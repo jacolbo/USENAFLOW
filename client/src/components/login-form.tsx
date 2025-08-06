@@ -18,19 +18,19 @@ const loginSchema = z.object({
 
 type LoginFormData = z.infer<typeof loginSchema>;
 
-interface UserCredential {
+interface UserCredentials {
+  id: string;
   username: string;
   password: string;
-  role: string;
   name: string;
-  abbr: string;
-  id?: string;
+  role: string;
+  abbreviation: string;
 }
 
 interface LoginFormProps {
   onLogin: (user: User) => void;
   onShowRegister: () => void;
-  userCredentials: UserCredential[];
+  userCredentials: UserCredentials[];
 }
 
 export function LoginForm({ onLogin, onShowRegister, userCredentials }: LoginFormProps) {
@@ -108,7 +108,7 @@ export function LoginForm({ onLogin, onShowRegister, userCredentials }: LoginFor
         name: foundUser.name,
         role: foundUser.role,
         value: foundUser.role === "Retoucher" ? `${foundUser.name}_${Date.now()}` : foundUser.role,
-        abbr: foundUser.abbr
+        abbr: foundUser.abbreviation
       };
 
       onLogin(user);

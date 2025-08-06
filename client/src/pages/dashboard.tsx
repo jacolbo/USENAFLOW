@@ -2,16 +2,16 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { LoginForm } from "@/components/login-form";
 import { RegisterForm } from "@/components/register-form";
-import { AdminUserManager } from "@/components/admin-user-manager";
+import { SettingsPanel } from "@/components/settings-panel";
 import { AddProjectForm } from "@/components/add-project-form";
 import { TaskTable } from "@/components/task-table";
 import { StatusLegend } from "@/components/status-legend";
-import { UserManagement } from "@/components/user-management";
 import { User } from "@/lib/types";
 import { Project } from "@shared/schema";
-import { Camera, User as UserIcon, LogOut } from "lucide-react";
+import { Camera, User as UserIcon, LogOut, Settings } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 
 interface UserCredential {
   username: string;
@@ -20,6 +20,15 @@ interface UserCredential {
   name: string;
   abbr: string;
   id?: string;
+}
+
+interface UserCredentials {
+  id: string;
+  username: string;
+  password: string;
+  name: string;
+  role: string;
+  abbreviation: string;
 }
 
 export default function Dashboard() {
@@ -36,10 +45,10 @@ export default function Dashboard() {
   ]);
 
   // User credentials for login/register system
-  const [userCredentials, setUserCredentials] = useState<UserCredential[]>([
-    { username: "admin", password: "admin123", role: "Admin", name: "admin", abbr: "ADM" },
-    { username: "lucky", password: "lm123", role: "Retoucher", name: "lucky", abbr: "LM" },
-    { username: "asa", password: "asa123", role: "Retoucher", name: "asa", abbr: "ASA" },
+  const [userCredentials, setUserCredentials] = useState<UserCredentials[]>([
+    { id: "admin", username: "admin", password: "admin123", role: "Admin", name: "admin", abbreviation: "ADM" },
+    { id: "lucky", username: "lucky", password: "lm123", role: "Retoucher", name: "lucky", abbreviation: "LM" },
+    { id: "asa", username: "asa", password: "asa123", role: "Retoucher", name: "asa", abbreviation: "ASA" },
   ]);
 
   const { data: projects = [], isLoading } = useQuery<Project[]>({
@@ -58,8 +67,16 @@ export default function Dashboard() {
   };
 
   const handleRegister = (newUserCredential: UserCredential) => {
-    // Add to credentials array
-    setUserCredentials(prev => [...prev, newUserCredential]);
+    // Convert to UserCredentials format and add to credentials array
+    const newCredentials: UserCredentials = {
+      id: newUserCredential.id || Date.now().toString(),
+      username: newUserCredential.username,
+      password: newUserCredential.password,
+      name: newUserCredential.name,
+      role: newUserCredential.role,
+      abbreviation: newUserCredential.abbr
+    };
+    setUserCredentials(prev => [...prev, newCredentials]);
     
     // Create User object for immediate login
     const newUser: User = {
@@ -79,7 +96,7 @@ export default function Dashboard() {
     setCurrentView('login');
   };
 
-  const handleUpdateUserCredentials = (credentials: UserCredential[]) => {
+  const handleUpdateUserCredentials = (credentials: UserCredentials[]) => {
     setUserCredentials(credentials);
   };
 
@@ -164,6 +181,37 @@ export default function Dashboard() {
                         </span>
                       </div>
                     </div>
+                    
+                    {/* Settings Icon - Only visible to Admin users */}
+                    {user.role === "Admin" && (
+                      <Dialog>
+                        <DialogTrigger asChild>
+                          <Button 
+                            variant="outline" 
+                            size="sm"
+                            className="flex items-center gap-2"
+                          >
+                            <Settings className="h-4 w-4" />
+                            Settings
+                          </Button>
+                        </DialogTrigger>
+                        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+                          <DialogHeader>
+                            <DialogTitle>Settings</DialogTitle>
+                          </DialogHeader>
+                          <SettingsPanel
+                            users={users}
+                            userCredentials={userCredentials}
+                            onAddUser={handleAddUser}
+                            onEditUser={handleEditUser}
+                            onDeleteUser={handleDeleteUser}
+                            onUpdateUserCredentials={handleUpdateUserCredentials}
+                            currentUser={user}
+                          />
+                        </DialogContent>
+                      </Dialog>
+                    )}
+
                     <Button 
                       variant="outline" 
                       size="sm"
@@ -180,27 +228,7 @@ export default function Dashboard() {
           </div>
         </div>
 
-        <div className="space-y-8">
-          {/* Admin User Management Panel - only for Admin */}
-          {user && (
-            <AdminUserManager 
-              users={userCredentials}
-              onUpdateUsers={handleUpdateUserCredentials}
-              currentUser={user}
-            />
-          )}
-
-          {/* Team Management Panel - only for Admin */}
-          {user && (
-            <UserManagement 
-              users={users} 
-              onAddUser={handleAddUser}
-              onEditUser={handleEditUser}
-              onDeleteUser={handleDeleteUser}
-              currentUser={user}
-            />
-          )}
-          
+        <div className="space-y-8">          
           {/* Status Legend - only for Admin, LeadRetoucher, and DataWrangler */}
           <StatusLegend projects={projects} user={user} allUsers={users} />
           

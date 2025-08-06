@@ -29,10 +29,19 @@ interface UserCredential {
   id?: string;
 }
 
+interface UserCredentials {
+  id: string;
+  username: string;
+  password: string;
+  name: string;
+  role: string;
+  abbreviation: string;
+}
+
 interface RegisterFormProps {
   onRegister: (user: UserCredential) => void;
   onBackToLogin: () => void;
-  existingUsers: UserCredential[];
+  existingUsers: UserCredentials[];
 }
 
 export function RegisterForm({ onRegister, onBackToLogin, existingUsers }: RegisterFormProps) {
