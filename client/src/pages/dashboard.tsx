@@ -1,14 +1,16 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { RoleSelector } from "@/components/role-selector";
+import { LoginForm } from "@/components/login-form";
+import { PasswordManager } from "@/components/password-manager";
 import { AddProjectForm } from "@/components/add-project-form";
 import { TaskTable } from "@/components/task-table";
 import { StatusLegend } from "@/components/status-legend";
 import { UserManagement } from "@/components/user-management";
-import { User, ROLE_MAPPINGS } from "@/lib/types";
+import { User } from "@/lib/types";
 import { Project } from "@shared/schema";
-import { Camera, User as UserIcon } from "lucide-react";
+import { Camera, User as UserIcon, LogOut } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Button } from "@/components/ui/button";
 
 export default function Dashboard() {
   const [user, setUser] = useState<User | null>(null);
@@ -22,20 +24,35 @@ export default function Dashboard() {
     { name: "Data Wrangler", role: "DataWrangler", value: "DataWrangler" },
   ]);
 
+  // User credentials for login system
+  const [userCredentials, setUserCredentials] = useState([
+    { username: "admin", password: "admin123", role: "Admin", name: "Evans", abbr: "EM" },
+    { username: "asa", password: "asa123", role: "Retoucher", name: "Dr Asa", abbr: "ASA" },
+    { username: "lucky", password: "lm123", role: "Retoucher", name: "Lucky", abbr: "LM" },
+    { username: "earl", password: "ec123", role: "Retoucher", name: "Earl", abbr: "EC" },
+    { username: "workflow", password: "wm123", role: "LeadRetoucher", name: "Sarah Wilson", abbr: "SW" },
+  ]);
+
   const { data: projects = [], isLoading } = useQuery<Project[]>({
     queryKey: ["/api/projects"],
     enabled: !!user,
   });
 
-  const handleChangeRole = (roleValue: string) => {
-    if (!roleValue) {
-      setUser(null);
-    } else {
-      const foundUser = users.find(u => u.value === roleValue);
-      if (foundUser) {
-        setUser(foundUser);
-      }
+  const handleLogin = (loggedInUser: User) => {
+    setUser(loggedInUser);
+    // Sync with users array for consistency
+    const existingUserIndex = users.findIndex(u => u.name === loggedInUser.name);
+    if (existingUserIndex === -1) {
+      setUsers(prev => [...prev, loggedInUser]);
     }
+  };
+
+  const handleLogout = () => {
+    setUser(null);
+  };
+
+  const handleUpdateCredentials = (credentials: typeof userCredentials) => {
+    setUserCredentials(credentials);
   };
 
   const handleAddUser = (newUser: User) => {
@@ -62,11 +79,23 @@ export default function Dashboard() {
     }
   };
 
+  // Show login form if user is not logged in
+  if (!user) {
+    return (
+      <LoginForm 
+        onLogin={handleLogin} 
+        userCredentials={userCredentials}
+      />
+    );
+  }
+
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gray-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <div className="text-center">Loading...</div>
+        <div className="container mx-auto px-4 py-8">
+          <div className="flex items-center justify-center">
+            <div className="text-lg">Loading...</div>
+          </div>
         </div>
       </div>
     );
@@ -74,64 +103,77 @@ export default function Dashboard() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="bg-white shadow-sm border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            <div className="flex items-center">
-              <Camera className="text-primary text-2xl mr-3" />
-              <h1 className="text-xl font-semibold text-gray-900">Photography Workflow</h1>
-            </div>
-            <div className="flex items-center space-x-4">
-              <RoleSelector user={user} onChangeRole={handleChangeRole} allUsers={users} />
-              {user && (
-                <div className="flex items-center space-x-2">
-                  <Avatar className="w-8 h-8">
-                    <AvatarFallback className="bg-primary/10">
-                      <UserIcon className="h-4 w-4 text-primary" />
-                    </AvatarFallback>
-                  </Avatar>
-                  <span className="text-sm font-medium text-gray-900">{user.name}</span>
-                </div>
-              )}
+      <div className="container mx-auto px-4 py-8">
+        <div className="bg-white rounded-lg shadow-sm mb-8">
+          <div className="px-6 py-4 border-b border-gray-200">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center">
+                <Camera className="text-primary text-2xl mr-3" />
+                <h1 className="text-xl font-semibold text-gray-900">Photography Workflow</h1>
+              </div>
+              <div className="flex items-center space-x-4">
+                {user && (
+                  <div className="flex items-center space-x-4">
+                    <div className="flex items-center space-x-2">
+                      <Avatar className="w-8 h-8">
+                        <AvatarFallback>{user.name.charAt(0)}</AvatarFallback>
+                      </Avatar>
+                      <div className="flex flex-col">
+                        <span className="text-sm font-medium">{user.name}</span>
+                        <span className="text-xs text-gray-500">
+                          {user.role === "LeadRetoucher" ? "Workflow Manager" : user.role}
+                        </span>
+                      </div>
+                    </div>
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={handleLogout}
+                      className="flex items-center gap-2"
+                    >
+                      <LogOut className="h-4 w-4" />
+                      Logout
+                    </Button>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>
-      </header>
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {!user ? (
-          <div className="text-center py-12">
-            <Camera className="mx-auto h-12 w-12 text-gray-400" />
-            <h3 className="mt-2 text-sm font-medium text-gray-900">Please select a role to continue</h3>
-            <p className="mt-1 text-sm text-gray-500">Choose your role from the dropdown above to access the workflow.</p>
-          </div>
-        ) : (
-          <div className="space-y-8">
-            {/* Team Management Panel - only for Admin */}
-            {user && (
-              <UserManagement 
-                users={users} 
-                onAddUser={handleAddUser}
-                onEditUser={handleEditUser}
-                onDeleteUser={handleDeleteUser}
-                currentUser={user}
-              />
-            )}
-            
-            {/* Status Legend - only for Admin, LeadRetoucher, and DataWrangler */}
-            <StatusLegend projects={projects} user={user} allUsers={users} />
-            
-            {/* Show project creation form for roles that can add projects */}
-            {user.role !== "Retoucher" && (
-              <AddProjectForm onAddProject={() => {}} />
-            )}
-            
-            {/* Show the task table for the visible projects */}
-            <TaskTable projects={projects} user={user} allUsers={users} />
-          </div>
-        )}
-      </main>
+        <div className="space-y-8">
+          {/* Password Management Panel - only for Admin */}
+          {user && (
+            <PasswordManager 
+              userCredentials={userCredentials}
+              onUpdateCredentials={handleUpdateCredentials}
+              currentUser={user}
+            />
+          )}
+
+          {/* Team Management Panel - only for Admin */}
+          {user && (
+            <UserManagement 
+              users={users} 
+              onAddUser={handleAddUser}
+              onEditUser={handleEditUser}
+              onDeleteUser={handleDeleteUser}
+              currentUser={user}
+            />
+          )}
+          
+          {/* Status Legend - only for Admin, LeadRetoucher, and DataWrangler */}
+          <StatusLegend projects={projects} user={user} allUsers={users} />
+          
+          {/* Show project creation form for roles that can add projects */}
+          {user.role !== "Retoucher" && (
+            <AddProjectForm onAddProject={() => {}} />
+          )}
+          
+          {/* Show the task table for the visible projects */}
+          <TaskTable projects={projects} user={user} allUsers={users} />
+        </div>
+      </div>
     </div>
   );
 }
