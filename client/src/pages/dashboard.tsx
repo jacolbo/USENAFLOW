@@ -8,7 +8,8 @@ import { TaskTable } from "@/components/task-table";
 import { StatusLegend } from "@/components/status-legend";
 import { User } from "@/lib/types";
 import { Project } from "@shared/schema";
-import { Camera, User as UserIcon, LogOut, Settings } from "lucide-react";
+import { User as UserIcon, LogOut, Settings } from "lucide-react";
+import logoImage from "@assets/ChatGPT Image Aug 7, 2025 at 01_05_33 AM_1754521723298.png";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -164,8 +165,12 @@ export default function Dashboard() {
           <div className="px-6 py-4 border-b border-gray-200">
             <div className="flex items-center justify-between">
               <div className="flex items-center">
-                <Camera className="text-primary text-2xl mr-3" />
-                <h1 className="text-xl font-semibold text-gray-900">USENA FLOW by Jepson Myles Studio</h1>
+                <img 
+                  src={logoImage} 
+                  alt="USENA FLOW" 
+                  className="h-8 mr-3"
+                />
+                <span className="text-sm text-gray-600">by Jepson Myles Studio</span>
               </div>
               <div className="flex items-center space-x-4">
                 {user && (

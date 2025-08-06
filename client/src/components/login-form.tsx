@@ -8,7 +8,8 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { User } from "@/lib/types";
-import { Camera, AlertCircle } from "lucide-react";
+import { AlertCircle } from "lucide-react";
+import logoImage from "@assets/ChatGPT Image Aug 7, 2025 at 01_05_33 AM_1754521723298.png";
 import { useToast } from "@/hooks/use-toast";
 
 const loginSchema = z.object({
@@ -132,10 +133,13 @@ export function LoginForm({ onLogin, onShowRegister, userCredentials }: LoginFor
     <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-md w-full space-y-8">
         <div className="text-center">
-          <div className="flex justify-center">
-            <Camera className="text-primary text-4xl mb-4" />
+          <div className="flex justify-center mb-4">
+            <img 
+              src={logoImage} 
+              alt="USENA FLOW" 
+              className="h-16"
+            />
           </div>
-          <h2 className="text-3xl font-bold text-gray-900">USENA FLOW</h2>
           <p className="mt-2 text-sm text-gray-600">by Jepson Myles Studio</p>
           <p className="mt-1 text-sm text-gray-600">
             Sign in to your account to continue
