@@ -274,6 +274,75 @@ export function TaskTable({ projects, user }: TaskTableProps) {
             </CardHeader>
             {!isCollapsed && (
               <CardContent>
+                {/* Mini Weekly Calendar - only for Admin, LeadRetoucher, and DataWrangler */}
+                {['Admin', 'LeadRetoucher', 'DataWrangler'].includes(user.role) && (
+                  <div className="mb-6 border rounded-lg p-4 bg-gray-50 dark:bg-gray-900">
+                    <div className="grid grid-cols-7 gap-2">
+                      {Array.from({ length: 7 }).map((_, dayIndex) => {
+                        const dayDate = new Date(monday);
+                        dayDate.setDate(monday.getDate() + dayIndex);
+                        const dayName = dayDate.toLocaleDateString('en-US', { weekday: 'short' });
+                        const dayNumber = dayDate.getDate();
+                        
+                        // Get projects due on this specific day
+                        const dayProjects = group.projects.filter(project => {
+                          const projectDate = new Date(project.dueDate);
+                          return projectDate.toDateString() === dayDate.toDateString();
+                        });
+
+                        const getRetoucherPrefix = (assignedTo: string | null) => {
+                          if (!assignedTo) return 'R?';
+                          if (assignedTo.includes('1')) return 'R1';
+                          if (assignedTo.includes('2')) return 'R2';
+                          if (assignedTo.includes('3')) return 'R3';
+                          return 'R?';
+                        };
+
+                        const getRetoucherColor = (prefix: string) => {
+                          switch (prefix) {
+                            case 'R1': return 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200';
+                            case 'R2': return 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200';
+                            case 'R3': return 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200';
+                            default: return 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200';
+                          }
+                        };
+
+                        return (
+                          <div key={dayIndex} className="text-center">
+                            <div className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
+                              {dayName}
+                            </div>
+                            <div className="text-xs text-gray-500 mb-2">
+                              {dayNumber}
+                            </div>
+                            <div className="space-y-1">
+                              {dayProjects.map(project => {
+                                const retoucherPrefix = getRetoucherPrefix(project.assignedTo);
+                                const colorClass = getRetoucherColor(retoucherPrefix);
+                                
+                                return (
+                                  <div key={project.id} className="text-xs">
+                                    <Badge 
+                                      variant="secondary" 
+                                      className={`${colorClass} px-1 py-0 text-xs font-medium w-full justify-start`}
+                                    >
+                                      {retoucherPrefix} {project.clientName}
+                                    </Badge>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                            {dayProjects.length === 0 && (
+                              <div className="text-xs text-gray-400 dark:text-gray-600 opacity-50">
+                                —
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
               <div className="overflow-x-auto">
                 <Table>
                   <TableHeader>
