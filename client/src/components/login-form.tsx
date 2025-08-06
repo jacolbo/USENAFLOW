@@ -18,19 +18,22 @@ const loginSchema = z.object({
 
 type LoginFormData = z.infer<typeof loginSchema>;
 
-interface LoginFormProps {
-  onLogin: (user: User) => void;
-  userCredentials: Array<{
-    username: string;
-    password: string;
-    role: string;
-    name: string;
-    abbr: string;
-    id?: string;
-  }>;
+interface UserCredential {
+  username: string;
+  password: string;
+  role: string;
+  name: string;
+  abbr: string;
+  id?: string;
 }
 
-export function LoginForm({ onLogin, userCredentials }: LoginFormProps) {
+interface LoginFormProps {
+  onLogin: (user: User) => void;
+  onShowRegister: () => void;
+  userCredentials: UserCredential[];
+}
+
+export function LoginForm({ onLogin, onShowRegister, userCredentials }: LoginFormProps) {
   const { toast } = useToast();
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -141,6 +144,19 @@ export function LoginForm({ onLogin, userCredentials }: LoginFormProps) {
               >
                 {isLoading ? "Signing in..." : "Sign In"}
               </Button>
+
+              <div className="text-center mt-4">
+                <p className="text-sm text-gray-600">
+                  Don't have an account?{" "}
+                  <button
+                    type="button"
+                    onClick={onShowRegister}
+                    className="text-blue-600 hover:text-blue-500 font-medium"
+                  >
+                    Register here
+                  </button>
+                </p>
+              </div>
             </form>
           </CardContent>
         </Card>

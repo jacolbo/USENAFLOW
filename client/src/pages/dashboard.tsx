@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { LoginForm } from "@/components/login-form";
-import { PasswordManager } from "@/components/password-manager";
+import { RegisterForm } from "@/components/register-form";
+import { AdminUserManager } from "@/components/admin-user-manager";
 import { AddProjectForm } from "@/components/add-project-form";
 import { TaskTable } from "@/components/task-table";
 import { StatusLegend } from "@/components/status-legend";
@@ -12,8 +13,18 @@ import { Camera, User as UserIcon, LogOut } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 
+interface UserCredential {
+  username: string;
+  password: string;
+  role: string;
+  name: string;
+  abbr: string;
+  id?: string;
+}
+
 export default function Dashboard() {
   const [user, setUser] = useState<User | null>(null);
+  const [currentView, setCurrentView] = useState<'login' | 'register'>('login');
   const [users, setUsers] = useState<User[]>([
     { id: "1", name: "Earl", role: "Retoucher", value: "Retoucher1", abbr: "EC" },
     { id: "2", name: "Dr Asa", role: "Retoucher", value: "Retoucher2", abbr: "ASA" },
@@ -24,13 +35,11 @@ export default function Dashboard() {
     { name: "Data Wrangler", role: "DataWrangler", value: "DataWrangler" },
   ]);
 
-  // User credentials for login system
-  const [userCredentials, setUserCredentials] = useState([
-    { username: "admin", password: "admin123", role: "Admin", name: "Evans", abbr: "EM" },
-    { username: "asa", password: "asa123", role: "Retoucher", name: "Dr Asa", abbr: "ASA" },
-    { username: "lucky", password: "lm123", role: "Retoucher", name: "Lucky", abbr: "LM" },
-    { username: "earl", password: "ec123", role: "Retoucher", name: "Earl", abbr: "EC" },
-    { username: "workflow", password: "wm123", role: "LeadRetoucher", name: "Sarah Wilson", abbr: "SW" },
+  // User credentials for login/register system
+  const [userCredentials, setUserCredentials] = useState<UserCredential[]>([
+    { username: "admin", password: "admin123", role: "Admin", name: "admin", abbr: "ADM" },
+    { username: "lucky", password: "lm123", role: "Retoucher", name: "lucky", abbr: "LM" },
+    { username: "asa", password: "asa123", role: "Retoucher", name: "asa", abbr: "ASA" },
   ]);
 
   const { data: projects = [], isLoading } = useQuery<Project[]>({
@@ -40,6 +49,7 @@ export default function Dashboard() {
 
   const handleLogin = (loggedInUser: User) => {
     setUser(loggedInUser);
+    setCurrentView('login');
     // Sync with users array for consistency
     const existingUserIndex = users.findIndex(u => u.name === loggedInUser.name);
     if (existingUserIndex === -1) {
@@ -47,11 +57,29 @@ export default function Dashboard() {
     }
   };
 
-  const handleLogout = () => {
-    setUser(null);
+  const handleRegister = (newUserCredential: UserCredential) => {
+    // Add to credentials array
+    setUserCredentials(prev => [...prev, newUserCredential]);
+    
+    // Create User object for immediate login
+    const newUser: User = {
+      id: newUserCredential.id,
+      name: newUserCredential.name,
+      role: newUserCredential.role,
+      value: newUserCredential.role === "Retoucher" ? `${newUserCredential.name}_${Date.now()}` : newUserCredential.role,
+      abbr: newUserCredential.abbr
+    };
+    
+    // Auto-login after registration
+    handleLogin(newUser);
   };
 
-  const handleUpdateCredentials = (credentials: typeof userCredentials) => {
+  const handleLogout = () => {
+    setUser(null);
+    setCurrentView('login');
+  };
+
+  const handleUpdateUserCredentials = (credentials: UserCredential[]) => {
     setUserCredentials(credentials);
   };
 
@@ -79,11 +107,22 @@ export default function Dashboard() {
     }
   };
 
-  // Show login form if user is not logged in
+  // Show login/register form if user is not logged in
   if (!user) {
+    if (currentView === 'register') {
+      return (
+        <RegisterForm 
+          onRegister={handleRegister}
+          onBackToLogin={() => setCurrentView('login')}
+          existingUsers={userCredentials}
+        />
+      );
+    }
+    
     return (
       <LoginForm 
-        onLogin={handleLogin} 
+        onLogin={handleLogin}
+        onShowRegister={() => setCurrentView('register')}
         userCredentials={userCredentials}
       />
     );
@@ -142,11 +181,11 @@ export default function Dashboard() {
         </div>
 
         <div className="space-y-8">
-          {/* Password Management Panel - only for Admin */}
+          {/* Admin User Management Panel - only for Admin */}
           {user && (
-            <PasswordManager 
-              userCredentials={userCredentials}
-              onUpdateCredentials={handleUpdateCredentials}
+            <AdminUserManager 
+              users={userCredentials}
+              onUpdateUsers={handleUpdateUserCredentials}
               currentUser={user}
             />
           )}
