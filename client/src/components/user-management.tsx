@@ -132,6 +132,13 @@ export function UserManagement({ users, onAddUser, onEditUser, onDeleteUser, cur
     }
   };
 
+  const getDisplayRoleName = (role: string) => {
+    switch (role) {
+      case "LeadRetoucher": return "Workflow Manager";
+      default: return role;
+    }
+  };
+
   // Only show for Admin users
   if (currentUser.role !== "Admin") {
     return null;
@@ -185,7 +192,7 @@ export function UserManagement({ users, onAddUser, onEditUser, onDeleteUser, cur
                         <SelectContent>
                           <SelectItem value="Admin">Admin</SelectItem>
                           <SelectItem value="Sales">Sales</SelectItem>
-                          <SelectItem value="LeadRetoucher">Lead Retoucher</SelectItem>
+                          <SelectItem value="LeadRetoucher">Workflow Manager</SelectItem>
                           <SelectItem value="DataWrangler">Data Wrangler</SelectItem>
                           <SelectItem value="Retoucher">Retoucher</SelectItem>
                         </SelectContent>
@@ -245,7 +252,7 @@ export function UserManagement({ users, onAddUser, onEditUser, onDeleteUser, cur
                     <TableCell className="font-medium">{user.name}</TableCell>
                     <TableCell>
                       <Badge className={getRoleBadgeColor(user.role)}>
-                        {user.role}
+                        {getDisplayRoleName(user.role)}
                       </Badge>
                     </TableCell>
                     <TableCell>
@@ -294,7 +301,7 @@ export function UserManagement({ users, onAddUser, onEditUser, onDeleteUser, cur
                                         <SelectContent>
                                           <SelectItem value="Admin">Admin</SelectItem>
                                           <SelectItem value="Sales">Sales</SelectItem>
-                                          <SelectItem value="LeadRetoucher">Lead Retoucher</SelectItem>
+                                          <SelectItem value="LeadRetoucher">Workflow Manager</SelectItem>
                                           <SelectItem value="DataWrangler">Data Wrangler</SelectItem>
                                           <SelectItem value="Retoucher">Retoucher</SelectItem>
                                         </SelectContent>

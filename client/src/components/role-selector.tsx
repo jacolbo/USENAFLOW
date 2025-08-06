@@ -12,7 +12,7 @@ export function RoleSelector({ user, onChangeRole, allUsers }: RoleSelectorProps
   const getDisplayName = (user: User) => {
     // Default users with special formatting
     if (user.value === "Admin") return "Sales/Admin";
-    if (user.value === "LeadRetoucher") return "Lead Retoucher";
+    if (user.value === "LeadRetoucher") return "Workflow Manager";
     if (user.value === "DataWrangler") return "Data Wrangler";
     if (user.value === "Retoucher1") return "Earl (Retoucher 1)";
     if (user.value === "Retoucher2") return "Dr Asa (Retoucher 2)";

@@ -18,7 +18,7 @@ export default function Dashboard() {
     { id: "3", name: "Lucky", role: "Retoucher", value: "Retoucher3", abbr: "LM" },
     // Default system users without IDs (cannot be edited/deleted)
     { name: "Sales/Admin", role: "Admin", value: "Admin" },
-    { name: "Lead Retoucher", role: "LeadRetoucher", value: "LeadRetoucher" },
+    { name: "Workflow Manager", role: "LeadRetoucher", value: "LeadRetoucher" },
     { name: "Data Wrangler", role: "DataWrangler", value: "DataWrangler" },
   ]);
 
