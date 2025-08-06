@@ -1,8 +1,8 @@
-# Photography Workflow Management System
+# UNESA FLOW by Jepson Myles Studio
 
 ## Overview
 
-This is a full-stack photography workflow management application built with React, Express.js, and PostgreSQL. The system helps photography studios manage projects from initial client submission through retouching and delivery. It features role-based access control, project status tracking, and a comprehensive dashboard interface.
+UNESA FLOW is a full-stack photography workflow management application built with React, Express.js, and PostgreSQL. The system helps Jepson Myles Studio manage projects from initial client submission through retouching and delivery. It features role-based access control, project status tracking, and a comprehensive dashboard interface.
 
 The application supports multiple user roles including Sales/Admin, Lead Retoucher, Data Wrangler, and individual retouchers, each with specific permissions and workflow responsibilities.
 
