@@ -32,7 +32,6 @@ export class MemStorage implements IStorage {
         packageCount: 10,
         selectedCount: 12,
         extras: 2,
-        turnaround: 3,
         dueDate: new Date(2025, 7, 7), // Aug 7, 2025
         status: ProjectStatus.AWAITING_PAYMENT,
         invoicePaid: false,
@@ -46,7 +45,6 @@ export class MemStorage implements IStorage {
         packageCount: 5,
         selectedCount: 5,
         extras: 0,
-        turnaround: 3,
         dueDate: new Date(2025, 7, 9), // Aug 9, 2025
         status: ProjectStatus.READY_FOR_RETOUCHING,
         invoicePaid: true,
@@ -60,7 +58,6 @@ export class MemStorage implements IStorage {
         packageCount: 8,
         selectedCount: 8,
         extras: 0,
-        turnaround: 3,
         dueDate: new Date(2025, 7, 1), // Aug 1, 2025
         status: ProjectStatus.REVIEW,
         invoicePaid: true,
@@ -74,7 +71,6 @@ export class MemStorage implements IStorage {
         packageCount: 7,
         selectedCount: 10,
         extras: 3,
-        turnaround: 2,
         dueDate: new Date(2025, 7, 2), // Aug 2, 2025
         status: ProjectStatus.DELIVERED,
         invoicePaid: true,
@@ -88,7 +84,6 @@ export class MemStorage implements IStorage {
         packageCount: 4,
         selectedCount: 4,
         extras: 0,
-        turnaround: 2,
         dueDate: new Date(2025, 7, 8), // Aug 8, 2025
         status: ProjectStatus.ASSIGNED,
         invoicePaid: true,

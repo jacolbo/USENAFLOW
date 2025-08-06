@@ -15,7 +15,6 @@ export const projects = pgTable("projects", {
   packageCount: integer("package_count").notNull(),
   selectedCount: integer("selected_count").notNull(),
   extras: integer("extras").notNull().default(0),
-  turnaround: integer("turnaround").notNull(),
   dueDate: timestamp("due_date").notNull(),
   status: text("status").notNull(),
   invoicePaid: boolean("invoice_paid").notNull().default(false),

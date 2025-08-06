@@ -175,7 +175,7 @@ export function TaskTable({ projects, user }: TaskTableProps) {
                       <TableHead>Pkg</TableHead>
                       <TableHead>Sel</TableHead>
                       <TableHead>Extra</TableHead>
-                      <TableHead>Turn</TableHead>
+
                       <TableHead>Due</TableHead>
                       <TableHead>Retoucher</TableHead>
                       <TableHead>Status</TableHead>
@@ -190,7 +190,7 @@ export function TaskTable({ projects, user }: TaskTableProps) {
                         <TableCell>{project.packageCount}</TableCell>
                         <TableCell>{project.selectedCount}</TableCell>
                         <TableCell>{project.extras}</TableCell>
-                        <TableCell>{project.turnaround} wk</TableCell>
+
                         <TableCell>{formatDate(new Date(project.dueDate))}</TableCell>
                         <TableCell>{project.assignedTo || "-"}</TableCell>
                         <TableCell>{getStatusBadge(project.status)}</TableCell>

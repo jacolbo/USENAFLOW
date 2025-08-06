@@ -1,0 +1,70 @@
+Please update the AddProjectForm in my React app as follows:
+🛠️ 1. Replace the "Turnaround" dropdown with a new “Slot into Week” dropdown:
+a. Add the following state and helper function inside AddProjectForm (before the return):
+const [dueWeek, setDueWeek] = useState("");
+
+// Helper: Generate 5 weeks (current week + next 4)
+const generateWeekOptions = () => {
+  const options = [];
+  const now = new Date();
+  const monday = new Date(now);
+  const day = monday.getDay();
+  const diff = day === 0 ? -6 : 1 - day;
+  monday.setDate(monday.getDate() + diff); // move to Monday
+
+  for (let i = 0; i < 5; i++) {
+    const weekStart = new Date(monday);
+    weekStart.setDate(monday.getDate() + i * 7);
+    const weekEnd = new Date(weekStart);
+    weekEnd.setDate(weekStart.getDate() + 6);
+    const label = `Week of ${weekStart.toLocaleDateString()} – ${weekEnd.toLocaleDateString()}`;
+    options.push({ value: weekStart.toISOString(), label });
+  }
+  return options;
+};
+b. In the form JSX, remove the turnaround field and replace it with this:
+<div>
+  <label>
+    Slot into Week:{" "}
+    <select value={dueWeek} onChange={(e) => setDueWeek(e.target.value)} required>
+      <option value="">Select a week</option>
+      {generateWeekOptions().map((option, idx) => (
+        <option key={idx} value={option.value}>
+          {option.label}
+        </option>
+      ))}
+    </select>
+  </label>
+</div>
+🧠 2. Update the handleSubmit() function inside AddProjectForm:
+a. Replace this line:
+onAddProject({ clientName: client, packageCount, selectedCount, turnaround: parseInt(turnaround, 10) });
+With this:
+if (!dueWeek) {
+  alert("Please select a week to slot the project into.");
+  return;
+}
+const dueDate = new Date(dueWeek);
+onAddProject({ clientName: client, packageCount, selectedCount, dueDate });
+🧾 3. Update the addProject() function in App.jsx or App.js:
+Replace the addProject() function with the following:
+const addProject = ({ clientName, packageCount, selectedCount, dueDate }) => {
+  const extras = Math.max(0, selectedCount - packageCount);
+  const status = extras > 0 ? "Awaiting Payment" : "Ready for Retouching";
+  const invoicePaid = extras > 0 ? false : true;
+  const newTask = {
+    id: nextId,
+    client: clientName,
+    packageCount,
+    selectedCount,
+    extras,
+    turnaround: null, // No longer needed
+    dueDate: new Date(dueDate),
+    status,
+    invoicePaid,
+    assignedTo: null,
+    rating: null
+  };
+  setTasks([...tasks, newTask]);
+  setNextId(nextId + 1);
+};

@@ -5,13 +5,14 @@ import { AddProjectForm } from "@/components/add-project-form";
 import { TaskTable } from "@/components/task-table";
 import { StatusLegend } from "@/components/status-legend";
 import { User, ROLE_MAPPINGS } from "@/lib/types";
+import { Project } from "@shared/schema";
 import { Camera, User as UserIcon } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 
 export default function Dashboard() {
   const [user, setUser] = useState<User | null>(null);
 
-  const { data: projects = [], isLoading } = useQuery({
+  const { data: projects = [], isLoading } = useQuery<Project[]>({
     queryKey: ["/api/projects"],
     enabled: !!user,
   });
