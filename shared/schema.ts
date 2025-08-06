@@ -34,6 +34,8 @@ export const insertProjectSchema = createInsertSchema(projects).omit({
   extras: true,
   status: true,
   invoicePaid: true,
+}).extend({
+  dueDate: z.string().transform((str) => new Date(str)),
 });
 
 export const updateProjectSchema = createInsertSchema(projects).partial().omit({

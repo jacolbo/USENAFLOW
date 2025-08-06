@@ -133,7 +133,6 @@ export class MemStorage implements IStorage {
       ...insertProject,
       id,
       extras,
-      dueDate: new Date(insertProject.dueDate),
       status,
       invoicePaid,
       assignedTo: null,
