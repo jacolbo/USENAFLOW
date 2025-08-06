@@ -148,7 +148,7 @@ export default function Dashboard() {
             <div className="flex items-center justify-between">
               <div className="flex items-center">
                 <Camera className="text-primary text-2xl mr-3" />
-                <h1 className="text-xl font-semibold text-gray-900">UNESA FLOW by Jepson Myles Studio</h1>
+                <h1 className="text-xl font-semibold text-gray-900">USENA FLOW by Jepson Myles Studio</h1>
               </div>
               <div className="flex items-center space-x-4">
                 {user && (

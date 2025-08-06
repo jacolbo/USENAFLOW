@@ -135,7 +135,7 @@ export function LoginForm({ onLogin, onShowRegister, userCredentials }: LoginFor
           <div className="flex justify-center">
             <Camera className="text-primary text-4xl mb-4" />
           </div>
-          <h2 className="text-3xl font-bold text-gray-900">UNESA FLOW</h2>
+          <h2 className="text-3xl font-bold text-gray-900">USENA FLOW</h2>
           <p className="mt-2 text-sm text-gray-600">by Jepson Myles Studio</p>
           <p className="mt-1 text-sm text-gray-600">
             Sign in to your account to continue
