@@ -1,0 +1,444 @@
+import React, { useState } from 'react';
+
+// Component for selecting user role (login simulation)
+function RoleSelector({ user, onChangeRole }) {
+  return (
+    <div style={{ margin: '1em 0' }}>
+      <label>
+        Select Role:{" "}
+        <select value={user ? user.value : ""} onChange={(e) => onChangeRole(e.target.value)}>
+          <option value="" disabled>Select role</option>
+          <option value="Admin">Sales/Admin</option>
+          <option value="LeadRetoucher">Lead Retoucher</option>
+          <option value="DataWrangler">Data Wrangler</option>
+          <option value="Retoucher1">Retoucher 1</option>
+          <option value="Retoucher2">Retoucher 2</option>
+          <option value="Retoucher3">Retoucher 3</option>
+        </select>
+      </label>
+    </div>
+  );
+}
+
+// Component for adding a new project (visible to Admin/Lead/Data roles)
+function AddProjectForm({ onAddProject }) {
+  const [client, setClient] = useState("");
+  const [pkgCount, setPkgCount] = useState("");
+  const [selCount, setSelCount] = useState("");
+  const [turnaround, setTurnaround] = useState("3");
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (!client || !pkgCount || !selCount) {
+      alert("Please fill in all fields.");
+      return;
+    }
+    const packageCount = parseInt(pkgCount, 10);
+    const selectedCount = parseInt(selCount, 10);
+    if (isNaN(packageCount) || isNaN(selectedCount)) {
+      alert("Package and Selected counts must be numbers.");
+      return;
+    }
+    onAddProject({ clientName: client, packageCount, selectedCount, turnaround: parseInt(turnaround, 10) });
+    // Clear form fields after adding
+    setClient("");
+    setPkgCount("");
+    setSelCount("");
+    setTurnaround("3");
+  };
+
+  return (
+    <form onSubmit={handleSubmit} style={{ margin: '1em 0', padding: '1em', border: '1px solid #ccc' }}>
+      <h3>Add New Project</h3>
+      <div>
+        <label>
+          Client Name:{" "}
+          <input type="text" value={client} onChange={(e) => setClient(e.target.value)} required />
+        </label>
+      </div>
+      <div>
+        <label>
+          Package Photos:{" "}
+          <input type="number" value={pkgCount} onChange={(e) => setPkgCount(e.target.value)} required />
+        </label>
+      </div>
+      <div>
+        <label>
+          Selected Photos:{" "}
+          <input type="number" value={selCount} onChange={(e) => setSelCount(e.target.value)} required />
+        </label>
+      </div>
+      <div>
+        <label>
+          Turnaround:{" "}
+          <select value={turnaround} onChange={(e) => setTurnaround(e.target.value)}>
+            <option value="3">Standard (3 weeks)</option>
+            <option value="2">Fast-Track (2 weeks)</option>
+          </select>
+        </label>
+      </div>
+      <button type="submit">Create Project</button>
+    </form>
+  );
+}
+
+// Component to display the task table (projects grouped by week)
+function TaskTable({ tasks, user, onAssign, onMarkPaid, onMarkDone, onUndo, onDeliver, onSetRating }) {
+  // Helper: get Monday of the week for a given date
+  const getWeekStart = (date) => {
+    const d = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    const day = d.getDay(); // 0 = Sunday, 1 = Monday, etc.
+    const diff = day === 0 ? -6 : 1 - day; // adjust Sunday to previous Monday
+    d.setDate(d.getDate() + diff);
+    return d;
+  };
+  // Helper: format date as "Mon DD, YYYY"
+  const formatDate = (date) =>
+    date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+
+  // Group tasks by week (Monday start date)
+  const groups = [];
+  tasks.forEach(task => {
+    const weekStart = getWeekStart(task.dueDate);
+    // find or create group for this weekStart
+    const key = weekStart.getTime();
+    let group = groups.find(g => g.key === key);
+    if (!group) {
+      group = { key: key, weekStart: weekStart, tasks: [] };
+      groups.push(group);
+    }
+    group.tasks.push(task);
+  });
+  // Sort groups by weekStart date
+  groups.sort((a, b) => a.weekStart - b.weekStart);
+
+  return (
+    <div>
+      {groups.map(group => {
+        const monday = group.weekStart;
+        const sunday = new Date(monday);
+        sunday.setDate(monday.getDate() + 6);
+        const weekLabel = `${formatDate(monday)} - ${formatDate(sunday)}`;
+        // Sort tasks in each week by due date
+        group.tasks.sort((a, b) => a.dueDate - b.dueDate);
+        return (
+          <div key={group.key}>
+            <h3>Week of {weekLabel}</h3>
+            <table>
+              <thead>
+                <tr>
+                  <th>Client</th>
+                  <th>Pkg</th>
+                  <th>Sel</th>
+                  <th>Extra</th>
+                  <th>Turn</th>
+                  <th>Due</th>
+                  <th>Retoucher</th>
+                  <th>Status</th>
+                  {user.role === 'Admin' && <th>Rating</th>}
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {group.tasks.map(task => {
+                  // Determine CSS class for status (for coloring)
+                  let statusClass = "";
+                  if (task.status === "Awaiting Payment") statusClass = "status-awaiting";
+                  else if (task.status === "Ready for Retouching") statusClass = "status-ready";
+                  else if (task.status === "Assigned") statusClass = "status-assigned";
+                  else if (task.status === "Review") statusClass = "status-review";
+                  else if (task.status === "Delivered") statusClass = "status-delivered";
+                  return (
+                    <tr key={task.id}>
+                      <td>{task.client}</td>
+                      <td>{task.packageCount}</td>
+                      <td>{task.selectedCount}</td>
+                      <td>{task.extras}</td>
+                      <td>{task.turnaround} wk</td>
+                      <td>{formatDate(task.dueDate)}</td>
+                      <td>{task.assignedTo || "-"}</td>
+                      <td className={statusClass}>{task.status}</td>
+                      {user.role === 'Admin' && (
+                        <td>
+                          {task.status === "Delivered" ? (
+                            // Admin can set or change rating on delivered projects
+                            <select 
+                              value={task.rating ? task.rating : ""} 
+                              onChange={(e) => onSetRating(task.id, parseInt(e.target.value, 10))}
+                            >
+                              <option value="" disabled>{task.rating ? "Change rating" : "Rate..."}</option>
+                              <option value="1">1 – Poor</option>
+                              <option value="2">2 – Fair</option>
+                              <option value="3">3 – Good</option>
+                              <option value="4">4 – Very Good</option>
+                              <option value="5">5 – Excellent</option>
+                            </select>
+                          ) : (
+                            // If not delivered or no rating, just show existing rating or placeholder
+                            task.rating ? task.rating : "-"
+                          )}
+                        </td>
+                      )}
+                      <td>
+                        {/* Lead Retoucher or Admin can assign tasks that are ready (or reassign if needed) */}
+                        {(user.role === 'LeadRetoucher' || user.role === 'Admin') 
+                          && (task.status === 'Ready for Retouching' || task.status === 'Assigned') && (
+                          <select 
+                            value={task.assignedTo || ""} 
+                            onChange={(e) => onAssign(task.id, e.target.value)}
+                          >
+                            <option value="" disabled>
+                              {task.assignedTo ? "Reassign to..." : "Assign to..."}
+                            </option>
+                            <option value="Retoucher 1">Retoucher 1</option>
+                            <option value="Retoucher 2">Retoucher 2</option>
+                            <option value="Retoucher 3">Retoucher 3</option>
+                          </select>
+                        )}
+                        {/* Admin can mark invoice paid if awaiting payment */}
+                        {user.role === 'Admin' && task.status === 'Awaiting Payment' && (
+                          <button onClick={() => onMarkPaid(task.id)}>Mark Invoice Paid</button>
+                        )}
+                        {/* Retoucher can mark done on their assigned task */}
+                        {user.role === 'Retoucher' && task.assignedTo === user.name && task.status === 'Assigned' && (
+                          <button onClick={() => onMarkDone(task.id)}>Mark Done</button>
+                        )}
+                        {/* Admin can deliver or request revision when a task is in Review */}
+                        {user.role === 'Admin' && task.status === 'Review' && (
+                          <>
+                            <button onClick={() => onDeliver(task.id)}>Deliver</button>{" "}
+                            <button onClick={() => onUndo(task.id)}>Request Revision</button>
+                          </>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function App() {
+  // State for current logged-in user (role)
+  const [user, setUser] = useState(null);
+  // Initial project list with some examples demonstrating various statuses
+  const initialTasks = [
+    {
+      id: 1,
+      client: "Alice",
+      packageCount: 10,
+      selectedCount: 12,
+      extras: 2,
+      turnaround: 3,
+      dueDate: new Date(2025, 7, 7),  // Aug 7, 2025
+      status: "Awaiting Payment",
+      invoicePaid: false,
+      assignedTo: null,
+      rating: null
+    },
+    {
+      id: 2,
+      client: "Bob",
+      packageCount: 5,
+      selectedCount: 5,
+      extras: 0,
+      turnaround: 3,
+      dueDate: new Date(2025, 7, 9),  // Aug 9, 2025
+      status: "Ready for Retouching",
+      invoicePaid: true,
+      assignedTo: null,
+      rating: null
+    },
+    {
+      id: 3,
+      client: "Charlie",
+      packageCount: 8,
+      selectedCount: 8,
+      extras: 0,
+      turnaround: 3,
+      dueDate: new Date(2025, 7, 1),  // Aug 1, 2025
+      status: "Review",
+      invoicePaid: true,
+      assignedTo: "Retoucher 2",
+      rating: null
+    },
+    {
+      id: 4,
+      client: "Daisy",
+      packageCount: 7,
+      selectedCount: 10,
+      extras: 3,
+      turnaround: 2,
+      dueDate: new Date(2025, 7, 2),  // Aug 2, 2025
+      status: "Delivered",
+      invoicePaid: true,
+      assignedTo: "Retoucher 1",
+      rating: 5
+    },
+    {
+      id: 5,
+      client: "Eve",
+      packageCount: 4,
+      selectedCount: 4,
+      extras: 0,
+      turnaround: 2,
+      dueDate: new Date(2025, 7, 8),  // Aug 8, 2025
+      status: "Assigned",
+      invoicePaid: true,
+      assignedTo: "Retoucher 3",
+      rating: null
+    }
+  ];
+  const [tasks, setTasks] = useState(initialTasks);
+  const [nextId, setNextId] = useState(initialTasks.length + 1);
+
+  // Handle role selection (login)
+  const handleChangeRole = (roleValue) => {
+    if (!roleValue) {
+      setUser(null);
+    } else if (roleValue === "Admin") {
+      setUser({ role: "Admin", name: "Sales/Admin", value: "Admin" });
+    } else if (roleValue === "LeadRetoucher") {
+      setUser({ role: "LeadRetoucher", name: "Lead Retoucher", value: "LeadRetoucher" });
+    } else if (roleValue === "DataWrangler") {
+      setUser({ role: "DataWrangler", name: "Data Wrangler", value: "DataWrangler" });
+    } else if (roleValue.startsWith("Retoucher")) {
+      // Extract retoucher number from value, e.g., "Retoucher1" -> "Retoucher 1"
+      const num = roleValue.slice("Retoucher".length);
+      const name = "Retoucher " + num;
+      setUser({ role: "Retoucher", name: name, value: roleValue });
+    }
+  };
+
+  // Add a new project to the list
+  const addProject = ({ clientName, packageCount, selectedCount, turnaround }) => {
+    const extras = Math.max(0, selectedCount - packageCount);
+    const status = extras > 0 ? "Awaiting Payment" : "Ready for Retouching";
+    const invoicePaid = extras > 0 ? false : true;
+    const dueDate = new Date();
+    dueDate.setDate(dueDate.getDate() + (turnaround === 3 ? 21 : 14));
+    const newTask = {
+      id: nextId,
+      client: clientName,
+      packageCount,
+      selectedCount,
+      extras,
+      turnaround,
+      dueDate,
+      status,
+      invoicePaid,
+      assignedTo: null,
+      rating: null
+    };
+    setTasks([...tasks, newTask]);
+    setNextId(nextId + 1);
+  };
+
+  // Assign (or reassign) a task to a retoucher
+  const assignTask = (taskId, retoucherName) => {
+    setTasks(tasks.map(t => {
+      if (t.id === taskId) {
+        // If task was not assigned yet, update status to "Assigned"
+        const newStatus = (t.status === "Ready for Retouching") ? "Assigned" : t.status;
+        return { ...t, assignedTo: retoucherName, status: newStatus };
+      }
+      return t;
+    }));
+  };
+
+  // Mark invoice as paid (allow retouching to start)
+  const markInvoicePaid = (taskId) => {
+    setTasks(tasks.map(t => {
+      if (t.id === taskId) {
+        // Only applicable for "Awaiting Payment" tasks
+        const newStatus = t.status === "Awaiting Payment"
+          ? (t.assignedTo ? "Assigned" : "Ready for Retouching")
+          : t.status;
+        return { ...t, invoicePaid: true, status: newStatus };
+      }
+      return t;
+    }));
+  };
+
+  // Retoucher marks a task as done (complete editing)
+  const markDone = (taskId) => {
+    setTasks(tasks.map(t => 
+      t.id === taskId ? { ...t, status: "Review" } : t
+    ));
+  };
+
+  // Admin requests revision (undo completion)
+  const requestRevision = (taskId) => {
+    setTasks(tasks.map(t => 
+      t.id === taskId ? { ...t, status: "Assigned" } : t
+    ));
+  };
+
+  // Admin delivers the project (finalize)
+  const deliverTask = (taskId) => {
+    setTasks(tasks.map(t => 
+      t.id === taskId ? { ...t, status: "Delivered" } : t
+    ));
+  };
+
+  // Admin sets a rating for a delivered project
+  const setRating = (taskId, rating) => {
+    setTasks(tasks.map(t => 
+      t.id === taskId ? { ...t, rating: rating } : t
+    ));
+  };
+
+  // Filter tasks for the current user (retoucher sees only their tasks)
+  let visibleTasks = tasks;
+  if (user && user.role === "Retoucher") {
+    visibleTasks = tasks.filter(t => t.assignedTo === user.name && t.status !== "Delivered");
+  }
+  // (Admins/Leads/Data see all projects including delivered ones for record)
+
+  return (
+    <div>
+      <h2>Jepson Myles Studio – Photo Editing Workflow</h2>
+      {/* Role selection dropdown */}
+      <RoleSelector user={user} onChangeRole={handleChangeRole} />
+      {!user ? (
+        <p><em>Please select a role to continue.</em></p>
+      ) : (
+        <div>
+          <p>Logged in as <strong>{user.name}</strong></p>
+          {/* Show project creation form for roles that can add projects */}
+          {user.role !== "Retoucher" && <AddProjectForm onAddProject={addProject} />}
+          {/* Show the task table for the visible projects */}
+          <TaskTable 
+            tasks={visibleTasks} 
+            user={user}
+            onAssign={assignTask}
+            onMarkPaid={markInvoicePaid}
+            onMarkDone={markDone}
+            onUndo={requestRevision}
+            onDeliver={deliverTask}
+            onSetRating={setRating}
+          />
+        </div>
+      )}
+      {/* Basic styling for table and status highlighting */}
+      <style>{`
+        table { border-collapse: collapse; width: 100%; margin-bottom: 1em; }
+        th, td { padding: 8px; border-bottom: 1px solid #ccc; }
+        th { background: #f9f9f9; text-align: left; }
+        tr:nth-child(even) { background: #f5f5f5; }
+        .status-awaiting { color: #d9534f; font-weight: bold; }    /* red */
+        .status-ready { color: #5bc0de; font-weight: bold; }       /* blue (info) */
+        .status-assigned { color: #5bc0de; font-weight: bold; }    /* blue */
+        .status-review { color: #f0ad4e; font-weight: bold; }      /* orange */
+        .status-delivered { color: #5cb85c; font-weight: bold; }   /* green */
+      `}</style>
+    </div>
+  );
+}
+
+export default App;
