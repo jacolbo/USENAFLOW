@@ -1,0 +1,304 @@
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
+import { Project } from "@shared/schema";
+import { User } from "@/lib/types";
+import { Calendar, Star } from "lucide-react";
+
+interface TaskTableProps {
+  projects: Project[];
+  user: User;
+}
+
+export function TaskTable({ projects, user }: TaskTableProps) {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  const updateProjectMutation = useMutation({
+    mutationFn: async ({ id, endpoint, data }: { id: string; endpoint: string; data?: any }) => {
+      const response = await apiRequest("PATCH", `/api/projects/${id}/${endpoint}`, data);
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to update project. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Helper: get Monday of the week for a given date
+  const getWeekStart = (date: Date) => {
+    const d = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    const day = d.getDay(); // 0 = Sunday, 1 = Monday, etc.
+    const diff = day === 0 ? -6 : 1 - day; // adjust Sunday to previous Monday
+    d.setDate(d.getDate() + diff);
+    return d;
+  };
+
+  // Helper: format date as "Mon DD, YYYY"
+  const formatDate = (date: Date) =>
+    date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+
+  // Group projects by week (Monday start date)
+  const groups: { key: number; weekStart: Date; projects: Project[] }[] = [];
+  projects.forEach(project => {
+    const weekStart = getWeekStart(new Date(project.dueDate));
+    const key = weekStart.getTime();
+    let group = groups.find(g => g.key === key);
+    if (!group) {
+      group = { key: key, weekStart: weekStart, projects: [] };
+      groups.push(group);
+    }
+    group.projects.push(project);
+  });
+
+  // Sort groups by weekStart date
+  groups.sort((a, b) => a.weekStart.getTime() - b.weekStart.getTime());
+
+  const getStatusBadge = (status: string) => {
+    const statusConfig = {
+      "Awaiting Payment": { variant: "secondary" as const, className: "bg-orange-500 text-white hover:bg-orange-600" },
+      "Ready for Retouching": { variant: "secondary" as const, className: "bg-blue-500 text-white hover:bg-blue-600" },
+      "Assigned": { variant: "secondary" as const, className: "bg-purple-500 text-white hover:bg-purple-600" },
+      "Review": { variant: "secondary" as const, className: "bg-red-500 text-white hover:bg-red-600" },
+      "Delivered": { variant: "secondary" as const, className: "bg-green-500 text-white hover:bg-green-600" },
+    };
+
+    const config = statusConfig[status as keyof typeof statusConfig] || { variant: "secondary" as const, className: "" };
+    return (
+      <Badge variant={config.variant} className={config.className}>
+        {status}
+      </Badge>
+    );
+  };
+
+  const handleAssign = (projectId: string, retoucherName: string) => {
+    updateProjectMutation.mutate({
+      id: projectId,
+      endpoint: "assign",
+      data: { assignedTo: retoucherName },
+    });
+  };
+
+  const handleMarkPaid = (projectId: string) => {
+    updateProjectMutation.mutate({
+      id: projectId,
+      endpoint: "mark-paid",
+    });
+  };
+
+  const handleMarkDone = (projectId: string) => {
+    updateProjectMutation.mutate({
+      id: projectId,
+      endpoint: "mark-done",
+    });
+  };
+
+  const handleRequestRevision = (projectId: string) => {
+    updateProjectMutation.mutate({
+      id: projectId,
+      endpoint: "request-revision",
+    });
+  };
+
+  const handleDeliver = (projectId: string) => {
+    updateProjectMutation.mutate({
+      id: projectId,
+      endpoint: "deliver",
+    });
+  };
+
+  const handleSetRating = (projectId: string, rating: number) => {
+    updateProjectMutation.mutate({
+      id: projectId,
+      endpoint: "rating",
+      data: { rating },
+    });
+  };
+
+  // Filter projects for retouchers
+  let visibleProjects = projects;
+  if (user.role === "Retoucher") {
+    visibleProjects = projects.filter(p => p.assignedTo === user.name && p.status !== "Delivered");
+  }
+
+  // Re-group the filtered projects
+  const visibleGroups: { key: number; weekStart: Date; projects: Project[] }[] = [];
+  visibleProjects.forEach(project => {
+    const weekStart = getWeekStart(new Date(project.dueDate));
+    const key = weekStart.getTime();
+    let group = visibleGroups.find(g => g.key === key);
+    if (!group) {
+      group = { key: key, weekStart: weekStart, projects: [] };
+      visibleGroups.push(group);
+    }
+    group.projects.push(project);
+  });
+
+  visibleGroups.sort((a, b) => a.weekStart.getTime() - b.weekStart.getTime());
+
+  return (
+    <div className="space-y-8">
+      {visibleGroups.map(group => {
+        const monday = group.weekStart;
+        const sunday = new Date(monday);
+        sunday.setDate(monday.getDate() + 6);
+        const weekLabel = `${formatDate(monday)} - ${formatDate(sunday)}`;
+        
+        // Sort projects in each week by due date
+        group.projects.sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
+        
+        return (
+          <Card key={group.key}>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Calendar className="h-5 w-5 text-gray-600" />
+                Week of {weekLabel}
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Client</TableHead>
+                      <TableHead>Pkg</TableHead>
+                      <TableHead>Sel</TableHead>
+                      <TableHead>Extra</TableHead>
+                      <TableHead>Turn</TableHead>
+                      <TableHead>Due</TableHead>
+                      <TableHead>Retoucher</TableHead>
+                      <TableHead>Status</TableHead>
+                      {user.role === 'Admin' && <TableHead>Rating</TableHead>}
+                      <TableHead>Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {group.projects.map(project => (
+                      <TableRow key={project.id}>
+                        <TableCell className="font-medium">{project.clientName}</TableCell>
+                        <TableCell>{project.packageCount}</TableCell>
+                        <TableCell>{project.selectedCount}</TableCell>
+                        <TableCell>{project.extras}</TableCell>
+                        <TableCell>{project.turnaround} wk</TableCell>
+                        <TableCell>{formatDate(new Date(project.dueDate))}</TableCell>
+                        <TableCell>{project.assignedTo || "-"}</TableCell>
+                        <TableCell>{getStatusBadge(project.status)}</TableCell>
+                        {user.role === 'Admin' && (
+                          <TableCell>
+                            {project.status === "Delivered" ? (
+                              <div className="flex items-center gap-2">
+                                {project.rating && (
+                                  <div className="flex items-center gap-1">
+                                    <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
+                                    <span>{project.rating}</span>
+                                  </div>
+                                )}
+                                <Select
+                                  value={project.rating?.toString() || ""}
+                                  onValueChange={(value) => handleSetRating(project.id, parseInt(value, 10))}
+                                >
+                                  <SelectTrigger className="w-32">
+                                    <SelectValue placeholder="Rate..." />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="1">1 – Poor</SelectItem>
+                                    <SelectItem value="2">2 – Fair</SelectItem>
+                                    <SelectItem value="3">3 – Good</SelectItem>
+                                    <SelectItem value="4">4 – Very Good</SelectItem>
+                                    <SelectItem value="5">5 – Excellent</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                            ) : (
+                              project.rating || "-"
+                            )}
+                          </TableCell>
+                        )}
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            {/* Lead Retoucher or Admin can assign tasks */}
+                            {(user.role === 'LeadRetoucher' || user.role === 'Admin') 
+                              && (project.status === 'Ready for Retouching' || project.status === 'Assigned') && (
+                              <Select
+                                value={project.assignedTo || ""}
+                                onValueChange={(value) => handleAssign(project.id, value)}
+                              >
+                                <SelectTrigger className="w-40">
+                                  <SelectValue placeholder={project.assignedTo ? "Reassign to..." : "Assign to..."} />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="Retoucher 1">Retoucher 1</SelectItem>
+                                  <SelectItem value="Retoucher 2">Retoucher 2</SelectItem>
+                                  <SelectItem value="Retoucher 3">Retoucher 3</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            )}
+                            
+                            {/* Admin can mark invoice paid */}
+                            {user.role === 'Admin' && project.status === 'Awaiting Payment' && (
+                              <Button 
+                                size="sm" 
+                                onClick={() => handleMarkPaid(project.id)}
+                                disabled={updateProjectMutation.isPending}
+                              >
+                                Mark Paid
+                              </Button>
+                            )}
+                            
+                            {/* Retoucher can mark done on their assigned task */}
+                            {user.role === 'Retoucher' && project.assignedTo === user.name && project.status === 'Assigned' && (
+                              <Button 
+                                size="sm" 
+                                onClick={() => handleMarkDone(project.id)}
+                                disabled={updateProjectMutation.isPending}
+                              >
+                                Mark Done
+                              </Button>
+                            )}
+                            
+                            {/* Admin can deliver or request revision when in Review */}
+                            {user.role === 'Admin' && project.status === 'Review' && (
+                              <>
+                                <Button 
+                                  size="sm" 
+                                  onClick={() => handleDeliver(project.id)}
+                                  disabled={updateProjectMutation.isPending}
+                                  className="bg-green-600 hover:bg-green-700"
+                                >
+                                  Deliver
+                                </Button>
+                                <Button 
+                                  size="sm" 
+                                  variant="outline"
+                                  onClick={() => handleRequestRevision(project.id)}
+                                  disabled={updateProjectMutation.isPending}
+                                >
+                                  Revision
+                                </Button>
+                              </>
+                            )}
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </CardContent>
+          </Card>
+        );
+      })}
+    </div>
+  );
+}
