@@ -9,7 +9,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { AlertCircle, ArrowLeft } from "lucide-react";
-import logoImage from "@assets/ChatGPT Image Aug 7, 2025 at 01_05_33 AM_1754521723298.png";
+import logoImage from "@assets/USENA-FLOW_1754522507856.png";
 import { useToast } from "@/hooks/use-toast";
 
 const registerSchema = z.object({

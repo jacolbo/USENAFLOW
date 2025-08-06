@@ -9,7 +9,7 @@ import { StatusLegend } from "@/components/status-legend";
 import { User } from "@/lib/types";
 import { Project } from "@shared/schema";
 import { User as UserIcon, LogOut, Settings } from "lucide-react";
-import logoImage from "@assets/ChatGPT Image Aug 7, 2025 at 01_05_33 AM_1754521723298.png";
+import logoImage from "@assets/USENA-FLOW_1754522507856.png";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
