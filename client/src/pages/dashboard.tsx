@@ -74,6 +74,9 @@ export default function Dashboard() {
           </div>
         ) : (
           <div className="space-y-8">
+            {/* Status Legend - only for Admin, LeadRetoucher, and DataWrangler */}
+            <StatusLegend projects={projects} user={user} />
+            
             {/* Show project creation form for roles that can add projects */}
             {user.role !== "Retoucher" && (
               <AddProjectForm onAddProject={() => {}} />
@@ -81,9 +84,6 @@ export default function Dashboard() {
             
             {/* Show the task table for the visible projects */}
             <TaskTable projects={projects} user={user} />
-            
-            {/* Status Legend */}
-            <StatusLegend />
           </div>
         )}
       </main>
