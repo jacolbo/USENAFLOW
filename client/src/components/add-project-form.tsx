@@ -182,7 +182,7 @@ export function AddProjectForm({ onAddProject }: AddProjectFormProps) {
             <Button 
               type="submit" 
               disabled={createProjectMutation.isPending}
-              className="inline-flex items-center gap-2"
+              className="inline-flex items-center gap-2 bg-black hover:bg-gray-800 text-white"
             >
               <Plus className="h-4 w-4" />
               Create Project
