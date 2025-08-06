@@ -137,7 +137,7 @@ export function LoginForm({ onLogin, onShowRegister, userCredentials }: LoginFor
             <img 
               src={logoImage} 
               alt="USENA FLOW" 
-              className="h-16"
+              className="h-20"
             />
           </div>
           <p className="mt-2 text-sm text-gray-600">by Jepson Myles Studio</p>

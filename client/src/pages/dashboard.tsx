@@ -168,7 +168,7 @@ export default function Dashboard() {
                 <img 
                   src={logoImage} 
                   alt="USENA FLOW" 
-                  className="h-8 mr-3"
+                  className="h-10 mr-3"
                 />
                 <span className="text-sm text-gray-600">by Jepson Myles Studio</span>
               </div>
