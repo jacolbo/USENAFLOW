@@ -16,6 +16,14 @@ export function StatusLegend({ projects, user }: StatusLegendProps) {
     return null;
   }
 
+  const getWeekStart = (date: Date) => {
+    const d = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    const day = d.getDay();
+    const diff = day === 0 ? -6 : 1 - day;
+    d.setDate(d.getDate() + diff);
+    return d;
+  };
+
   const currentWeekProjects = useMemo(() => {
     const now = new Date();
     const currentWeekStart = getWeekStart(now);
@@ -43,14 +51,6 @@ export function StatusLegend({ projects, user }: StatusLegendProps) {
 
     return dayGroups;
   }, [projects]);
-
-  const getWeekStart = (date: Date) => {
-    const d = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-    const day = d.getDay();
-    const diff = day === 0 ? -6 : 1 - day;
-    d.setDate(d.getDate() + diff);
-    return d;
-  };
 
   const getRetoucherPrefix = (assignedTo: string | null) => {
     if (!assignedTo) return '';
