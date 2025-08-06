@@ -6,11 +6,12 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { User } from "@/lib/types";
-import { UserPlus, Users, Trash2 } from "lucide-react";
+import { UserPlus, Users, Trash2, Edit } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 const addUserSchema = z.object({
@@ -24,43 +25,88 @@ type AddUserFormData = z.infer<typeof addUserSchema>;
 interface UserManagementProps {
   users: User[];
   onAddUser: (user: User) => void;
+  onEditUser: (userId: string, updatedUser: Partial<User>) => void;
   onDeleteUser: (userId: string) => void;
   currentUser: User;
 }
 
-export function UserManagement({ users, onAddUser, onDeleteUser, currentUser }: UserManagementProps) {
+export function UserManagement({ users, onAddUser, onEditUser, onDeleteUser, currentUser }: UserManagementProps) {
   const { toast } = useToast();
   const [isAddingUser, setIsAddingUser] = useState(false);
+  const [editingUser, setEditingUser] = useState<User | null>(null);
 
   const {
-    register,
-    handleSubmit,
-    reset,
-    setValue,
-    watch,
-    formState: { errors }
+    register: registerAdd,
+    handleSubmit: handleSubmitAdd,
+    reset: resetAdd,
+    setValue: setValueAdd,
+    watch: watchAdd,
+    formState: { errors: errorsAdd }
   } = useForm<AddUserFormData>({
     resolver: zodResolver(addUserSchema)
   });
 
-  const selectedRole = watch("role");
+  const {
+    register: registerEdit,
+    handleSubmit: handleSubmitEdit,
+    reset: resetEdit,
+    setValue: setValueEdit,
+    watch: watchEdit,
+    formState: { errors: errorsEdit }
+  } = useForm<AddUserFormData>({
+    resolver: zodResolver(addUserSchema)
+  });
 
-  const onSubmit = (data: AddUserFormData) => {
+  const selectedRole = watchAdd("role");
+  const selectedEditRole = watchEdit("role");
+
+  const onSubmitAdd = (data: AddUserFormData) => {
     const newUser: User = {
-      id: Date.now().toString(), // Simple ID generation
+      id: Date.now().toString(),
       name: data.name,
       role: data.role,
-      value: data.role === "Retoucher" ? `Retoucher_${Date.now()}` : data.role,
+      value: data.role === "Retoucher" ? `${data.name}_${Date.now()}` : `${data.role}_${Date.now()}`,
       abbr: data.abbreviation
     };
 
     onAddUser(newUser);
-    reset();
+    resetAdd();
     setIsAddingUser(false);
     
     toast({
-      title: "User Added",
+      title: "Team Member Added",
       description: `${data.name} has been added as ${data.role}`,
+    });
+  };
+
+  const onSubmitEdit = (data: AddUserFormData) => {
+    if (!editingUser) return;
+
+    const updatedUser: Partial<User> = {
+      name: data.name,
+      role: data.role,
+      abbr: data.abbreviation,
+      // Update value if role changed
+      value: data.role === editingUser.role ? editingUser.value : 
+             data.role === "Retoucher" ? `${data.name}_${Date.now()}` : `${data.role}_${Date.now()}`
+    };
+
+    onEditUser(editingUser.id!, updatedUser);
+    resetEdit();
+    setEditingUser(null);
+    
+    toast({
+      title: "Team Member Updated",
+      description: `${data.name} has been updated`,
+    });
+  };
+
+  const handleEditUser = (user: User) => {
+    setEditingUser(user);
+    resetEdit({
+      name: user.name,
+      role: user.role,
+      abbreviation: user.abbr || ""
     });
   };
 
@@ -68,7 +114,7 @@ export function UserManagement({ users, onAddUser, onDeleteUser, currentUser }: 
     if (user.id && window.confirm(`Are you sure you want to delete ${user.name}?`)) {
       onDeleteUser(user.id);
       toast({
-        title: "User Deleted",
+        title: "Team Member Deleted",
         description: `${user.name} has been removed`,
         variant: "destructive",
       });
@@ -96,7 +142,7 @@ export function UserManagement({ users, onAddUser, onDeleteUser, currentUser }: 
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Users className="h-5 w-5" />
-          User Management
+          Team Management
         </CardTitle>
       </CardHeader>
       <CardContent>
@@ -116,23 +162,23 @@ export function UserManagement({ users, onAddUser, onDeleteUser, currentUser }: 
                 <CardTitle className="text-lg">Add New Team Member</CardTitle>
               </CardHeader>
               <CardContent>
-                <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+                <form onSubmit={handleSubmitAdd(onSubmitAdd)} className="space-y-4">
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div>
                       <Label htmlFor="name">Full Name</Label>
                       <Input
                         id="name"
-                        {...register("name")}
+                        {...registerAdd("name")}
                         placeholder="e.g. Thandi"
                       />
-                      {errors.name && (
-                        <p className="text-sm text-red-600 mt-1">{errors.name.message}</p>
+                      {errorsAdd.name && (
+                        <p className="text-sm text-red-600 mt-1">{errorsAdd.name.message}</p>
                       )}
                     </div>
                     
                     <div>
                       <Label htmlFor="role">Role</Label>
-                      <Select onValueChange={(value) => setValue("role", value)}>
+                      <Select onValueChange={(value) => setValueAdd("role", value)}>
                         <SelectTrigger>
                           <SelectValue placeholder="Select role" />
                         </SelectTrigger>
@@ -144,8 +190,8 @@ export function UserManagement({ users, onAddUser, onDeleteUser, currentUser }: 
                           <SelectItem value="Retoucher">Retoucher</SelectItem>
                         </SelectContent>
                       </Select>
-                      {errors.role && (
-                        <p className="text-sm text-red-600 mt-1">{errors.role.message}</p>
+                      {errorsAdd.role && (
+                        <p className="text-sm text-red-600 mt-1">{errorsAdd.role.message}</p>
                       )}
                     </div>
                     
@@ -153,24 +199,24 @@ export function UserManagement({ users, onAddUser, onDeleteUser, currentUser }: 
                       <Label htmlFor="abbreviation">Abbreviation</Label>
                       <Input
                         id="abbreviation"
-                        {...register("abbreviation")}
+                        {...registerAdd("abbreviation")}
                         placeholder="e.g. TM"
                         maxLength={3}
                       />
-                      {errors.abbreviation && (
-                        <p className="text-sm text-red-600 mt-1">{errors.abbreviation.message}</p>
+                      {errorsAdd.abbreviation && (
+                        <p className="text-sm text-red-600 mt-1">{errorsAdd.abbreviation.message}</p>
                       )}
                     </div>
                   </div>
                   
                   <div className="flex gap-2">
-                    <Button type="submit">Add User</Button>
+                    <Button type="submit">Add Member</Button>
                     <Button 
                       type="button" 
                       variant="outline" 
                       onClick={() => {
                         setIsAddingUser(false);
-                        reset();
+                        resetAdd();
                       }}
                     >
                       Cancel
@@ -206,17 +252,101 @@ export function UserManagement({ users, onAddUser, onDeleteUser, currentUser }: 
                       <Badge variant="outline">{user.abbr || "—"}</Badge>
                     </TableCell>
                     <TableCell>
-                      {user.id && (
-                        <Button
-                          size="sm"
-                          variant="destructive"
-                          onClick={() => handleDeleteUser(user)}
-                          className="flex items-center gap-1"
-                        >
-                          <Trash2 className="h-3 w-3" />
-                          Delete
-                        </Button>
-                      )}
+                      <div className="flex gap-2">
+                        {user.id && (
+                          <>
+                            <Dialog>
+                              <DialogTrigger asChild>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => handleEditUser(user)}
+                                  className="flex items-center gap-1"
+                                >
+                                  <Edit className="h-3 w-3" />
+                                  Edit
+                                </Button>
+                              </DialogTrigger>
+                              <DialogContent>
+                                <DialogHeader>
+                                  <DialogTitle>Edit Team Member</DialogTitle>
+                                </DialogHeader>
+                                <form onSubmit={handleSubmitEdit(onSubmitEdit)} className="space-y-4">
+                                  <div className="grid grid-cols-1 gap-4">
+                                    <div>
+                                      <Label htmlFor="edit-name">Full Name</Label>
+                                      <Input
+                                        id="edit-name"
+                                        {...registerEdit("name")}
+                                        placeholder="e.g. Thandi"
+                                      />
+                                      {errorsEdit.name && (
+                                        <p className="text-sm text-red-600 mt-1">{errorsEdit.name.message}</p>
+                                      )}
+                                    </div>
+                                    
+                                    <div>
+                                      <Label htmlFor="edit-role">Role</Label>
+                                      <Select onValueChange={(value) => setValueEdit("role", value)} defaultValue={editingUser?.role}>
+                                        <SelectTrigger>
+                                          <SelectValue placeholder="Select role" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                          <SelectItem value="Admin">Admin</SelectItem>
+                                          <SelectItem value="Sales">Sales</SelectItem>
+                                          <SelectItem value="LeadRetoucher">Lead Retoucher</SelectItem>
+                                          <SelectItem value="DataWrangler">Data Wrangler</SelectItem>
+                                          <SelectItem value="Retoucher">Retoucher</SelectItem>
+                                        </SelectContent>
+                                      </Select>
+                                      {errorsEdit.role && (
+                                        <p className="text-sm text-red-600 mt-1">{errorsEdit.role.message}</p>
+                                      )}
+                                    </div>
+                                    
+                                    <div>
+                                      <Label htmlFor="edit-abbreviation">Abbreviation</Label>
+                                      <Input
+                                        id="edit-abbreviation"
+                                        {...registerEdit("abbreviation")}
+                                        placeholder="e.g. TM"
+                                        maxLength={3}
+                                      />
+                                      {errorsEdit.abbreviation && (
+                                        <p className="text-sm text-red-600 mt-1">{errorsEdit.abbreviation.message}</p>
+                                      )}
+                                    </div>
+                                  </div>
+                                  
+                                  <div className="flex gap-2">
+                                    <Button type="submit">Update Member</Button>
+                                    <Button 
+                                      type="button" 
+                                      variant="outline" 
+                                      onClick={() => {
+                                        setEditingUser(null);
+                                        resetEdit();
+                                      }}
+                                    >
+                                      Cancel
+                                    </Button>
+                                  </div>
+                                </form>
+                              </DialogContent>
+                            </Dialog>
+                            
+                            <Button
+                              size="sm"
+                              variant="destructive"
+                              onClick={() => handleDeleteUser(user)}
+                              className="flex items-center gap-1"
+                            >
+                              <Trash2 className="h-3 w-3" />
+                              Delete
+                            </Button>
+                          </>
+                        )}
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}

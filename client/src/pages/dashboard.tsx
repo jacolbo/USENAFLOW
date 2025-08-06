@@ -12,44 +12,54 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 
 export default function Dashboard() {
   const [user, setUser] = useState<User | null>(null);
-  const [customUsers, setCustomUsers] = useState<User[]>([]);
+  const [users, setUsers] = useState<User[]>([
+    { id: "1", name: "Earl", role: "Retoucher", value: "Retoucher1", abbr: "EC" },
+    { id: "2", name: "Dr Asa", role: "Retoucher", value: "Retoucher2", abbr: "ASA" },
+    { id: "3", name: "Lucky", role: "Retoucher", value: "Retoucher3", abbr: "LM" },
+    // Default system users without IDs (cannot be edited/deleted)
+    { name: "Sales/Admin", role: "Admin", value: "Admin" },
+    { name: "Lead Retoucher", role: "LeadRetoucher", value: "LeadRetoucher" },
+    { name: "Data Wrangler", role: "DataWrangler", value: "DataWrangler" },
+  ]);
 
   const { data: projects = [], isLoading } = useQuery<Project[]>({
     queryKey: ["/api/projects"],
     enabled: !!user,
   });
 
-  // Combine default users with custom users
-  const allUsers = [
-    ...Object.values(ROLE_MAPPINGS),
-    ...customUsers
-  ];
-
   const handleChangeRole = (roleValue: string) => {
     if (!roleValue) {
       setUser(null);
     } else {
-      // First check custom users
-      const customUser = customUsers.find(u => u.value === roleValue);
-      if (customUser) {
-        setUser(customUser);
-        return;
-      }
-      
-      // Then check default role mappings
-      const roleMapping = ROLE_MAPPINGS[roleValue as keyof typeof ROLE_MAPPINGS];
-      if (roleMapping) {
-        setUser(roleMapping);
+      const foundUser = users.find(u => u.value === roleValue);
+      if (foundUser) {
+        setUser(foundUser);
       }
     }
   };
 
   const handleAddUser = (newUser: User) => {
-    setCustomUsers(prev => [...prev, newUser]);
+    setUsers(prev => [...prev, newUser]);
+  };
+
+  const handleEditUser = (userId: string, updatedUser: Partial<User>) => {
+    setUsers(prev => prev.map(u => 
+      u.id === userId ? { ...u, ...updatedUser } : u
+    ));
+    
+    // If editing the current user, update the user state
+    if (user && user.id === userId) {
+      setUser(prev => prev ? { ...prev, ...updatedUser } : null);
+    }
   };
 
   const handleDeleteUser = (userId: string) => {
-    setCustomUsers(prev => prev.filter(u => u.id !== userId));
+    setUsers(prev => prev.filter(u => u.id !== userId));
+    
+    // If deleting the current user, reset to null
+    if (user && user.id === userId) {
+      setUser(null);
+    }
   };
 
   if (isLoading) {
@@ -73,7 +83,7 @@ export default function Dashboard() {
               <h1 className="text-xl font-semibold text-gray-900">Photography Workflow</h1>
             </div>
             <div className="flex items-center space-x-4">
-              <RoleSelector user={user} onChangeRole={handleChangeRole} allUsers={allUsers} />
+              <RoleSelector user={user} onChangeRole={handleChangeRole} allUsers={users} />
               {user && (
                 <div className="flex items-center space-x-2">
                   <Avatar className="w-8 h-8">
@@ -98,18 +108,19 @@ export default function Dashboard() {
           </div>
         ) : (
           <div className="space-y-8">
-            {/* User Management Panel - only for Admin */}
+            {/* Team Management Panel - only for Admin */}
             {user && (
               <UserManagement 
-                users={allUsers} 
+                users={users} 
                 onAddUser={handleAddUser}
+                onEditUser={handleEditUser}
                 onDeleteUser={handleDeleteUser}
                 currentUser={user}
               />
             )}
             
             {/* Status Legend - only for Admin, LeadRetoucher, and DataWrangler */}
-            <StatusLegend projects={projects} user={user} allUsers={allUsers} />
+            <StatusLegend projects={projects} user={user} allUsers={users} />
             
             {/* Show project creation form for roles that can add projects */}
             {user.role !== "Retoucher" && (
@@ -117,7 +128,7 @@ export default function Dashboard() {
             )}
             
             {/* Show the task table for the visible projects */}
-            <TaskTable projects={projects} user={user} allUsers={allUsers} />
+            <TaskTable projects={projects} user={user} allUsers={users} />
           </div>
         )}
       </main>
