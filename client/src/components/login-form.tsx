@@ -142,18 +142,6 @@ export function LoginForm({ onLogin, userCredentials }: LoginFormProps) {
                 {isLoading ? "Signing in..." : "Sign In"}
               </Button>
             </form>
-
-            {/* Development Helper - Remove in production */}
-            <div className="mt-6 p-3 bg-gray-50 rounded-md border">
-              <h4 className="text-xs font-semibold text-gray-700 mb-2">Development Credentials:</h4>
-              <div className="text-xs text-gray-600 space-y-1">
-                <div><strong>Admin:</strong> admin / admin123</div>
-                <div><strong>Dr Asa:</strong> asa / asa123</div>
-                <div><strong>Lucky:</strong> lucky / lm123</div>
-                <div><strong>Earl:</strong> earl / ec123</div>
-                <div><strong>Workflow Manager:</strong> workflow / wm123</div>
-              </div>
-            </div>
           </CardContent>
         </Card>
       </div>
