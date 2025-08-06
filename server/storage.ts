@@ -134,14 +134,11 @@ export class MemStorage implements IStorage {
     const status = extras > 0 ? ProjectStatus.AWAITING_PAYMENT : ProjectStatus.READY_FOR_RETOUCHING;
     const invoicePaid = extras === 0;
     
-    const dueDate = new Date();
-    dueDate.setDate(dueDate.getDate() + (insertProject.turnaround === 3 ? 21 : 14));
-    
     const project: Project = {
       ...insertProject,
       id,
       extras,
-      dueDate,
+      dueDate: new Date(insertProject.dueDate),
       status,
       invoicePaid,
       assignedTo: null,

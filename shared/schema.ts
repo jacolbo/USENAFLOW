@@ -33,7 +33,6 @@ export const insertProjectSchema = createInsertSchema(projects).omit({
   id: true,
   createdAt: true,
   extras: true,
-  dueDate: true,
   status: true,
   invoicePaid: true,
 });

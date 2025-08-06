@@ -13,11 +13,47 @@ interface AddProjectFormProps {
   onAddProject: () => void;
 }
 
+// Helper function to get Monday of the current week
+const getWeekStart = (date: Date) => {
+  const d = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  const day = d.getDay(); // 0 = Sunday, 1 = Monday, etc.
+  const diff = day === 0 ? -6 : 1 - day; // adjust Sunday to previous Monday
+  d.setDate(d.getDate() + diff);
+  return d;
+};
+
+// Helper function to format date range for display
+const formatWeekRange = (monday: Date) => {
+  const sunday = new Date(monday);
+  sunday.setDate(monday.getDate() + 6);
+  const formatDate = (date: Date) =>
+    date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  return `${formatDate(monday)} – ${formatDate(sunday)}`;
+};
+
+// Generate week options (current week + 4 weeks ahead)
+const generateWeekOptions = () => {
+  const currentWeekStart = getWeekStart(new Date());
+  const options = [];
+  
+  for (let i = 0; i < 5; i++) {
+    const weekStart = new Date(currentWeekStart);
+    weekStart.setDate(currentWeekStart.getDate() + (i * 7));
+    
+    options.push({
+      value: weekStart.toISOString(),
+      label: `Week of ${formatWeekRange(weekStart)}`
+    });
+  }
+  
+  return options;
+};
+
 export function AddProjectForm({ onAddProject }: AddProjectFormProps) {
   const [clientName, setClientName] = useState("");
   const [packageCount, setPackageCount] = useState("");
   const [selectedCount, setSelectedCount] = useState("");
-  const [turnaround, setTurnaround] = useState("3");
+  const [dueWeek, setDueWeek] = useState("");
 
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -32,7 +68,7 @@ export function AddProjectForm({ onAddProject }: AddProjectFormProps) {
       setClientName("");
       setPackageCount("");
       setSelectedCount("");
-      setTurnaround("3");
+      setDueWeek("");
       onAddProject();
       toast({
         title: "Project created",
@@ -51,7 +87,7 @@ export function AddProjectForm({ onAddProject }: AddProjectFormProps) {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!clientName || !packageCount || !selectedCount) {
+    if (!clientName || !packageCount || !selectedCount || !dueWeek) {
       toast({
         title: "Validation Error",
         description: "Please fill in all fields.",
@@ -76,7 +112,7 @@ export function AddProjectForm({ onAddProject }: AddProjectFormProps) {
       clientName,
       packageCount: pkgCount,
       selectedCount: selCount,
-      turnaround: parseInt(turnaround, 10),
+      dueDate: dueWeek,
     });
   };
 
@@ -127,14 +163,17 @@ export function AddProjectForm({ onAddProject }: AddProjectFormProps) {
           </div>
           
           <div className="space-y-2">
-            <Label htmlFor="turnaround">Turnaround</Label>
-            <Select value={turnaround} onValueChange={setTurnaround}>
+            <Label htmlFor="dueWeek">Slot into Week</Label>
+            <Select value={dueWeek} onValueChange={setDueWeek}>
               <SelectTrigger>
-                <SelectValue />
+                <SelectValue placeholder="Select week" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="3">Standard (3 weeks)</SelectItem>
-                <SelectItem value="2">Fast-Track (2 weeks)</SelectItem>
+                {generateWeekOptions().map((option) => (
+                  <SelectItem key={option.value} value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
