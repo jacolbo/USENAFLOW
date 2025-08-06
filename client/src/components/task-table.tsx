@@ -8,7 +8,8 @@ import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Project } from "@shared/schema";
 import { User } from "@/lib/types";
-import { Calendar, Star } from "lucide-react";
+import { Calendar, Star, ChevronDown, ChevronRight } from "lucide-react";
+import { useState, useMemo } from "react";
 
 interface TaskTableProps {
   projects: Project[];
@@ -18,6 +19,46 @@ interface TaskTableProps {
 export function TaskTable({ projects, user }: TaskTableProps) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
+
+  // Helper function to get week start
+  const getWeekStart = (date: Date) => {
+    const d = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    const day = d.getDay(); // 0 = Sunday, 1 = Monday, etc.
+    const diff = day === 0 ? -6 : 1 - day; // adjust Sunday to previous Monday
+    d.setDate(d.getDate() + diff);
+    return d;
+  };
+
+  // State for collapsed weeks
+  const [collapsedWeeks, setCollapsedWeeks] = useState<Record<string, boolean>>(() => {
+    const now = new Date();
+    const currentWeekStart = getWeekStart(now);
+    const currentWeekKey = currentWeekStart.toISOString().split('T')[0];
+    
+    // Initialize with all weeks collapsed except current week
+    const initialState: Record<string, boolean> = {};
+    const projectWeeks = new Set(projects.map(p => getWeekStart(new Date(p.dueDate)).toISOString().split('T')[0]));
+    
+    projectWeeks.forEach(weekKey => {
+      // Only expand current week by default
+      initialState[weekKey] = weekKey !== currentWeekKey;
+    });
+    
+    return initialState;
+  });
+
+  const toggleWeek = (weekKey: string) => {
+    setCollapsedWeeks(prev => ({
+      ...prev,
+      [weekKey]: !prev[weekKey]
+    }));
+  };
+
+  const formatWeekRange = (weekStart: Date) => {
+    const weekEnd = new Date(weekStart);
+    weekEnd.setDate(weekStart.getDate() + 6);
+    return `${weekStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} – ${weekEnd.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
+  };
 
 
 
@@ -37,15 +78,6 @@ export function TaskTable({ projects, user }: TaskTableProps) {
       });
     },
   });
-
-  // Helper: get Monday of the week for a given date
-  const getWeekStart = (date: Date) => {
-    const d = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-    const day = d.getDay(); // 0 = Sunday, 1 = Monday, etc.
-    const diff = day === 0 ? -6 : 1 - day; // adjust Sunday to previous Monday
-    d.setDate(d.getDate() + diff);
-    return d;
-  };
 
   // Helper: format date as "Mon DD, YYYY"
   const formatDate = (date: Date) =>
@@ -212,20 +244,36 @@ export function TaskTable({ projects, user }: TaskTableProps) {
         const monday = group.weekStart;
         const sunday = new Date(monday);
         sunday.setDate(monday.getDate() + 6);
-        const weekLabel = `${formatDate(monday)} - ${formatDate(sunday)}`;
+        const weekLabel = formatWeekRange(monday);
+        const weekKey = monday.toISOString().split('T')[0];
+        const isCollapsed = collapsedWeeks[weekKey];
         
         // Sort projects in each week by due date
         group.projects.sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
         
         return (
           <Card key={group.key}>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Calendar className="h-5 w-5 text-gray-600" />
-                Week of {weekLabel}
+            <CardHeader 
+              className="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+              onClick={() => toggleWeek(weekKey)}
+            >
+              <CardTitle className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  {isCollapsed ? (
+                    <ChevronRight className="h-5 w-5 text-gray-600" />
+                  ) : (
+                    <ChevronDown className="h-5 w-5 text-gray-600" />
+                  )}
+                  <Calendar className="h-5 w-5 text-gray-600" />
+                  Week of {weekLabel}
+                </div>
+                <div className="flex items-center gap-2 text-sm text-gray-500">
+                  <span>📅 ({group.projects.length} projects)</span>
+                </div>
               </CardTitle>
             </CardHeader>
-            <CardContent>
+            {!isCollapsed && (
+              <CardContent>
               <div className="overflow-x-auto">
                 <Table>
                   <TableHeader>
@@ -396,7 +444,8 @@ export function TaskTable({ projects, user }: TaskTableProps) {
                   </TableBody>
                 </Table>
               </div>
-            </CardContent>
+              </CardContent>
+            )}
           </Card>
         );
       })}
