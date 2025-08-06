@@ -1,0 +1,71 @@
+✅ 1. Allow Admin, Sales, and Lead Retoucher to change the due week for any project
+Inside the <td> where task.dueDate is displayed, replace it with a dropdown only visible to Admin, Lead Retoucher, and Sales.
+The dropdown should list 5 week ranges, starting from this week (Monday) and going 4 weeks ahead.
+Each option should display: Week of Aug 5, 2025 – Aug 11, 2025, etc.
+When a new week is selected, it should update the project’s dueDate.
+Here’s the JSX to use:
+<td>
+  {['Admin', 'LeadRetoucher', 'Sales'].includes(user.role) ? (
+    <select
+      value={task.dueDate.toISOString()}
+      onChange={(e) => onChangeDueDate(task.id, new Date(e.target.value))}
+    >
+      {generateWeekOptions().map((option, idx) => (
+        <option key={idx} value={option.value}>
+          {option.label}
+        </option>
+      ))}
+    </select>
+  ) : (
+    formatDate(task.dueDate)
+  )}
+</td>
+Add this helper function inside the TaskTable component:
+const generateWeekOptions = () => {
+  const options = [];
+  const now = new Date();
+  const monday = new Date(now);
+  const day = monday.getDay();
+  const diff = day === 0 ? -6 : 1 - day;
+  monday.setDate(monday.getDate() + diff);
+
+  for (let i = 0; i < 5; i++) {
+    const weekStart = new Date(monday);
+    weekStart.setDate(monday.getDate() + i * 7);
+    const weekEnd = new Date(weekStart);
+    weekEnd.setDate(weekStart.getDate() + 6);
+    const label = `Week of ${weekStart.toLocaleDateString()} – ${weekEnd.toLocaleDateString()}`;
+    options.push({ value: weekStart.toISOString(), label });
+  }
+  return options;
+};
+Also implement the onChangeDueDate function in App.js:
+const changeDueDate = (taskId, newDate) => {
+  setTasks(tasks.map(t => t.id === taskId ? { ...t, dueDate: newDate } : t));
+};
+Pass it into the TaskTable:
+<TaskTable
+  ...
+  onChangeDueDate={changeDueDate}
+/>
+✅ 2. Allow Admin, Sales, and Lead Retoucher to delete a project
+In the “Actions” column of the project row, add a red “Delete” button for users with role Admin, Sales, or LeadRetoucher.
+When clicked, show a window.confirm() prompt.
+If confirmed, remove the project from state.
+Here’s the JSX to insert in the Actions column:
+{['Admin', 'Sales', 'LeadRetoucher'].includes(user.role) && (
+  <button onClick={() => onDeleteTask(task.id)} style={{ color: 'red' }}>
+    Delete
+  </button>
+)}
+Add the function in App.js:
+const deleteTask = (taskId) => {
+  if (window.confirm("Are you sure you want to delete this project?")) {
+    setTasks(tasks.filter(t => t.id !== taskId));
+  }
+};
+And pass it into TaskTable:
+<TaskTable
+  ...
+  onDeleteTask={deleteTask}
+/>

@@ -19,6 +19,26 @@ export function TaskTable({ projects, user }: TaskTableProps) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
+  // Generate week options for due date changes
+  const generateWeekOptions = () => {
+    const options = [];
+    const now = new Date();
+    const monday = new Date(now);
+    const day = monday.getDay();
+    const diff = day === 0 ? -6 : 1 - day;
+    monday.setDate(monday.getDate() + diff);
+
+    for (let i = 0; i < 5; i++) {
+      const weekStart = new Date(monday);
+      weekStart.setDate(monday.getDate() + i * 7);
+      const weekEnd = new Date(weekStart);
+      weekEnd.setDate(weekStart.getDate() + 6);
+      const label = `Week of ${weekStart.toLocaleDateString()} – ${weekEnd.toLocaleDateString()}`;
+      options.push({ value: weekStart.toISOString(), label });
+    }
+    return options;
+  };
+
   const updateProjectMutation = useMutation({
     mutationFn: async ({ id, endpoint, data }: { id: string; endpoint: string; data?: any }) => {
       const response = await apiRequest("PATCH", `/api/projects/${id}/${endpoint}`, data);
@@ -126,6 +146,41 @@ export function TaskTable({ projects, user }: TaskTableProps) {
     });
   };
 
+  const handleChangeDueDate = (projectId: string, newDate: Date) => {
+    updateProjectMutation.mutate({
+      id: projectId,
+      endpoint: "",
+      data: { dueDate: newDate.toISOString() },
+    });
+  };
+
+  const deleteProjectMutation = useMutation({
+    mutationFn: async (projectId: string) => {
+      const response = await apiRequest("DELETE", `/api/projects/${projectId}`);
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
+      toast({
+        title: "Project deleted",
+        description: "Project has been removed successfully.",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to delete project. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleDeleteProject = (projectId: string) => {
+    if (window.confirm("Are you sure you want to delete this project?")) {
+      deleteProjectMutation.mutate(projectId);
+    }
+  };
+
   // Filter projects for retouchers
   let visibleProjects = projects;
   if (user.role === "Retoucher") {
@@ -191,7 +246,27 @@ export function TaskTable({ projects, user }: TaskTableProps) {
                         <TableCell>{project.selectedCount}</TableCell>
                         <TableCell>{project.extras}</TableCell>
 
-                        <TableCell>{formatDate(new Date(project.dueDate))}</TableCell>
+                        <TableCell>
+                          {['Admin', 'LeadRetoucher'].includes(user.role) ? (
+                            <Select
+                              value={new Date(project.dueDate).toISOString()}
+                              onValueChange={(value) => handleChangeDueDate(project.id, new Date(value))}
+                            >
+                              <SelectTrigger className="w-40">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {generateWeekOptions().map((option, idx) => (
+                                  <SelectItem key={idx} value={option.value}>
+                                    {option.label}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          ) : (
+                            formatDate(new Date(project.dueDate))
+                          )}
+                        </TableCell>
                         <TableCell>{project.assignedTo || "-"}</TableCell>
                         <TableCell>{getStatusBadge(project.status)}</TableCell>
                         {user.role === 'Admin' && (
@@ -287,6 +362,19 @@ export function TaskTable({ projects, user }: TaskTableProps) {
                                   Revision
                                 </Button>
                               </>
+                            )}
+                            
+                            {/* Delete button for Admin and Lead Retoucher */}
+                            {['Admin', 'LeadRetoucher'].includes(user.role) && (
+                              <Button 
+                                size="sm" 
+                                variant="destructive"
+                                onClick={() => handleDeleteProject(project.id)}
+                                disabled={updateProjectMutation.isPending || deleteProjectMutation.isPending}
+                                className="ml-2"
+                              >
+                                Delete
+                              </Button>
                             )}
                           </div>
                         </TableCell>

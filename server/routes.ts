@@ -17,13 +17,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Create a new project
   app.post("/api/projects", async (req, res) => {
     try {
-      console.log("Received data:", JSON.stringify(req.body, null, 2));
       const validatedData = insertProjectSchema.parse(req.body);
       const project = await storage.createProject(validatedData);
       res.status(201).json(project);
     } catch (error) {
-      console.log("Validation error:", error);
-      res.status(400).json({ error: "Invalid project data", details: error.message });
+      res.status(400).json({ error: "Invalid project data" });
     }
   });
 
@@ -169,6 +167,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(updatedProject);
     } catch (error) {
       res.status(400).json({ error: "Failed to set rating" });
+    }
+  });
+
+  // Delete project (admin/lead retoucher action)
+  app.delete("/api/projects/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const deleted = await storage.deleteProject(id);
+      
+      if (!deleted) {
+        return res.status(404).json({ error: "Project not found" });
+      }
+      
+      res.json({ message: "Project deleted successfully" });
+    } catch (error) {
+      res.status(400).json({ error: "Failed to delete project" });
     }
   });
 
