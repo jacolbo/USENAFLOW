@@ -14,9 +14,10 @@ import { useState, useMemo } from "react";
 interface TaskTableProps {
   projects: Project[];
   user: User;
+  allUsers: User[];
 }
 
-export function TaskTable({ projects, user }: TaskTableProps) {
+export function TaskTable({ projects, user, allUsers }: TaskTableProps) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
@@ -291,6 +292,12 @@ export function TaskTable({ projects, user }: TaskTableProps) {
                         });
 
                         const getRetoucherPrefix = (assignedTo: string | null) => {
+                          // Check if it's a custom user first
+                          const customUser = allUsers.find(u => u.name === assignedTo && u.abbr);
+                          if (customUser && customUser.abbr) {
+                            return customUser.abbr;
+                          }
+                          // Fall back to default abbreviations
                           return formatRetoucherAbbr(assignedTo);
                         };
 
@@ -299,7 +306,7 @@ export function TaskTable({ projects, user }: TaskTableProps) {
                             case 'EC': return 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200';
                             case 'ASA': return 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200';
                             case 'LM': return 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200';
-                            default: return 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200';
+                            default: return 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200'; // Custom users get indigo
                           }
                         };
 
@@ -393,7 +400,11 @@ export function TaskTable({ projects, user }: TaskTableProps) {
                             formatDate(new Date(project.dueDate))
                           )}
                         </TableCell>
-                        <TableCell>{getRetoucherFullName(project.assignedTo)}</TableCell>
+                        <TableCell>
+                          {/* Check if it's a custom user, otherwise use the helper function */}
+                          {allUsers.find(u => u.name === project.assignedTo && u.id)?.name || 
+                           getRetoucherFullName(project.assignedTo)}
+                        </TableCell>
                         <TableCell>{getStatusBadge(project.status)}</TableCell>
                         {user.role === 'Admin' && (
                           <TableCell>
@@ -439,9 +450,20 @@ export function TaskTable({ projects, user }: TaskTableProps) {
                                   <SelectValue placeholder={project.assignedTo ? "Reassign to..." : "Assign to..."} />
                                 </SelectTrigger>
                                 <SelectContent>
+                                  {/* Default retouchers */}
                                   <SelectItem value="Retoucher 1">Earl</SelectItem>
                                   <SelectItem value="Retoucher 2">Dr Asa</SelectItem>
                                   <SelectItem value="Retoucher 3">Lucky</SelectItem>
+                                  
+                                  {/* Custom retouchers */}
+                                  {allUsers
+                                    .filter(u => u.role === "Retoucher" && u.id) // Only custom retouchers
+                                    .map(retoucher => (
+                                      <SelectItem key={retoucher.value} value={retoucher.name}>
+                                        {retoucher.name}
+                                      </SelectItem>
+                                    ))
+                                  }
                                 </SelectContent>
                               </Select>
                             )}

@@ -8,9 +8,10 @@ import { useMemo } from "react";
 interface StatusLegendProps {
   projects: Project[];
   user: User;
+  allUsers: User[];
 }
 
-export function StatusLegend({ projects, user }: StatusLegendProps) {
+export function StatusLegend({ projects, user, allUsers }: StatusLegendProps) {
   // Only show for Admin, LeadRetoucher, and DataWrangler
   if (!['Admin', 'LeadRetoucher', 'DataWrangler'].includes(user.role)) {
     return null;
@@ -53,6 +54,12 @@ export function StatusLegend({ projects, user }: StatusLegendProps) {
   }, [projects]);
 
   const getRetoucherPrefix = (assignedTo: string | null) => {
+    // Check if it's a custom user first
+    const customUser = allUsers.find(u => u.name === assignedTo && u.abbr);
+    if (customUser && customUser.abbr) {
+      return customUser.abbr;
+    }
+    // Fall back to default abbreviations
     return formatRetoucherAbbr(assignedTo);
   };
 
@@ -61,7 +68,7 @@ export function StatusLegend({ projects, user }: StatusLegendProps) {
       case 'EC': return 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200';
       case 'ASA': return 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200';
       case 'LM': return 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200';
-      default: return 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200';
+      default: return 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200'; // Custom users get indigo
     }
   };
 

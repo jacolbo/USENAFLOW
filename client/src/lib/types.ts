@@ -2,6 +2,8 @@ export interface User {
   role: string;
   name: string;
   value: string;
+  id?: string;
+  abbr?: string;
 }
 
 export const ROLE_MAPPINGS = {
