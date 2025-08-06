@@ -41,6 +41,8 @@ export const insertProjectSchema = createInsertSchema(projects).omit({
 export const updateProjectSchema = createInsertSchema(projects).partial().omit({
   id: true,
   createdAt: true,
+}).extend({
+  dueDate: z.string().transform((str) => new Date(str)).optional(),
 });
 
 export type InsertUser = z.infer<typeof insertUserSchema>;

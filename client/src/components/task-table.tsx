@@ -128,11 +128,31 @@ export function TaskTable({ projects, user }: TaskTableProps) {
     });
   };
 
+  const changeDueDateMutation = useMutation({
+    mutationFn: async ({ id, dueDate }: { id: string; dueDate: string }) => {
+      const response = await apiRequest("PATCH", `/api/projects/${id}`, { dueDate });
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
+      toast({
+        title: "Due date updated",
+        description: "Project due date has been changed successfully.",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to update due date. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
   const handleChangeDueDate = (projectId: string, newDate: Date) => {
-    updateProjectMutation.mutate({
+    changeDueDateMutation.mutate({
       id: projectId,
-      endpoint: "",
-      data: { dueDate: newDate.toISOString() },
+      dueDate: newDate.toISOString(),
     });
   };
 
