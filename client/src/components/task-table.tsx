@@ -251,7 +251,7 @@ export function TaskTable({ projects, user }: TaskTableProps) {
                         <TableCell>{project.extras}</TableCell>
 
                         <TableCell>
-                          {['Retoucher1', 'Retoucher2', 'Retoucher3'].includes(user.role) ? (
+                          {(user.role === 'Retoucher' || ['Retoucher1', 'Retoucher2', 'Retoucher3'].includes(user.role)) ? (
                             <span 
                               style={{
                                 backgroundColor: '#cce5ff',
