@@ -2,6 +2,144 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Luxury Login Page Styles */
+.luxury-login-bg {
+  background: #0A0A0A;
+  background-image: 
+    radial-gradient(circle at 20% 50%, rgba(212, 175, 55, 0.05) 0%, transparent 50%),
+    radial-gradient(circle at 80% 20%, rgba(212, 175, 55, 0.03) 0%, transparent 50%);
+  min-height: 100vh;
+}
+
+.luxury-login-card {
+  background: linear-gradient(135deg, rgba(16, 16, 16, 0.95) 0%, rgba(20, 20, 20, 0.98) 100%);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(212, 175, 55, 0.2);
+  box-shadow: 
+    0 20px 60px rgba(0, 0, 0, 0.8),
+    0 0 40px rgba(212, 175, 55, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.luxury-logo {
+  filter: drop-shadow(0 0 20px rgba(212, 175, 55, 0.3));
+  transition: all 0.3s ease;
+}
+
+.luxury-logo:hover {
+  filter: drop-shadow(0 0 30px rgba(212, 175, 55, 0.6));
+  transform: scale(1.02);
+}
+
+.luxury-input {
+  background: rgba(26, 26, 26, 0.8);
+  border: 1px solid #333333;
+  color: #E5E5E5;
+  transition: all 0.3s ease;
+  font-family: 'Inter', sans-serif;
+}
+
+.luxury-input::placeholder {
+  color: #999999;
+}
+
+.luxury-input:focus {
+  border-color: #D4AF37;
+  box-shadow: 
+    0 0 0 1px #D4AF37,
+    0 0 20px rgba(212, 175, 55, 0.3);
+  background: rgba(32, 32, 32, 0.9);
+}
+
+.luxury-button {
+  background: linear-gradient(135deg, rgba(10, 10, 10, 0.9) 0%, rgba(20, 20, 20, 0.95) 100%);
+  border: 1px solid #D4AF37;
+  color: #FFFFFF;
+  font-family: 'Inter', sans-serif;
+  font-weight: 500;
+  transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.luxury-button::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(212, 175, 55, 0.2), transparent);
+  transition: left 0.6s ease;
+}
+
+.luxury-button:hover {
+  box-shadow: 
+    0 8px 25px rgba(212, 175, 55, 0.3),
+    0 0 30px rgba(212, 175, 55, 0.2);
+  transform: translateY(-2px);
+  border-color: #F4C430;
+}
+
+.luxury-button:hover::before {
+  left: 100%;
+}
+
+.luxury-button:active {
+  transform: translateY(0);
+}
+
+.luxury-text-primary {
+  color: #E5E5E5;
+  font-family: 'Inter', sans-serif;
+}
+
+.luxury-text-secondary {
+  color: #999999;
+  font-family: 'Inter', sans-serif;
+}
+
+.luxury-text-gold {
+  color: #D4AF37;
+  font-family: 'Inter', sans-serif;
+  transition: all 0.3s ease;
+}
+
+.luxury-text-gold:hover {
+  color: #F4C430;
+  text-shadow: 0 0 10px rgba(212, 175, 55, 0.4);
+}
+
+.luxury-heading {
+  font-family: 'Playfair Display', serif;
+  color: #E5E5E5;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.8);
+}
+
+.luxury-error {
+  color: #FF4C4C;
+  font-family: 'Inter', sans-serif;
+  background: rgba(255, 76, 76, 0.1);
+  border: 1px solid rgba(255, 76, 76, 0.3);
+  backdrop-filter: blur(5px);
+}
+
+.luxury-animation-text {
+  color: #D4AF37;
+  font-family: 'Playfair Display', serif;
+  text-shadow: 0 0 15px rgba(212, 175, 55, 0.5);
+  animation: luxuryGlow 2s ease-in-out infinite alternate;
+}
+
+@keyframes luxuryGlow {
+  from {
+    text-shadow: 0 0 15px rgba(212, 175, 55, 0.5);
+  }
+  to {
+    text-shadow: 0 0 25px rgba(212, 175, 55, 0.8);
+  }
+}
+
 :root {
   --background: hsl(0, 0%, 100%);
   --foreground: hsl(20, 14.3%, 4.1%);
