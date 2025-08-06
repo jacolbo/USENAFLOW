@@ -1,0 +1,68 @@
+🧨 ALL-ROUNDER REPLIT PROMPT: Retoucher Naming System Update
+Please globally update my React app to support friendly team names and abbreviations for retouchers, while preserving internal logic and workflows. Below is the complete specification:
+👥 RETOUCHER ACCOUNTS – INTERNAL LOGIC (DO NOT CHANGE)
+Continue to use the following internal values for all logic, assignments, filters, and login control:
+Internal Role	Used in user.name and assignedTo
+Retoucher 1	"Retoucher 1"
+Retoucher 2	"Retoucher 2"
+Retoucher 3	"Retoucher 3"
+✅ 1. LOGIN ROLE SELECTOR — SHOW TEAM NAMES
+Update the role selector dropdown to show team-friendly names for retouchers, while assigning the correct internal values.
+💡 Example dropdown options:
+<option value="Admin">Sales/Admin</option>
+<option value="LeadRetoucher">Lead Retoucher</option>
+<option value="DataWrangler">Data Wrangler</option>
+<option value="Retoucher1">Earl (Retoucher 1)</option>
+<option value="Retoucher2">Dr Asa (Retoucher 2)</option>
+<option value="Retoucher3">Lucky (Retoucher 3)</option>
+💡 Logic for assigning user values:
+if (roleValue === "Retoucher1") {
+  setUser({ role: "Retoucher", name: "Retoucher 1", value: "Retoucher1" });
+} else if (roleValue === "Retoucher2") {
+  setUser({ role: "Retoucher", name: "Retoucher 2", value: "Retoucher2" });
+} else if (roleValue === "Retoucher3") {
+  setUser({ role: "Retoucher", name: "Retoucher 3", value: "Retoucher3" });
+}
+This ensures login and filtering continue using system-recognized role names.
+✅ 2. CALENDAR STATUS LEGEND — SHOW ABBREVIATIONS ONLY
+In the weekly calendar view (above the collapsible table), show abbreviated retoucher codes in front of the client names.
+💡 Mapping:
+Internal Name	Calendar Display
+"Retoucher 1"	EC (Earl)
+"Retoucher 2"	ASA (Dr Asa)
+"Retoucher 3"	LM (Lucky)
+null/undefined	R?
+💡 Helper function:
+const formatRetoucherAbbr = (name) => {
+  if (name === "Retoucher 1") return "EC";
+  if (name === "Retoucher 2") return "ASA";
+  if (name === "Retoucher 3") return "LM";
+  return "R?";
+};
+💡 Usage in calendar:
+<div>{formatRetoucherAbbr(task.assignedTo)} {task.client}</div>
+✅ 3. TASK TABLE – SHOW SYSTEM NAMES IN RETOUCHER COLUMN
+Keep the “Retoucher” column in the main task table showing the original internal names (e.g. “Retoucher 1”) — or optionally switch to friendly names using this helper:
+const getRetoucherFullName = (name) => {
+  if (name === "Retoucher 1") return "Earl";
+  if (name === "Retoucher 2") return "Dr Asa";
+  if (name === "Retoucher 3") return "Lucky";
+  return "-";
+};
+Then update the table column like:
+<td>{getRetoucherFullName(task.assignedTo)}</td>
+✅ 4. TASK ASSIGNMENT DROPDOWN – SHOW TEAM NAMES
+In the retoucher assignment dropdown (Assign to...), update the options to:
+<option value="Retoucher 1">Earl</option>
+<option value="Retoucher 2">Dr Asa</option>
+<option value="Retoucher 3">Lucky</option>
+Assignment values must still be stored as "Retoucher 1", etc.
+✅ 5. Summary of What NOT to Change:
+user.name, user.value, and assignedTo values in state
+Role-based filtering and access
+Task assignment logic
+Retoucher-specific queues
+✅ Optional Bonus (if needed):
+Add color coding to EC, ASA, and LM in calendar view
+Add tooltips like title="Earl" on the abbreviated labels
+Add a legend key below the calendar like: EC = Earl, ASA = Dr Asa, etc.

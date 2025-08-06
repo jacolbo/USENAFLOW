@@ -2,7 +2,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Calendar } from "lucide-react";
 import { Project } from "@shared/schema";
-import { User, formatRetoucher } from "@/lib/types";
+import { User, formatRetoucherAbbr } from "@/lib/types";
 import { useMemo } from "react";
 
 interface StatusLegendProps {
@@ -53,11 +53,7 @@ export function StatusLegend({ projects, user }: StatusLegendProps) {
   }, [projects]);
 
   const getRetoucherPrefix = (assignedTo: string | null) => {
-    const formatted = formatRetoucher(assignedTo);
-    if (formatted === 'EC') return 'EC';
-    if (formatted === 'ASA') return 'ASA';
-    if (formatted === 'LM') return 'LM';
-    return 'R?';
+    return formatRetoucherAbbr(assignedTo);
   };
 
   const getRetoucherColor = (prefix: string) => {

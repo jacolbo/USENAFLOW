@@ -7,7 +7,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Project } from "@shared/schema";
-import { User, formatRetoucher } from "@/lib/types";
+import { User, formatRetoucherAbbr, getRetoucherFullName } from "@/lib/types";
 import { Calendar, Star, ChevronDown, ChevronRight } from "lucide-react";
 import { useState, useMemo } from "react";
 
@@ -291,11 +291,7 @@ export function TaskTable({ projects, user }: TaskTableProps) {
                         });
 
                         const getRetoucherPrefix = (assignedTo: string | null) => {
-                          const formatted = formatRetoucher(assignedTo);
-                          if (formatted === 'EC') return 'EC';
-                          if (formatted === 'ASA') return 'ASA';
-                          if (formatted === 'LM') return 'LM';
-                          return 'R?';
+                          return formatRetoucherAbbr(assignedTo);
                         };
 
                         const getRetoucherColor = (prefix: string) => {
@@ -397,7 +393,7 @@ export function TaskTable({ projects, user }: TaskTableProps) {
                             formatDate(new Date(project.dueDate))
                           )}
                         </TableCell>
-                        <TableCell>{formatRetoucher(project.assignedTo) || "-"}</TableCell>
+                        <TableCell>{getRetoucherFullName(project.assignedTo)}</TableCell>
                         <TableCell>{getStatusBadge(project.status)}</TableCell>
                         {user.role === 'Admin' && (
                           <TableCell>
@@ -443,9 +439,9 @@ export function TaskTable({ projects, user }: TaskTableProps) {
                                   <SelectValue placeholder={project.assignedTo ? "Reassign to..." : "Assign to..."} />
                                 </SelectTrigger>
                                 <SelectContent>
-                                  <SelectItem value="Retoucher 1">EC</SelectItem>
-                                  <SelectItem value="Retoucher 2">ASA</SelectItem>
-                                  <SelectItem value="Retoucher 3">LM</SelectItem>
+                                  <SelectItem value="Retoucher 1">Earl</SelectItem>
+                                  <SelectItem value="Retoucher 2">Dr Asa</SelectItem>
+                                  <SelectItem value="Retoucher 3">Lucky</SelectItem>
                                 </SelectContent>
                               </Select>
                             )}

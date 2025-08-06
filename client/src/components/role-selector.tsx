@@ -19,9 +19,9 @@ export function RoleSelector({ user, onChangeRole }: RoleSelectorProps) {
           <SelectItem value="Admin">Sales/Admin</SelectItem>
           <SelectItem value="LeadRetoucher">Lead Retoucher</SelectItem>
           <SelectItem value="DataWrangler">Data Wrangler</SelectItem>
-          <SelectItem value="Retoucher1">Retoucher 1</SelectItem>
-          <SelectItem value="Retoucher2">Retoucher 2</SelectItem>
-          <SelectItem value="Retoucher3">Retoucher 3</SelectItem>
+          <SelectItem value="Retoucher1">Earl (Retoucher 1)</SelectItem>
+          <SelectItem value="Retoucher2">Dr Asa (Retoucher 2)</SelectItem>
+          <SelectItem value="Retoucher3">Lucky (Retoucher 3)</SelectItem>
         </SelectContent>
       </Select>
     </div>
