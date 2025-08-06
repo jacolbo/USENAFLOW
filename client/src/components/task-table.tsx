@@ -7,7 +7,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Project } from "@shared/schema";
-import { User } from "@/lib/types";
+import { User, formatRetoucher } from "@/lib/types";
 import { Calendar, Star, ChevronDown, ChevronRight } from "lucide-react";
 import { useState, useMemo } from "react";
 
@@ -291,18 +291,18 @@ export function TaskTable({ projects, user }: TaskTableProps) {
                         });
 
                         const getRetoucherPrefix = (assignedTo: string | null) => {
-                          if (!assignedTo) return 'R?';
-                          if (assignedTo.includes('1')) return 'R1';
-                          if (assignedTo.includes('2')) return 'R2';
-                          if (assignedTo.includes('3')) return 'R3';
+                          const formatted = formatRetoucher(assignedTo);
+                          if (formatted === 'EC') return 'EC';
+                          if (formatted === 'ASA') return 'ASA';
+                          if (formatted === 'LM') return 'LM';
                           return 'R?';
                         };
 
                         const getRetoucherColor = (prefix: string) => {
                           switch (prefix) {
-                            case 'R1': return 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200';
-                            case 'R2': return 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200';
-                            case 'R3': return 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200';
+                            case 'EC': return 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200';
+                            case 'ASA': return 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200';
+                            case 'LM': return 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200';
                             default: return 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200';
                           }
                         };
@@ -397,7 +397,7 @@ export function TaskTable({ projects, user }: TaskTableProps) {
                             formatDate(new Date(project.dueDate))
                           )}
                         </TableCell>
-                        <TableCell>{project.assignedTo || "-"}</TableCell>
+                        <TableCell>{formatRetoucher(project.assignedTo) || "-"}</TableCell>
                         <TableCell>{getStatusBadge(project.status)}</TableCell>
                         {user.role === 'Admin' && (
                           <TableCell>
@@ -443,9 +443,9 @@ export function TaskTable({ projects, user }: TaskTableProps) {
                                   <SelectValue placeholder={project.assignedTo ? "Reassign to..." : "Assign to..."} />
                                 </SelectTrigger>
                                 <SelectContent>
-                                  <SelectItem value="Retoucher 1">Retoucher 1</SelectItem>
-                                  <SelectItem value="Retoucher 2">Retoucher 2</SelectItem>
-                                  <SelectItem value="Retoucher 3">Retoucher 3</SelectItem>
+                                  <SelectItem value="Retoucher 1">EC</SelectItem>
+                                  <SelectItem value="Retoucher 2">ASA</SelectItem>
+                                  <SelectItem value="Retoucher 3">LM</SelectItem>
                                 </SelectContent>
                               </Select>
                             )}
