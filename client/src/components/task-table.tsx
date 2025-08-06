@@ -19,25 +19,7 @@ export function TaskTable({ projects, user }: TaskTableProps) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
-  // Generate week options for due date changes
-  const generateWeekOptions = () => {
-    const options = [];
-    const now = new Date();
-    const monday = new Date(now);
-    const day = monday.getDay();
-    const diff = day === 0 ? -6 : 1 - day;
-    monday.setDate(monday.getDate() + diff);
 
-    for (let i = 0; i < 5; i++) {
-      const weekStart = new Date(monday);
-      weekStart.setDate(monday.getDate() + i * 7);
-      const weekEnd = new Date(weekStart);
-      weekEnd.setDate(weekStart.getDate() + 6);
-      const label = `Week of ${weekStart.toLocaleDateString()} – ${weekEnd.toLocaleDateString()}`;
-      options.push({ value: weekStart.toISOString(), label });
-    }
-    return options;
-  };
 
   const updateProjectMutation = useMutation({
     mutationFn: async ({ id, endpoint, data }: { id: string; endpoint: string; data?: any }) => {
@@ -247,22 +229,13 @@ export function TaskTable({ projects, user }: TaskTableProps) {
                         <TableCell>{project.extras}</TableCell>
 
                         <TableCell>
-                          {['Admin', 'LeadRetoucher'].includes(user.role) ? (
-                            <Select
-                              value={new Date(project.dueDate).toISOString()}
-                              onValueChange={(value) => handleChangeDueDate(project.id, new Date(value))}
-                            >
-                              <SelectTrigger className="w-40">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {generateWeekOptions().map((option, idx) => (
-                                  <SelectItem key={idx} value={option.value}>
-                                    {option.label}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
+                          {(user.role === 'Admin' || user.role === 'LeadRetoucher') ? (
+                            <input
+                              type="date"
+                              value={new Date(project.dueDate).toISOString().slice(0, 10)}
+                              onChange={(e) => handleChangeDueDate(project.id, new Date(e.target.value))}
+                              className="border rounded px-2 py-1"
+                            />
                           ) : (
                             formatDate(new Date(project.dueDate))
                           )}
