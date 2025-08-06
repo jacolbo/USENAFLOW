@@ -122,7 +122,7 @@ export default function Dashboard() {
     return (
       <LoginForm 
         onLogin={handleLogin}
-        onShowRegister={() => setCurrentView('register')}
+        onShowRegister={() => {}} // No longer used, kept for compatibility
         userCredentials={userCredentials}
       />
     );

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -37,6 +37,9 @@ export function LoginForm({ onLogin, onShowRegister, userCredentials }: LoginFor
   const { toast } = useToast();
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [showAnimation, setShowAnimation] = useState(false);
+  const [animationText, setAnimationText] = useState("");
+  const [currentIteration, setCurrentIteration] = useState(0);
 
   const {
     register,
@@ -45,6 +48,60 @@ export function LoginForm({ onLogin, onShowRegister, userCredentials }: LoginFor
   } = useForm<LoginFormData>({
     resolver: zodResolver(loginSchema)
   });
+
+  const triggerNoFriendsAnimation = () => {
+    setShowAnimation(true);
+    setCurrentIteration(0);
+    setAnimationText("");
+  };
+
+  useEffect(() => {
+    if (!showAnimation) return;
+
+    const fullText = "No new friends. No new friends. No, no, no.";
+    let currentText = "";
+    let charIndex = 0;
+    
+    const typewriterInterval = setInterval(() => {
+      if (charIndex < fullText.length) {
+        currentText += fullText[charIndex];
+        setAnimationText(currentText);
+        charIndex++;
+      } else {
+        clearInterval(typewriterInterval);
+        
+        setTimeout(() => {
+          if (currentIteration < 2) {
+            setCurrentIteration(prev => prev + 1);
+            setAnimationText("");
+            charIndex = 0;
+            currentText = "";
+            
+            // Restart the typewriter effect
+            const repeatInterval = setInterval(() => {
+              if (charIndex < fullText.length) {
+                currentText += fullText[charIndex];
+                setAnimationText(currentText);
+                charIndex++;
+              } else {
+                clearInterval(repeatInterval);
+                
+                if (currentIteration === 1) {
+                  setTimeout(() => {
+                    setShowAnimation(false);
+                    setAnimationText("");
+                    setCurrentIteration(0);
+                  }, 1500);
+                }
+              }
+            }, 50);
+          }
+        }, 1000);
+      }
+    }, 50);
+
+    return () => clearInterval(typewriterInterval);
+  }, [showAnimation, currentIteration]);
 
   const onSubmit = async (data: LoginFormData) => {
     setIsLoading(true);
@@ -146,18 +203,28 @@ export function LoginForm({ onLogin, onShowRegister, userCredentials }: LoginFor
               </Button>
 
               <div className="text-center mt-4">
-                <p className="text-sm text-gray-600">
-                  Don't have an account?{" "}
-                  <button
-                    type="button"
-                    onClick={onShowRegister}
-                    className="text-blue-600 hover:text-blue-500 font-medium"
-                  >
-                    Register here
-                  </button>
-                </p>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={triggerNoFriendsAnimation}
+                  className="w-full"
+                  disabled={showAnimation}
+                >
+                  Register Here
+                </Button>
               </div>
             </form>
+
+            {/* Animation Display */}
+            {showAnimation && (
+              <div className="mt-6 p-4 bg-red-50 border border-red-200 rounded-md">
+                <div className="text-center">
+                  <p className="text-lg font-bold text-red-800 min-h-[1.5rem] animate-pulse">
+                    {animationText}
+                  </p>
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
