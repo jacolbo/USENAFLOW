@@ -183,6 +183,28 @@ export function TaskTable({ projects, user }: TaskTableProps) {
     }
   };
 
+  const getDayOfWeekDisplay = (date: Date) => {
+    const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    const dayColors = {
+      'Sunday': 'text-red-600',
+      'Monday': 'text-blue-600', 
+      'Tuesday': 'text-green-600',
+      'Wednesday': 'text-purple-600',
+      'Thursday': 'text-orange-600',
+      'Friday': 'text-indigo-600',
+      'Saturday': 'text-pink-600'
+    };
+    
+    const dayName = days[date.getDay()];
+    const colorClass = dayColors[dayName];
+    
+    return (
+      <span className={`font-semibold ${colorClass}`}>
+        {dayName}
+      </span>
+    );
+  };
+
   // Filter projects for retouchers
   let visibleProjects = projects;
   if (user.role === "Retoucher") {
@@ -257,7 +279,14 @@ export function TaskTable({ projects, user }: TaskTableProps) {
                               className="border rounded px-2 py-1"
                             />
                           ) : (
-                            formatDate(new Date(project.dueDate))
+                            <div>
+                              <div>{formatDate(new Date(project.dueDate))}</div>
+                              {['Retoucher1', 'Retoucher2', 'Retoucher3'].includes(user.role) && (
+                                <div className="text-sm mt-1">
+                                  {getDayOfWeekDisplay(new Date(project.dueDate))}
+                                </div>
+                              )}
+                            </div>
                           )}
                         </TableCell>
                         <TableCell>{project.assignedTo || "-"}</TableCell>
