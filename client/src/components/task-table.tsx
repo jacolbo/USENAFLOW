@@ -184,8 +184,8 @@ export function TaskTable({ projects, user }: TaskTableProps) {
   };
 
   const getDayOfWeekDisplay = (date: Date) => {
-    const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-    const dayColors = {
+    const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'] as const;
+    const dayColors: Record<typeof days[number], string> = {
       'Sunday': 'text-red-600',
       'Monday': 'text-blue-600', 
       'Tuesday': 'text-green-600',
