@@ -48,8 +48,9 @@ export default function Dashboard() {
   // User credentials for login/register system
   const [userCredentials, setUserCredentials] = useState<UserCredentials[]>([
     { id: "admin", username: "admin", password: "admin123", role: "Admin", name: "admin", abbreviation: "ADM" },
-    { id: "lucky", username: "lucky", password: "lm123", role: "Retoucher", name: "lucky", abbreviation: "LM" },
-    { id: "asa", username: "asa", password: "asa123", role: "Retoucher", name: "asa", abbreviation: "ASA" },
+    { id: "earl", username: "earl", password: "earl123", role: "Retoucher", name: "Earl", abbreviation: "EC" },
+    { id: "asa", username: "asa", password: "asa123", role: "Retoucher", name: "Dr Asa", abbreviation: "ASA" },
+    { id: "lucky", username: "lucky", password: "lm123", role: "Retoucher", name: "Lucky", abbreviation: "LM" },
   ]);
 
   const { data: projects = [], isLoading } = useQuery<Project[]>({

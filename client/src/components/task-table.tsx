@@ -221,7 +221,11 @@ export function TaskTable({ projects, user, allUsers }: TaskTableProps) {
   // Filter projects for retouchers
   let visibleProjects = projects;
   if (user.role === "Retoucher") {
-    visibleProjects = projects.filter(p => p.assignedTo === user.name && p.status !== "Delivered");
+    visibleProjects = projects.filter(p => 
+      p.assignedTo && 
+      p.assignedTo.toLowerCase() === user.name.toLowerCase() && 
+      p.status !== "Delivered"
+    );
   }
 
   // Re-group the filtered projects
@@ -450,16 +454,11 @@ export function TaskTable({ projects, user, allUsers }: TaskTableProps) {
                                   <SelectValue placeholder={project.assignedTo ? "Reassign to..." : "Assign to..."} />
                                 </SelectTrigger>
                                 <SelectContent>
-                                  {/* Default retouchers */}
-                                  <SelectItem value="Retoucher 1">Earl</SelectItem>
-                                  <SelectItem value="Retoucher 2">Dr Asa</SelectItem>
-                                  <SelectItem value="Retoucher 3">Lucky</SelectItem>
-                                  
-                                  {/* Custom retouchers */}
+                                  {/* All retouchers */}
                                   {allUsers
-                                    .filter(u => u.role === "Retoucher" && u.id) // Only custom retouchers
+                                    .filter(u => u.role === "Retoucher")
                                     .map(retoucher => (
-                                      <SelectItem key={retoucher.value} value={retoucher.name}>
+                                      <SelectItem key={retoucher.value || retoucher.name} value={retoucher.name}>
                                         {retoucher.name}
                                       </SelectItem>
                                     ))
@@ -480,7 +479,10 @@ export function TaskTable({ projects, user, allUsers }: TaskTableProps) {
                             )}
                             
                             {/* Retoucher can mark done on their assigned task */}
-                            {user.role === 'Retoucher' && project.assignedTo === user.name && project.status === 'Assigned' && (
+                            {user.role === 'Retoucher' && 
+                             project.assignedTo && 
+                             project.assignedTo.toLowerCase() === user.name.toLowerCase() && 
+                             project.status === 'Assigned' && (
                               <Button 
                                 size="sm" 
                                 onClick={() => handleMarkDone(project.id)}
