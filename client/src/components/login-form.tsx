@@ -208,22 +208,7 @@ export function LoginForm({ onLogin, onShowRegister, userCredentials }: LoginFor
               </div>
             </form>
             
-            {/* Team Accounts Reference */}
-            <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-md">
-              <h3 className="text-sm font-semibold text-blue-800 mb-2">Available Team Accounts:</h3>
-              <div className="grid grid-cols-2 gap-2 text-xs text-blue-700">
-                <div><strong>Admin</strong> (username: admin)</div>
-                <div><strong>Sales</strong> (username: sales)</div>
-                <div><strong>Workflow Manager</strong> (username: workflow)</div>
-                <div><strong>Data Wrangler</strong> (username: data)</div>
-                <div><strong>Earl</strong> (username: earl)</div>
-                <div><strong>Dr Asa</strong> (username: asa)</div>
-                <div><strong>Lucky</strong> (username: lucky)</div>
-              </div>
-              <p className="text-xs text-blue-600 mt-2">
-                Contact Admin for passwords. All accounts work on any computer.
-              </p>
-            </div>
+
 
             {/* Animation Display */}
             {showAnimation && (
