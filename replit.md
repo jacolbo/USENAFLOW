@@ -36,9 +36,10 @@ Preferred communication style: Simple, everyday language.
 - **Storage Pattern**: Repository pattern with in-memory fallback for development
 
 ### Authentication & Authorization
-- **Role-Based Access**: Six distinct user roles with different permissions
-- **Session Management**: Express sessions with PostgreSQL session store
-- **Frontend State**: Simple role selection without persistent authentication (demo mode)
+- **Role-Based Access**: Seven distinct user roles with different permissions (Admin, Sales, LeadRetoucher, DataWrangler, Retoucher)
+- **Cross-Device Login**: Static credentials that work on any computer/device
+- **Password Management**: Admin can view and reset all team passwords through Settings panel
+- **Team Credentials**: Built-in accounts for all team roles with standardized login credentials
 - **Dynamic Team Management**: Admin-controlled user creation and editing with persistent state
 
 ### Project Management Features
@@ -88,6 +89,23 @@ Preferred communication style: Simple, everyday language.
 - **zod**: Schema validation and type inference
 
 ## Recent Changes (January 2025)
+
+### Cross-Device Authentication & Sales Role Implementation
+- **Sales Role Created**: New Sales role with same permissions as Admin except team management (no Settings panel access)
+- **Complete Team Credentials**: Added built-in login accounts for all team members with consistent username/password format
+- **Cross-Device Login**: Static credentials work on any computer - team members can login from different devices
+- **Password Visibility**: Admin users can view all team passwords through Settings > Password Management tab
+- **Login Reference**: Added credentials reference panel on login screen for easy team access
+- **Comprehensive Access**: All roles now have proper login credentials for cross-device functionality
+
+### Team Credentials Reference
+- **Admin**: admin / admin123 (full access including team management)
+- **Sales**: sales / sales123 (project management, no team settings)
+- **Workflow Manager**: workflow / workflow123 (lead retoucher permissions)
+- **Data Wrangler**: data / data123 (data management permissions)
+- **Earl**: earl / earl123 (retoucher access)
+- **Dr Asa**: asa / asa123 (retoucher access)
+- **Lucky**: lucky / lm123 (retoucher access)
 
 ### Team Management System Implementation
 - **Global User State**: Replaced static role mappings with dynamic user array including default team members (Earl/EC, Dr Asa/ASA, Lucky/LM)

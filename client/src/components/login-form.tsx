@@ -207,6 +207,23 @@ export function LoginForm({ onLogin, onShowRegister, userCredentials }: LoginFor
                 </Button>
               </div>
             </form>
+            
+            {/* Team Credentials Reference */}
+            <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-md">
+              <h3 className="text-sm font-semibold text-blue-800 mb-2">Team Login Credentials:</h3>
+              <div className="grid grid-cols-2 gap-2 text-xs text-blue-700">
+                <div><strong>Admin:</strong> admin / admin123</div>
+                <div><strong>Sales:</strong> sales / sales123</div>
+                <div><strong>Workflow:</strong> workflow / workflow123</div>
+                <div><strong>Data:</strong> data / data123</div>
+                <div><strong>Earl:</strong> earl / earl123</div>
+                <div><strong>Dr Asa:</strong> asa / asa123</div>
+                <div><strong>Lucky:</strong> lucky / lm123</div>
+              </div>
+              <p className="text-xs text-blue-600 mt-2">
+                These credentials work on any computer. Admin can view/reset passwords in Settings.
+              </p>
+            </div>
 
             {/* Animation Display */}
             {showAnimation && (
