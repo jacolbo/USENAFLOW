@@ -146,6 +146,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // General project update endpoint
+  app.patch("/api/projects/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const updateData = updateProjectSchema.parse(req.body);
+      
+      const updatedProject = await storage.updateProject(id, updateData);
+      
+      if (!updatedProject) {
+        return res.status(404).json({ error: "Project not found" });
+      }
+      
+      res.json(updatedProject);
+    } catch (error) {
+      res.status(400).json({ error: "Failed to update project" });
+    }
+  });
+
   // Set project rating (admin action)
   app.patch("/api/projects/:id/rating", async (req, res) => {
     try {

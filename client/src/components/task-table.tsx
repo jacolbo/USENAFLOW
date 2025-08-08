@@ -189,6 +189,34 @@ export function TaskTable({ projects, user, allUsers }: TaskTableProps) {
     });
   };
 
+  const changeSelectedCountMutation = useMutation({
+    mutationFn: async ({ id, selectedCount }: { id: string; selectedCount: number }) => {
+      const response = await apiRequest("PATCH", `/api/projects/${id}`, { selectedCount });
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
+      toast({
+        title: "Selected count updated",
+        description: "Project selected photo count has been changed successfully.",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to update selected count. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleChangeSelectedCount = (projectId: string, selectedCount: number) => {
+    changeSelectedCountMutation.mutate({
+      id: projectId,
+      selectedCount,
+    });
+  };
+
   const deleteProjectMutation = useMutation({
     mutationFn: async (projectId: string) => {
       const response = await apiRequest("DELETE", `/api/projects/${projectId}`);
@@ -371,7 +399,19 @@ export function TaskTable({ projects, user, allUsers }: TaskTableProps) {
                       <TableRow key={project.id}>
                         <TableCell className="font-medium">{project.clientName}</TableCell>
                         <TableCell>{project.packageCount}</TableCell>
-                        <TableCell>{project.selectedCount}</TableCell>
+                        <TableCell>
+                          {['Admin', 'Sales', 'DataWrangler', 'LeadRetoucher'].includes(user.role) ? (
+                            <input
+                              type="number"
+                              value={project.selectedCount}
+                              onChange={(e) => handleChangeSelectedCount(project.id, parseInt(e.target.value) || 0)}
+                              className="border rounded px-2 py-1 w-16 text-center"
+                              min="0"
+                            />
+                          ) : (
+                            project.selectedCount
+                          )}
+                        </TableCell>
                         <TableCell>{project.extras}</TableCell>
 
                         <TableCell>
@@ -393,7 +433,7 @@ export function TaskTable({ projects, user, allUsers }: TaskTableProps) {
                                 year: 'numeric' 
                               }).format(new Date(project.dueDate))}
                             </span>
-                          ) : (user.role === 'Admin' || user.role === 'Sales' || user.role === 'LeadRetoucher') ? (
+                          ) : (user.role === 'Admin' || user.role === 'Sales' || user.role === 'DataWrangler' || user.role === 'LeadRetoucher') ? (
                             <input
                               type="date"
                               value={new Date(project.dueDate).toISOString().slice(0, 10)}
