@@ -40,7 +40,8 @@ export default function Dashboard() {
     { id: "2", name: "Dr Asa", role: "Retoucher", value: "Retoucher2", abbr: "ASA" },
     { id: "3", name: "Lucky", role: "Retoucher", value: "Retoucher3", abbr: "LM" },
     // Default system users without IDs (cannot be edited/deleted)
-    { name: "Sales/Admin", role: "Admin", value: "Admin" },
+    { name: "Admin", role: "Admin", value: "Admin" },
+    { name: "Sales", role: "Sales", value: "Sales" },
     { name: "Workflow Manager", role: "LeadRetoucher", value: "LeadRetoucher" },
     { name: "Data Wrangler", role: "DataWrangler", value: "DataWrangler" },
   ]);
@@ -48,6 +49,7 @@ export default function Dashboard() {
   // User credentials for login/register system
   const [userCredentials, setUserCredentials] = useState<UserCredentials[]>([
     { id: "admin", username: "admin", password: "admin123", role: "Admin", name: "admin", abbreviation: "ADM" },
+    { id: "sales", username: "sales", password: "sales123", role: "Sales", name: "sales", abbreviation: "SAL" },
     { id: "earl", username: "earl", password: "earl123", role: "Retoucher", name: "Earl", abbreviation: "EC" },
     { id: "asa", username: "asa", password: "asa123", role: "Retoucher", name: "Dr Asa", abbreviation: "ASA" },
     { id: "lucky", username: "lucky", password: "lm123", role: "Retoucher", name: "Lucky", abbreviation: "LM" },

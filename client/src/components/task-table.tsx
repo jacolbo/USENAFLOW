@@ -362,7 +362,7 @@ export function TaskTable({ projects, user, allUsers }: TaskTableProps) {
                       <TableHead>Due</TableHead>
                       <TableHead>Retoucher</TableHead>
                       <TableHead>Status</TableHead>
-                      {user.role === 'Admin' && <TableHead>Rating</TableHead>}
+                      {(user.role === 'Admin' || user.role === 'Sales') && <TableHead>Rating</TableHead>}
                       <TableHead>Actions</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -393,7 +393,7 @@ export function TaskTable({ projects, user, allUsers }: TaskTableProps) {
                                 year: 'numeric' 
                               }).format(new Date(project.dueDate))}
                             </span>
-                          ) : (user.role === 'Admin' || user.role === 'LeadRetoucher') ? (
+                          ) : (user.role === 'Admin' || user.role === 'Sales' || user.role === 'LeadRetoucher') ? (
                             <input
                               type="date"
                               value={new Date(project.dueDate).toISOString().slice(0, 10)}
@@ -410,7 +410,7 @@ export function TaskTable({ projects, user, allUsers }: TaskTableProps) {
                            getRetoucherFullName(project.assignedTo)}
                         </TableCell>
                         <TableCell>{getStatusBadge(project.status)}</TableCell>
-                        {user.role === 'Admin' && (
+                        {(user.role === 'Admin' || user.role === 'Sales') && (
                           <TableCell>
                             {project.status === "Delivered" ? (
                               <div className="flex items-center gap-2">
@@ -443,8 +443,8 @@ export function TaskTable({ projects, user, allUsers }: TaskTableProps) {
                         )}
                         <TableCell>
                           <div className="flex items-center gap-2">
-                            {/* Lead Retoucher or Admin can assign tasks */}
-                            {(user.role === 'LeadRetoucher' || user.role === 'Admin') 
+                            {/* Lead Retoucher, Admin, or Sales can assign tasks */}
+                            {(user.role === 'LeadRetoucher' || user.role === 'Admin' || user.role === 'Sales') 
                               && (project.status === 'Ready for Retouching' || project.status === 'Assigned') && (
                               <Select
                                 value={project.assignedTo || ""}
@@ -467,8 +467,8 @@ export function TaskTable({ projects, user, allUsers }: TaskTableProps) {
                               </Select>
                             )}
                             
-                            {/* Admin can mark invoice paid */}
-                            {user.role === 'Admin' && project.status === 'Awaiting Payment' && (
+                            {/* Admin or Sales can mark invoice paid */}
+                            {(user.role === 'Admin' || user.role === 'Sales') && project.status === 'Awaiting Payment' && (
                               <Button 
                                 size="sm" 
                                 onClick={() => handleMarkPaid(project.id)}
@@ -492,8 +492,8 @@ export function TaskTable({ projects, user, allUsers }: TaskTableProps) {
                               </Button>
                             )}
                             
-                            {/* Admin can deliver or request revision when in Review */}
-                            {user.role === 'Admin' && project.status === 'Review' && (
+                            {/* Admin or Sales can deliver or request revision when in Review */}
+                            {(user.role === 'Admin' || user.role === 'Sales') && project.status === 'Review' && (
                               <>
                                 <Button 
                                   size="sm" 

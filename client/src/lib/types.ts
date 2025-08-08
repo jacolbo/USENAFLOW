@@ -7,7 +7,8 @@ export interface User {
 }
 
 export const ROLE_MAPPINGS = {
-  Admin: { role: "Admin", name: "Sales/Admin", value: "Admin" },
+  Admin: { role: "Admin", name: "Admin", value: "Admin" },
+  Sales: { role: "Sales", name: "Sales", value: "Sales" },
   LeadRetoucher: { role: "LeadRetoucher", name: "Lead Retoucher", value: "LeadRetoucher" },
   DataWrangler: { role: "DataWrangler", name: "Data Wrangler", value: "DataWrangler" },
   Retoucher1: { role: "Retoucher", name: "Retoucher 1", value: "Retoucher1" },

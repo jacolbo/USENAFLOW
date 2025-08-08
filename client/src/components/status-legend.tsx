@@ -12,8 +12,8 @@ interface StatusLegendProps {
 }
 
 export function StatusLegend({ projects, user, allUsers }: StatusLegendProps) {
-  // Only show for Admin, LeadRetoucher, and DataWrangler
-  if (!['Admin', 'LeadRetoucher', 'DataWrangler'].includes(user.role)) {
+  // Only show for Admin, Sales, LeadRetoucher, and DataWrangler
+  if (!['Admin', 'Sales', 'LeadRetoucher', 'DataWrangler'].includes(user.role)) {
     return null;
   }
 
