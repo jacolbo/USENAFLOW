@@ -188,24 +188,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Split project - assign selected photos and create new project for remaining
-  app.post("/api/projects/:id/split", async (req, res) => {
-    try {
-      const { id } = req.params;
-      const { selectedCount } = req.body;
-      
-      if (!selectedCount || selectedCount <= 0) {
-        return res.status(400).json({ error: "Selected count must be greater than 0" });
-      }
-      
-      const result = await storage.splitProject(id, selectedCount);
-      
-      res.json(result);
-    } catch (error) {
-      res.status(400).json({ error: "Failed to split project" });
-    }
-  });
-
   // Delete project (admin/lead retoucher action)
   app.delete("/api/projects/:id", async (req, res) => {
     try {

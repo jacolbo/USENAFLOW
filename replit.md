@@ -90,15 +90,6 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes (January 2025)
 
-### Photo Inventory Management & Project Splitting System Implementation
-- **Total Photos Tracking**: Added totalPhotos field to projects to track full photo count available for each client
-- **Smart Project Splitting**: When selected count < total photos, system automatically creates duplicate project for remaining photos
-- **Split Project Logic**: Original project gets selected photos, new project created for unedited photos with 1-week later due date
-- **Visual Split Indicators**: Projects created from splits show "Split" badge in client name column
-- **Form Validation**: AddProjectForm now requires total photos count and validates selected ≤ total
-- **Automatic Extras Calculation**: Extras = Selected Count - Package Count (minimum 0) when editing selected count
-- **Project Grouping**: Related projects linked via projectGroup and parentProjectId fields for tracking
-
 ### Cross-Device Authentication & Sales Role Implementation
 - **Sales Role Created**: New Sales role with same permissions as Admin except team management (no Settings panel access)
 - **Complete Team Credentials**: Added built-in login accounts for all team members with consistent username/password format

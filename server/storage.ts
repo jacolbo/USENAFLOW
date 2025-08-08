@@ -11,7 +11,6 @@ export interface IStorage {
   createProject(project: InsertProject): Promise<Project>;
   updateProject(id: string, updates: UpdateProject): Promise<Project | undefined>;
   deleteProject(id: string): Promise<boolean>;
-  splitProject(projectId: string, selectedCount: number): Promise<{ originalProject: Project; remainingProject: Project | null }>;
 }
 
 export class MemStorage implements IStorage {
@@ -32,15 +31,12 @@ export class MemStorage implements IStorage {
         clientName: "Alice",
         packageCount: 10,
         selectedCount: 12,
-        totalPhotos: 16, // Total photos available
         extras: 2,
         dueDate: new Date(2025, 7, 7), // Aug 7, 2025
         status: ProjectStatus.AWAITING_PAYMENT,
         invoicePaid: false,
         assignedTo: null,
         rating: null,
-        parentProjectId: null,
-        projectGroup: "alice-group-1",
         createdAt: new Date(),
       },
       {
@@ -48,15 +44,12 @@ export class MemStorage implements IStorage {
         clientName: "Bob",
         packageCount: 5,
         selectedCount: 5,
-        totalPhotos: 8, // Total photos available
         extras: 0,
         dueDate: new Date(2025, 7, 9), // Aug 9, 2025
         status: ProjectStatus.READY_FOR_RETOUCHING,
         invoicePaid: true,
         assignedTo: null,
         rating: null,
-        parentProjectId: null,
-        projectGroup: "bob-group-1",
         createdAt: new Date(),
       },
       {
@@ -64,15 +57,12 @@ export class MemStorage implements IStorage {
         clientName: "Charlie",
         packageCount: 8,
         selectedCount: 8,
-        totalPhotos: 15, // Total photos available
         extras: 0,
         dueDate: new Date(2025, 7, 1), // Aug 1, 2025
         status: ProjectStatus.REVIEW,
         invoicePaid: true,
         assignedTo: "Retoucher 2",
         rating: null,
-        parentProjectId: null,
-        projectGroup: "charlie-group-1",
         createdAt: new Date(),
       },
       {
@@ -80,15 +70,12 @@ export class MemStorage implements IStorage {
         clientName: "Daisy",
         packageCount: 7,
         selectedCount: 10,
-        totalPhotos: 14, // Total photos available
         extras: 3,
         dueDate: new Date(2025, 7, 2), // Aug 2, 2025
         status: ProjectStatus.DELIVERED,
         invoicePaid: true,
         assignedTo: "Retoucher 1",
         rating: 5,
-        parentProjectId: null,
-        projectGroup: "daisy-group-1",
         createdAt: new Date(),
       },
       {
@@ -96,15 +83,12 @@ export class MemStorage implements IStorage {
         clientName: "Eve",
         packageCount: 4,
         selectedCount: 4,
-        totalPhotos: 10, // Total photos available
         extras: 0,
         dueDate: new Date(2025, 7, 8), // Aug 8, 2025
         status: ProjectStatus.ASSIGNED,
         invoicePaid: true,
         assignedTo: "Retoucher 3",
         rating: null,
-        parentProjectId: null,
-        projectGroup: "eve-group-1",
         createdAt: new Date(),
       },
     ];
@@ -153,8 +137,6 @@ export class MemStorage implements IStorage {
       invoicePaid,
       assignedTo: null,
       rating: null,
-      parentProjectId: null,
-      projectGroup: insertProject.projectGroup || `${insertProject.clientName.toLowerCase()}-group-${Date.now()}`,
       createdAt: new Date(),
     };
     
@@ -175,49 +157,6 @@ export class MemStorage implements IStorage {
 
   async deleteProject(id: string): Promise<boolean> {
     return this.projects.delete(id);
-  }
-
-  async splitProject(projectId: string, selectedCount: number): Promise<{ originalProject: Project; remainingProject: Project | null }> {
-    const project = this.projects.get(projectId);
-    if (!project) {
-      throw new Error("Project not found");
-    }
-
-    // Calculate remaining photos
-    const remainingPhotos = project.totalPhotos - selectedCount;
-    
-    // Update original project with selected count
-    const updatedProject = {
-      ...project,
-      selectedCount,
-      extras: Math.max(0, selectedCount - project.packageCount)
-    };
-    this.projects.set(projectId, updatedProject);
-
-    // Create new project for remaining photos if any
-    let remainingProject: Project | null = null;
-    if (remainingPhotos > 0) {
-      const newId = randomUUID();
-      remainingProject = {
-        id: newId,
-        clientName: project.clientName,
-        packageCount: Math.min(project.packageCount, remainingPhotos), // Remaining package capacity
-        selectedCount: 0, // Not yet selected for editing
-        totalPhotos: remainingPhotos,
-        extras: 0,
-        dueDate: new Date(project.dueDate.getTime() + 7 * 24 * 60 * 60 * 1000), // Due 1 week later
-        status: ProjectStatus.AWAITING_PAYMENT,
-        invoicePaid: false,
-        assignedTo: null,
-        rating: null,
-        parentProjectId: projectId,
-        projectGroup: project.projectGroup,
-        createdAt: new Date(),
-      };
-      this.projects.set(newId, remainingProject);
-    }
-
-    return { originalProject: updatedProject, remainingProject };
   }
 }
 

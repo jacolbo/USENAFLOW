@@ -53,7 +53,6 @@ export function AddProjectForm({ onAddProject }: AddProjectFormProps) {
   const [clientName, setClientName] = useState("");
   const [packageCount, setPackageCount] = useState("");
   const [selectedCount, setSelectedCount] = useState("");
-  const [totalPhotos, setTotalPhotos] = useState("");
   const [dueWeek, setDueWeek] = useState("");
 
   const queryClient = useQueryClient();
@@ -69,7 +68,6 @@ export function AddProjectForm({ onAddProject }: AddProjectFormProps) {
       setClientName("");
       setPackageCount("");
       setSelectedCount("");
-      setTotalPhotos("");
       setDueWeek("");
       onAddProject();
       toast({
@@ -89,7 +87,7 @@ export function AddProjectForm({ onAddProject }: AddProjectFormProps) {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!clientName || !packageCount || !selectedCount || !totalPhotos || !dueWeek) {
+    if (!clientName || !packageCount || !selectedCount || !dueWeek) {
       toast({
         title: "Validation Error",
         description: "Please fill in all fields.",
@@ -100,21 +98,11 @@ export function AddProjectForm({ onAddProject }: AddProjectFormProps) {
 
     const pkgCount = parseInt(packageCount, 10);
     const selCount = parseInt(selectedCount, 10);
-    const totalCount = parseInt(totalPhotos, 10);
 
-    if (isNaN(pkgCount) || isNaN(selCount) || isNaN(totalCount)) {
+    if (isNaN(pkgCount) || isNaN(selCount)) {
       toast({
         title: "Validation Error",
-        description: "Package, Selected, and Total counts must be numbers.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    if (selCount > totalCount) {
-      toast({
-        title: "Validation Error",
-        description: "Selected count cannot be greater than total photos.",
+        description: "Package and Selected counts must be numbers.",
         variant: "destructive",
       });
       return;
@@ -124,7 +112,6 @@ export function AddProjectForm({ onAddProject }: AddProjectFormProps) {
       clientName,
       packageCount: pkgCount,
       selectedCount: selCount,
-      totalPhotos: totalCount,
       dueDate: dueWeek,
     });
   };
@@ -138,7 +125,7 @@ export function AddProjectForm({ onAddProject }: AddProjectFormProps) {
         </CardTitle>
       </CardHeader>
       <CardContent>
-        <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+        <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           <div className="space-y-2">
             <Label htmlFor="client">Client Name</Label>
             <Input
@@ -158,18 +145,6 @@ export function AddProjectForm({ onAddProject }: AddProjectFormProps) {
               type="number"
               value={packageCount}
               onChange={(e) => setPackageCount(e.target.value)}
-              placeholder="0"
-              required
-            />
-          </div>
-          
-          <div className="space-y-2">
-            <Label htmlFor="total">Total Photos</Label>
-            <Input
-              id="total"
-              type="number"
-              value={totalPhotos}
-              onChange={(e) => setTotalPhotos(e.target.value)}
               placeholder="0"
               required
             />
@@ -203,7 +178,7 @@ export function AddProjectForm({ onAddProject }: AddProjectFormProps) {
             </Select>
           </div>
           
-          <div className="md:col-span-2 lg:col-span-5">
+          <div className="md:col-span-2 lg:col-span-4">
             <Button 
               type="submit" 
               disabled={createProjectMutation.isPending}

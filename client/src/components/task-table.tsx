@@ -215,44 +215,15 @@ export function TaskTable({ projects, user, allUsers }: TaskTableProps) {
     const project = projects.find(p => p.id === projectId);
     if (!project) return;
     
-    // Check if we need to split the project (selected count < total photos)
-    if (selectedCount < project.totalPhotos && selectedCount > 0) {
-      // Split the project
-      splitProjectMutation.mutate({
-        projectId,
-        selectedCount,
-      });
-    } else {
-      // Just update the selected count
-      const extras = Math.max(0, selectedCount - project.packageCount);
-      changeSelectedCountMutation.mutate({
-        id: projectId,
-        selectedCount,
-        extras,
-      });
-    }
+    // Calculate extras: selected count minus package count (minimum 0)
+    const extras = Math.max(0, selectedCount - project.packageCount);
+    
+    changeSelectedCountMutation.mutate({
+      id: projectId,
+      selectedCount,
+      extras,
+    });
   };
-
-  const splitProjectMutation = useMutation({
-    mutationFn: async ({ projectId, selectedCount }: { projectId: string; selectedCount: number }) => {
-      const response = await apiRequest("POST", `/api/projects/${projectId}/split`, { selectedCount });
-      return response.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
-      toast({
-        title: "Project split successfully",
-        description: "Selected photos assigned to current project. Remaining photos created as new project.",
-      });
-    },
-    onError: () => {
-      toast({
-        title: "Error",
-        description: "Failed to split project. Please try again.",
-        variant: "destructive",
-      });
-    },
-  });
 
   const deleteProjectMutation = useMutation({
     mutationFn: async (projectId: string) => {
@@ -420,10 +391,10 @@ export function TaskTable({ projects, user, allUsers }: TaskTableProps) {
                   <TableHeader>
                     <TableRow>
                       <TableHead>Client</TableHead>
-                      <TableHead>Total</TableHead>
                       <TableHead>Pkg</TableHead>
                       <TableHead>Sel</TableHead>
                       <TableHead>Extra</TableHead>
+
                       <TableHead>Due</TableHead>
                       <TableHead>Retoucher</TableHead>
                       <TableHead>Status</TableHead>
@@ -434,15 +405,7 @@ export function TaskTable({ projects, user, allUsers }: TaskTableProps) {
                   <TableBody>
                     {group.projects.map(project => (
                       <TableRow key={project.id}>
-                        <TableCell className="font-medium">
-                          {project.clientName}
-                          {project.parentProjectId && (
-                            <span className="ml-2 text-xs bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300 px-2 py-1 rounded">
-                              Split
-                            </span>
-                          )}
-                        </TableCell>
-                        <TableCell className="text-blue-600 font-medium">{project.totalPhotos}</TableCell>
+                        <TableCell className="font-medium">{project.clientName}</TableCell>
                         <TableCell>{project.packageCount}</TableCell>
                         <TableCell>
                           {['Admin', 'Sales', 'DataWrangler', 'LeadRetoucher'].includes(user.role) ? (
