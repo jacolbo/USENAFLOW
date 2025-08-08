@@ -190,15 +190,15 @@ export function TaskTable({ projects, user, allUsers }: TaskTableProps) {
   };
 
   const changeSelectedCountMutation = useMutation({
-    mutationFn: async ({ id, selectedCount }: { id: string; selectedCount: number }) => {
-      const response = await apiRequest("PATCH", `/api/projects/${id}`, { selectedCount });
+    mutationFn: async ({ id, selectedCount, extras }: { id: string; selectedCount: number; extras: number }) => {
+      const response = await apiRequest("PATCH", `/api/projects/${id}`, { selectedCount, extras });
       return response.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
       toast({
         title: "Selected count updated",
-        description: "Project selected photo count has been changed successfully.",
+        description: "Project selected photo count and extras updated successfully.",
       });
     },
     onError: () => {
@@ -211,9 +211,17 @@ export function TaskTable({ projects, user, allUsers }: TaskTableProps) {
   });
 
   const handleChangeSelectedCount = (projectId: string, selectedCount: number) => {
+    // Find the project to get the package count
+    const project = projects.find(p => p.id === projectId);
+    if (!project) return;
+    
+    // Calculate extras: selected count minus package count (minimum 0)
+    const extras = Math.max(0, selectedCount - project.packageCount);
+    
     changeSelectedCountMutation.mutate({
       id: projectId,
       selectedCount,
+      extras,
     });
   };
 
