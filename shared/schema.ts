@@ -14,12 +14,15 @@ export const projects = pgTable("projects", {
   clientName: text("client_name").notNull(),
   packageCount: integer("package_count").notNull(),
   selectedCount: integer("selected_count").notNull(),
+  totalPhotos: integer("total_photos").notNull(), // Total photos available for this client
   extras: integer("extras").notNull().default(0),
   dueDate: timestamp("due_date").notNull(),
   status: text("status").notNull(),
   invoicePaid: boolean("invoice_paid").notNull().default(false),
   assignedTo: text("assigned_to"),
   rating: integer("rating"),
+  parentProjectId: varchar("parent_project_id"), // Links to original project if this is a split
+  projectGroup: text("project_group"), // Groups related projects together
   createdAt: timestamp("created_at").notNull().default(sql`now()`),
 });
 
