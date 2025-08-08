@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { LoginForm } from "@/components/login-form";
 import { RegisterForm } from "@/components/register-form";
@@ -35,6 +35,9 @@ interface UserCredentials {
 export default function Dashboard() {
   const [user, setUser] = useState<User | null>(null);
   const [currentView, setCurrentView] = useState<'login' | 'register'>('login');
+  
+  // Session timeout duration (10 minutes in milliseconds)
+  const SESSION_TIMEOUT = 10 * 60 * 1000;
   const [users, setUsers] = useState<User[]>([
     { id: "1", name: "Earl", role: "Retoucher", value: "Retoucher1", abbr: "EC" },
     { id: "2", name: "Dr Asa", role: "Retoucher", value: "Retoucher2", abbr: "ASA" },
@@ -62,9 +65,72 @@ export default function Dashboard() {
     enabled: !!user,
   });
 
+  // Check for existing session on component mount and periodically
+  useEffect(() => {
+    const storedUser = getStoredSession();
+    if (storedUser && !user) {
+      setUser(storedUser);
+      // Sync with users array for consistency
+      const existingUserIndex = users.findIndex(u => u.name === storedUser.name);
+      if (existingUserIndex === -1) {
+        setUsers(prev => [...prev, storedUser]);
+      }
+    }
+
+    // Set up interval to check session expiry every minute
+    const sessionCheckInterval = setInterval(() => {
+      if (user) {
+        const storedUser = getStoredSession();
+        if (!storedUser) {
+          // Session expired, log out user
+          setUser(null);
+          setCurrentView('login');
+        }
+      }
+    }, 60000); // Check every minute
+
+    return () => clearInterval(sessionCheckInterval);
+  }, [user]); // Dependencies: user state and users array
+
+  // Session management functions
+  const saveSession = (user: User) => {
+    const sessionData = {
+      user,
+      timestamp: Date.now()
+    };
+    localStorage.setItem('usenaflow_session', JSON.stringify(sessionData));
+  };
+
+  const getStoredSession = () => {
+    try {
+      const sessionStr = localStorage.getItem('usenaflow_session');
+      if (!sessionStr) return null;
+      
+      const sessionData = JSON.parse(sessionStr);
+      const currentTime = Date.now();
+      
+      // Check if session is expired (older than 10 minutes)
+      if (currentTime - sessionData.timestamp > SESSION_TIMEOUT) {
+        localStorage.removeItem('usenaflow_session');
+        return null;
+      }
+      
+      return sessionData.user;
+    } catch (error) {
+      localStorage.removeItem('usenaflow_session');
+      return null;
+    }
+  };
+
+  const clearSession = () => {
+    localStorage.removeItem('usenaflow_session');
+  };
+
   const handleLogin = (loggedInUser: User) => {
     setUser(loggedInUser);
     setCurrentView('login');
+    saveSession(loggedInUser);
+    
     // Sync with users array for consistency
     const existingUserIndex = users.findIndex(u => u.name === loggedInUser.name);
     if (existingUserIndex === -1) {
@@ -100,6 +166,7 @@ export default function Dashboard() {
   const handleLogout = () => {
     setUser(null);
     setCurrentView('login');
+    clearSession();
   };
 
   const handleUpdateUserCredentials = (credentials: UserCredentials[]) => {
