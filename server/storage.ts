@@ -309,4 +309,5 @@ export class DatabaseStorage implements IStorage {
   }
 }
 
+// Use DatabaseStorage for persistent data across deployments
 export const storage = new DatabaseStorage();
