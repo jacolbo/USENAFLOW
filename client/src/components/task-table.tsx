@@ -9,7 +9,7 @@ import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Project } from "@shared/schema";
 import { User, formatRetoucherAbbr, getRetoucherFullName } from "@/lib/types";
-import { Calendar, Star, ChevronDown, ChevronRight } from "lucide-react";
+import { Calendar, Star, ChevronDown, ChevronRight, Copy } from "lucide-react";
 import { useState, useMemo } from "react";
 
 interface TaskTableProps {
@@ -281,6 +281,31 @@ export function TaskTable({ projects, user, allUsers }: TaskTableProps) {
       id: projectId,
       extras,
     });
+  };
+
+  const duplicateProjectMutation = useMutation({
+    mutationFn: async (projectId: string) => {
+      const response = await apiRequest("POST", `/api/projects/${projectId}/duplicate`);
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
+      toast({
+        title: "Project duplicated",
+        description: "Project has been duplicated successfully.",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to duplicate project. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleDuplicateProject = (projectId: string) => {
+    duplicateProjectMutation.mutate(projectId);
   };
 
   const deleteProjectMutation = useMutation({
@@ -652,6 +677,20 @@ export function TaskTable({ projects, user, allUsers }: TaskTableProps) {
                               </>
                             )}
                             
+                            {/* Duplicate button for Admin, Sales, Data Wrangler */}
+                            {['Admin', 'Sales', 'DataWrangler'].includes(user.role) && (
+                              <Button 
+                                size="sm" 
+                                variant="outline"
+                                onClick={() => handleDuplicateProject(project.id)}
+                                disabled={duplicateProjectMutation.isPending}
+                                className="ml-2"
+                              >
+                                <Copy className="h-4 w-4 mr-1" />
+                                Duplicate
+                              </Button>
+                            )}
+
                             {/* Delete button for Admin and Lead Retoucher */}
                             {['Admin', 'LeadRetoucher'].includes(user.role) && (
                               <Button 

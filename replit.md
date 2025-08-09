@@ -122,3 +122,17 @@ Preferred communication style: Simple, everyday language.
 - **System Integration**: Dynamic user lists populate role selector, assignment dropdowns, and calendar legends
 - **Custom Abbreviations**: Support for personalized team member abbreviations in calendar views
 - **Color Coding**: Indigo theme for custom users, preserving original color scheme for default team members
+
+### Data Wrangler Enhanced Permissions (January 2025)
+- **Full Project Editing**: Data Wranglers can now edit package count, selected photos count, and extras for any project
+- **Automatic Calculations**: System automatically recalculates extras when package or selected count changes
+- **Project Duplication**: Data Wranglers can duplicate projects with one click, copying all details except status/assignments
+- **Notes Management**: Data Wranglers have full access to create, edit, and manage project notes with text and image support
+- **Role Permissions**: Admin, Sales, Data Wrangler, and Lead Retoucher all have comprehensive project management capabilities
+
+### Notes System Implementation
+- **Text and Image Notes**: Support for both text notes and image uploads using object storage
+- **Role-Based Access**: Admin/Sales/Data Wrangler can create and edit notes; retouchers can view existing notes only
+- **Real-Time Updates**: Notes system integrates with main project table showing notes status and count
+- **Image Upload**: Secure image upload functionality using Replit's object storage service
+- **Session Management**: Extended session timeout from 10 minutes to 2 hours for improved workflow efficiency

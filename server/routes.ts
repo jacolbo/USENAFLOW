@@ -189,6 +189,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Duplicate project (admin/sales/data wrangler action)
+  app.post("/api/projects/:id/duplicate", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const originalProject = await storage.getProject(id);
+      
+      if (!originalProject) {
+        return res.status(404).json({ error: "Project not found" });
+      }
+      
+      // Create a new project with copied data but reset status and assignments
+      const duplicatedProject = await storage.createProject({
+        clientName: `${originalProject.clientName} (Copy)`,
+        packageCount: originalProject.packageCount,
+        selectedCount: originalProject.selectedCount,
+        dueDate: originalProject.dueDate,
+      });
+      
+      res.status(201).json(duplicatedProject);
+    } catch (error) {
+      res.status(400).json({ error: "Failed to duplicate project" });
+    }
+  });
+
   // Delete project (admin/lead retoucher action)
   app.delete("/api/projects/:id", async (req, res) => {
     try {
