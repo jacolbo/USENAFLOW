@@ -23,17 +23,20 @@ interface ChartDataPoint {
   fullDate: string;
 }
 
-// Colors and stroke widths for specific retouchers
+// Team total line thickness
+const TEAM_STROKE_WIDTH = 4;
+
+// Colors and stroke widths for specific retouchers (half thickness of team line)
 const RETOUCHER_STYLES: Record<string, { color: string; strokeWidth: number }> = {
-  "Lucky": { color: "#EF4444", strokeWidth: 4 }, // Red
-  "Earl": { color: "#EC4899", strokeWidth: 4 }, // Magenta  
-  "Dr Asa": { color: "#10B981", strokeWidth: 3 }, // Green
-  "Asa": { color: "#10B981", strokeWidth: 3 }, // Green (alternative name)
+  "Lucky": { color: "#EF4444", strokeWidth: TEAM_STROKE_WIDTH / 2 }, // Red
+  "Earl": { color: "#EC4899", strokeWidth: TEAM_STROKE_WIDTH / 2 }, // Magenta  
+  "Dr Asa": { color: "#10B981", strokeWidth: TEAM_STROKE_WIDTH / 2 }, // Green
+  "Asa": { color: "#10B981", strokeWidth: TEAM_STROKE_WIDTH / 2 }, // Green (alternative name)
   // Fallback colors for other retouchers
-  "default1": { color: "#F59E0B", strokeWidth: 3 }, // Orange
-  "default2": { color: "#8B5CF6", strokeWidth: 4 }, // Purple
-  "default3": { color: "#06B6D4", strokeWidth: 3 }, // Cyan
-  "default4": { color: "#84CC16", strokeWidth: 4 }, // Lime
+  "default1": { color: "#F59E0B", strokeWidth: TEAM_STROKE_WIDTH / 2 }, // Orange
+  "default2": { color: "#8B5CF6", strokeWidth: TEAM_STROKE_WIDTH / 2 }, // Purple
+  "default3": { color: "#06B6D4", strokeWidth: TEAM_STROKE_WIDTH / 2 }, // Cyan
+  "default4": { color: "#84CC16", strokeWidth: TEAM_STROKE_WIDTH / 2 }, // Lime
 };
 
 const getRetoucherStyle = (retoucher: string, index: number) => {
@@ -46,11 +49,11 @@ const getRetoucherStyle = (retoucher: string, index: number) => {
   const fallbackKeys = Object.keys(RETOUCHER_STYLES).filter(key => key.startsWith('default'));
   if (fallbackKeys.length === 0) {
     // Final fallback if no defaults are available
-    return { color: "#6B7280", strokeWidth: 3 }; // Gray
+    return { color: "#6B7280", strokeWidth: TEAM_STROKE_WIDTH / 2 }; // Gray
   }
   
   const fallbackKey = fallbackKeys[index % fallbackKeys.length];
-  return RETOUCHER_STYLES[fallbackKey] || { color: "#6B7280", strokeWidth: 3 };
+  return RETOUCHER_STYLES[fallbackKey] || { color: "#6B7280", strokeWidth: TEAM_STROKE_WIDTH / 2 };
 };
 
 export function TeamAnalytics({ user }: TeamAnalyticsProps) {
@@ -415,7 +418,7 @@ export function TeamAnalytics({ user }: TeamAnalyticsProps) {
                     type="monotone" 
                     dataKey="photos" 
                     stroke="#3B82F6"
-                    strokeWidth={2}
+                    strokeWidth={TEAM_STROKE_WIDTH}
                     dot={{ fill: '#3B82F6', strokeWidth: 2, r: 3 }}
                     activeDot={{ r: 5, fill: '#3B82F6' }}
                     name="Team Total"
@@ -449,7 +452,7 @@ export function TeamAnalytics({ user }: TeamAnalyticsProps) {
                   className="w-4 rounded-full"
                   style={{ 
                     backgroundColor: "#3B82F6",
-                    height: "2px"
+                    height: `${TEAM_STROKE_WIDTH}px`
                   }}
                 />
                 <span className="text-sm text-gray-600 font-medium">Team Total</span>
