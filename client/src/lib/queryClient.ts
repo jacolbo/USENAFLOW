@@ -41,6 +41,12 @@ export const getQueryFn: <T>(options: {
     return await res.json();
   };
 
+// API helper functions
+export async function updateProject(id: string | number, data: any) {
+  const response = await apiRequest("PATCH", `/api/projects/${id}`, data);
+  return response.json();
+}
+
 export const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
