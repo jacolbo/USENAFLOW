@@ -11,6 +11,7 @@ import { Project } from "@shared/schema";
 import { User, formatRetoucherAbbr, getRetoucherFullName } from "@/lib/types";
 import { Calendar, Star, ChevronDown, ChevronRight, Copy } from "lucide-react";
 import { useState, useMemo } from "react";
+import { DailyQuote } from "./daily-quote";
 
 interface TaskTableProps {
   projects: Project[];
@@ -377,6 +378,9 @@ export function TaskTable({ projects, user, allUsers }: TaskTableProps) {
 
   return (
     <div className="space-y-8">
+      {/* Daily Quote */}
+      <DailyQuote userId={user.name} className="mb-6" />
+      
       {visibleGroups.map(group => {
         const monday = group.weekStart;
         const sunday = new Date(monday);
