@@ -1,0 +1,110 @@
+REPLIT AGENT PROMPT — “Team Progress” (Photos Edited Analytics)
+Goal: Add a Team Progress page that shows how many photos were edited daily/weekly/monthly or over a custom date range.
+Count photos only after Sales/Admin mark a project as “Delivered”.
+Show both a line chart (photos over time) and a histogram (distribution).
+This page must be visible to Admin, Workflow Manager, and Sales accounts only.
+
+Tasks:
+
+Dependencies
+
+Add libraries for charts and date utilities.
+
+Ensure nothing breaks existing styling (luxe black theme).
+
+Data rules
+
+Only include projects where status === "Delivered".
+
+Use deliveredAt (ISO date) as the official timestamp for analytics.
+
+Photo count per project = selectedCount if present; otherwise packageCount + extras (non-negative).
+
+If deliveredAt is missing when delivery occurs, set it automatically at the moment Sales/Admin mark the project as Delivered.
+
+Page & Routing
+
+Create a Team Progress page at route: /team-progress.
+
+Add navigation links:
+
+Desktop sidebar: Team Progress
+
+Mobile tab bar: an appropriate icon (e.g., 📈) labeled Team Progress
+
+The page is role-gated: only Admin, Workflow Manager, Sales can access. Retouchers see an access message.
+
+Filters / Controls
+
+Date range selector: From (date) and To (date).
+Default: last 30 days.
+
+Granularity selector: Daily, Weekly, Monthly.
+
+Daily buckets start at local midnight.
+
+Weekly buckets start Monday.
+
+Monthly buckets start at the first of the month.
+
+Charts
+
+Line chart: X = time buckets (per selected granularity), Y = total photos delivered in that bucket.
+
+Histogram (bar chart): same buckets on X, Y = total photos delivered.
+
+Hide legends (single series), keep clean labels, respect current dark theme.
+
+KPI Summary
+
+Above charts, show:
+
+Total photos in selected range
+
+Number of buckets
+
+Average photos per bucket (one decimal)
+
+Performance & Edge Cases
+
+If no delivered projects in the selected range, show a friendly empty state.
+
+Ensure charts render with 0 values (don’t crash).
+
+Handle long ranges efficiently (bucket/aggregate once, reuse for both charts).
+
+Integration Points
+
+Wherever the app marks a project Delivered, ensure:
+
+status becomes "Delivered"
+
+deliveredAt is stamped (ISO) if not already set
+
+Ensure the analytics page reads projects via the existing API/data layer (no duplicate state).
+
+Accessibility & UX
+
+Use clear headings, aria-labels for charts, and concise tooltips.
+
+Maintain the luxe black aesthetic and spacing consistent with the app.
+
+QA Checklist
+
+Verify daily/weekly/monthly counts match a manual sample.
+
+Confirm that projects not delivered are excluded.
+
+Confirm role-based access works (Admin/Workflow Manager/Sales = allowed; Retouchers = blocked).
+
+Confirm date range + granularity updates both charts and KPIs.
+
+Done Criteria:
+
+A Team Progress page exists at /team-progress with the controls, two charts, and KPI summary.
+
+Only Delivered projects (by Sales/Admin) are counted, grouped by deliveredAt.
+
+Feature is accessible to Admin, Workflow Manager, Sales; blocked for Retouchers.
+
+Navigation links appear in both desktop sidebar and mobile tab bar.

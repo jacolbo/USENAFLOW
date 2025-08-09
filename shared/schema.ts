@@ -20,6 +20,7 @@ export const projects = pgTable("projects", {
   invoicePaid: boolean("invoice_paid").notNull().default(false),
   assignedTo: text("assigned_to"),
   rating: integer("rating"),
+  deliveredAt: timestamp("delivered_at"),
   createdAt: timestamp("created_at").notNull().default(sql`now()`),
 });
 

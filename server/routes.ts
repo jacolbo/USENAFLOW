@@ -135,6 +135,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       const updatedProject = await storage.updateProject(id, {
         status: ProjectStatus.DELIVERED,
+        deliveredAt: new Date(),
       });
       
       if (!updatedProject) {
