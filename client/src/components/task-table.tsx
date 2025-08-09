@@ -5,7 +5,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import { ProjectNotes } from "./project-notes";
-import { apiRequest, updateProject } from "@/lib/queryClient";
+import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Project } from "@shared/schema";
 import { User, formatRetoucherAbbr, getRetoucherFullName } from "@/lib/types";
@@ -173,23 +173,11 @@ export function TaskTable({ projects, user, allUsers }: TaskTableProps) {
     });
   };
 
-  const handleDeliver = async (projectId: string) => {
-    const nowIso = new Date().toISOString();
-    try {
-      await updateProject(projectId, { status: 'Delivered', deliveredAt: nowIso });
-      // Refresh the projects list
-      queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
-      toast({
-        title: "Project delivered",
-        description: "Project has been marked as delivered successfully.",
-      });
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to deliver project. Please try again.",
-        variant: "destructive",
-      });
-    }
+  const handleDeliver = (projectId: string) => {
+    updateProjectMutation.mutate({
+      id: projectId,
+      endpoint: "deliver",
+    });
   };
 
   const handleSetRating = (projectId: string, rating: number) => {
