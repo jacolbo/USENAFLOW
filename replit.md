@@ -152,13 +152,13 @@ Preferred communication style: Simple, everyday language.
 - **Session Management**: Extended session timeout from 10 minutes to 2 hours for improved workflow efficiency
 
 ### Team Progress Analytics Implementation (January 2025)
-- **Analytics Dashboard**: Created comprehensive Team Progress page at `/team-progress` with photos edited analytics
-- **Role-Based Access**: Available only to Admin, Sales, and Workflow Manager roles; restricted for retouchers
-- **Advanced Charts**: Implemented line chart (trend over time) and histogram (distribution) using Recharts library
+- **Integrated Analytics**: Added comprehensive team analytics directly to the main dashboard page bottom
+- **Role-Based Access**: Available only to Admin, Sales, and Lead Retoucher roles; hidden for retouchers
+- **Advanced Charts**: Implemented line chart showing photos delivered over time using Recharts library
 - **KPI Summary**: Displays total photos delivered, time periods, and average photos per period
 - **Flexible Filtering**: Date range selector with default last 30 days and granularity options (daily/weekly/monthly)
 - **Delivered Projects Tracking**: Only counts photos from projects marked as "Delivered" with automatic deliveredAt timestamp
-- **Navigation Integration**: Added navigation links between Dashboard and Team Progress in header
+- **Seamless Integration**: Analytics appear below project table for easy access without separate page navigation
 - **Data Accuracy**: Photo count calculation uses selectedCount or packageCount + extras (non-negative)
 
 ### Daily Quotes System Implementation (January 2025)

@@ -6,7 +6,9 @@ import { SettingsPanel } from "@/components/settings-panel";
 import { AddProjectForm } from "@/components/add-project-form";
 import { TaskTable } from "@/components/task-table";
 import { StatusLegend } from "@/components/status-legend";
-import { AnalyticsHeader } from "@/components/analytics-header";
+
+import { TeamAnalytics } from "@/components/team-analytics";
+import { DailyQuote } from "@/components/daily-quote";
 import { User } from "@/lib/types";
 import { Project } from "@shared/schema";
 import { User as UserIcon, LogOut, Settings } from "lucide-react";
@@ -233,7 +235,7 @@ export default function Dashboard() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <AnalyticsHeader user={user} />
+
       <div className="container mx-auto px-4 py-8">
         <div className="bg-white rounded-lg shadow-sm mb-8">
           <div className="px-6 py-4 border-b border-gray-200">
@@ -307,7 +309,10 @@ export default function Dashboard() {
           </div>
         </div>
 
-        <div className="space-y-8">          
+        <div className="space-y-8">  
+          {/* Daily Quote */}
+          <DailyQuote user={user} />
+          
           {/* Status Legend - only for Admin, LeadRetoucher, and DataWrangler */}
           <StatusLegend projects={projects} user={user} allUsers={users} />
           
@@ -318,6 +323,9 @@ export default function Dashboard() {
           
           {/* Show the task table for the visible projects */}
           <TaskTable projects={projects} user={user} allUsers={users} />
+
+          {/* Team Progress Analytics */}
+          <TeamAnalytics user={user} />
         </div>
       </div>
     </div>

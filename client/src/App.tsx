@@ -11,7 +11,7 @@ function Router() {
   return (
     <Switch>
       <Route path="/" component={Dashboard} />
-      <Route path="/team-progress" component={TeamProgress} />
+
       <Route component={NotFound} />
     </Switch>
   );
