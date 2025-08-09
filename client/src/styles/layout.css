@@ -16,8 +16,14 @@ body{margin:0;background:var(--bg);color:var(--fg);font-family:Inter,system-ui,A
 .sidebar__nav{padding:8px 8px;}
 .sidebar__link{display:block;color:var(--fg);text-decoration:none;padding:10px 12px;border-radius:8px;}
 .sidebar__link:hover{background:#141414;}
+.sidebar__link--active{background:var(--gold);color:#000;font-weight:600;}
 
 .tabbar{position:fixed;left:0;right:0;bottom:0;background:#0c0c0c;border-top:1px solid var(--line);
   display:flex;gap:6px;padding:8px;justify-content:space-around;}
-.tabbar__btn{background:#111;border:1px solid var(--line);color:var(--fg);padding:10px 14px;border-radius:12px;}
+.tabbar a{text-decoration:none;}
+.tabbar__btn{background:#111;border:1px solid var(--line);color:var(--fg);padding:10px 14px;border-radius:12px;cursor:pointer;}
 .tabbar__btn:focus,.tabbar__btn:hover{outline:none;border-color:var(--gold);color:var(--gold);}
+.tabbar__btn--active{background:var(--gold);color:#000;border-color:var(--gold);font-weight:600;}
+
+/* Mobile layout adjustments */
+.app--mobile .app__main{padding-bottom:80px;} /* Account for fixed tabbar */

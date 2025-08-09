@@ -5,13 +5,21 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import Dashboard from "@/pages/dashboard";
 import NotFound from "@/pages/not-found";
+import MobileLayout from "@/layouts/MobileLayout";
+import DesktopLayout from "@/layouts/DesktopLayout";
+import { isMobile } from "@/utils/platform";
 
-function Router() {
+function AppRouter() {
+  const isResponsiveMobile = isMobile();
+  const Layout = isResponsiveMobile ? MobileLayout : DesktopLayout;
+
   return (
-    <Switch>
-      <Route path="/" component={Dashboard} />
-      <Route component={NotFound} />
-    </Switch>
+    <Layout title="USENA FLOW">
+      <Switch>
+        <Route path="/" component={Dashboard} />
+        <Route component={NotFound} />
+      </Switch>
+    </Layout>
   );
 }
 
@@ -20,7 +28,7 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <Toaster />
-        <Router />
+        <AppRouter />
       </TooltipProvider>
     </QueryClientProvider>
   );
