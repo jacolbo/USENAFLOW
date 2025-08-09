@@ -46,6 +46,10 @@ export function TaskTable({ projects, user, allUsers }: TaskTableProps) {
   // Helper function to get week start
   const getWeekStart = (date: Date) => {
     const d = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    // Ensure valid year range
+    if (d.getFullYear() < 2024) {
+      d.setFullYear(2024);
+    }
     const day = d.getDay(); // 0 = Sunday, 1 = Monday, etc.
     const diff = day === 0 ? -6 : 1 - day; // adjust Sunday to previous Monday
     d.setDate(d.getDate() + diff);
@@ -555,6 +559,8 @@ export function TaskTable({ projects, user, allUsers }: TaskTableProps) {
                               value={new Date(project.dueDate).toISOString().slice(0, 10)}
                               onChange={(e) => handleChangeDueDate(project.id, new Date(e.target.value))}
                               className="border rounded px-2 py-1"
+                              min="2024-01-01"
+                              max="2030-12-31"
                             />
                           ) : (
                             formatDate(new Date(project.dueDate))

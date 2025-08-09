@@ -16,6 +16,10 @@ interface AddProjectFormProps {
 // Helper function to get Monday of the current week
 const getWeekStart = (date: Date) => {
   const d = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  // Ensure valid year range
+  if (d.getFullYear() < 2024) {
+    d.setFullYear(2024);
+  }
   const day = d.getDay(); // 0 = Sunday, 1 = Monday, etc.
   const diff = day === 0 ? -6 : 1 - day; // adjust Sunday to previous Monday
   d.setDate(d.getDate() + diff);
@@ -33,7 +37,12 @@ const formatWeekRange = (monday: Date) => {
 
 // Generate week options (current week + 4 weeks ahead)
 const generateWeekOptions = () => {
-  const currentWeekStart = getWeekStart(new Date());
+  const today = new Date();
+  // Ensure we're working with a date that has a proper year (minimum 2024)
+  if (today.getFullYear() < 2024) {
+    today.setFullYear(2024);
+  }
+  const currentWeekStart = getWeekStart(today);
   const options = [];
   
   for (let i = 0; i < 5; i++) {

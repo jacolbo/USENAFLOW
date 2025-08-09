@@ -11,14 +11,22 @@ async function seed() {
     return;
   }
 
-  // Insert sample projects
+  // Helper function to ensure dates are in valid range
+  const ensureValidDate = (date: Date) => {
+    if (date.getFullYear() < 2024) {
+      date.setFullYear(2024);
+    }
+    return date;
+  };
+
+  // Insert sample projects with valid dates
   const sampleProjects = [
     {
       clientName: "Alice",
       packageCount: 10,
       selectedCount: 12,
       extras: 2,
-      dueDate: new Date(2025, 7, 7), // Aug 7, 2025
+      dueDate: ensureValidDate(new Date(2025, 7, 7)), // Aug 7, 2025
       status: ProjectStatus.AWAITING_PAYMENT,
       invoicePaid: false,
       assignedTo: null,
@@ -29,7 +37,7 @@ async function seed() {
       packageCount: 5,
       selectedCount: 5,
       extras: 0,
-      dueDate: new Date(2025, 7, 9), // Aug 9, 2025
+      dueDate: ensureValidDate(new Date(2025, 7, 9)), // Aug 9, 2025
       status: ProjectStatus.READY_FOR_RETOUCHING,
       invoicePaid: true,
       assignedTo: null,
@@ -40,7 +48,7 @@ async function seed() {
       packageCount: 8,
       selectedCount: 8,
       extras: 0,
-      dueDate: new Date(2025, 7, 5), // Aug 5, 2025
+      dueDate: ensureValidDate(new Date(2025, 7, 5)), // Aug 5, 2025
       status: ProjectStatus.REVIEW,
       invoicePaid: true,
       assignedTo: "Lucky",
@@ -51,7 +59,7 @@ async function seed() {
       packageCount: 7,
       selectedCount: 10,
       extras: 3,
-      dueDate: new Date(2025, 7, 2), // Aug 2, 2025
+      dueDate: ensureValidDate(new Date(2025, 7, 2)), // Aug 2, 2025
       status: ProjectStatus.DELIVERED,
       invoicePaid: true,
       assignedTo: "Earl",
@@ -62,7 +70,7 @@ async function seed() {
       packageCount: 4,
       selectedCount: 4,
       extras: 0,
-      dueDate: new Date(2025, 7, 8), // Aug 8, 2025
+      dueDate: ensureValidDate(new Date(2025, 7, 8)), // Aug 8, 2025
       status: ProjectStatus.ASSIGNED,
       invoicePaid: true,
       assignedTo: "Dr Asa",
