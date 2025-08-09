@@ -40,6 +40,20 @@ export function AnalyticsHeader({ user }: AnalyticsHeaderProps) {
                   Dashboard
                 </Button>
               </Link>
+              
+              {/* Team Progress link - Only for Admin, Sales, WorkflowManager */}
+              {['Admin', 'Sales', 'WorkflowManager'].includes(user.role) && (
+                <Link href="/team-progress">
+                  <Button 
+                    variant="ghost" 
+                    size="sm"
+                    className="flex items-center gap-2"
+                  >
+                    📈
+                    Team Progress
+                  </Button>
+                </Link>
+              )}
             </nav>
           </div>
           

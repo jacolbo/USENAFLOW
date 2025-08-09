@@ -275,6 +275,20 @@ export default function Dashboard() {
                         </Button>
                       </Link>
                     )}
+                    
+                    {/* Team Progress - Only visible to Admin, Sales, WorkflowManager */}
+                    {['Admin', 'Sales', 'WorkflowManager'].includes(user.role) && (
+                      <Link href="/team-progress">
+                        <Button 
+                          variant={location === "/team-progress" ? "default" : "ghost"} 
+                          size="sm"
+                          className="flex items-center gap-2"
+                        >
+                          📈
+                          Team Progress
+                        </Button>
+                      </Link>
+                    )}
                   </nav>
                 )}
               </div>
