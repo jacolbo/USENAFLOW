@@ -23,17 +23,35 @@ interface ChartDataPoint {
   fullDate: string;
 }
 
-// Colors and stroke widths for different retouchers
-const RETOUCHER_STYLES = [
-  { color: "#3B82F6", strokeWidth: 3 }, // Blue
-  { color: "#EF4444", strokeWidth: 4 }, // Red  
-  { color: "#10B981", strokeWidth: 3 }, // Green
-  { color: "#F59E0B", strokeWidth: 4 }, // Orange
-  { color: "#8B5CF6", strokeWidth: 3 }, // Purple
-  { color: "#EC4899", strokeWidth: 4 }, // Pink
-  { color: "#06B6D4", strokeWidth: 3 }, // Cyan
-  { color: "#84CC16", strokeWidth: 4 }, // Lime
-];
+// Colors and stroke widths for specific retouchers
+const RETOUCHER_STYLES: Record<string, { color: string; strokeWidth: number }> = {
+  "Lucky": { color: "#EF4444", strokeWidth: 4 }, // Red
+  "Earl": { color: "#EC4899", strokeWidth: 4 }, // Magenta  
+  "Dr Asa": { color: "#10B981", strokeWidth: 3 }, // Green
+  "Asa": { color: "#10B981", strokeWidth: 3 }, // Green (alternative name)
+  // Fallback colors for other retouchers
+  "default1": { color: "#F59E0B", strokeWidth: 3 }, // Orange
+  "default2": { color: "#8B5CF6", strokeWidth: 4 }, // Purple
+  "default3": { color: "#06B6D4", strokeWidth: 3 }, // Cyan
+  "default4": { color: "#84CC16", strokeWidth: 4 }, // Lime
+};
+
+const getRetoucherStyle = (retoucher: string, index: number) => {
+  // Check if we have a specific style for this retoucher
+  if (RETOUCHER_STYLES[retoucher]) {
+    return RETOUCHER_STYLES[retoucher];
+  }
+  
+  // Fallback to default colors for unknown retouchers
+  const fallbackKeys = Object.keys(RETOUCHER_STYLES).filter(key => key.startsWith('default'));
+  if (fallbackKeys.length === 0) {
+    // Final fallback if no defaults are available
+    return { color: "#6B7280", strokeWidth: 3 }; // Gray
+  }
+  
+  const fallbackKey = fallbackKeys[index % fallbackKeys.length];
+  return RETOUCHER_STYLES[fallbackKey] || { color: "#6B7280", strokeWidth: 3 };
+};
 
 export function TeamAnalytics({ user }: TeamAnalyticsProps) {
   // Only show for allowed roles
@@ -340,7 +358,7 @@ export function TeamAnalytics({ user }: TeamAnalyticsProps) {
       {analyticsData.retoucherStats && Object.keys(analyticsData.retoucherStats).length > 0 && (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {Object.entries(analyticsData.retoucherStats).map(([retoucher, total], index) => {
-            const style = RETOUCHER_STYLES[index % RETOUCHER_STYLES.length];
+            const style = getRetoucherStyle(retoucher, index);
             return (
               <Card key={retoucher}>
                 <CardContent className="p-4">
@@ -392,9 +410,20 @@ export function TeamAnalytics({ user }: TeamAnalyticsProps) {
                       borderRadius: '8px',
                     }}
                   />
+                  {/* Team total line (blue) */}
+                  <Line 
+                    type="monotone" 
+                    dataKey="photos" 
+                    stroke="#3B82F6"
+                    strokeWidth={2}
+                    dot={{ fill: '#3B82F6', strokeWidth: 2, r: 3 }}
+                    activeDot={{ r: 5, fill: '#3B82F6' }}
+                    name="Team Total"
+                  />
+                  
                   {/* Individual lines for each retoucher */}
                   {analyticsData.retouchers?.map((retoucher, index) => {
-                    const style = RETOUCHER_STYLES[index % RETOUCHER_STYLES.length];
+                    const style = getRetoucherStyle(retoucher, index);
                     return (
                       <Line
                         key={retoucher}
@@ -413,25 +442,36 @@ export function TeamAnalytics({ user }: TeamAnalyticsProps) {
             </div>
             
             {/* Legend */}
-            {analyticsData.retouchers && analyticsData.retouchers.length > 0 && (
-              <div className="flex flex-wrap gap-4 mt-4 pt-4 border-t">
-                {analyticsData.retouchers.map((retoucher, index) => {
-                  const style = RETOUCHER_STYLES[index % RETOUCHER_STYLES.length];
-                  return (
-                    <div key={retoucher} className="flex items-center gap-2">
-                      <div 
-                        className="w-4 h-1 rounded-full"
-                        style={{ 
-                          backgroundColor: style.color,
-                          height: `${style.strokeWidth}px`
-                        }}
-                      />
-                      <span className="text-sm text-gray-600">{retoucher}</span>
-                    </div>
-                  );
-                })}
+            <div className="flex flex-wrap gap-4 mt-4 pt-4 border-t">
+              {/* Team total legend */}
+              <div className="flex items-center gap-2">
+                <div 
+                  className="w-4 rounded-full"
+                  style={{ 
+                    backgroundColor: "#3B82F6",
+                    height: "2px"
+                  }}
+                />
+                <span className="text-sm text-gray-600 font-medium">Team Total</span>
               </div>
-            )}
+              
+              {/* Individual retoucher legends */}
+              {analyticsData.retouchers && analyticsData.retouchers.map((retoucher, index) => {
+                const style = getRetoucherStyle(retoucher, index);
+                return (
+                  <div key={retoucher} className="flex items-center gap-2">
+                    <div 
+                      className="w-4 rounded-full"
+                      style={{ 
+                        backgroundColor: style.color,
+                        height: `${style.strokeWidth}px`
+                      }}
+                    />
+                    <span className="text-sm text-gray-600">{retoucher}</span>
+                  </div>
+                );
+              })}
+            </div>
           </CardContent>
         </Card>
       ) : (
