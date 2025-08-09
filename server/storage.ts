@@ -252,13 +252,20 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updateProject(id: string, updates: UpdateProject): Promise<Project | undefined> {
-    // Calculate extras if packageCount or selectedCount changed
-    if (updates.packageCount !== undefined || updates.selectedCount !== undefined) {
+    // Always recalculate extras if packageCount, selectedCount, or extras changed
+    if (updates.packageCount !== undefined || updates.selectedCount !== undefined || updates.extras !== undefined) {
       const currentProject = await this.getProject(id);
       if (currentProject) {
         const newPackageCount = updates.packageCount ?? currentProject.packageCount;
         const newSelectedCount = updates.selectedCount ?? currentProject.selectedCount;
-        updates.extras = Math.max(0, newSelectedCount - newPackageCount);
+        
+        // If extras is being directly updated, ensure selectedCount matches
+        if (updates.extras !== undefined && updates.selectedCount === undefined) {
+          updates.selectedCount = newPackageCount + updates.extras;
+        } else {
+          // Otherwise calculate extras from counts
+          updates.extras = Math.max(0, (updates.selectedCount ?? newSelectedCount) - newPackageCount);
+        }
       }
     }
 

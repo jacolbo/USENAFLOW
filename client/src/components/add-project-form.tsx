@@ -63,6 +63,13 @@ export function AddProjectForm({ onAddProject }: AddProjectFormProps) {
   const [packageCount, setPackageCount] = useState("");
   const [selectedCount, setSelectedCount] = useState("");
   const [dueWeek, setDueWeek] = useState("");
+  
+  // Calculate extras in real-time
+  const calculateExtras = () => {
+    const pkgCount = parseInt(packageCount, 10) || 0;
+    const selCount = parseInt(selectedCount, 10) || 0;
+    return Math.max(0, selCount - pkgCount);
+  };
 
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -169,6 +176,11 @@ export function AddProjectForm({ onAddProject }: AddProjectFormProps) {
               placeholder="0"
               required
             />
+            {packageCount && selectedCount && (
+              <div className="text-sm text-gray-600 dark:text-gray-400">
+                Extras: {calculateExtras()} photos
+              </div>
+            )}
           </div>
           
           <div className="space-y-2">

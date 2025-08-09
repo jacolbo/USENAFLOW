@@ -281,8 +281,17 @@ export function TaskTable({ projects, user, allUsers }: TaskTableProps) {
   };
 
   const handleChangeExtras = (projectId: string, extras: number) => {
+    // Find the project to calculate new selected count
+    const project = projects.find(p => p.id === projectId);
+    if (!project) return;
+    
+    // When extras change, update selected count accordingly
+    // selected count = package count + extras
+    const newSelectedCount = project.packageCount + extras;
+    
     changeSelectedCountMutation.mutate({
       id: projectId,
+      selectedCount: newSelectedCount,
       extras,
     });
   };
