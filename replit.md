@@ -98,6 +98,14 @@ Preferred communication style: Simple, everyday language.
 - **Login Reference**: Added credentials reference panel on login screen for easy team access
 - **Comprehensive Access**: All roles now have proper login credentials for cross-device functionality
 
+### Notes System Implementation
+- **Project Notes Feature**: Complete notes system supporting both text and image notes for projects
+- **Role-Based Access**: Admin, Sales, and Data Wrangler can create, edit, and delete notes; Retouchers can view notes only when they exist
+- **Object Storage Integration**: Set up cloud storage for image note attachments with automatic file upload handling
+- **Database Integration**: Added project_notes table with proper schema and API endpoints for full CRUD operations
+- **UI Integration**: Notes column in project table with conditional visibility based on user role and note existence
+- **Automatic Extras Calculation**: When editing selected photo count, extras are automatically calculated (selected - package count, minimum 0)
+
 ### Team Credentials Reference
 - **Admin**: admin / admin123 (full access including team management)
 - **Sales**: sales / sales123 (project management, no team settings)

@@ -23,6 +23,16 @@ export const projects = pgTable("projects", {
   createdAt: timestamp("created_at").notNull().default(sql`now()`),
 });
 
+export const projectNotes = pgTable("project_notes", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  projectId: varchar("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
+  noteType: text("note_type").notNull(), // 'text' or 'image'
+  content: text("content").notNull(), // text content or image path
+  createdBy: text("created_by").notNull(),
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+  updatedAt: timestamp("updated_at").notNull().default(sql`now()`),
+});
+
 export const insertUserSchema = createInsertSchema(users).pick({
   username: true,
   password: true,
@@ -45,11 +55,27 @@ export const updateProjectSchema = createInsertSchema(projects).partial().omit({
   dueDate: z.string().transform((str) => new Date(str)).optional(),
 });
 
+export const insertProjectNoteSchema = createInsertSchema(projectNotes).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const updateProjectNoteSchema = createInsertSchema(projectNotes).partial().omit({
+  id: true,
+  projectId: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
 export type InsertProject = z.infer<typeof insertProjectSchema>;
 export type UpdateProject = z.infer<typeof updateProjectSchema>;
 export type Project = typeof projects.$inferSelect;
+export type InsertProjectNote = z.infer<typeof insertProjectNoteSchema>;
+export type UpdateProjectNote = z.infer<typeof updateProjectNoteSchema>;
+export type ProjectNote = typeof projectNotes.$inferSelect;
 
 export const UserRoles = {
   ADMIN: "Admin",

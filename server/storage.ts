@@ -1,4 +1,4 @@
-import { type User, type InsertUser, type Project, type InsertProject, type UpdateProject, ProjectStatus } from "@shared/schema";
+import { type User, type InsertUser, type Project, type InsertProject, type UpdateProject, type ProjectNote, type InsertProjectNote, type UpdateProjectNote, ProjectStatus } from "@shared/schema";
 import { randomUUID } from "crypto";
 
 export interface IStorage {
@@ -11,15 +11,22 @@ export interface IStorage {
   createProject(project: InsertProject): Promise<Project>;
   updateProject(id: string, updates: UpdateProject): Promise<Project | undefined>;
   deleteProject(id: string): Promise<boolean>;
+  
+  getProjectNotes(projectId: string): Promise<ProjectNote[]>;
+  createProjectNote(note: InsertProjectNote): Promise<ProjectNote>;
+  updateProjectNote(id: string, updates: UpdateProjectNote): Promise<ProjectNote | undefined>;
+  deleteProjectNote(id: string): Promise<boolean>;
 }
 
 export class MemStorage implements IStorage {
   private users: Map<string, User>;
   private projects: Map<string, Project>;
+  private projectNotes: Map<string, ProjectNote>;
 
   constructor() {
     this.users = new Map();
     this.projects = new Map();
+    this.projectNotes = new Map();
     this.initializeData();
   }
 
@@ -157,6 +164,40 @@ export class MemStorage implements IStorage {
 
   async deleteProject(id: string): Promise<boolean> {
     return this.projects.delete(id);
+  }
+
+  // Project Notes methods
+  async getProjectNotes(projectId: string): Promise<ProjectNote[]> {
+    const notes = Array.from(this.projectNotes.values());
+    return notes.filter(note => note.projectId === projectId);
+  }
+
+  async createProjectNote(note: InsertProjectNote): Promise<ProjectNote> {
+    const newNote: ProjectNote = {
+      id: randomUUID(),
+      ...note,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    this.projectNotes.set(newNote.id, newNote);
+    return newNote;
+  }
+
+  async updateProjectNote(id: string, updates: UpdateProjectNote): Promise<ProjectNote | undefined> {
+    const note = this.projectNotes.get(id);
+    if (!note) return undefined;
+
+    const updatedNote: ProjectNote = {
+      ...note,
+      ...updates,
+      updatedAt: new Date(),
+    };
+    this.projectNotes.set(id, updatedNote);
+    return updatedNote;
+  }
+
+  async deleteProjectNote(id: string): Promise<boolean> {
+    return this.projectNotes.delete(id);
   }
 }
 

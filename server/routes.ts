@@ -1,7 +1,8 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertProjectSchema, updateProjectSchema, ProjectStatus } from "@shared/schema";
+import { insertProjectSchema, updateProjectSchema, insertProjectNoteSchema, updateProjectNoteSchema, ProjectStatus } from "@shared/schema";
+import { ObjectStorageService, ObjectNotFoundError } from "./objectStorage";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Get all projects
@@ -201,6 +202,103 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({ message: "Project deleted successfully" });
     } catch (error) {
       res.status(400).json({ error: "Failed to delete project" });
+    }
+  });
+
+  // Notes endpoints
+  // Get notes for a project
+  app.get("/api/projects/:projectId/notes", async (req, res) => {
+    try {
+      const { projectId } = req.params;
+      const notes = await storage.getProjectNotes(projectId);
+      res.json(notes);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch notes" });
+    }
+  });
+
+  // Create a new note
+  app.post("/api/projects/:projectId/notes", async (req, res) => {
+    try {
+      const { projectId } = req.params;
+      const noteData = { ...req.body, projectId };
+      const validatedData = insertProjectNoteSchema.parse(noteData);
+      const note = await storage.createProjectNote(validatedData);
+      res.status(201).json(note);
+    } catch (error) {
+      res.status(400).json({ error: "Invalid note data" });
+    }
+  });
+
+  // Update a note
+  app.patch("/api/projects/:projectId/notes/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const validatedData = updateProjectNoteSchema.parse(req.body);
+      const note = await storage.updateProjectNote(id, validatedData);
+      
+      if (!note) {
+        return res.status(404).json({ error: "Note not found" });
+      }
+      
+      res.json(note);
+    } catch (error) {
+      res.status(400).json({ error: "Failed to update note" });
+    }
+  });
+
+  // Delete a note
+  app.delete("/api/projects/:projectId/notes/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const deleted = await storage.deleteProjectNote(id);
+      
+      if (!deleted) {
+        return res.status(404).json({ error: "Note not found" });
+      }
+      
+      res.json({ message: "Note deleted successfully" });
+    } catch (error) {
+      res.status(400).json({ error: "Failed to delete note" });
+    }
+  });
+
+  // Object storage endpoints for images
+  app.get("/objects/:objectPath(*)", async (req, res) => {
+    const objectStorageService = new ObjectStorageService();
+    try {
+      const objectFile = await objectStorageService.getObjectEntityFile(req.path);
+      objectStorageService.downloadObject(objectFile, res);
+    } catch (error) {
+      console.error("Error checking object access:", error);
+      if (error instanceof ObjectNotFoundError) {
+        return res.sendStatus(404);
+      }
+      return res.sendStatus(500);
+    }
+  });
+
+  app.post("/api/objects/upload", async (req, res) => {
+    const objectStorageService = new ObjectStorageService();
+    const uploadURL = await objectStorageService.getObjectEntityUploadURL();
+    res.json({ uploadURL });
+  });
+
+  app.put("/api/note-images", async (req, res) => {
+    if (!req.body.imageURL) {
+      return res.status(400).json({ error: "imageURL is required" });
+    }
+
+    try {
+      const objectStorageService = new ObjectStorageService();
+      const objectPath = objectStorageService.normalizeObjectEntityPath(req.body.imageURL);
+
+      res.status(200).json({
+        objectPath: objectPath,
+      });
+    } catch (error) {
+      console.error("Error setting note image:", error);
+      res.status(500).json({ error: "Internal server error" });
     }
   });
 

@@ -3,7 +3,8 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
+import { ProjectNotes } from "./project-notes";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Project } from "@shared/schema";
@@ -20,6 +21,27 @@ interface TaskTableProps {
 export function TaskTable({ projects, user, allUsers }: TaskTableProps) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
+
+  // Query to get all notes for all projects to determine which have notes
+  const allNotesQuery = useQuery({
+    queryKey: ["/api/projects/notes/all"],
+    queryFn: async () => {
+      const notesData: Record<string, number> = {};
+      // Fetch notes count for each project
+      await Promise.all(
+        projects.map(async (project) => {
+          try {
+            const response = await fetch(`/api/projects/${project.id}/notes`);
+            const notes = await response.json();
+            notesData[project.id] = notes.length;
+          } catch {
+            notesData[project.id] = 0;
+          }
+        })
+      );
+      return notesData;
+    },
+  });
 
   // Helper function to get week start
   const getWeekStart = (date: Date) => {
@@ -399,6 +421,7 @@ export function TaskTable({ projects, user, allUsers }: TaskTableProps) {
                       <TableHead>Retoucher</TableHead>
                       <TableHead>Status</TableHead>
                       {(user.role === 'Admin' || user.role === 'Sales') && <TableHead>Rating</TableHead>}
+                      <TableHead>Notes</TableHead>
                       <TableHead>Actions</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -489,6 +512,13 @@ export function TaskTable({ projects, user, allUsers }: TaskTableProps) {
                             )}
                           </TableCell>
                         )}
+                        <TableCell>
+                          <ProjectNotes 
+                            projectId={project.id} 
+                            userRole={user.role} 
+                            hasNotes={(allNotesQuery.data?.[project.id] || 0) > 0}
+                          />
+                        </TableCell>
                         <TableCell>
                           <div className="flex items-center gap-2">
                             {/* Lead Retoucher, Admin, or Sales can assign tasks */}
