@@ -212,21 +212,35 @@ export function TaskTable({ projects, user, allUsers }: TaskTableProps) {
   };
 
   const changeSelectedCountMutation = useMutation({
-    mutationFn: async ({ id, selectedCount, extras }: { id: string; selectedCount: number; extras: number }) => {
-      const response = await apiRequest("PATCH", `/api/projects/${id}`, { selectedCount, extras });
+    mutationFn: async ({ 
+      id, 
+      selectedCount, 
+      packageCount,
+      extras 
+    }: { 
+      id: string; 
+      selectedCount?: number; 
+      packageCount?: number;
+      extras: number; 
+    }) => {
+      const updateData: any = { extras };
+      if (selectedCount !== undefined) updateData.selectedCount = selectedCount;
+      if (packageCount !== undefined) updateData.packageCount = packageCount;
+      
+      const response = await apiRequest("PATCH", `/api/projects/${id}`, updateData);
       return response.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
       toast({
-        title: "Selected count updated",
-        description: "Project selected photo count and extras updated successfully.",
+        title: "Project updated",
+        description: "Project details updated successfully.",
       });
     },
     onError: () => {
       toast({
         title: "Error",
-        description: "Failed to update selected count. Please try again.",
+        description: "Failed to update project. Please try again.",
         variant: "destructive",
       });
     },
@@ -243,6 +257,28 @@ export function TaskTable({ projects, user, allUsers }: TaskTableProps) {
     changeSelectedCountMutation.mutate({
       id: projectId,
       selectedCount,
+      extras,
+    });
+  };
+
+  const handleChangePackageCount = (projectId: string, packageCount: number) => {
+    // Find the project to recalculate extras
+    const project = projects.find(p => p.id === projectId);
+    if (!project) return;
+    
+    // Calculate extras: selected count minus new package count (minimum 0)
+    const extras = Math.max(0, project.selectedCount - packageCount);
+    
+    changeSelectedCountMutation.mutate({
+      id: projectId,
+      packageCount,
+      extras,
+    });
+  };
+
+  const handleChangeExtras = (projectId: string, extras: number) => {
+    changeSelectedCountMutation.mutate({
+      id: projectId,
       extras,
     });
   };
@@ -429,7 +465,19 @@ export function TaskTable({ projects, user, allUsers }: TaskTableProps) {
                     {group.projects.map(project => (
                       <TableRow key={project.id}>
                         <TableCell className="font-medium">{project.clientName}</TableCell>
-                        <TableCell>{project.packageCount}</TableCell>
+                        <TableCell>
+                          {['Admin', 'Sales', 'DataWrangler', 'LeadRetoucher'].includes(user.role) ? (
+                            <input
+                              type="number"
+                              value={project.packageCount}
+                              onChange={(e) => handleChangePackageCount(project.id, parseInt(e.target.value) || 0)}
+                              className="border rounded px-2 py-1 w-16 text-center"
+                              min="0"
+                            />
+                          ) : (
+                            project.packageCount
+                          )}
+                        </TableCell>
                         <TableCell>
                           {['Admin', 'Sales', 'DataWrangler', 'LeadRetoucher'].includes(user.role) ? (
                             <input
@@ -443,7 +491,19 @@ export function TaskTable({ projects, user, allUsers }: TaskTableProps) {
                             project.selectedCount
                           )}
                         </TableCell>
-                        <TableCell>{project.extras}</TableCell>
+                        <TableCell>
+                          {['Admin', 'Sales', 'DataWrangler', 'LeadRetoucher'].includes(user.role) ? (
+                            <input
+                              type="number"
+                              value={project.extras}
+                              onChange={(e) => handleChangeExtras(project.id, parseInt(e.target.value) || 0)}
+                              className="border rounded px-2 py-1 w-16 text-center"
+                              min="0"
+                            />
+                          ) : (
+                            project.extras
+                          )}
+                        </TableCell>
 
                         <TableCell>
                           {(user.role === 'Retoucher' || ['Retoucher1', 'Retoucher2', 'Retoucher3'].includes(user.role)) ? (
