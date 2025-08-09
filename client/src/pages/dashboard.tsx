@@ -36,8 +36,8 @@ export default function Dashboard() {
   const [user, setUser] = useState<User | null>(null);
   const [currentView, setCurrentView] = useState<'login' | 'register'>('login');
   
-  // Session timeout duration (10 minutes in milliseconds)
-  const SESSION_TIMEOUT = 10 * 60 * 1000;
+  // Session timeout duration (2 hours in milliseconds)
+  const SESSION_TIMEOUT = 2 * 60 * 60 * 1000;
   const [users, setUsers] = useState<User[]>([
     { id: "1", name: "Earl", role: "Retoucher", value: "Retoucher1", abbr: "EC" },
     { id: "2", name: "Dr Asa", role: "Retoucher", value: "Retoucher2", abbr: "ASA" },
@@ -109,7 +109,7 @@ export default function Dashboard() {
       const sessionData = JSON.parse(sessionStr);
       const currentTime = Date.now();
       
-      // Check if session is expired (older than 10 minutes)
+      // Check if session is expired (older than 2 hours)
       if (currentTime - sessionData.timestamp > SESSION_TIMEOUT) {
         localStorage.removeItem('usenaflow_session');
         return null;
