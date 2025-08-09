@@ -21,6 +21,7 @@ export const projects = pgTable("projects", {
   assignedTo: text("assigned_to"),
   rating: integer("rating"),
   createdAt: timestamp("created_at").notNull().default(sql`now()`),
+  deliveredAt: timestamp("delivered_at"),
 });
 
 export const projectNotes = pgTable("project_notes", {
@@ -44,6 +45,7 @@ export const insertProjectSchema = createInsertSchema(projects).omit({
   extras: true,
   status: true,
   invoicePaid: true,
+  deliveredAt: true,
 }).extend({
   dueDate: z.string().transform((str) => new Date(str)),
 });

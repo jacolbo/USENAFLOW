@@ -135,6 +135,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       const updatedProject = await storage.updateProject(id, {
         status: ProjectStatus.DELIVERED,
+        deliveredAt: new Date(),
       });
       
       if (!updatedProject) {
@@ -152,6 +153,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { id } = req.params;
       const updateData = updateProjectSchema.parse(req.body);
+      
+      // If status is being changed to Delivered, set deliveredAt timestamp
+      if (updateData.status === ProjectStatus.DELIVERED) {
+        updateData.deliveredAt = new Date();
+      }
       
       const updatedProject = await storage.updateProject(id, updateData);
       

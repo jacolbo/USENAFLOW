@@ -8,7 +8,8 @@ import { TaskTable } from "@/components/task-table";
 import { StatusLegend } from "@/components/status-legend";
 import { User } from "@/lib/types";
 import { Project } from "@shared/schema";
-import { User as UserIcon, LogOut, Settings } from "lucide-react";
+import { User as UserIcon, LogOut, Settings, TrendingUp, Home } from "lucide-react";
+import { Link, useLocation } from "wouter";
 import logoImage from "@assets/USENA-FLOW_1754522507856.png";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -35,6 +36,7 @@ interface UserCredentials {
 export default function Dashboard() {
   const [user, setUser] = useState<User | null>(null);
   const [currentView, setCurrentView] = useState<'login' | 'register'>('login');
+  const [location] = useLocation();
   
   // Session timeout duration (2 hours in milliseconds)
   const SESSION_TIMEOUT = 2 * 60 * 60 * 1000;
@@ -236,13 +238,45 @@ export default function Dashboard() {
         <div className="bg-white rounded-lg shadow-sm mb-8">
           <div className="px-6 py-4 border-b border-gray-200">
             <div className="flex items-center justify-between">
-              <div className="flex items-center">
-                <img 
-                  src={logoImage} 
-                  alt="USENA FLOW" 
-                  className="h-12 mr-2"
-                />
-                <span className="text-sm text-gray-600">by Jepson Myles Studio</span>
+              <div className="flex items-center space-x-6">
+                <div className="flex items-center">
+                  <img 
+                    src={logoImage} 
+                    alt="USENA FLOW" 
+                    className="h-12 mr-2"
+                  />
+                  <span className="text-sm text-gray-600">by Jepson Myles Studio</span>
+                </div>
+                
+                {/* Navigation Menu - Only visible to logged-in users */}
+                {user && (
+                  <nav className="flex items-center space-x-4">
+                    <Link href="/">
+                      <Button 
+                        variant={location === "/" ? "default" : "ghost"} 
+                        size="sm"
+                        className="flex items-center gap-2"
+                      >
+                        <Home className="h-4 w-4" />
+                        Dashboard
+                      </Button>
+                    </Link>
+                    
+                    {/* Analytics - Only visible to Admin, Sales, WorkflowManager */}
+                    {['Admin', 'Sales', 'WorkflowManager'].includes(user.role) && (
+                      <Link href="/analytics">
+                        <Button 
+                          variant={location === "/analytics" ? "default" : "ghost"} 
+                          size="sm"
+                          className="flex items-center gap-2"
+                        >
+                          <TrendingUp className="h-4 w-4" />
+                          Analytics
+                        </Button>
+                      </Link>
+                    )}
+                  </nav>
+                )}
               </div>
               <div className="flex items-center space-x-4">
                 {user && (
