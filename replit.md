@@ -29,11 +29,12 @@ Preferred communication style: Simple, everyday language.
 - **Development**: Hot reload with Vite middleware integration
 
 ### Data Layer
-- **Database**: PostgreSQL with Drizzle ORM
+- **Database**: PostgreSQL with Drizzle ORM (Persistent Storage)
 - **Schema Management**: Drizzle Kit for migrations and schema generation
 - **Database Provider**: Neon Database serverless PostgreSQL
 - **Validation**: Zod schemas for runtime type checking and API validation
-- **Storage Pattern**: Repository pattern with in-memory fallback for development
+- **Storage Pattern**: DatabaseStorage implementation with automatic data seeding
+- **Data Persistence**: All user data persists across deployments and restarts
 
 ### Authentication & Authorization
 - **Role-Based Access**: Seven distinct user roles with different permissions (Admin, Sales, LeadRetoucher, DataWrangler, Retoucher)
@@ -129,6 +130,19 @@ Preferred communication style: Simple, everyday language.
 - **Project Duplication**: Data Wranglers can duplicate projects with one click, copying all details except status/assignments
 - **Notes Management**: Data Wranglers have full access to create, edit, and manage project notes with text and image support
 - **Role Permissions**: Admin, Sales, Data Wrangler, and Lead Retoucher all have comprehensive project management capabilities
+
+### Database Persistence Implementation (January 2025)
+- **Persistent Storage**: Replaced in-memory storage with PostgreSQL database backend
+- **Data Security**: All user data (projects, notes, assignments) now persists across deployments
+- **Automatic Seeding**: Database initializes with sample data on first run, prevents data loss
+- **Production Ready**: Full CRUD operations with database transactions and error handling
+- **Zero Data Loss**: All projects, notes, and user activity preserved during updates and deployments
+
+### Project Management Features Enhancement
+- **Data Wrangler Permissions**: Full project editing including package count, selected photos, and extras
+- **Automatic Calculations**: System recalculates extras when package or selected count changes
+- **Project Duplication**: One-click project duplication available to Admin, Sales, and Data Wranglers
+- **Notes Management**: Admin/Sales/Data Wrangler can create, edit, delete notes; retouchers view-only access
 
 ### Notes System Implementation
 - **Text and Image Notes**: Support for both text notes and image uploads using object storage

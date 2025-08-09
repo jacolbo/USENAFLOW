@@ -1,4 +1,6 @@
-import { type User, type InsertUser, type Project, type InsertProject, type UpdateProject, type ProjectNote, type InsertProjectNote, type UpdateProjectNote, ProjectStatus } from "@shared/schema";
+import { type User, type InsertUser, type Project, type InsertProject, type UpdateProject, type ProjectNote, type InsertProjectNote, type UpdateProjectNote, ProjectStatus, users, projects, projectNotes } from "@shared/schema";
+import { db } from "./db";
+import { eq, sql } from "drizzle-orm";
 import { randomUUID } from "crypto";
 
 export interface IStorage {
@@ -201,4 +203,103 @@ export class MemStorage implements IStorage {
   }
 }
 
-export const storage = new MemStorage();
+// Database Storage Implementation
+export class DatabaseStorage implements IStorage {
+  async getUser(id: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.id, id));
+    return user || undefined;
+  }
+
+  async getUserByUsername(username: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.username, username));
+    return user || undefined;
+  }
+
+  async createUser(insertUser: InsertUser): Promise<User> {
+    const [user] = await db
+      .insert(users)
+      .values(insertUser)
+      .returning();
+    return user;
+  }
+
+  async getAllProjects(): Promise<Project[]> {
+    return await db.select().from(projects);
+  }
+
+  async getProject(id: string): Promise<Project | undefined> {
+    const [project] = await db.select().from(projects).where(eq(projects.id, id));
+    return project || undefined;
+  }
+
+  async createProject(insertProject: InsertProject): Promise<Project> {
+    const extras = Math.max(0, insertProject.selectedCount - insertProject.packageCount);
+    const status = extras > 0 ? ProjectStatus.AWAITING_PAYMENT : ProjectStatus.READY_FOR_RETOUCHING;
+    const invoicePaid = extras === 0;
+    
+    const [project] = await db
+      .insert(projects)
+      .values({
+        ...insertProject,
+        extras,
+        status,
+        invoicePaid,
+        assignedTo: null,
+        rating: null,
+      })
+      .returning();
+    return project;
+  }
+
+  async updateProject(id: string, updates: UpdateProject): Promise<Project | undefined> {
+    // Calculate extras if packageCount or selectedCount changed
+    if (updates.packageCount !== undefined || updates.selectedCount !== undefined) {
+      const currentProject = await this.getProject(id);
+      if (currentProject) {
+        const newPackageCount = updates.packageCount ?? currentProject.packageCount;
+        const newSelectedCount = updates.selectedCount ?? currentProject.selectedCount;
+        updates.extras = Math.max(0, newSelectedCount - newPackageCount);
+      }
+    }
+
+    const [project] = await db
+      .update(projects)
+      .set(updates)
+      .where(eq(projects.id, id))
+      .returning();
+    return project || undefined;
+  }
+
+  async deleteProject(id: string): Promise<boolean> {
+    const result = await db.delete(projects).where(eq(projects.id, id));
+    return (result.rowCount || 0) > 0;
+  }
+
+  async getProjectNotes(projectId: string): Promise<ProjectNote[]> {
+    return await db.select().from(projectNotes).where(eq(projectNotes.projectId, projectId));
+  }
+
+  async createProjectNote(note: InsertProjectNote): Promise<ProjectNote> {
+    const [projectNote] = await db
+      .insert(projectNotes)
+      .values(note)
+      .returning();
+    return projectNote;
+  }
+
+  async updateProjectNote(id: string, updates: UpdateProjectNote): Promise<ProjectNote | undefined> {
+    const [projectNote] = await db
+      .update(projectNotes)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(projectNotes.id, id))
+      .returning();
+    return projectNote || undefined;
+  }
+
+  async deleteProjectNote(id: string): Promise<boolean> {
+    const result = await db.delete(projectNotes).where(eq(projectNotes.id, id));
+    return (result.rowCount || 0) > 0;
+  }
+}
+
+export const storage = new DatabaseStorage();
