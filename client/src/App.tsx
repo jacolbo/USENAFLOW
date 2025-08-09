@@ -4,24 +4,14 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import Dashboard from "@/pages/dashboard";
-import CalendarPage from "@/pages/calendar";
 import NotFound from "@/pages/not-found";
-import MobileLayout from "@/layouts/MobileLayout";
-import DesktopLayout from "@/layouts/DesktopLayout";
-import { isMobile } from "@/utils/platform";
 
-function AppRouter() {
-  const isResponsiveMobile = isMobile();
-  const Layout = isResponsiveMobile ? MobileLayout : DesktopLayout;
-
+function Router() {
   return (
-    <Layout title="USENA FLOW">
-      <Switch>
-        <Route path="/" component={Dashboard} />
-        <Route path="/calendar" component={CalendarPage} />
-        <Route component={NotFound} />
-      </Switch>
-    </Layout>
+    <Switch>
+      <Route path="/" component={Dashboard} />
+      <Route component={NotFound} />
+    </Switch>
   );
 }
 
@@ -30,7 +20,7 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <Toaster />
-        <AppRouter />
+        <Router />
       </TooltipProvider>
     </QueryClientProvider>
   );

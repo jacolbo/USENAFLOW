@@ -11,8 +11,6 @@
     "db:push": "drizzle-kit push"
   },
   "dependencies": {
-    "@capacitor/cli": "^7.4.2",
-    "@capacitor/core": "^7.4.2",
     "@google-cloud/storage": "^7.16.0",
     "@hookform/resolvers": "^3.10.0",
     "@jridgewell/trace-mapping": "^0.3.25",
