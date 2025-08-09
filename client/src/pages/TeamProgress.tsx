@@ -11,6 +11,7 @@ import { User } from "@/lib/types";
 import { format, startOfWeek, startOfMonth, startOfDay, subDays, parseISO, isWithinInterval } from "date-fns";
 import { TrendingUp, BarChart3, Calendar, Users } from "lucide-react";
 import { AnalyticsHeader } from "@/components/analytics-header";
+import { useLocation } from "wouter";
 
 type Granularity = "daily" | "weekly" | "monthly";
 
@@ -23,19 +24,49 @@ interface ChartDataPoint {
 export default function TeamProgress() {
   // Get user from localStorage (same pattern as dashboard)
   const [user, setUser] = useState<User | null>(null);
+  const [, setLocation] = useLocation();
+  const [isUserLoaded, setIsUserLoaded] = useState(false);
 
   useEffect(() => {
     const savedUser = localStorage.getItem('currentUser');
     if (savedUser) {
       setUser(JSON.parse(savedUser));
     }
+    setIsUserLoaded(true);
   }, []);
+
+  // State for filters
+  const [granularity, setGranularity] = useState<Granularity>("daily");
+  const [fromDate, setFromDate] = useState(() => {
+    const date = new Date();
+    date.setDate(date.getDate() - 30);
+    return format(date, "yyyy-MM-dd");
+  });
+  const [toDate, setToDate] = useState(() => format(new Date(), "yyyy-MM-dd"));
+
+  // Fetch projects
+  const { data: projects = [], isLoading } = useQuery({
+    queryKey: ["/api/projects"],
+  });
+
+  // Show loading while user is being loaded
+  if (!isUserLoaded) {
+    return (
+      <div className="min-h-screen bg-black text-white flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white mx-auto mb-4"></div>
+          <p className="text-gray-400">Loading...</p>
+        </div>
+      </div>
+    );
+  }
 
   // If no user logged in, redirect to dashboard
   if (!user) {
-    window.location.href = '/';
+    setLocation('/');
     return null;
   }
+
   // Role-based access control
   const allowedRoles = ["Admin", "Sales", "LeadRetoucher"];
   if (!allowedRoles.includes(user.role)) {
@@ -53,20 +84,6 @@ export default function TeamProgress() {
       </div>
     );
   }
-
-  // State for filters
-  const [granularity, setGranularity] = useState<Granularity>("daily");
-  const [fromDate, setFromDate] = useState(() => {
-    const date = new Date();
-    date.setDate(date.getDate() - 30);
-    return format(date, "yyyy-MM-dd");
-  });
-  const [toDate, setToDate] = useState(() => format(new Date(), "yyyy-MM-dd"));
-
-  // Fetch projects
-  const { data: projects = [], isLoading } = useQuery({
-    queryKey: ["/api/projects"],
-  });
 
   // Process analytics data
   const analyticsData = useMemo(() => {
