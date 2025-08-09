@@ -11,7 +11,7 @@ export function AnalyticsHeader({ user }: AnalyticsHeaderProps) {
   const [location] = useLocation();
   
   // Only show for allowed roles
-  const allowedRoles = ["Admin", "Sales", "WorkflowManager"];
+  const allowedRoles = ["Admin", "Sales", "LeadRetoucher"];
   if (!allowedRoles.includes(user.role)) {
     return null;
   }

@@ -37,7 +37,7 @@ export default function TeamProgress() {
     return null;
   }
   // Role-based access control
-  const allowedRoles = ["Admin", "Sales", "WorkflowManager"];
+  const allowedRoles = ["Admin", "Sales", "LeadRetoucher"];
   if (!allowedRoles.includes(user.role)) {
     return (
       <div className="min-h-screen bg-black text-white flex items-center justify-center">
@@ -46,7 +46,7 @@ export default function TeamProgress() {
             <Users className="h-12 w-12 text-gray-500 mx-auto mb-4" />
             <h2 className="text-xl font-semibold mb-2">Access Restricted</h2>
             <p className="text-gray-400">
-              Team Progress analytics are only available to Admin, Sales, and Workflow Manager roles.
+              Team Progress analytics are only available to Admin, Sales, and Lead Retoucher roles.
             </p>
           </CardContent>
         </Card>
