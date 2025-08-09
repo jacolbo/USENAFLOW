@@ -23,6 +23,18 @@ interface ChartDataPoint {
   fullDate: string;
 }
 
+// Colors and stroke widths for different retouchers
+const RETOUCHER_STYLES = [
+  { color: "#3B82F6", strokeWidth: 3 }, // Blue
+  { color: "#EF4444", strokeWidth: 4 }, // Red  
+  { color: "#10B981", strokeWidth: 3 }, // Green
+  { color: "#F59E0B", strokeWidth: 4 }, // Orange
+  { color: "#8B5CF6", strokeWidth: 3 }, // Purple
+  { color: "#EC4899", strokeWidth: 4 }, // Pink
+  { color: "#06B6D4", strokeWidth: 3 }, // Cyan
+  { color: "#84CC16", strokeWidth: 4 }, // Lime
+];
+
 export function TeamAnalytics({ user }: TeamAnalyticsProps) {
   // Only show for allowed roles
   const allowedRoles = ["Admin", "Sales", "LeadRetoucher"];
@@ -44,9 +56,9 @@ export function TeamAnalytics({ user }: TeamAnalyticsProps) {
     queryKey: ["/api/projects"],
   });
 
-  // Process analytics data
+  // Process analytics data with individual retoucher tracking
   const analyticsData = useMemo(() => {
-    if (!projects.length) return { chartData: [], totalPhotos: 0, bucketsCount: 0, avgPhotos: 0 };
+    if (!projects.length) return { chartData: [], totalPhotos: 0, bucketsCount: 0, avgPhotos: 0, retoucherStats: {}, retouchers: [] };
 
     const from = parseISO(fromDate + "T00:00:00");
     const to = parseISO(toDate + "T23:59:59");
@@ -59,10 +71,23 @@ export function TeamAnalytics({ user }: TeamAnalyticsProps) {
       return isWithinInterval(deliveredDate, { start: from, end: to });
     });
 
-    // Create buckets based on granularity
+    // Get unique retouchers from delivered projects
+    const retouchers = Array.from(new Set(
+      deliveredProjects
+        .map(p => p.assignedTo)
+        .filter((assignedTo): assignedTo is string => Boolean(assignedTo))
+    )).sort();
+
+    // Create buckets for overall data and per retoucher
     const buckets = new Map<string, number>();
+    const retoucherBuckets = new Map<string, Map<string, number>>();
     
-    // Initialize buckets
+    // Initialize retoucher buckets
+    retouchers.forEach(retoucher => {
+      retoucherBuckets.set(retoucher, new Map<string, number>());
+    });
+    
+    // Initialize time buckets
     const current = new Date(from);
     const end = new Date(to);
     
@@ -91,9 +116,16 @@ export function TeamAnalytics({ user }: TeamAnalyticsProps) {
       if (!buckets.has(bucketKey)) {
         buckets.set(bucketKey, 0);
       }
+      
+      // Initialize bucket for each retoucher
+      retouchers.forEach(retoucher => {
+        if (!retoucherBuckets.get(retoucher)!.has(bucketKey)) {
+          retoucherBuckets.get(retoucher)!.set(bucketKey, 0);
+        }
+      });
     }
 
-    // Aggregate photos by bucket
+    // Aggregate photos by bucket and retoucher
     deliveredProjects.forEach(project => {
       const deliveredDate = parseISO(project.deliveredAt!);
       let bucketKey: string;
@@ -113,13 +145,22 @@ export function TeamAnalytics({ user }: TeamAnalyticsProps) {
       // Calculate photo count: selectedCount or packageCount + extras
       const photoCount = project.selectedCount || (project.packageCount + Math.max(0, project.extras || 0));
       
+      // Add to overall buckets
       if (buckets.has(bucketKey)) {
         buckets.set(bucketKey, buckets.get(bucketKey)! + photoCount);
       }
+      
+      // Add to retoucher bucket
+      if (project.assignedTo && retoucherBuckets.has(project.assignedTo)) {
+        const retoucherBucket = retoucherBuckets.get(project.assignedTo)!;
+        if (retoucherBucket.has(bucketKey)) {
+          retoucherBucket.set(bucketKey, retoucherBucket.get(bucketKey)! + photoCount);
+        }
+      }
     });
 
-    // Convert to chart data with proper sorting
-    const chartData: ChartDataPoint[] = Array.from(buckets.entries())
+    // Convert to chart data with retoucher data
+    const chartData: (ChartDataPoint & Record<string, number>)[] = Array.from(buckets.entries())
       .map(([period, photos]) => {
         // Create a full date for sorting
         let fullDate: string;
@@ -131,21 +172,37 @@ export function TeamAnalytics({ user }: TeamAnalyticsProps) {
           fullDate = period + "-01"; // yyyy-MM-01 format for months
         }
         
-        return {
+        const dataPoint: any = {
           period: granularity === "daily" ? format(parseISO(fullDate), "MMM dd") :
                   granularity === "weekly" ? format(parseISO(fullDate), "MMM dd") :
                   format(parseISO(fullDate), "MMM yyyy"),
           photos,
           fullDate
         };
+        
+        // Add data for each retoucher
+        retouchers.forEach(retoucher => {
+          const retoucherCount = retoucherBuckets.get(retoucher)?.get(period) || 0;
+          dataPoint[retoucher] = retoucherCount;
+        });
+        
+        return dataPoint;
       })
       .sort((a, b) => a.fullDate.localeCompare(b.fullDate));
+
+    // Calculate retoucher stats
+    const retoucherStats = retouchers.reduce((stats, retoucher) => {
+      const retoucherBucket = retoucherBuckets.get(retoucher)!;
+      const totalPhotos = Array.from(retoucherBucket.values()).reduce((sum, count) => sum + count, 0);
+      stats[retoucher] = totalPhotos;
+      return stats;
+    }, {} as Record<string, number>);
 
     const totalPhotos = Array.from(buckets.values()).reduce((sum, count) => sum + count, 0);
     const bucketsCount = buckets.size;
     const avgPhotos = bucketsCount > 0 ? totalPhotos / bucketsCount : 0;
 
-    return { chartData, totalPhotos, bucketsCount, avgPhotos };
+    return { chartData, totalPhotos, bucketsCount, avgPhotos, retoucherStats, retouchers };
   }, [projects, fromDate, toDate, granularity]);
 
   const handleDateReset = () => {
@@ -279,13 +336,40 @@ export function TeamAnalytics({ user }: TeamAnalyticsProps) {
         </Card>
       </div>
 
+      {/* Individual Retoucher Stats */}
+      {analyticsData.retoucherStats && Object.keys(analyticsData.retoucherStats).length > 0 && (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          {Object.entries(analyticsData.retoucherStats).map(([retoucher, total], index) => {
+            const style = RETOUCHER_STYLES[index % RETOUCHER_STYLES.length];
+            return (
+              <Card key={retoucher}>
+                <CardContent className="p-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-gray-600">{retoucher}</p>
+                      <p className="text-2xl font-bold" style={{ color: style.color }}>
+                        {total}
+                      </p>
+                    </div>
+                    <div 
+                      className="w-3 h-8 rounded-full"
+                      style={{ backgroundColor: style.color }}
+                    />
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+      )}
+
       {/* Chart */}
       {analyticsData.chartData.length > 0 ? (
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <TrendingUp className="h-5 w-5" />
-              Photos Delivered Over Time
+              Individual Retoucher Performance Over Time
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -308,17 +392,46 @@ export function TeamAnalytics({ user }: TeamAnalyticsProps) {
                       borderRadius: '8px',
                     }}
                   />
-                  <Line 
-                    type="monotone" 
-                    dataKey="photos" 
-                    stroke="#3B82F6"
-                    strokeWidth={2}
-                    dot={{ fill: '#3B82F6', strokeWidth: 2 }}
-                    activeDot={{ r: 6, fill: '#3B82F6' }}
-                  />
+                  {/* Individual lines for each retoucher */}
+                  {analyticsData.retouchers?.map((retoucher, index) => {
+                    const style = RETOUCHER_STYLES[index % RETOUCHER_STYLES.length];
+                    return (
+                      <Line
+                        key={retoucher}
+                        type="monotone"
+                        dataKey={retoucher as string}
+                        stroke={style.color}
+                        strokeWidth={style.strokeWidth}
+                        dot={{ fill: style.color, strokeWidth: 2, r: 4 }}
+                        activeDot={{ r: 6, fill: style.color }}
+                        name={retoucher as string}
+                      />
+                    );
+                  })}
                 </LineChart>
               </ResponsiveContainer>
             </div>
+            
+            {/* Legend */}
+            {analyticsData.retouchers && analyticsData.retouchers.length > 0 && (
+              <div className="flex flex-wrap gap-4 mt-4 pt-4 border-t">
+                {analyticsData.retouchers.map((retoucher, index) => {
+                  const style = RETOUCHER_STYLES[index % RETOUCHER_STYLES.length];
+                  return (
+                    <div key={retoucher} className="flex items-center gap-2">
+                      <div 
+                        className="w-4 h-1 rounded-full"
+                        style={{ 
+                          backgroundColor: style.color,
+                          height: `${style.strokeWidth}px`
+                        }}
+                      />
+                      <span className="text-sm text-gray-600">{retoucher}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </CardContent>
         </Card>
       ) : (
