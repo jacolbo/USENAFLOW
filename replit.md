@@ -123,13 +123,12 @@ Preferred communication style: Simple, everyday language.
 - **Custom Abbreviations**: Support for personalized team member abbreviations in calendar views
 - **Color Coding**: Indigo theme for custom users, preserving original color scheme for default team members
 
-### Enhanced Role Permissions (January 2025)
-- **Full Project Editing**: Data Wranglers and Workflow Managers can edit package count, selected photos count, and extras for any project
+### Data Wrangler Enhanced Permissions (January 2025)
+- **Full Project Editing**: Data Wranglers can now edit package count, selected photos count, and extras for any project
 - **Automatic Calculations**: System automatically recalculates extras when package or selected count changes
-- **Project Duplication**: Data Wranglers and Workflow Managers can duplicate projects with one click, copying all details except status/assignments
-- **Notes Management**: Data Wranglers have full access to create, edit, and manage project notes with text and image support (Workflow Managers excluded from notes)
-- **Assignment Permissions**: Workflow Managers can assign projects to retouchers, mark invoices paid, and handle project delivery/revisions
-- **Role Permissions**: Admin, Sales, Data Wrangler, Lead Retoucher, and Workflow Manager all have comprehensive project management capabilities
+- **Project Duplication**: Data Wranglers can duplicate projects with one click, copying all details except status/assignments
+- **Notes Management**: Data Wranglers have full access to create, edit, and manage project notes with text and image support
+- **Role Permissions**: Admin, Sales, Data Wrangler, and Lead Retoucher all have comprehensive project management capabilities
 
 ### Notes System Implementation
 - **Text and Image Notes**: Support for both text notes and image uploads using object storage

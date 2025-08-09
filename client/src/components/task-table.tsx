@@ -398,8 +398,8 @@ export function TaskTable({ projects, user, allUsers }: TaskTableProps) {
             </CardHeader>
             {!isCollapsed && (
               <CardContent>
-                {/* Mini Weekly Calendar - only for Admin, LeadRetoucher, DataWrangler, and WorkflowManager */}
-                {['Admin', 'LeadRetoucher', 'DataWrangler', 'WorkflowManager'].includes(user.role) && (
+                {/* Mini Weekly Calendar - only for Admin, LeadRetoucher, and DataWrangler */}
+                {['Admin', 'LeadRetoucher', 'DataWrangler'].includes(user.role) && (
                   <div className="mb-6 border rounded-lg p-4 bg-gray-50 dark:bg-gray-900">
                     <div className="grid grid-cols-7 gap-2">
                       {Array.from({ length: 7 }).map((_, dayIndex) => {
@@ -491,7 +491,7 @@ export function TaskTable({ projects, user, allUsers }: TaskTableProps) {
                       <TableRow key={project.id}>
                         <TableCell className="font-medium">{project.clientName}</TableCell>
                         <TableCell>
-                          {['Admin', 'Sales', 'DataWrangler', 'LeadRetoucher', 'WorkflowManager'].includes(user.role) ? (
+                          {['Admin', 'Sales', 'DataWrangler', 'LeadRetoucher'].includes(user.role) ? (
                             <input
                               type="number"
                               value={project.packageCount}
@@ -504,7 +504,7 @@ export function TaskTable({ projects, user, allUsers }: TaskTableProps) {
                           )}
                         </TableCell>
                         <TableCell>
-                          {['Admin', 'Sales', 'DataWrangler', 'LeadRetoucher', 'WorkflowManager'].includes(user.role) ? (
+                          {['Admin', 'Sales', 'DataWrangler', 'LeadRetoucher'].includes(user.role) ? (
                             <input
                               type="number"
                               value={project.selectedCount}
@@ -517,7 +517,7 @@ export function TaskTable({ projects, user, allUsers }: TaskTableProps) {
                           )}
                         </TableCell>
                         <TableCell>
-                          {['Admin', 'Sales', 'DataWrangler', 'LeadRetoucher', 'WorkflowManager'].includes(user.role) ? (
+                          {['Admin', 'Sales', 'DataWrangler', 'LeadRetoucher'].includes(user.role) ? (
                             <input
                               type="number"
                               value={project.extras}
@@ -549,7 +549,7 @@ export function TaskTable({ projects, user, allUsers }: TaskTableProps) {
                                 year: 'numeric' 
                               }).format(new Date(project.dueDate))}
                             </span>
-                          ) : (user.role === 'Admin' || user.role === 'Sales' || user.role === 'DataWrangler' || user.role === 'LeadRetoucher' || user.role === 'WorkflowManager') ? (
+                          ) : (user.role === 'Admin' || user.role === 'Sales' || user.role === 'DataWrangler' || user.role === 'LeadRetoucher') ? (
                             <input
                               type="date"
                               value={new Date(project.dueDate).toISOString().slice(0, 10)}
@@ -606,8 +606,8 @@ export function TaskTable({ projects, user, allUsers }: TaskTableProps) {
                         </TableCell>
                         <TableCell>
                           <div className="flex items-center gap-2">
-                            {/* Lead Retoucher, Admin, Sales, or Workflow Manager can assign tasks */}
-                            {(user.role === 'LeadRetoucher' || user.role === 'Admin' || user.role === 'Sales' || user.role === 'WorkflowManager') 
+                            {/* Lead Retoucher, Admin, or Sales can assign tasks */}
+                            {(user.role === 'LeadRetoucher' || user.role === 'Admin' || user.role === 'Sales') 
                               && (project.status === 'Ready for Retouching' || project.status === 'Assigned') && (
                               <Select
                                 value={project.assignedTo || ""}
@@ -630,8 +630,8 @@ export function TaskTable({ projects, user, allUsers }: TaskTableProps) {
                               </Select>
                             )}
                             
-                            {/* Admin, Sales, or Workflow Manager can mark invoice paid */}
-                            {(user.role === 'Admin' || user.role === 'Sales' || user.role === 'WorkflowManager') && project.status === 'Awaiting Payment' && (
+                            {/* Admin or Sales can mark invoice paid */}
+                            {(user.role === 'Admin' || user.role === 'Sales') && project.status === 'Awaiting Payment' && (
                               <Button 
                                 size="sm" 
                                 onClick={() => handleMarkPaid(project.id)}
@@ -655,8 +655,8 @@ export function TaskTable({ projects, user, allUsers }: TaskTableProps) {
                               </Button>
                             )}
                             
-                            {/* Admin, Sales, or Workflow Manager can deliver or request revision when in Review */}
-                            {(user.role === 'Admin' || user.role === 'Sales' || user.role === 'WorkflowManager') && project.status === 'Review' && (
+                            {/* Admin or Sales can deliver or request revision when in Review */}
+                            {(user.role === 'Admin' || user.role === 'Sales') && project.status === 'Review' && (
                               <>
                                 <Button 
                                   size="sm" 
@@ -677,8 +677,8 @@ export function TaskTable({ projects, user, allUsers }: TaskTableProps) {
                               </>
                             )}
                             
-                            {/* Duplicate button for Admin, Sales, Data Wrangler, Workflow Manager */}
-                            {['Admin', 'Sales', 'DataWrangler', 'WorkflowManager'].includes(user.role) && (
+                            {/* Duplicate button for Admin, Sales, Data Wrangler */}
+                            {['Admin', 'Sales', 'DataWrangler'].includes(user.role) && (
                               <Button 
                                 size="sm" 
                                 variant="outline"
