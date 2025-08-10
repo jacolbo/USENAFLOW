@@ -10,7 +10,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Project } from "@shared/schema";
 import { User, formatRetoucherAbbr, getRetoucherFullName } from "@/lib/types";
 import { Calendar, Star, ChevronDown, ChevronRight, Copy } from "lucide-react";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback, useRef } from "react";
 import { DailyQuote } from "./daily-quote";
 
 interface TaskTableProps {
@@ -22,6 +22,16 @@ interface TaskTableProps {
 export function TaskTable({ projects, user, allUsers }: TaskTableProps) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  
+  // Local state for input values to ensure smooth typing
+  const [localInputValues, setLocalInputValues] = useState<Record<string, {
+    packageCount?: number;
+    selectedCount?: number;
+    extras?: number;
+  }>>({});
+  
+  // Debounce timeouts
+  const timeoutRefs = useRef<Record<string, NodeJS.Timeout>>({});
 
   // Query to get all notes for all projects to determine which have notes
   const allNotesQuery = useQuery({
@@ -251,51 +261,128 @@ export function TaskTable({ projects, user, allUsers }: TaskTableProps) {
     },
   });
 
-  const handleChangeSelectedCount = (projectId: string, selectedCount: number) => {
-    // Find the project to get the package count
-    const project = projects.find(p => p.id === projectId);
-    if (!project) return;
+  const handleChangeSelectedCount = useCallback((projectId: string, selectedCount: number) => {
+    // Update local state immediately for smooth input
+    setLocalInputValues(prev => ({
+      ...prev,
+      [projectId]: { ...prev[projectId], selectedCount }
+    }));
     
-    // Calculate extras: selected count minus package count (minimum 0)
-    const extras = Math.max(0, selectedCount - project.packageCount);
+    // Clear existing timeout
+    if (timeoutRefs.current[projectId]) {
+      clearTimeout(timeoutRefs.current[projectId]);
+    }
     
-    changeSelectedCountMutation.mutate({
-      id: projectId,
-      selectedCount,
-      extras,
-    });
-  };
+    // Set new timeout for API call
+    timeoutRefs.current[projectId] = setTimeout(() => {
+      const project = projects.find(p => p.id === projectId);
+      if (!project) return;
+      
+      // Get current package count (from local state or project)
+      const currentPackageCount = localInputValues[projectId]?.packageCount ?? project.packageCount;
+      const extras = Math.max(0, selectedCount - currentPackageCount);
+      
+      changeSelectedCountMutation.mutate({
+        id: projectId,
+        selectedCount,
+        extras,
+      });
+      
+      // Clear local state after successful update
+      setLocalInputValues(prev => {
+        const updated = { ...prev };
+        if (updated[projectId]) {
+          delete updated[projectId].selectedCount;
+          if (Object.keys(updated[projectId]).length === 0) {
+            delete updated[projectId];
+          }
+        }
+        return updated;
+      });
+    }, 500);
+  }, [projects, localInputValues, changeSelectedCountMutation]);
 
-  const handleChangePackageCount = (projectId: string, packageCount: number) => {
-    // Find the project to recalculate extras
-    const project = projects.find(p => p.id === projectId);
-    if (!project) return;
+  const handleChangePackageCount = useCallback((projectId: string, packageCount: number) => {
+    // Update local state immediately for smooth input
+    setLocalInputValues(prev => ({
+      ...prev,
+      [projectId]: { ...prev[projectId], packageCount }
+    }));
     
-    // Calculate extras: selected count minus new package count (minimum 0)
-    const extras = Math.max(0, project.selectedCount - packageCount);
+    // Clear existing timeout
+    if (timeoutRefs.current[`pkg_${projectId}`]) {
+      clearTimeout(timeoutRefs.current[`pkg_${projectId}`]);
+    }
     
-    changeSelectedCountMutation.mutate({
-      id: projectId,
-      packageCount,
-      extras,
-    });
-  };
+    // Set new timeout for API call
+    timeoutRefs.current[`pkg_${projectId}`] = setTimeout(() => {
+      const project = projects.find(p => p.id === projectId);
+      if (!project) return;
+      
+      // Get current selected count (from local state or project)
+      const currentSelectedCount = localInputValues[projectId]?.selectedCount ?? project.selectedCount;
+      const extras = Math.max(0, currentSelectedCount - packageCount);
+      
+      changeSelectedCountMutation.mutate({
+        id: projectId,
+        packageCount,
+        extras,
+      });
+      
+      // Clear local state after successful update
+      setLocalInputValues(prev => {
+        const updated = { ...prev };
+        if (updated[projectId]) {
+          delete updated[projectId].packageCount;
+          if (Object.keys(updated[projectId]).length === 0) {
+            delete updated[projectId];
+          }
+        }
+        return updated;
+      });
+    }, 500);
+  }, [projects, localInputValues, changeSelectedCountMutation]);
 
-  const handleChangeExtras = (projectId: string, extras: number) => {
-    // Find the project to calculate new selected count
-    const project = projects.find(p => p.id === projectId);
-    if (!project) return;
+  const handleChangeExtras = useCallback((projectId: string, extras: number) => {
+    // Update local state immediately for smooth input
+    setLocalInputValues(prev => ({
+      ...prev,
+      [projectId]: { ...prev[projectId], extras }
+    }));
     
-    // When extras change, update selected count accordingly
-    // selected count = package count + extras
-    const newSelectedCount = project.packageCount + extras;
+    // Clear existing timeout
+    if (timeoutRefs.current[`ext_${projectId}`]) {
+      clearTimeout(timeoutRefs.current[`ext_${projectId}`]);
+    }
     
-    changeSelectedCountMutation.mutate({
-      id: projectId,
-      selectedCount: newSelectedCount,
-      extras,
-    });
-  };
+    // Set new timeout for API call
+    timeoutRefs.current[`ext_${projectId}`] = setTimeout(() => {
+      const project = projects.find(p => p.id === projectId);
+      if (!project) return;
+      
+      // Get current package count (from local state or project)
+      const currentPackageCount = localInputValues[projectId]?.packageCount ?? project.packageCount;
+      const newSelectedCount = currentPackageCount + extras;
+      
+      changeSelectedCountMutation.mutate({
+        id: projectId,
+        selectedCount: newSelectedCount,
+        extras,
+      });
+      
+      // Clear local state after successful update
+      setLocalInputValues(prev => {
+        const updated = { ...prev };
+        if (updated[projectId]) {
+          delete updated[projectId].extras;
+          if (Object.keys(updated[projectId]).length === 0) {
+            delete updated[projectId];
+          }
+        }
+        return updated;
+      });
+    }, 500);
+  }, [projects, localInputValues, changeSelectedCountMutation]);
 
   const duplicateProjectMutation = useMutation({
     mutationFn: async (projectId: string) => {
@@ -389,8 +476,12 @@ export function TaskTable({ projects, user, allUsers }: TaskTableProps) {
         const weekKey = monday.toISOString().split('T')[0];
         const isCollapsed = collapsedWeeks[weekKey];
         
-        // Sort projects in each week by due date
-        group.projects.sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
+        // Sort projects in each week by due date, then by ID for stability
+        group.projects.sort((a, b) => {
+          const dateComparison = new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
+          if (dateComparison !== 0) return dateComparison;
+          return a.id.localeCompare(b.id); // Secondary sort by ID for stability
+        });
         
         return (
           <Card key={group.key}>
@@ -511,10 +602,11 @@ export function TaskTable({ projects, user, allUsers }: TaskTableProps) {
                           {['Admin', 'Sales', 'DataWrangler', 'LeadRetoucher'].includes(user.role) ? (
                             <input
                               type="number"
-                              value={project.packageCount}
+                              value={localInputValues[project.id]?.packageCount ?? project.packageCount}
                               onChange={(e) => handleChangePackageCount(project.id, parseInt(e.target.value) || 0)}
-                              className="border rounded px-2 py-1 w-16 text-center"
+                              className="border rounded px-2 py-1 w-16 text-center bg-white dark:bg-gray-800"
                               min="0"
+                              placeholder="0"
                             />
                           ) : (
                             project.packageCount
@@ -524,10 +616,11 @@ export function TaskTable({ projects, user, allUsers }: TaskTableProps) {
                           {['Admin', 'Sales', 'DataWrangler', 'LeadRetoucher'].includes(user.role) ? (
                             <input
                               type="number"
-                              value={project.selectedCount}
+                              value={localInputValues[project.id]?.selectedCount ?? project.selectedCount}
                               onChange={(e) => handleChangeSelectedCount(project.id, parseInt(e.target.value) || 0)}
-                              className="border rounded px-2 py-1 w-16 text-center"
+                              className="border rounded px-2 py-1 w-16 text-center bg-white dark:bg-gray-800"
                               min="0"
+                              placeholder="0"
                             />
                           ) : (
                             project.selectedCount
@@ -537,10 +630,11 @@ export function TaskTable({ projects, user, allUsers }: TaskTableProps) {
                           {['Admin', 'Sales', 'DataWrangler', 'LeadRetoucher'].includes(user.role) ? (
                             <input
                               type="number"
-                              value={project.extras}
+                              value={localInputValues[project.id]?.extras ?? project.extras}
                               onChange={(e) => handleChangeExtras(project.id, parseInt(e.target.value) || 0)}
-                              className="border rounded px-2 py-1 w-16 text-center"
+                              className="border rounded px-2 py-1 w-16 text-center bg-white dark:bg-gray-800"
                               min="0"
+                              placeholder="0"
                             />
                           ) : (
                             project.extras
