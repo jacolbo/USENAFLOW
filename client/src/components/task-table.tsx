@@ -447,7 +447,7 @@ export function TaskTable({ projects, user, allUsers }: TaskTableProps) {
   // Mutation for updating project due dates
   const updateProjectDueDateMutation = useMutation({
     mutationFn: async ({ projectId, newDueDate }: { projectId: string; newDueDate: string }) => {
-      return apiRequest(`/api/projects/${projectId}`, "PATCH", { dueDate: newDueDate });
+      return apiRequest("PATCH", `/api/projects/${projectId}`, { dueDate: newDueDate });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/projects"] });

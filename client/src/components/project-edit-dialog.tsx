@@ -32,7 +32,7 @@ export function ProjectEditDialog({ project, open, onOpenChange, allUsers, userR
     if (project) {
       setDueDate(format(new Date(project.dueDate), "yyyy-MM-dd"));
       setStatus(project.status);
-      setAssignedTo(project.assignedTo || "");
+      setAssignedTo(project.assignedTo || "unassigned");
     }
   }, [project]);
 
@@ -40,7 +40,7 @@ export function ProjectEditDialog({ project, open, onOpenChange, allUsers, userR
     mutationFn: async (updates: { dueDate?: string; status?: ProjectStatus; assignedTo?: string | null }) => {
       if (!project) throw new Error("No project selected");
       
-      return apiRequest(`/api/projects/${project.id}`, "PATCH", updates);
+      return apiRequest("PATCH", `/api/projects/${project.id}`, updates);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
@@ -73,8 +73,8 @@ export function ProjectEditDialog({ project, open, onOpenChange, allUsers, userR
       updates.status = status as ProjectStatus;
     }
     
-    if (assignedTo !== (project.assignedTo || "")) {
-      updates.assignedTo = assignedTo || null;
+    if (assignedTo !== (project.assignedTo || "unassigned")) {
+      updates.assignedTo = assignedTo === "unassigned" ? null : assignedTo;
     }
 
     if (Object.keys(updates).length > 0) {
@@ -133,7 +133,7 @@ export function ProjectEditDialog({ project, open, onOpenChange, allUsers, userR
                   <SelectValue placeholder="Select retoucher..." />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Unassigned</SelectItem>
+                  <SelectItem value="unassigned">Unassigned</SelectItem>
                   {allUsers
                     .filter(u => u.role === "Retoucher" || (u.role === "Admin" && u.name === "Evans Abreation E.M"))
                     .map(retoucher => (
