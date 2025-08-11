@@ -45,7 +45,7 @@ export default function Dashboard() {
     { id: "1", name: "Earl", role: "Retoucher", value: "Retoucher1", abbr: "EC" },
     { id: "2", name: "Dr Asa", role: "Retoucher", value: "Retoucher2", abbr: "ASA" },
     { id: "3", name: "Lucky", role: "Retoucher", value: "Retoucher3", abbr: "LM" },
-    { id: "4", name: "Evans Abreation E.M", role: "Admin", value: "Admin", abbr: "E.M" },
+    { id: "4", name: "Papa Anesu", role: "Admin", value: "Admin", abbr: "PA" },
     // Default system users without IDs (cannot be edited/deleted)
     { name: "Admin", role: "Admin", value: "Admin" },
     { name: "Sales", role: "Sales", value: "Sales" },
@@ -55,7 +55,7 @@ export default function Dashboard() {
 
   // User credentials for login/register system
   const [userCredentials, setUserCredentials] = useState<UserCredentials[]>([
-    { id: "admin", username: "admin", password: "admin123", role: "Admin", name: "Evans Abreation E.M", abbreviation: "E.M" },
+    { id: "admin", username: "admin", password: "admin123", role: "Admin", name: "Papa Anesu", abbreviation: "PA" },
     { id: "sales", username: "sales", password: "sales123", role: "Sales", name: "sales", abbreviation: "SAL" },
     { id: "workflow", username: "workflow", password: "workflow123", role: "LeadRetoucher", name: "Workflow Manager", abbreviation: "WFM" },
     { id: "data", username: "data", password: "data123", role: "DataWrangler", name: "Data Wrangler", abbreviation: "DW" },

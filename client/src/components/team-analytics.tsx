@@ -32,7 +32,7 @@ const RETOUCHER_STYLES: Record<string, { color: string; strokeWidth: number }> =
   "Earl": { color: "#EC4899", strokeWidth: TEAM_STROKE_WIDTH / 2 }, // Magenta  
   "Dr Asa": { color: "#10B981", strokeWidth: TEAM_STROKE_WIDTH / 2 }, // Green
   "Asa": { color: "#10B981", strokeWidth: TEAM_STROKE_WIDTH / 2 }, // Green (alternative name)
-  "Evans Abreation E.M": { color: "#F59E0B", strokeWidth: TEAM_STROKE_WIDTH / 2 }, // Orange
+  "Papa Anesu": { color: "#F59E0B", strokeWidth: TEAM_STROKE_WIDTH / 2 }, // Orange
   // Fallback colors for other retouchers
   "default1": { color: "#8B5CF6", strokeWidth: TEAM_STROKE_WIDTH / 2 }, // Purple
   "default2": { color: "#06B6D4", strokeWidth: TEAM_STROKE_WIDTH / 2 }, // Cyan
