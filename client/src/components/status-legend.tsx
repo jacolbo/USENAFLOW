@@ -90,16 +90,22 @@ export function StatusLegend({ projects, user, allUsers }: StatusLegendProps) {
   // Mutation for updating project due dates
   const updateProjectDueDateMutation = useMutation({
     mutationFn: async ({ projectId, newDueDate }: { projectId: string; newDueDate: string }) => {
-      return apiRequest("PATCH", `/api/projects/${projectId}`, { dueDate: newDueDate });
+      console.log("Updating project due date:", { projectId, newDueDate });
+      const response = await apiRequest("PATCH", `/api/projects/${projectId}`, { dueDate: newDueDate });
+      return response;
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
+      console.log("Due date update successful:", data);
+      // Force a refetch of projects
       queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
+      queryClient.refetchQueries({ queryKey: ["/api/projects"] });
       toast({
         title: "Due date updated",
-        description: "Project due date has been updated successfully.",
+        description: "Project moved to new date successfully.",
       });
     },
-    onError: () => {
+    onError: (error) => {
+      console.error("Due date update failed:", error);
       toast({
         title: "Error",
         description: "Failed to update due date. Please try again.",
