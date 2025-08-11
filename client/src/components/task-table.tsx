@@ -158,7 +158,7 @@ export function TaskTable({ projects, user, allUsers }: TaskTableProps) {
     updateProjectMutation.mutate({
       id: projectId,
       endpoint: "assign",
-      data: { assignedTo: retoucherName },
+      data: { assignedTo: retoucherName === "__UNASSIGN__" ? null : retoucherName },
     });
   };
 
@@ -732,7 +732,7 @@ export function TaskTable({ projects, user, allUsers }: TaskTableProps) {
                                 </SelectTrigger>
                                 <SelectContent>
                                   {/* Unassign option */}
-                                  <SelectItem value="">Unassign</SelectItem>
+                                  <SelectItem value="__UNASSIGN__">Unassign</SelectItem>
                                   {/* All retouchers + Admin as retoucher */}
                                   {allUsers
                                     .filter(u => u.role === "Retoucher" || (u.role === "Admin" && u.name === "Anesu's Pops"))
