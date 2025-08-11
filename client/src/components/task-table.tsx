@@ -733,7 +733,7 @@ export function TaskTable({ projects, user, allUsers }: TaskTableProps) {
                                 <SelectContent>
                                   {/* All retouchers + Admin as retoucher */}
                                   {allUsers
-                                    .filter(u => u.role === "Retoucher" || (u.role === "Admin" && u.name === "Evans Abreation E.M"))
+                                    .filter(u => u.role === "Retoucher" || (u.role === "Admin" && u.name === "Anesu's Pops"))
                                     .map(retoucher => (
                                       <SelectItem key={retoucher.value || retoucher.name} value={retoucher.name}>
                                         {retoucher.name}
