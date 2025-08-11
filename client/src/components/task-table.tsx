@@ -12,7 +12,6 @@ import { User, formatRetoucherAbbr, getRetoucherFullName } from "@/lib/types";
 import { Calendar, Star, ChevronDown, ChevronRight, Copy } from "lucide-react";
 import { useState, useMemo, useCallback, useRef } from "react";
 import { DailyQuote } from "./daily-quote";
-import { ProjectEditDialog } from "./project-edit-dialog";
 
 interface TaskTableProps {
   projects: Project[];
@@ -33,13 +32,6 @@ export function TaskTable({ projects, user, allUsers }: TaskTableProps) {
   
   // Debounce timeouts
   const timeoutRefs = useRef<Record<string, NodeJS.Timeout>>({});
-  
-  // Dialog state for editing projects
-  const [editingProject, setEditingProject] = useState<Project | null>(null);
-  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
-  
-  // Drag and drop state
-  const [draggedProject, setDraggedProject] = useState<Project | null>(null);
 
   // Query to get all notes for all projects to determine which have notes
   const allNotesQuery = useQuery({
@@ -444,63 +436,6 @@ export function TaskTable({ projects, user, allUsers }: TaskTableProps) {
     }
   };
 
-  // Mutation for updating project due dates
-  const updateProjectDueDateMutation = useMutation({
-    mutationFn: async ({ projectId, newDueDate }: { projectId: string; newDueDate: string }) => {
-      console.log("Updating project due date:", { projectId, newDueDate });
-      const response = await apiRequest("PATCH", `/api/projects/${projectId}`, { dueDate: newDueDate });
-      return response;
-    },
-    onSuccess: (data) => {
-      console.log("Due date update successful:", data);
-      // Force a refetch of projects
-      queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
-      queryClient.refetchQueries({ queryKey: ["/api/projects"] });
-      toast({
-        title: "Due date updated",
-        description: "Project moved to new date successfully.",
-      });
-    },
-    onError: (error) => {
-      console.error("Due date update failed:", error);
-      toast({
-        title: "Error",
-        description: "Failed to update due date. Please try again.",
-        variant: "destructive",
-      });
-    },
-  });
-
-  // Double-click handler for editing projects
-  const handleProjectDoubleClick = (project: Project) => {
-    setEditingProject(project);
-    setIsEditDialogOpen(true);
-  };
-
-  // Drag handlers
-  const handleDragStart = (e: React.DragEvent, project: Project) => {
-    setDraggedProject(project);
-    e.dataTransfer.effectAllowed = "move";
-    e.dataTransfer.setData("text/plain", project.id);
-  };
-
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = "move";
-  };
-
-  const handleDrop = (e: React.DragEvent, targetDate: Date) => {
-    e.preventDefault();
-    if (draggedProject) {
-      const newDueDate = targetDate.toISOString().split('T')[0];
-      updateProjectDueDateMutation.mutate({
-        projectId: draggedProject.id,
-        newDueDate,
-      });
-      setDraggedProject(null);
-    }
-  };
-
 
 
   // Filter projects for retouchers
@@ -608,12 +543,7 @@ export function TaskTable({ projects, user, allUsers }: TaskTableProps) {
                         };
 
                         return (
-                          <div 
-                            key={dayIndex} 
-                            className="text-center min-h-[120px] p-2 border-2 border-dashed border-transparent hover:border-blue-300 dark:hover:border-blue-600 transition-colors"
-                            onDragOver={handleDragOver}
-                            onDrop={(e) => handleDrop(e, dayDate)}
-                          >
+                          <div key={dayIndex} className="text-center">
                             <div className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
                               {dayName}
                             </div>
@@ -629,11 +559,7 @@ export function TaskTable({ projects, user, allUsers }: TaskTableProps) {
                                   <div key={project.id} className="text-xs">
                                     <Badge 
                                       variant="secondary" 
-                                      className={`${colorClass} px-1 py-0 text-xs font-medium w-full justify-start cursor-pointer hover:opacity-80 transition-opacity`}
-                                      draggable
-                                      onDragStart={(e) => handleDragStart(e, project)}
-                                      onDoubleClick={() => handleProjectDoubleClick(project)}
-                                      title="Double-click to edit or drag to move"
+                                      className={`${colorClass} px-1 py-0 text-xs font-medium w-full justify-start`}
                                     >
                                       {retoucherPrefix} {project.clientName}
                                     </Badge>
@@ -642,8 +568,8 @@ export function TaskTable({ projects, user, allUsers }: TaskTableProps) {
                               })}
                             </div>
                             {dayProjects.length === 0 && (
-                              <div className="text-xs text-gray-400 dark:text-gray-600 opacity-50 mt-4">
-                                Drop here
+                              <div className="text-xs text-gray-400 dark:text-gray-600 opacity-50">
+                                —
                               </div>
                             )}
                           </div>
@@ -903,15 +829,6 @@ export function TaskTable({ projects, user, allUsers }: TaskTableProps) {
           </Card>
         );
       })}
-
-      {/* Project Edit Dialog */}
-      <ProjectEditDialog
-        project={editingProject}
-        open={isEditDialogOpen}
-        onOpenChange={setIsEditDialogOpen}
-        allUsers={allUsers}
-        userRole={user.role}
-      />
     </div>
   );
 }

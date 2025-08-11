@@ -34,17 +34,6 @@ export const projectNotes = pgTable("project_notes", {
   updatedAt: timestamp("updated_at").notNull().default(sql`now()`),
 });
 
-export const notifications = pgTable("notifications", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  type: text("type").notNull(), // 'project_completed', 'project_assigned', etc.
-  title: text("title").notNull(),
-  message: text("message").notNull(),
-  projectId: varchar("project_id").references(() => projects.id, { onDelete: "cascade" }),
-  targetRole: text("target_role").notNull(), // 'Admin', 'Sales', etc.
-  isRead: boolean("is_read").notNull().default(false),
-  createdAt: timestamp("created_at").notNull().default(sql`now()`),
-});
-
 export const insertUserSchema = createInsertSchema(users).pick({
   username: true,
   password: true,
@@ -80,16 +69,6 @@ export const updateProjectNoteSchema = createInsertSchema(projectNotes).partial(
   updatedAt: true,
 });
 
-export const insertNotificationSchema = createInsertSchema(notifications).omit({
-  id: true,
-  createdAt: true,
-});
-
-export const updateNotificationSchema = createInsertSchema(notifications).partial().omit({
-  id: true,
-  createdAt: true,
-});
-
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
 export type InsertProject = z.infer<typeof insertProjectSchema>;
@@ -98,9 +77,6 @@ export type Project = typeof projects.$inferSelect;
 export type InsertProjectNote = z.infer<typeof insertProjectNoteSchema>;
 export type UpdateProjectNote = z.infer<typeof updateProjectNoteSchema>;
 export type ProjectNote = typeof projectNotes.$inferSelect;
-export type InsertNotification = z.infer<typeof insertNotificationSchema>;
-export type UpdateNotification = z.infer<typeof updateNotificationSchema>;
-export type Notification = typeof notifications.$inferSelect;
 
 export const UserRoles = {
   ADMIN: "Admin",

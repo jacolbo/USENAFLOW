@@ -1,4 +1,4 @@
-import { type User, type InsertUser, type Project, type InsertProject, type UpdateProject, type ProjectNote, type InsertProjectNote, type UpdateProjectNote, type Notification, type InsertNotification, ProjectStatus, users, projects, projectNotes, notifications } from "@shared/schema";
+import { type User, type InsertUser, type Project, type InsertProject, type UpdateProject, type ProjectNote, type InsertProjectNote, type UpdateProjectNote, ProjectStatus, users, projects, projectNotes } from "@shared/schema";
 import { db } from "./db";
 import { eq, sql } from "drizzle-orm";
 import { randomUUID } from "crypto";
@@ -18,10 +18,6 @@ export interface IStorage {
   createProjectNote(note: InsertProjectNote): Promise<ProjectNote>;
   updateProjectNote(id: string, updates: UpdateProjectNote): Promise<ProjectNote | undefined>;
   deleteProjectNote(id: string): Promise<boolean>;
-  
-  getAllNotifications(): Promise<Notification[]>;
-  createNotification(notification: InsertNotification): Promise<Notification>;
-  updateNotification(id: string, updates: Partial<Notification>): Promise<Notification | undefined>;
 }
 
 export class MemStorage implements IStorage {
@@ -310,28 +306,6 @@ export class DatabaseStorage implements IStorage {
   async deleteProjectNote(id: string): Promise<boolean> {
     const result = await db.delete(projectNotes).where(eq(projectNotes.id, id));
     return (result.rowCount || 0) > 0;
-  }
-
-  // Notification methods
-  async getAllNotifications(): Promise<Notification[]> {
-    return await db.select().from(notifications).orderBy(notifications.createdAt);
-  }
-
-  async createNotification(insertNotification: InsertNotification): Promise<Notification> {
-    const [notification] = await db
-      .insert(notifications)
-      .values(insertNotification)
-      .returning();
-    return notification;
-  }
-
-  async updateNotification(id: string, updates: Partial<Notification>): Promise<Notification | undefined> {
-    const [notification] = await db
-      .update(notifications)
-      .set(updates)
-      .where(eq(notifications.id, id))
-      .returning();
-    return notification || undefined;
   }
 }
 

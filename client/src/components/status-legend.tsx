@@ -3,11 +3,7 @@ import { Badge } from "@/components/ui/badge";
 import { Calendar } from "lucide-react";
 import { Project } from "@shared/schema";
 import { User, formatRetoucherAbbr } from "@/lib/types";
-import { useMemo, useState } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { apiRequest } from "@/lib/queryClient";
-import { useToast } from "@/hooks/use-toast";
-import { ProjectEditDialog } from "./project-edit-dialog";
+import { useMemo } from "react";
 
 interface StatusLegendProps {
   projects: Project[];
@@ -20,16 +16,6 @@ export function StatusLegend({ projects, user, allUsers }: StatusLegendProps) {
   if (!['Admin', 'Sales', 'LeadRetoucher', 'DataWrangler'].includes(user.role)) {
     return null;
   }
-
-  const { toast } = useToast();
-  const queryClient = useQueryClient();
-  
-  // Dialog state for editing projects
-  const [editingProject, setEditingProject] = useState<Project | null>(null);
-  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
-  
-  // Drag and drop state
-  const [draggedProject, setDraggedProject] = useState<Project | null>(null);
 
   const getWeekStart = (date: Date) => {
     const d = new Date(date.getFullYear(), date.getMonth(), date.getDate());
@@ -82,65 +68,7 @@ export function StatusLegend({ projects, user, allUsers }: StatusLegendProps) {
       case 'EC': return 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200';
       case 'ASA': return 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200';
       case 'LM': return 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200';
-      case 'E.M': return 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200';
       default: return 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200'; // Custom users get indigo
-    }
-  };
-
-  // Mutation for updating project due dates
-  const updateProjectDueDateMutation = useMutation({
-    mutationFn: async ({ projectId, newDueDate }: { projectId: string; newDueDate: string }) => {
-      console.log("Updating project due date:", { projectId, newDueDate });
-      const response = await apiRequest("PATCH", `/api/projects/${projectId}`, { dueDate: newDueDate });
-      return response;
-    },
-    onSuccess: (data) => {
-      console.log("Due date update successful:", data);
-      // Force a refetch of projects
-      queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
-      queryClient.refetchQueries({ queryKey: ["/api/projects"] });
-      toast({
-        title: "Due date updated",
-        description: "Project moved to new date successfully.",
-      });
-    },
-    onError: (error) => {
-      console.error("Due date update failed:", error);
-      toast({
-        title: "Error",
-        description: "Failed to update due date. Please try again.",
-        variant: "destructive",
-      });
-    },
-  });
-
-  // Double-click handler for editing projects
-  const handleProjectDoubleClick = (project: Project) => {
-    setEditingProject(project);
-    setIsEditDialogOpen(true);
-  };
-
-  // Drag handlers
-  const handleDragStart = (e: React.DragEvent, project: Project) => {
-    setDraggedProject(project);
-    e.dataTransfer.effectAllowed = "move";
-    e.dataTransfer.setData("text/plain", project.id);
-  };
-
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = "move";
-  };
-
-  const handleDrop = (e: React.DragEvent, targetDate: Date) => {
-    e.preventDefault();
-    if (draggedProject) {
-      const newDueDate = targetDate.toISOString().split('T')[0];
-      updateProjectDueDateMutation.mutate({
-        projectId: draggedProject.id,
-        newDueDate,
-      });
-      setDraggedProject(null);
     }
   };
 
@@ -167,13 +95,11 @@ export function StatusLegend({ projects, user, allUsers }: StatusLegendProps) {
             return (
               <div
                 key={index}
-                className={`border rounded-lg p-2 min-h-[100px] border-2 border-dashed transition-colors ${
+                className={`border rounded-lg p-2 min-h-[100px] ${
                   isToday 
-                    ? 'bg-blue-50 border-blue-200 dark:bg-blue-950 dark:border-blue-800 hover:border-blue-400 dark:hover:border-blue-600' 
-                    : 'bg-gray-50 border-gray-200 dark:bg-gray-900 dark:border-gray-700 hover:border-blue-300 dark:hover:border-blue-600'
+                    ? 'bg-blue-50 border-blue-200 dark:bg-blue-950 dark:border-blue-800' 
+                    : 'bg-gray-50 border-gray-200 dark:bg-gray-900 dark:border-gray-700'
                 }`}
-                onDragOver={handleDragOver}
-                onDrop={(e) => handleDrop(e, dayDate)}
               >
                 <div className="text-center mb-2">
                   <div className={`text-sm font-medium ${isToday ? 'text-blue-700 dark:text-blue-300' : 'text-gray-700 dark:text-gray-300'}`}>
@@ -193,11 +119,7 @@ export function StatusLegend({ projects, user, allUsers }: StatusLegendProps) {
                       <div key={project.id} className="text-xs">
                         <Badge 
                           variant="secondary" 
-                          className={`${colorClass} px-1 py-0 text-xs font-medium w-full justify-start cursor-pointer hover:opacity-80 transition-opacity`}
-                          draggable
-                          onDragStart={(e) => handleDragStart(e, project)}
-                          onDoubleClick={() => handleProjectDoubleClick(project)}
-                          title="Double-click to edit or drag to move"
+                          className={`${colorClass} px-1 py-0 text-xs font-medium w-full justify-start`}
                         >
                           {retoucherPrefix ? `${retoucherPrefix} ` : ''}
                           {project.clientName}
@@ -209,7 +131,7 @@ export function StatusLegend({ projects, user, allUsers }: StatusLegendProps) {
                 
                 {dayProjects.length === 0 && (
                   <div className="text-center text-xs text-gray-400 dark:text-gray-600 mt-4">
-                    Drop here
+                    No projects
                   </div>
                 )}
               </div>
@@ -217,15 +139,6 @@ export function StatusLegend({ projects, user, allUsers }: StatusLegendProps) {
           })}
         </div>
       </CardContent>
-      
-      {/* Project Edit Dialog */}
-      <ProjectEditDialog
-        project={editingProject}
-        open={isEditDialogOpen}
-        onOpenChange={setIsEditDialogOpen}
-        allUsers={allUsers}
-        userRole={user.role}
-      />
     </Card>
   );
 }
