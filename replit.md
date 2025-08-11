@@ -108,7 +108,7 @@ Preferred communication style: Simple, everyday language.
 - **Automatic Extras Calculation**: When editing selected photo count, extras are automatically calculated (selected - package count, minimum 0)
 
 ### Team Credentials Reference
-- **Admin**: admin / admin123 (full access including team management)
+- **Admin**: admin / admin123 (full access including team management + retoucher capabilities as "Evans Abreation E.M")
 - **Sales**: sales / sales123 (project management, no team settings)
 - **Workflow Manager**: workflow / workflow123 (lead retoucher permissions)
 - **Data Wrangler**: data / data123 (data management permissions)
@@ -167,3 +167,11 @@ Preferred communication style: Simple, everyday language.
 - **Quote Library**: 350+ professional and motivational quotes focused on work excellence and productivity
 - **User-Specific**: Quote selection based on user ID and current date for consistent daily experience
 - **Visual Design**: Elegant quote card with quote icon and "Daily Inspiration" label
+
+### Admin as Retoucher Implementation (January 2025)
+- **Dual Role**: Admin user can now function as both administrator and retoucher
+- **Retoucher Identity**: Admin operates as retoucher under the name "Evans Abreation E.M" with alias "E.M"
+- **Assignment System**: Admin appears in project assignment dropdowns alongside other retouchers
+- **Calendar Integration**: Evans Abreation E.M shows in mini-calendar with orange color coding (E.M badge)
+- **Analytics Integration**: Tracked separately in team analytics with orange line graph
+- **Input Optimization**: Fixed smooth editing for Pkg/Sel/Extra fields with 500ms debouncing and stable project positioning

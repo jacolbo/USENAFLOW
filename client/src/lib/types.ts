@@ -21,6 +21,7 @@ export const formatRetoucherAbbr = (name: string | null) => {
   if (name === "Retoucher 1") return "EC";
   if (name === "Retoucher 2") return "ASA";
   if (name === "Retoucher 3") return "LM";
+  if (name === "Evans Abreation E.M") return "E.M";
   return "R?";
 };
 
@@ -29,5 +30,6 @@ export const getRetoucherFullName = (name: string | null) => {
   if (name === "Retoucher 1") return "Earl";
   if (name === "Retoucher 2") return "Dr Asa";
   if (name === "Retoucher 3") return "Lucky";
+  if (name === "Evans Abreation E.M") return "Evans Abreation E.M";
   return name || "-";
 };

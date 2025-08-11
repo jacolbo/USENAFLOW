@@ -537,6 +537,7 @@ export function TaskTable({ projects, user, allUsers }: TaskTableProps) {
                             case 'EC': return 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200';
                             case 'ASA': return 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200';
                             case 'LM': return 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200';
+                            case 'E.M': return 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200';
                             default: return 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200'; // Custom users get indigo
                           }
                         };
@@ -730,9 +731,9 @@ export function TaskTable({ projects, user, allUsers }: TaskTableProps) {
                                   <SelectValue placeholder={project.assignedTo ? "Reassign to..." : "Assign to..."} />
                                 </SelectTrigger>
                                 <SelectContent>
-                                  {/* All retouchers */}
+                                  {/* All retouchers + Admin as retoucher */}
                                   {allUsers
-                                    .filter(u => u.role === "Retoucher")
+                                    .filter(u => u.role === "Retoucher" || (u.role === "Admin" && u.name === "Evans Abreation E.M"))
                                     .map(retoucher => (
                                       <SelectItem key={retoucher.value || retoucher.name} value={retoucher.name}>
                                         {retoucher.name}
