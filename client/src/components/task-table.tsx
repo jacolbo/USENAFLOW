@@ -731,6 +731,8 @@ export function TaskTable({ projects, user, allUsers }: TaskTableProps) {
                                   <SelectValue placeholder={project.assignedTo ? "Reassign to..." : "Assign to..."} />
                                 </SelectTrigger>
                                 <SelectContent>
+                                  {/* Unassign option */}
+                                  <SelectItem value="">Unassign</SelectItem>
                                   {/* All retouchers + Admin as retoucher */}
                                   {allUsers
                                     .filter(u => u.role === "Retoucher" || (u.role === "Admin" && u.name === "Anesu's Pops"))
