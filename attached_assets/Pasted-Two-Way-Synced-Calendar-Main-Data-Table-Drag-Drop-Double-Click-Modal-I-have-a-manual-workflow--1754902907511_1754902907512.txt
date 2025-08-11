@@ -1,0 +1,110 @@
+Two-Way Synced Calendar & Main Data Table (Drag/Drop + Double-Click Modal)
+I have a manual workflow app (React + Node/Express, JSON storage). I need a calendar view that is fully in sync with the main data table. Any change in one must instantly reflect in the other.
+Core requirements
+Single source of truth
+Use clients.json as the single data source (via Express API).
+Both the Data Table and the Calendar read from the same endpoints and update via the same mutation endpoints.
+After any update, both views refresh (or update optimistically).
+Calendar tech
+Use FullCalendar (React) with week view default.
+Event fields map from client objects:
+id (string)
+title = Client name
+start = assigned/edit date (ISO)
+extendedProps: package_photos, selected_photos, type, assigned_retoucher, is_done, star_rating
+Event colors:
+Maternity = one color, General = another, Christmas = another
+If is_done === true, show a muted/complete color
+Two-way sync behaviors
+Drag & drop an event to another day → updates the client’s date in clients.json and immediately reflects in the Data Table.
+Double-click an event → open a Client Detail Modal with the same fields/actions available in the Data Table row:
+Change date (date picker)
+Assign to retoucher (dropdown)
+View/edit package_photos, selected_photos (where role allows)
+Mark as done (where role allows)
+Admin star rating (if completed)
+Saving in the modal commits to clients.json via API, then updates both Calendar and Table.
+Role-based permissions (must enforce in UI + API)
+Roles: admin, sales, lead_retoucher, data_wrangler, retoucher.
+Admin / Sales / Lead Retoucher / Data Wrangler:
+Can drag & drop events (change date)
+Can assign retoucher (dropdown)
+Can edit package/selected counts
+Admin can rate stars (completed jobs)
+Sales can unmark done (override) and sees notifications
+Retoucher:
+Cannot drag & drop or change date
+Cannot assign retoucher
+Can mark their own assigned project as done
+Sees star rating for their projects only
+Calendar shows only their assigned events
+Retouchers never see who is assigned to other projects; only their own queue.
+Notifications
+When a project is marked Done, create a Sales notification (persist in notifications.json).
+Sales dashboard shows a badge; opening the list can mark notifications as seen.
+Working days guard (lightweight)
+If an event is dragged to a weekend/holiday, show a warning toast and allow Admin/Sales/Lead/Data-wrangler to confirm or cancel. Retoucher is never allowed to drag.
+API (Node/Express, JSON storage)
+Create/ensure these endpoints (read/write clients.json, notifications.json, users.json):
+GET /api/clients → list all clients (server filters to user role if needed)
+PUT /api/clients/:id/date → body: { date: ISOString }
+PUT /api/clients/:id/assign → body: { assigned_retoucher: string|null }
+PUT /api/clients/:id/fields → body: { package_photos?, selected_photos?, type?, name? }
+PUT /api/clients/:id/done → body: { is_done: boolean }
+If true, also append a Sales notification in notifications.json
+PUT /api/clients/:id/rate → Admin only. body: { star_rating: number }
+GET /api/notifications → Sales only (or admin for audit)
+PUT /api/notifications/:id/seen → Sales marks as seen
+GET /api/users/me → return current session user & role
+Protect all mutations by role.
+Frontend components to create/modify
+CalendarView.jsx
+FullCalendar (week view default)
+Receives clients[] and currentUser
+Map clients → events, with colors by shoot type and done state
+Enable drag/drop only for allowed roles; on drop call /api/clients/:id/date
+Double-click handler → open ClientModal
+ClientModal.jsx
+Shows: name, package_photos, selected_photos, type, date, assigned_retoucher, is_done, star_rating
+Fields enabled/disabled based on role logic above
+Save calls appropriate endpoints
+DataTable.jsx
+Existing main table
+Ensure field edits call same endpoints as modal
+When a row is updated, Calendar updates (and vice versa)
+useClientsStore.js (or similar)
+Central client state hook to fetch list, update on mutations, and notify both views
+Optionally do optimistic updates
+Toast/alerts for success/warnings
+State & sync strategy
+Implement a simple shared store (useClientsStore) that both CalendarView and DataTable consume.
+All mutations:
+Update backend (JSON)
+Then update store state (or optimistic update then reconcile)
+After any mutation, both views reflect changes immediately without reload.
+Access control in UI
+Calendar:
+Drag/Drop enabled only for roles: admin, sales, lead_retoucher, data_wrangler
+Double-click modal always opens, but fields are enabled per role:
+Date + Assign only for admin/sales/lead/data-wrangler
+Done toggle only if currentUser is the assigned_retoucher
+Star rating only for admin and only if is_done = true
+Data Table:
+Show/hide columns and inputs with same role rules
+Retoucher sees only their rows
+File changes (outline)
+src/CalendarView.jsx (new)
+src/ClientModal.jsx (new)
+src/DataTable.jsx (ensure it already exists; wire to same store)
+src/hooks/useClientsStore.js (new)
+server/routes/clients.js (ensure endpoints above)
+server/routes/notifications.js
+data/clients.json, data/notifications.json (persist)
+Acceptance criteria (test plan)
+Admin drags a client from Tue → Thu on calendar; table date updates instantly.
+Admin edits package_photos in table; open modal from calendar (double-click) → value matches.
+Sales double-clicks calendar event, reassigns retoucher → table assignment updates.
+Retoucher opens calendar → sees only their events and cannot drag.
+Retoucher marks done in modal → Sales sees a new notification.
+Weekend/holiday drop shows warning & requires confirm (retoucher cannot drop at all).
+Please implement the above, keeping code modular and enforcing role checks both in UI and on the server routes.
