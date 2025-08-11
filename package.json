@@ -11,6 +11,11 @@
     "db:push": "drizzle-kit push"
   },
   "dependencies": {
+    "@fullcalendar/core": "^6.1.19",
+    "@fullcalendar/daygrid": "^6.1.19",
+    "@fullcalendar/interaction": "^6.1.19",
+    "@fullcalendar/react": "^6.1.19",
+    "@fullcalendar/timegrid": "^6.1.19",
     "@google-cloud/storage": "^7.16.0",
     "@hookform/resolvers": "^3.10.0",
     "@jridgewell/trace-mapping": "^0.3.25",

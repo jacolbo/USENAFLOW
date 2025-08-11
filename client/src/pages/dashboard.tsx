@@ -6,7 +6,8 @@ import { SettingsPanel } from "@/components/settings-panel";
 import { AddProjectForm } from "@/components/add-project-form";
 import { TaskTable } from "@/components/task-table";
 import { StatusLegend } from "@/components/status-legend";
-
+import { FullCalendarView } from "@/components/full-calendar-view";
+import { NotificationsPanel } from "@/components/notifications-panel";
 import { TeamAnalytics } from "@/components/team-analytics";
 import { DailyQuote } from "@/components/daily-quote";
 import { User } from "@/lib/types";
@@ -38,6 +39,7 @@ interface UserCredentials {
 export default function Dashboard() {
   const [user, setUser] = useState<User | null>(null);
   const [currentView, setCurrentView] = useState<'login' | 'register'>('login');
+  const [viewMode, setViewMode] = useState<'table' | 'calendar'>('table');
   
   // Session timeout duration (2 hours in milliseconds)
   const SESSION_TIMEOUT = 2 * 60 * 60 * 1000;
@@ -294,6 +296,9 @@ export default function Dashboard() {
                       </Dialog>
                     )}
 
+                    {/* Notifications Panel - Only for Admin and Sales */}
+                    <NotificationsPanel user={user} />
+
                     <Button 
                       variant="outline" 
                       size="sm"
@@ -312,18 +317,42 @@ export default function Dashboard() {
 
         <div className="space-y-8">  
           {/* Daily Quote */}
-          <DailyQuote user={user} />
+          <DailyQuote userId={user.id} />
           
           {/* Status Legend - only for Admin, LeadRetoucher, and DataWrangler */}
           <StatusLegend projects={projects} user={user} allUsers={users} />
           
-          {/* Show project creation form for roles that can add projects */}
-          {user.role !== "Retoucher" && (
-            <AddProjectForm onAddProject={() => {}} />
-          )}
+          {/* View Toggle and Project Creation */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Button 
+                variant={viewMode === 'table' ? 'default' : 'outline'} 
+                size="sm"
+                onClick={() => setViewMode('table')}
+              >
+                📋 Table View
+              </Button>
+              <Button 
+                variant={viewMode === 'calendar' ? 'default' : 'outline'} 
+                size="sm"
+                onClick={() => setViewMode('calendar')}
+              >
+                📅 Calendar View
+              </Button>
+            </div>
+            
+            {/* Show project creation form for roles that can add projects */}
+            {user.role !== "Retoucher" && (
+              <AddProjectForm onAddProject={() => {}} />
+            )}
+          </div>
           
-          {/* Show the task table for the visible projects */}
-          <TaskTable projects={projects} user={user} allUsers={users} />
+          {/* Main Project View */}
+          {viewMode === 'table' ? (
+            <TaskTable projects={projects} user={user} allUsers={users} />
+          ) : (
+            <FullCalendarView projects={projects} user={user} allUsers={users} />
+          )}
 
           {/* Team Progress Analytics */}
           <TeamAnalytics user={user} />

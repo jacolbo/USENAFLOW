@@ -1,8 +1,11 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertProjectSchema, updateProjectSchema, insertProjectNoteSchema, updateProjectNoteSchema, ProjectStatus } from "@shared/schema";
+import { insertProjectSchema, updateProjectSchema, insertProjectNoteSchema, updateProjectNoteSchema, ProjectStatus, insertNotificationSchema } from "@shared/schema";
 import { ObjectStorageService, ObjectNotFoundError } from "./objectStorage";
+import { db } from "./db";
+import { notifications } from "@shared/schema";
+import { eq } from "drizzle-orm";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Get all projects
@@ -31,10 +34,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { id } = req.params;
       const validatedData = updateProjectSchema.parse(req.body);
+      const oldProject = await storage.getProject(id);
       const project = await storage.updateProject(id, validatedData);
       
       if (!project) {
         return res.status(404).json({ error: "Project not found" });
+      }
+      
+      // Check if status changed to delivered - create notification
+      if (oldProject && oldProject.status !== "delivered" && project.status === "delivered") {
+        await storage.createNotification({
+          type: "project_completed",
+          title: "Project Completed",
+          message: `${project.clientName} has been marked as delivered${project.assignedTo ? ` by ${project.assignedTo}` : ''}.`,
+          projectId: project.id,
+          targetRole: "Sales",
+          isRead: false,
+        });
       }
       
       res.json(project);
@@ -324,6 +340,48 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error setting note image:", error);
       res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // Notification endpoints
+  app.get("/api/notifications", async (req, res) => {
+    try {
+      const allNotifications = await storage.getAllNotifications();
+      res.json(allNotifications);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch notifications" });
+    }
+  });
+
+  app.patch("/api/notifications/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { isRead } = req.body;
+      
+      const notification = await storage.updateNotification(id, { isRead });
+      
+      if (!notification) {
+        return res.status(404).json({ error: "Notification not found" });
+      }
+      
+      res.json(notification);
+    } catch (error) {
+      res.status(400).json({ error: "Invalid update data" });
+    }
+  });
+
+  app.patch("/api/notifications/mark-all-read", async (req, res) => {
+    try {
+      const allNotifications = await storage.getAllNotifications();
+      await Promise.all(
+        allNotifications
+          .filter(n => !n.isRead)
+          .map(n => storage.updateNotification(n.id, { isRead: true }))
+      );
+      
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to mark notifications as read" });
     }
   });
 
