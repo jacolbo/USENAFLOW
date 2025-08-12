@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import type { WebSocketMessage, Notification } from '@shared/schema';
 import notificationSound from '@assets/Default iPhone Notification Sound (Apple Sound) - Sound Effect for Editing_1755004252731.mp3';
@@ -9,102 +9,111 @@ export function useWebSocket(user?: { id: string; username: string } | null) {
   const wsRef = useRef<WebSocket | null>(null);
   const queryClient = useQueryClient();
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const reconnectAttempts = useRef(0);
+  const maxReconnectAttempts = 5;
 
   useEffect(() => {
     // Initialize audio for notifications
     audioRef.current = new Audio(notificationSound);
-    audioRef.current.volume = 0.5; // Set volume to 50%
+    audioRef.current.volume = 0.5;
 
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
     const wsUrl = `${protocol}//${window.location.host}/ws`;
 
     const connect = () => {
-      wsRef.current = new WebSocket(wsUrl);
+      if (wsRef.current && wsRef.current.readyState !== WebSocket.CLOSED) {
+        return; // Don't create multiple connections
+      }
 
-      wsRef.current.onopen = () => {
-        console.log('WebSocket connected');
-        setIsConnected(true);
-        
-        // Send user identification if user is logged in
-        if (user && wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-          // Small delay to ensure connection is fully established
-          setTimeout(() => {
-            if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-              const identifyMessage: WebSocketMessage = {
-                type: 'USER_IDENTIFY',
-                data: {
-                  userId: user.id,
-                  username: user.username
-                },
-                timestamp: new Date()
-              };
-              wsRef.current.send(JSON.stringify(identifyMessage));
-            }
-          }, 100);
-        }
-      };
+      try {
+        wsRef.current = new WebSocket(wsUrl);
 
-      wsRef.current.onmessage = (event) => {
-        try {
-          const message: WebSocketMessage = JSON.parse(event.data);
+        wsRef.current.onopen = () => {
+          console.log('WebSocket connected');
+          setIsConnected(true);
+          reconnectAttempts.current = 0;
           
-          switch (message.type) {
-            case 'NOTIFICATION':
-              const notification = message.data as Notification;
-              console.log('Received notification:', notification);
-              
-              // Add notification to the list
-              setNotifications(prev => [notification, ...prev.slice(0, 9)]); // Keep last 10
-              
-              // Play notification sound for important notifications (not welcome message)
-              if (notification.title !== 'Live Sync Connected' && audioRef.current) {
-                audioRef.current.currentTime = 0; // Reset to beginning
-                audioRef.current.play().catch(error => {
-                  console.log('Could not play notification sound:', error);
-                });
+          // Send user identification after connection is established
+          if (user) {
+            setTimeout(() => {
+              if (wsRef.current?.readyState === WebSocket.OPEN) {
+                const identifyMessage: WebSocketMessage = {
+                  type: 'USER_IDENTIFY',
+                  data: {
+                    userId: user.id,
+                    username: user.username
+                  },
+                  timestamp: new Date()
+                };
+                wsRef.current.send(JSON.stringify(identifyMessage));
               }
-              
-              // Show browser notification if permission granted
-              if (Notification.permission === 'granted' && notification.title !== 'Live Sync Connected') {
-                new Notification(notification.title, {
-                  body: notification.message,
-                  icon: '/favicon.ico'
-                });
-              }
-              break;
-
-            case 'PROJECT_UPDATE':
-              console.log('Project updated:', message.data);
-              // Invalidate projects query to refresh data
-              queryClient.invalidateQueries({ queryKey: ['/api/projects'] });
-              break;
-
-            default:
-              console.log('Unknown WebSocket message type:', message.type);
+            }, 200);
           }
-        } catch (error) {
-          console.error('Error parsing WebSocket message:', error);
-        }
-      };
+        };
 
-      wsRef.current.onclose = (event) => {
-        console.log('WebSocket disconnected', event.code, event.reason);
-        setIsConnected(false);
-        
-        // Only attempt to reconnect if not a normal closure
-        if (event.code !== 1000) {
-          setTimeout(() => {
-            console.log('Attempting to reconnect...');
-            if (!wsRef.current || wsRef.current.readyState === WebSocket.CLOSED) {
-              connect();
+        wsRef.current.onmessage = (event) => {
+          try {
+            const message: WebSocketMessage = JSON.parse(event.data);
+            
+            switch (message.type) {
+              case 'NOTIFICATION':
+                const notification = message.data as Notification;
+                console.log('Received notification:', notification);
+                setNotifications(prev => [notification, ...prev]);
+                
+                // Play notification sound
+                if (audioRef.current) {
+                  audioRef.current.play().catch(console.error);
+                }
+                
+                // Show browser notification if permission granted
+                if ('Notification' in window && Notification.permission === 'granted') {
+                  new Notification(notification.title, {
+                    body: notification.message,
+                    icon: '/favicon.ico'
+                  });
+                }
+                break;
+
+              case 'PROJECT_UPDATE':
+                console.log('Project updated:', message.data);
+                queryClient.invalidateQueries({ queryKey: ['/api/projects'] });
+                break;
+
+              case 'SYNC_REQUEST':
+                // Simple connection confirmation - no action needed
+                break;
+
+              default:
+                console.log('Unknown WebSocket message type:', message.type);
             }
-          }, 3000);
-        }
-      };
+          } catch (error) {
+            console.error('Error parsing WebSocket message:', error);
+          }
+        };
 
-      wsRef.current.onerror = (error) => {
-        console.error('WebSocket error:', error);
-      };
+        wsRef.current.onclose = (event) => {
+          console.log('WebSocket disconnected', event.code);
+          setIsConnected(false);
+          
+          // Only reconnect if not a normal closure and haven't exceeded max attempts
+          if (event.code !== 1000 && reconnectAttempts.current < maxReconnectAttempts) {
+            reconnectAttempts.current++;
+            setTimeout(() => {
+              if (!wsRef.current || wsRef.current.readyState === WebSocket.CLOSED) {
+                connect();
+              }
+            }, 2000 * reconnectAttempts.current); // Exponential backoff
+          }
+        };
+
+        wsRef.current.onerror = (error) => {
+          console.error('WebSocket error:', error);
+        };
+
+      } catch (error) {
+        console.error('Failed to create WebSocket connection:', error);
+      }
     };
 
     connect();
@@ -116,7 +125,7 @@ export function useWebSocket(user?: { id: string; username: string } | null) {
 
     return () => {
       if (wsRef.current) {
-        wsRef.current.close();
+        wsRef.current.close(1000, 'Component unmounting');
       }
     };
   }, [queryClient, user]);
