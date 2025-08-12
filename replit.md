@@ -175,3 +175,22 @@ Preferred communication style: Simple, everyday language.
 - **Calendar Integration**: Evans Abreation E.M shows in mini-calendar with orange color coding (E.M badge)
 - **Analytics Integration**: Tracked separately in team analytics with orange line graph
 - **Input Optimization**: Fixed smooth editing for Pkg/Sel/Extra fields with 500ms debouncing and stable project positioning
+
+### Archive System Implementation (January 2025)
+- **Current vs Archive Views**: Toggle between current projects (last 7 days) and archive projects (older than 1 week)
+- **Smart Interface**: Add Project form and Team Analytics only show in current view for focus on active work
+- **Visual Indicators**: Archive button shows current view state with project count indicators
+- **Date-Based Filtering**: Automatic separation based on project creation/due dates
+- **Clean Organization**: Maintains all project accessibility while reducing dashboard clutter
+
+### Live Sync & Notification System Implementation (January 2025)
+- **WebSocket Integration**: Real-time bidirectional communication between client and server
+- **Live Project Updates**: Automatic project table refresh when any team member makes changes
+- **Smart Notifications**: Targeted notifications for project assignments, completions, and status changes
+- **Browser Notifications**: Native OS notifications for important updates (with user permission)
+- **Connection Status**: Visual indicators showing live sync connection status in notification center
+- **Notification Types**: Project assigned, project completed, project created, and status changes
+- **User-Targeted Alerts**: Assignments send notifications specifically to assigned retouchers
+- **Notification Management**: Mark as read, clear all, and unread count badges
+- **Auto-Reconnection**: Automatic WebSocket reconnection on connection loss
+- **Real-Time Collaboration**: Instant visibility of team member actions across all connected devices

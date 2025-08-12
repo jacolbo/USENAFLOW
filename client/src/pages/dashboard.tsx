@@ -9,6 +9,8 @@ import { TaskTable } from "@/components/task-table";
 
 import { TeamAnalytics } from "@/components/team-analytics";
 import { DailyQuote } from "@/components/daily-quote";
+import { NotificationCenter } from "@/components/notification-center";
+import { useWebSocket } from "@/hooks/use-websocket";
 import { User } from "@/lib/types";
 import { Project } from "@shared/schema";
 import { User as UserIcon, LogOut, Settings, Archive } from "lucide-react";
@@ -39,6 +41,15 @@ export default function Dashboard() {
   const [user, setUser] = useState<User | null>(null);
   const [currentView, setCurrentView] = useState<'login' | 'register'>('login');
   const [showArchive, setShowArchive] = useState(false);
+
+  // Initialize WebSocket for live sync and notifications
+  const {
+    isConnected,
+    notifications,
+    markNotificationAsRead,
+    clearAllNotifications,
+    unreadCount
+  } = useWebSocket();
   
   // Session timeout duration (2 hours in milliseconds)
   const SESSION_TIMEOUT = 2 * 60 * 60 * 1000;
@@ -287,6 +298,15 @@ export default function Dashboard() {
                       </div>
                     </div>
                     
+                    {/* Notification Center */}
+                    <NotificationCenter
+                      notifications={notifications}
+                      unreadCount={unreadCount}
+                      isConnected={isConnected}
+                      onMarkAsRead={markNotificationAsRead}
+                      onClearAll={clearAllNotifications}
+                    />
+
                     {/* Archive Button */}
                     <Button 
                       variant={showArchive ? "default" : "outline"}

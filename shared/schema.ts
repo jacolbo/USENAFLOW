@@ -94,3 +94,22 @@ export const ProjectStatus = {
   REVIEW: "Review",
   DELIVERED: "Delivered",
 } as const;
+
+// Notification system schemas
+export interface Notification {
+  id: string;
+  type: 'PROJECT_ASSIGNED' | 'PROJECT_COMPLETED' | 'PROJECT_STATUS_CHANGED' | 'PROJECT_CREATED';
+  title: string;
+  message: string;
+  projectId: string;
+  projectName: string;
+  userId?: string; // Target user for the notification
+  createdAt: Date;
+  read: boolean;
+}
+
+export interface WebSocketMessage {
+  type: 'NOTIFICATION' | 'PROJECT_UPDATE' | 'SYNC_REQUEST';
+  data: any;
+  timestamp: Date;
+}

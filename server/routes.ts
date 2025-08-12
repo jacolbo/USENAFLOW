@@ -1,8 +1,51 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
+import { WebSocketServer, WebSocket } from "ws";
 import { storage } from "./storage";
 import { insertProjectSchema, updateProjectSchema, insertProjectNoteSchema, updateProjectNoteSchema, ProjectStatus } from "@shared/schema";
 import { ObjectStorageService, ObjectNotFoundError } from "./objectStorage";
+import type { Notification, WebSocketMessage } from "@shared/schema";
+
+// Global WebSocket connections store
+const wsConnections = new Map<string, { ws: WebSocket, userId?: string }>();
+
+// Helper function to broadcast notifications
+function broadcastNotification(notification: Notification, targetUserId?: string) {
+  const message: WebSocketMessage = {
+    type: 'NOTIFICATION',
+    data: notification,
+    timestamp: new Date()
+  };
+
+  wsConnections.forEach(({ ws, userId }, connectionId) => {
+    if (ws.readyState === WebSocket.OPEN) {
+      // Send to specific user or broadcast to all
+      if (!targetUserId || userId === targetUserId) {
+        ws.send(JSON.stringify(message));
+      }
+    } else {
+      // Clean up dead connections
+      wsConnections.delete(connectionId);
+    }
+  });
+}
+
+// Helper function to broadcast project updates
+function broadcastProjectUpdate(project: any) {
+  const message: WebSocketMessage = {
+    type: 'PROJECT_UPDATE',
+    data: project,
+    timestamp: new Date()
+  };
+
+  wsConnections.forEach(({ ws }, connectionId) => {
+    if (ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify(message));
+    } else {
+      wsConnections.delete(connectionId);
+    }
+  });
+}
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Get all projects
@@ -20,6 +63,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const validatedData = insertProjectSchema.parse(req.body);
       const project = await storage.createProject(validatedData);
+      
+      // Broadcast project creation notification
+      const notification: Notification = {
+        id: `notif_${Date.now()}_${Math.random()}`,
+        type: 'PROJECT_CREATED',
+        title: 'New Project Created',
+        message: `Project "${project.clientName}" has been created`,
+        projectId: project.id,
+        projectName: project.clientName,
+        createdAt: new Date(),
+        read: false
+      };
+      broadcastNotification(notification);
+      broadcastProjectUpdate(project);
+      
       res.status(201).json(project);
     } catch (error) {
       res.status(400).json({ error: "Invalid project data" });
@@ -31,12 +89,47 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { id } = req.params;
       const validatedData = updateProjectSchema.parse(req.body);
+      const oldProject = await storage.getProject(id);
       const project = await storage.updateProject(id, validatedData);
       
       if (!project) {
         return res.status(404).json({ error: "Project not found" });
       }
-      
+
+      // Check for status changes and send notifications
+      if (oldProject && oldProject.status !== project.status) {
+        let notification: Notification | null = null;
+
+        if (project.status === ProjectStatus.DELIVERED) {
+          notification = {
+            id: `notif_${Date.now()}_${Math.random()}`,
+            type: 'PROJECT_COMPLETED',
+            title: 'Project Completed!',
+            message: `Project "${project.clientName}" has been marked as delivered`,
+            projectId: project.id,
+            projectName: project.clientName,
+            createdAt: new Date(),
+            read: false
+          };
+        } else {
+          notification = {
+            id: `notif_${Date.now()}_${Math.random()}`,
+            type: 'PROJECT_STATUS_CHANGED',
+            title: 'Project Status Updated',
+            message: `Project "${project.clientName}" status changed from "${oldProject.status}" to "${project.status}"`,
+            projectId: project.id,
+            projectName: project.clientName,
+            createdAt: new Date(),
+            read: false
+          };
+        }
+
+        if (notification) {
+          broadcastNotification(notification);
+        }
+      }
+
+      broadcastProjectUpdate(project);
       res.json(project);
     } catch (error) {
       res.status(400).json({ error: "Invalid update data" });
@@ -60,7 +153,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
         assignedTo,
         status,
       });
-      
+
+      // Send assignment notification
+      if (assignedTo && assignedTo !== "__UNASSIGN__") {
+        const notification: Notification = {
+          id: `notif_${Date.now()}_${Math.random()}`,
+          type: 'PROJECT_ASSIGNED',
+          title: 'New Project Assignment',
+          message: `You have been assigned to project "${project.clientName}"`,
+          projectId: project.id,
+          projectName: project.clientName,
+          userId: assignedTo,
+          createdAt: new Date(),
+          read: false
+        };
+        broadcastNotification(notification, assignedTo);
+      }
+
+      broadcastProjectUpdate(updatedProject);
       res.json(updatedProject);
     } catch (error) {
       res.status(400).json({ error: "Failed to assign project" });
@@ -328,5 +438,61 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   const httpServer = createServer(app);
+
+  // Set up WebSocket server for live sync and notifications
+  const wss = new WebSocketServer({ server: httpServer, path: '/ws' });
+
+  wss.on('connection', (ws, req) => {
+    const connectionId = `conn_${Date.now()}_${Math.random()}`;
+    console.log(`WebSocket connection established: ${connectionId}`);
+    
+    // Store connection
+    wsConnections.set(connectionId, { ws });
+
+    ws.on('message', (data) => {
+      try {
+        const message: WebSocketMessage = JSON.parse(data.toString());
+        
+        switch (message.type) {
+          case 'SYNC_REQUEST':
+            // Client requesting full sync - could send all projects here if needed
+            console.log('Sync request received from client');
+            break;
+          default:
+            console.log('Unknown message type:', message.type);
+        }
+      } catch (error) {
+        console.error('Error parsing WebSocket message:', error);
+      }
+    });
+
+    ws.on('close', () => {
+      console.log(`WebSocket connection closed: ${connectionId}`);
+      wsConnections.delete(connectionId);
+    });
+
+    ws.on('error', (error) => {
+      console.error(`WebSocket error for ${connectionId}:`, error);
+      wsConnections.delete(connectionId);
+    });
+
+    // Send welcome message
+    const welcomeMessage: WebSocketMessage = {
+      type: 'NOTIFICATION',
+      data: {
+        id: `welcome_${connectionId}`,
+        type: 'PROJECT_STATUS_CHANGED',
+        title: 'Live Sync Connected',
+        message: 'You are now connected to live updates',
+        projectId: '',
+        projectName: '',
+        createdAt: new Date(),
+        read: false
+      },
+      timestamp: new Date()
+    };
+    ws.send(JSON.stringify(welcomeMessage));
+  });
+
   return httpServer;
 }
