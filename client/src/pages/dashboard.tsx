@@ -11,7 +11,7 @@ import { TeamAnalytics } from "@/components/team-analytics";
 import { DailyQuote } from "@/components/daily-quote";
 import { User } from "@/lib/types";
 import { Project } from "@shared/schema";
-import { User as UserIcon, LogOut, Settings } from "lucide-react";
+import { User as UserIcon, LogOut, Settings, Archive } from "lucide-react";
 import logoImage from "@assets/USENA-FLOW_1754522507856.png";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -38,6 +38,7 @@ interface UserCredentials {
 export default function Dashboard() {
   const [user, setUser] = useState<User | null>(null);
   const [currentView, setCurrentView] = useState<'login' | 'register'>('login');
+  const [showArchive, setShowArchive] = useState(false);
   
   // Session timeout duration (2 hours in milliseconds)
   const SESSION_TIMEOUT = 2 * 60 * 60 * 1000;
@@ -64,10 +65,32 @@ export default function Dashboard() {
     { id: "lucky", username: "lucky", password: "lm123", role: "Retoucher", name: "Lucky", abbreviation: "LM" },
   ]);
 
-  const { data: projects = [], isLoading } = useQuery<Project[]>({
+  const { data: allProjects = [], isLoading } = useQuery<Project[]>({
     queryKey: ["/api/projects"],
     enabled: !!user,
   });
+
+  // Filter projects based on archive view
+  const getFilteredProjects = () => {
+    const oneWeekAgo = new Date();
+    oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+
+    if (showArchive) {
+      // Show projects older than one week
+      return allProjects.filter(project => {
+        const projectDate = new Date(project.createdAt || project.dueDate);
+        return projectDate < oneWeekAgo;
+      });
+    } else {
+      // Show projects from the last week
+      return allProjects.filter(project => {
+        const projectDate = new Date(project.createdAt || project.dueDate);
+        return projectDate >= oneWeekAgo;
+      });
+    }
+  };
+
+  const projects = getFilteredProjects();
 
   // Check for existing session on component mount and periodically
   useEffect(() => {
@@ -264,6 +287,17 @@ export default function Dashboard() {
                       </div>
                     </div>
                     
+                    {/* Archive Button */}
+                    <Button 
+                      variant={showArchive ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setShowArchive(!showArchive)}
+                      className="flex items-center gap-2"
+                    >
+                      <Archive className="h-4 w-4" />
+                      {showArchive ? "Current" : "Archive"}
+                    </Button>
+
                     {/* Settings Icon - Only visible to Admin users */}
                     {user.role === "Admin" && (
                       <Dialog>
@@ -314,18 +348,36 @@ export default function Dashboard() {
           {/* Daily Quote */}
           <DailyQuote user={user} />
           
+          {/* Archive Status Header */}
+          <div className="bg-white rounded-lg shadow-sm p-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Archive className="h-5 w-5 text-gray-600" />
+                <h2 className="text-lg font-semibold">
+                  {showArchive ? "Archive Projects" : "Current Projects"}
+                </h2>
+                <span className="text-sm text-gray-500">
+                  ({showArchive ? "Older than 1 week" : "From last 7 days"})
+                </span>
+              </div>
+              <div className="text-sm text-gray-600">
+                {projects.length} project{projects.length !== 1 ? 's' : ''}
+              </div>
+            </div>
+          </div>
 
-          
-          {/* Show project creation form for roles that can add projects */}
-          {user.role !== "Retoucher" && (
+          {/* Show project creation form for roles that can add projects - only in current view */}
+          {!showArchive && user.role !== "Retoucher" && (
             <AddProjectForm onAddProject={() => {}} />
           )}
           
           {/* Show the task table for the visible projects */}
           <TaskTable projects={projects} user={user} allUsers={users} />
 
-          {/* Team Progress Analytics */}
-          <TeamAnalytics user={user} />
+          {/* Team Progress Analytics - only in current view */}
+          {!showArchive && (
+            <TeamAnalytics user={user} />
+          )}
         </div>
       </div>
     </div>
