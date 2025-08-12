@@ -5,7 +5,7 @@ import { RegisterForm } from "@/components/register-form";
 import { SettingsPanel } from "@/components/settings-panel";
 import { AddProjectForm } from "@/components/add-project-form";
 import { TaskTable } from "@/components/task-table";
-import { StatusLegend } from "@/components/status-legend";
+
 
 import { TeamAnalytics } from "@/components/team-analytics";
 import { DailyQuote } from "@/components/daily-quote";
@@ -314,8 +314,7 @@ export default function Dashboard() {
           {/* Daily Quote */}
           <DailyQuote user={user} />
           
-          {/* Status Legend - only for Admin, LeadRetoucher, and DataWrangler */}
-          <StatusLegend projects={projects} user={user} allUsers={users} />
+
           
           {/* Show project creation form for roles that can add projects */}
           {user.role !== "Retoucher" && (
