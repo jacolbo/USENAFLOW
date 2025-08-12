@@ -1,14 +1,20 @@
 import { useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import type { WebSocketMessage, Notification } from '@shared/schema';
+import boxingBellSound from '@assets/Boxing Bell Sound Effect_1755004088599.mp3';
 
 export function useWebSocket() {
   const [isConnected, setIsConnected] = useState(false);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const wsRef = useRef<WebSocket | null>(null);
   const queryClient = useQueryClient();
+  const audioRef = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => {
+    // Initialize audio for notifications
+    audioRef.current = new Audio(boxingBellSound);
+    audioRef.current.volume = 0.3; // Set volume to 30%
+
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
     const wsUrl = `${protocol}//${window.location.host}/ws`;
 
@@ -31,6 +37,14 @@ export function useWebSocket() {
               
               // Add notification to the list
               setNotifications(prev => [notification, ...prev.slice(0, 9)]); // Keep last 10
+              
+              // Play notification sound for important notifications (not welcome message)
+              if (notification.title !== 'Live Sync Connected' && audioRef.current) {
+                audioRef.current.currentTime = 0; // Reset to beginning
+                audioRef.current.play().catch(error => {
+                  console.log('Could not play notification sound:', error);
+                });
+              }
               
               // Show browser notification if permission granted
               if (Notification.permission === 'granted' && notification.title !== 'Live Sync Connected') {
