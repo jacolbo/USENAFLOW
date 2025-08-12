@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import type { WebSocketMessage, Notification } from '@shared/schema';
-import boxingBellSound from '@assets/Boxing Bell Sound Effect_1755004088599.mp3';
+import notificationSound from '@assets/Default iPhone Notification Sound (Apple Sound) - Sound Effect for Editing_1755004252731.mp3';
 
 export function useWebSocket() {
   const [isConnected, setIsConnected] = useState(false);
@@ -12,8 +12,8 @@ export function useWebSocket() {
 
   useEffect(() => {
     // Initialize audio for notifications
-    audioRef.current = new Audio(boxingBellSound);
-    audioRef.current.volume = 0.3; // Set volume to 30%
+    audioRef.current = new Audio(notificationSound);
+    audioRef.current.volume = 0.5; // Set volume to 50%
 
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
     const wsUrl = `${protocol}//${window.location.host}/ws`;

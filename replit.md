@@ -194,4 +194,4 @@ Preferred communication style: Simple, everyday language.
 - **Notification Management**: Mark as read, clear all, and unread count badges
 - **Auto-Reconnection**: Automatic WebSocket reconnection on connection loss
 - **Real-Time Collaboration**: Instant visibility of team member actions across all connected devices
-- **Custom Notification Sound**: Boxing bell sound effect plays for important notifications (30% volume)
+- **Custom Notification Sound**: iPhone notification sound plays for important notifications (50% volume)
