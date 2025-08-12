@@ -109,7 +109,7 @@ export interface Notification {
 }
 
 export interface WebSocketMessage {
-  type: 'NOTIFICATION' | 'PROJECT_UPDATE' | 'SYNC_REQUEST';
+  type: 'NOTIFICATION' | 'PROJECT_UPDATE' | 'SYNC_REQUEST' | 'USER_IDENTIFY';
   data: any;
   timestamp: Date;
 }

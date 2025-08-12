@@ -446,7 +446,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const connectionId = `conn_${Date.now()}_${Math.random()}`;
     console.log(`WebSocket connection established: ${connectionId}`);
     
-    // Store connection
+    // Store connection (userId will be set when client identifies itself)
     wsConnections.set(connectionId, { ws });
 
     ws.on('message', (data) => {
@@ -455,8 +455,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         
         switch (message.type) {
           case 'SYNC_REQUEST':
-            // Client requesting full sync - could send all projects here if needed
             console.log('Sync request received from client');
+            break;
+          case 'USER_IDENTIFY':
+            // Client sends their user info to identify themselves
+            const userData = message.data as { userId: string, username: string };
+            if (userData?.userId) {
+              wsConnections.set(connectionId, { ws, userId: userData.userId });
+              console.log(`User identified: ${userData.username} (${userData.userId}) on connection ${connectionId}`);
+            }
             break;
           default:
             console.log('Unknown message type:', message.type);

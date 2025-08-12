@@ -3,7 +3,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import type { WebSocketMessage, Notification } from '@shared/schema';
 import notificationSound from '@assets/Default iPhone Notification Sound (Apple Sound) - Sound Effect for Editing_1755004252731.mp3';
 
-export function useWebSocket() {
+export function useWebSocket(user?: { id: string; username: string } | null) {
   const [isConnected, setIsConnected] = useState(false);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const wsRef = useRef<WebSocket | null>(null);
@@ -24,6 +24,19 @@ export function useWebSocket() {
       wsRef.current.onopen = () => {
         console.log('WebSocket connected');
         setIsConnected(true);
+        
+        // Send user identification if user is logged in
+        if (user && wsRef.current) {
+          const identifyMessage: WebSocketMessage = {
+            type: 'USER_IDENTIFY',
+            data: {
+              userId: user.id,
+              username: user.username
+            },
+            timestamp: new Date()
+          };
+          wsRef.current.send(JSON.stringify(identifyMessage));
+        }
       };
 
       wsRef.current.onmessage = (event) => {
@@ -97,7 +110,7 @@ export function useWebSocket() {
         wsRef.current.close();
       }
     };
-  }, [queryClient]);
+  }, [queryClient, user]);
 
   const markNotificationAsRead = (notificationId: string) => {
     setNotifications(prev => 

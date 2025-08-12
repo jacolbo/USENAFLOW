@@ -49,7 +49,7 @@ export default function Dashboard() {
     markNotificationAsRead,
     clearAllNotifications,
     unreadCount
-  } = useWebSocket();
+  } = useWebSocket(user ? { id: user.value, username: user.name } : null);
   
   // Session timeout duration (2 hours in milliseconds)
   const SESSION_TIMEOUT = 2 * 60 * 60 * 1000;
@@ -366,7 +366,7 @@ export default function Dashboard() {
 
         <div className="space-y-8">  
           {/* Daily Quote */}
-          <DailyQuote user={user} />
+          <DailyQuote userId={user.value} />
           
           {/* Archive Status Header */}
           <div className="bg-white rounded-lg shadow-sm p-4">
