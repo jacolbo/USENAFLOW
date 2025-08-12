@@ -483,22 +483,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       wsConnections.delete(connectionId);
     });
 
-    // Send welcome message
-    const welcomeMessage: WebSocketMessage = {
-      type: 'NOTIFICATION',
-      data: {
-        id: `welcome_${connectionId}`,
-        type: 'PROJECT_STATUS_CHANGED',
-        title: 'Live Sync Connected',
-        message: 'You are now connected to live updates',
-        projectId: '',
-        projectName: '',
-        createdAt: new Date(),
-        read: false
-      },
+    // Send a simple connection confirmation
+    ws.send(JSON.stringify({
+      type: 'SYNC_REQUEST',
+      data: { status: 'connected' },
       timestamp: new Date()
-    };
-    ws.send(JSON.stringify(welcomeMessage));
+    }));
   });
 
   return httpServer;

@@ -26,16 +26,21 @@ export function useWebSocket(user?: { id: string; username: string } | null) {
         setIsConnected(true);
         
         // Send user identification if user is logged in
-        if (user && wsRef.current) {
-          const identifyMessage: WebSocketMessage = {
-            type: 'USER_IDENTIFY',
-            data: {
-              userId: user.id,
-              username: user.username
-            },
-            timestamp: new Date()
-          };
-          wsRef.current.send(JSON.stringify(identifyMessage));
+        if (user && wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+          // Small delay to ensure connection is fully established
+          setTimeout(() => {
+            if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+              const identifyMessage: WebSocketMessage = {
+                type: 'USER_IDENTIFY',
+                data: {
+                  userId: user.id,
+                  username: user.username
+                },
+                timestamp: new Date()
+              };
+              wsRef.current.send(JSON.stringify(identifyMessage));
+            }
+          }, 100);
         }
       };
 
@@ -82,15 +87,19 @@ export function useWebSocket(user?: { id: string; username: string } | null) {
         }
       };
 
-      wsRef.current.onclose = () => {
-        console.log('WebSocket disconnected');
+      wsRef.current.onclose = (event) => {
+        console.log('WebSocket disconnected', event.code, event.reason);
         setIsConnected(false);
         
-        // Attempt to reconnect after 3 seconds
-        setTimeout(() => {
-          console.log('Attempting to reconnect...');
-          connect();
-        }, 3000);
+        // Only attempt to reconnect if not a normal closure
+        if (event.code !== 1000) {
+          setTimeout(() => {
+            console.log('Attempting to reconnect...');
+            if (!wsRef.current || wsRef.current.readyState === WebSocket.CLOSED) {
+              connect();
+            }
+          }, 3000);
+        }
       };
 
       wsRef.current.onerror = (error) => {
