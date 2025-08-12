@@ -9,8 +9,36 @@ import type { Notification, WebSocketMessage } from "@shared/schema";
 // Global WebSocket connections store
 const wsConnections = new Map<string, { ws: WebSocket, userId?: string }>();
 
+// Global SSE connections store
+let sseConnections: Map<string, { res: any; userId: string; username: string }>;
+
+// Function to broadcast via SSE
+function broadcastSSE(message: { type: string; payload?: any }, targetUserId?: string) {
+  if (!sseConnections) return;
+
+  for (const [connectionId, connection] of sseConnections.entries()) {
+    if (targetUserId && connection.userId !== targetUserId) {
+      continue; // Skip if targeting specific user and this isn't them
+    }
+
+    try {
+      connection.res.write(`data: ${JSON.stringify(message)}\n\n`);
+    } catch (error) {
+      console.error(`Failed to send SSE message to ${connectionId}:`, error);
+      sseConnections.delete(connectionId);
+    }
+  }
+}
+
 // Helper function to broadcast notifications
 function broadcastNotification(notification: Notification, targetUserId?: string) {
+  // SSE broadcast
+  broadcastSSE({
+    type: 'notification',
+    payload: notification
+  }, targetUserId);
+
+  // WebSocket broadcast (legacy)
   const message: WebSocketMessage = {
     type: 'NOTIFICATION',
     data: notification,
@@ -32,6 +60,13 @@ function broadcastNotification(notification: Notification, targetUserId?: string
 
 // Helper function to broadcast project updates
 function broadcastProjectUpdate(project: any) {
+  // SSE broadcast
+  broadcastSSE({
+    type: 'project_update',
+    payload: project
+  });
+
+  // WebSocket broadcast (legacy)
   const message: WebSocketMessage = {
     type: 'PROJECT_UPDATE',
     data: project,
@@ -437,9 +472,61 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Server-Sent Events for real-time notifications
+  sseConnections = new Map<string, { res: any; userId: string; username: string }>();
+
+  app.get('/api/events', (req, res) => {
+    const userId = req.query.userId as string;
+    const username = req.query.username as string;
+
+    if (!userId || !username) {
+      return res.status(400).json({ error: 'userId and username are required' });
+    }
+
+    // Set SSE headers
+    res.writeHead(200, {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      'Connection': 'keep-alive',
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Headers': 'Cache-Control'
+    });
+
+    const connectionId = `sse_${Date.now()}_${Math.random()}`;
+    sseConnections.set(connectionId, { res, userId, username });
+
+    console.log(`SSE connection established: ${username} (${userId}) - ${connectionId}`);
+
+    // Send initial connection confirmation
+    res.write(`data: ${JSON.stringify({ type: 'connected', timestamp: new Date() })}\n\n`);
+
+    // Keep connection alive with periodic pings
+    const pingInterval = setInterval(() => {
+      try {
+        res.write(`data: ${JSON.stringify({ type: 'ping', timestamp: new Date() })}\n\n`);
+      } catch (error) {
+        clearInterval(pingInterval);
+        sseConnections.delete(connectionId);
+      }
+    }, 30000);
+
+    // Handle client disconnect
+    req.on('close', () => {
+      console.log(`SSE connection closed: ${connectionId}`);
+      clearInterval(pingInterval);
+      sseConnections.delete(connectionId);
+    });
+
+    req.on('error', (error) => {
+      console.error(`SSE connection error: ${connectionId}`, error);
+      clearInterval(pingInterval);
+      sseConnections.delete(connectionId);
+    });
+  });
+
   const httpServer = createServer(app);
 
-  // Set up WebSocket server for live sync and notifications
+  // Set up WebSocket server for live sync and notifications (keeping for backward compatibility)
   const wss = new WebSocketServer({ server: httpServer, path: '/ws' });
 
   wss.on('connection', (ws, req) => {

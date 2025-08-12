@@ -10,7 +10,7 @@ import { TaskTable } from "@/components/task-table";
 import { TeamAnalytics } from "@/components/team-analytics";
 import { DailyQuote } from "@/components/daily-quote";
 import { NotificationCenter } from "@/components/notification-center";
-import { useWebSocket } from "@/hooks/use-websocket";
+import { useSSE } from "@/hooks/use-sse";
 import { User } from "@/lib/types";
 import { Project } from "@shared/schema";
 import { User as UserIcon, LogOut, Settings, Archive } from "lucide-react";
@@ -42,14 +42,14 @@ export default function Dashboard() {
   const [currentView, setCurrentView] = useState<'login' | 'register'>('login');
   const [showArchive, setShowArchive] = useState(false);
 
-  // Initialize WebSocket for live sync and notifications
+  // Initialize SSE for live sync and notifications
   const {
     isConnected,
     notifications,
     markNotificationAsRead,
     clearAllNotifications,
     unreadCount
-  } = useWebSocket(user ? { id: user.value, username: user.name } : null);
+  } = useSSE(user ? { id: user.value, username: user.name } : null);
   
   // Session timeout duration (2 hours in milliseconds)
   const SESSION_TIMEOUT = 2 * 60 * 60 * 1000;
