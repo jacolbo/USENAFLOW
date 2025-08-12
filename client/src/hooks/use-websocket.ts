@@ -96,14 +96,15 @@ export function useWebSocket(user?: { id: string; username: string } | null) {
           console.log('WebSocket disconnected', event.code);
           setIsConnected(false);
           
-          // Only reconnect if not a normal closure and haven't exceeded max attempts
+          // Don't reconnect if it's a normal closure (1000) from component unmounting
           if (event.code !== 1000 && reconnectAttempts.current < maxReconnectAttempts) {
             reconnectAttempts.current++;
+            const delay = Math.min(1000 * Math.pow(2, reconnectAttempts.current), 10000);
             setTimeout(() => {
               if (!wsRef.current || wsRef.current.readyState === WebSocket.CLOSED) {
                 connect();
               }
-            }, 2000 * reconnectAttempts.current); // Exponential backoff
+            }, delay);
           }
         };
 
