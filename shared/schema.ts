@@ -137,13 +137,10 @@ export interface Notification {
   type: 'project_assigned' | 'project_completed' | 'project_created' | 'status_change' | 'task_assigned' | 'task_completed';
   title: string;
   message: string;
-  timestamp: Date;
-  isRead: boolean;
   projectId?: string;
-  assignedBy?: string;
-  assignedTo?: string;
-  clientName?: string;
-  taskId?: string;
+  userId?: string;
+  createdAt: Date;
+  read: boolean;
 }
 
 export interface WebSocketMessage {

@@ -96,32 +96,45 @@ export function LoginForm({ onLogin, onShowRegister, userCredentials }: LoginFor
     setIsLoading(true);
     setError(null);
 
-    // Simulate a small delay for realistic login experience
-    await new Promise(resolve => setTimeout(resolve, 500));
-
-    const foundUser = userCredentials.find(
-      u => u.username === data.username && u.password === data.password
-    );
-
-    if (foundUser) {
-      const user: User = {
-        id: foundUser.id || foundUser.username,
-        name: foundUser.name,
-        role: foundUser.role,
-        value: foundUser.role === "Retoucher" ? `${foundUser.name}_${Date.now()}` : foundUser.role,
-        abbr: foundUser.abbreviation
-      };
-
-      onLogin(user);
-      toast({
-        title: "Login Successful",
-        description: `Welcome back, ${foundUser.name}!`,
+    try {
+      const response = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(data),
       });
-    } else {
-      setError("Invalid username or password. Please try again.");
+
+      const result = await response.json();
+
+      if (result.success && result.user) {
+        const user: User = {
+          id: result.user.id,
+          name: result.user.name,
+          role: result.user.role,
+          value: result.user.value,
+          abbr: result.user.abbreviation
+        };
+
+        onLogin(user);
+        toast({
+          title: "Login Successful",
+          description: `Welcome back, ${result.user.name}!`,
+        });
+      } else {
+        setError("Invalid username or password. Please try again.");
+        toast({
+          title: "Login Failed",
+          description: "Invalid credentials provided.",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      console.error('Login error:', error);
+      setError("Network error. Please try again.");
       toast({
         title: "Login Failed",
-        description: "Invalid credentials provided.",
+        description: "Network error occurred.",
         variant: "destructive",
       });
     }

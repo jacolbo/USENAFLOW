@@ -83,6 +83,51 @@ function broadcastProjectUpdate(project: any) {
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // Initialize SSE connections
+  sseConnections = new Map();
+
+  // Built-in user credentials for authentication
+  const userCredentials = [
+    { id: "admin", username: "admin", password: "admin123", role: "Admin", name: "Anesu's Pops", abbreviation: "AP" },
+    { id: "sales", username: "sales", password: "sales123", role: "Sales", name: "sales", abbreviation: "SAL" },
+    { id: "workflow", username: "workflow", password: "workflow123", role: "LeadRetoucher", name: "Workflow Manager", abbreviation: "WFM" },
+    { id: "data", username: "data", password: "data123", role: "DataWrangler", name: "Data Wrangler", abbreviation: "DW" },
+    { id: "earl", username: "earl", password: "earl123", role: "Retoucher", name: "Earl", abbreviation: "EC" },
+    { id: "asa", username: "asa", password: "asa123", role: "Retoucher", name: "Dr Asa", abbreviation: "ASA" },
+    { id: "lucky", username: "lucky", password: "lm123", role: "Retoucher", name: "Lucky", abbreviation: "LM" }
+  ];
+
+  // Authentication endpoints
+  app.post("/api/auth/login", (req, res) => {
+    const { username, password } = req.body;
+    const user = userCredentials.find(u => u.username === username && u.password === password);
+    
+    if (user) {
+      res.json({
+        success: true,
+        user: {
+          id: user.id,
+          username: user.username,
+          name: user.name,
+          role: user.role,
+          abbreviation: user.abbreviation,
+          value: user.role
+        }
+      });
+    } else {
+      res.status(401).json({ success: false, error: "Invalid credentials" });
+    }
+  });
+
+  app.get("/api/auth/status", (req, res) => {
+    // For simplicity, just return success - in production would check session/JWT
+    res.json({ authenticated: true });
+  });
+
+  app.post("/api/auth/logout", (req, res) => {
+    res.json({ success: true });
+  });
+
   // Get all projects
   app.get("/api/projects", async (req, res) => {
     try {
@@ -106,7 +151,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         title: 'New Project Created',
         message: `Project "${project.clientName}" has been created`,
         projectId: project.id,
-        projectName: project.clientName,
         createdAt: new Date(),
         read: false
       };
@@ -142,7 +186,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
             title: 'Project Completed!',
             message: `Project "${project.clientName}" has been marked as delivered`,
             projectId: project.id,
-            projectName: project.clientName,
             createdAt: new Date(),
             read: false
           };
@@ -153,7 +196,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
             title: 'Project Status Updated',
             message: `Project "${project.clientName}" status changed from "${oldProject.status}" to "${project.status}"`,
             projectId: project.id,
-            projectName: project.clientName,
             createdAt: new Date(),
             read: false
           };
@@ -197,7 +239,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
           title: 'New Project Assignment',
           message: `You have been assigned to project "${project.clientName}"`,
           projectId: project.id,
-          projectName: project.clientName,
           userId: assignedTo,
           createdAt: new Date(),
           read: false
@@ -518,11 +559,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
           type: 'task_assigned',
           title: 'New Task Assigned',
           message: `${task.assignedBy} assigned you a task: ${task.title}`,
-          timestamp: new Date(),
-          isRead: false,
-          taskId: task.id,
           projectId: task.projectId,
-          clientName: task.clientName
+          userId: task.assignedTo,
+          createdAt: new Date(),
+          read: false
         };
         broadcastNotification(notification, task.assignedTo);
       }
@@ -559,11 +599,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
           type: 'task_completed',
           title: 'Task Completed',
           message: `${task.assignedTo} completed task: ${task.title}`,
-          timestamp: new Date(),
-          isRead: false,
-          taskId: task.id,
           projectId: task.projectId,
-          clientName: task.clientName
+          userId: task.assignedBy,
+          createdAt: new Date(),
+          read: false
         };
         broadcastNotification(notification, task.assignedBy);
       }
