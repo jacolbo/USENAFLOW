@@ -11,15 +11,16 @@ import { Project } from "@shared/schema";
 import { User, formatRetoucherAbbr, getRetoucherFullName } from "@/lib/types";
 import { Calendar, Star, ChevronDown, ChevronRight, Copy } from "lucide-react";
 import { useState, useMemo, useCallback, useRef } from "react";
-import { DailyQuote } from "./daily-quote";
+
 
 interface TaskTableProps {
   projects: Project[];
   user: User;
   allUsers: User[];
+  isPersonalView?: boolean;
 }
 
-export function TaskTable({ projects, user, allUsers }: TaskTableProps) {
+export function TaskTable({ projects, user, allUsers, isPersonalView = false }: TaskTableProps) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   
@@ -447,6 +448,8 @@ export function TaskTable({ projects, user, allUsers }: TaskTableProps) {
       p.status !== "Delivered"
     );
   }
+  
+  // For personal view (admin's personal dashboard), projects are already filtered
 
   // Re-group the filtered projects
   const visibleGroups: { key: number; weekStart: Date; projects: Project[] }[] = [];
@@ -465,9 +468,6 @@ export function TaskTable({ projects, user, allUsers }: TaskTableProps) {
 
   return (
     <div className="space-y-8">
-      {/* Daily Quote */}
-      <DailyQuote userId={user.name} className="mb-6" />
-      
       {visibleGroups.map(group => {
         const monday = group.weekStart;
         const sunday = new Date(monday);
