@@ -582,245 +582,360 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Client</TableHead>
-                      <TableHead>Pkg</TableHead>
-                      <TableHead>Sel</TableHead>
-                      <TableHead>Extra</TableHead>
-
-                      <TableHead>Due</TableHead>
-                      <TableHead>Retoucher</TableHead>
-                      <TableHead>Status</TableHead>
-                      {user.role === 'Sales' && <TableHead>Rating</TableHead>}
-                      <TableHead>Notes</TableHead>
-                      <TableHead>Actions</TableHead>
+                      {user.role === 'Sales' ? (
+                        <>
+                          <TableHead>Pkg</TableHead>
+                          <TableHead>Actions</TableHead>
+                          <TableHead>Client</TableHead>
+                          <TableHead>Sel</TableHead>
+                          <TableHead>Extra</TableHead>
+                          <TableHead>Due</TableHead>
+                          <TableHead>Retoucher</TableHead>
+                          <TableHead>Status</TableHead>
+                          <TableHead>Rating</TableHead>
+                          <TableHead>Notes</TableHead>
+                        </>
+                      ) : (
+                        <>
+                          <TableHead>Client</TableHead>
+                          <TableHead>Pkg</TableHead>
+                          <TableHead>Sel</TableHead>
+                          <TableHead>Extra</TableHead>
+                          <TableHead>Due</TableHead>
+                          <TableHead>Retoucher</TableHead>
+                          <TableHead>Status</TableHead>
+                          <TableHead>Notes</TableHead>
+                          <TableHead>Actions</TableHead>
+                        </>
+                      )}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {group.projects.map(project => (
                       <TableRow key={project.id}>
-                        <TableCell className="font-medium">{project.clientName}</TableCell>
-                        <TableCell>
-                          {['Admin', 'Sales', 'DataWrangler', 'LeadRetoucher'].includes(user.role) ? (
-                            <input
-                              type="number"
-                              value={localInputValues[project.id]?.packageCount ?? project.packageCount}
-                              onChange={(e) => handleChangePackageCount(project.id, parseInt(e.target.value) || 0)}
-                              className="border rounded px-2 py-1 w-16 text-center bg-white dark:bg-gray-800"
-                              min="0"
-                              placeholder="0"
-                            />
-                          ) : (
-                            project.packageCount
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          {['Admin', 'Sales', 'DataWrangler', 'LeadRetoucher'].includes(user.role) ? (
-                            <input
-                              type="number"
-                              value={localInputValues[project.id]?.selectedCount ?? project.selectedCount}
-                              onChange={(e) => handleChangeSelectedCount(project.id, parseInt(e.target.value) || 0)}
-                              className="border rounded px-2 py-1 w-16 text-center bg-white dark:bg-gray-800"
-                              min="0"
-                              placeholder="0"
-                            />
-                          ) : (
-                            project.selectedCount
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          {['Admin', 'Sales', 'DataWrangler', 'LeadRetoucher'].includes(user.role) ? (
-                            <input
-                              type="number"
-                              value={localInputValues[project.id]?.extras ?? project.extras}
-                              onChange={(e) => handleChangeExtras(project.id, parseInt(e.target.value) || 0)}
-                              className="border rounded px-2 py-1 w-16 text-center bg-white dark:bg-gray-800"
-                              min="0"
-                              placeholder="0"
-                            />
-                          ) : (
-                            project.extras
-                          )}
-                        </TableCell>
-
-                        <TableCell>
-                          {(user.role === 'Retoucher' || ['Retoucher1', 'Retoucher2', 'Retoucher3'].includes(user.role)) ? (
-                            <span 
-                              style={{
-                                backgroundColor: '#cce5ff',
-                                color: '#004085',
-                                padding: '4px 10px',
-                                borderRadius: '20px',
-                                fontWeight: 'bold',
-                                display: 'inline-block'
-                              }}
-                            >
-                              {new Intl.DateTimeFormat('en-ZA', { 
-                                weekday: 'long', 
-                                day: 'numeric', 
-                                month: 'long', 
-                                year: 'numeric' 
-                              }).format(new Date(project.dueDate))}
-                            </span>
-                          ) : (user.role === 'Admin' || user.role === 'Sales' || user.role === 'DataWrangler' || user.role === 'LeadRetoucher') ? (
-                            <input
-                              type="date"
-                              value={new Date(project.dueDate).toISOString().slice(0, 10)}
-                              onChange={(e) => handleChangeDueDate(project.id, new Date(e.target.value))}
-                              className="border rounded px-2 py-1"
-                              min="2024-01-01"
-                              max="2030-12-31"
-                            />
-                          ) : (
-                            formatDate(new Date(project.dueDate))
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          {/* Check if it's a custom user, otherwise use the helper function */}
-                          {allUsers.find(u => u.name === project.assignedTo && u.id)?.name || 
-                           getRetoucherFullName(project.assignedTo)}
-                        </TableCell>
-                        <TableCell>{getStatusBadge(project.status)}</TableCell>
-                        {user.role === 'Sales' && (
-                          <TableCell>
-                            {project.status === "Delivered" ? (
+                        {user.role === 'Sales' ? (
+                          <>
+                            {/* Pkg column first for Sales */}
+                            <TableCell>
+                              <input
+                                type="number"
+                                value={localInputValues[project.id]?.packageCount ?? project.packageCount}
+                                onChange={(e) => handleChangePackageCount(project.id, parseInt(e.target.value) || 0)}
+                                className="border rounded px-2 py-1 w-16 text-center bg-white dark:bg-gray-800"
+                                min="0"
+                                placeholder="0"
+                              />
+                            </TableCell>
+                            {/* Actions column second for Sales */}
+                            <TableCell>
                               <div className="flex items-center gap-2">
-                                {project.rating && (
-                                  <div className="flex items-center gap-1">
-                                    <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
-                                    <span>{project.rating}</span>
-                                  </div>
+                                {/* Status-specific actions for Sales */}
+                                {project.status === 'Awaiting Payment' && (
+                                  <Button
+                                    onClick={() => handleMarkPaid(project.id)}
+                                    variant="outline"
+                                    size="sm"
+                                    className="text-green-600 hover:text-green-700"
+                                    data-testid={`button-mark-paid-${project.id}`}
+                                  >
+                                    Mark Paid
+                                  </Button>
                                 )}
-                                <Select
-                                  value={project.rating?.toString() || ""}
-                                  onValueChange={(value) => handleSetRating(project.id, parseInt(value, 10))}
+                                {project.status === 'Review' && (
+                                  <Button
+                                    onClick={() => handleDeliver(project.id)}
+                                    variant="outline"
+                                    size="sm"
+                                    className="text-blue-600 hover:text-blue-700"
+                                    data-testid={`button-deliver-${project.id}`}
+                                  >
+                                    Deliver
+                                  </Button>
+                                )}
+                              </div>
+                            </TableCell>
+                            {/* Client column third for Sales */}
+                            <TableCell className="font-medium">{project.clientName}</TableCell>
+                          </>
+                        ) : (
+                          <>
+                            {/* Standard order for other roles */}
+                            <TableCell className="font-medium">{project.clientName}</TableCell>
+                            <TableCell>
+                              {['Admin', 'Sales', 'DataWrangler', 'LeadRetoucher'].includes(user.role) ? (
+                                <input
+                                  type="number"
+                                  value={localInputValues[project.id]?.packageCount ?? project.packageCount}
+                                  onChange={(e) => handleChangePackageCount(project.id, parseInt(e.target.value) || 0)}
+                                  className="border rounded px-2 py-1 w-16 text-center bg-white dark:bg-gray-800"
+                                  min="0"
+                                  placeholder="0"
+                                />
+                              ) : (
+                                project.packageCount
+                              )}
+                            </TableCell>
+                          </>
+                        )}
+                        {/* Continue Sales role cells */}
+                        {user.role === 'Sales' ? (
+                          <>
+                            {/* Sel, Extra, Due, Retoucher, Status, Rating, Notes for Sales */}
+                            <TableCell>
+                              <input
+                                type="number"
+                                value={localInputValues[project.id]?.selectedCount ?? project.selectedCount}
+                                onChange={(e) => handleChangeSelectedCount(project.id, parseInt(e.target.value) || 0)}
+                                className="border rounded px-2 py-1 w-16 text-center bg-white dark:bg-gray-800"
+                                min="0"
+                                placeholder="0"
+                              />
+                            </TableCell>
+                            <TableCell>
+                              <input
+                                type="number"
+                                value={localInputValues[project.id]?.extras ?? project.extras}
+                                onChange={(e) => handleChangeExtras(project.id, parseInt(e.target.value) || 0)}
+                                className="border rounded px-2 py-1 w-16 text-center bg-white dark:bg-gray-800"
+                                min="0"
+                                placeholder="0"
+                              />
+                            </TableCell>
+                            <TableCell>
+                              <input
+                                type="date"
+                                value={new Date(project.dueDate).toISOString().slice(0, 10)}
+                                onChange={(e) => handleChangeDueDate(project.id, new Date(e.target.value))}
+                                className="border rounded px-2 py-1"
+                                min="2024-01-01"
+                                max="2030-12-31"
+                              />
+                            </TableCell>
+                            <TableCell>
+                              {allUsers.find(u => u.name === project.assignedTo && u.id)?.name || 
+                               getRetoucherFullName(project.assignedTo)}
+                            </TableCell>
+                            <TableCell>{getStatusBadge(project.status)}</TableCell>
+                            <TableCell>
+                              {project.status === "Delivered" ? (
+                                <div className="flex items-center gap-2">
+                                  {project.rating && (
+                                    <div className="flex items-center gap-1">
+                                      <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
+                                      <span>{project.rating}</span>
+                                    </div>
+                                  )}
+                                  <Select
+                                    value={project.rating?.toString() || ""}
+                                    onValueChange={(value) => handleSetRating(project.id, parseInt(value, 10))}
+                                  >
+                                    <SelectTrigger className="w-32">
+                                      <SelectValue placeholder="Rate..." />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="1">1 – Poor</SelectItem>
+                                      <SelectItem value="2">2 – Fair</SelectItem>
+                                      <SelectItem value="3">3 – Good</SelectItem>
+                                      <SelectItem value="4">4 – Very Good</SelectItem>
+                                      <SelectItem value="5">5 – Excellent</SelectItem>
+                                    </SelectContent>
+                                  </Select>
+                                </div>
+                              ) : (
+                                project.rating || "-"
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              <ProjectNotes 
+                                projectId={project.id} 
+                                userRole={user.role} 
+                                hasNotes={(allNotesQuery.data?.[project.id] || 0) > 0}
+                              />
+                            </TableCell>
+                          </>
+                        ) : (
+                          <>
+                            {/* Standard cells for other roles */}
+                            <TableCell>
+                              {['Admin', 'Sales', 'DataWrangler', 'LeadRetoucher'].includes(user.role) ? (
+                                <input
+                                  type="number"
+                                  value={localInputValues[project.id]?.selectedCount ?? project.selectedCount}
+                                  onChange={(e) => handleChangeSelectedCount(project.id, parseInt(e.target.value) || 0)}
+                                  className="border rounded px-2 py-1 w-16 text-center bg-white dark:bg-gray-800"
+                                  min="0"
+                                  placeholder="0"
+                                />
+                              ) : (
+                                project.selectedCount
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              {['Admin', 'Sales', 'DataWrangler', 'LeadRetoucher'].includes(user.role) ? (
+                                <input
+                                  type="number"
+                                  value={localInputValues[project.id]?.extras ?? project.extras}
+                                  onChange={(e) => handleChangeExtras(project.id, parseInt(e.target.value) || 0)}
+                                  className="border rounded px-2 py-1 w-16 text-center bg-white dark:bg-gray-800"
+                                  min="0"
+                                  placeholder="0"
+                                />
+                              ) : (
+                                project.extras
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              {(user.role === 'Retoucher' || ['Retoucher1', 'Retoucher2', 'Retoucher3'].includes(user.role)) ? (
+                                <span 
+                                  style={{
+                                    backgroundColor: '#cce5ff',
+                                    color: '#004085',
+                                    padding: '4px 10px',
+                                    borderRadius: '20px',
+                                    fontWeight: 'bold',
+                                    display: 'inline-block'
+                                  }}
                                 >
-                                  <SelectTrigger className="w-32">
-                                    <SelectValue placeholder="Rate..." />
+                                  {new Intl.DateTimeFormat('en-ZA', { 
+                                    weekday: 'long', 
+                                    day: 'numeric', 
+                                    month: 'long', 
+                                    year: 'numeric' 
+                                  }).format(new Date(project.dueDate))}
+                                </span>
+                              ) : (user.role === 'Admin' || user.role === 'Sales' || user.role === 'DataWrangler' || user.role === 'LeadRetoucher') ? (
+                                <input
+                                  type="date"
+                                  value={new Date(project.dueDate).toISOString().slice(0, 10)}
+                                  onChange={(e) => handleChangeDueDate(project.id, new Date(e.target.value))}
+                                  className="border rounded px-2 py-1"
+                                  min="2024-01-01"
+                                  max="2030-12-31"
+                                />
+                              ) : (
+                                formatDate(new Date(project.dueDate))
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              {allUsers.find(u => u.name === project.assignedTo && u.id)?.name || 
+                               getRetoucherFullName(project.assignedTo)}
+                            </TableCell>
+                            <TableCell>{getStatusBadge(project.status)}</TableCell>
+                            <TableCell>
+                              <ProjectNotes 
+                                projectId={project.id} 
+                                userRole={user.role} 
+                                hasNotes={(allNotesQuery.data?.[project.id] || 0) > 0}
+                              />
+                            </TableCell>
+                          </>
+                        )}
+                        {/* Actions column - only for non-Sales roles */}
+                        {user.role !== 'Sales' && (
+                          <TableCell>
+                            <div className="flex items-center gap-2">
+                              {/* Lead Retoucher, Admin, or Sales can assign tasks */}
+                              {(user.role === 'LeadRetoucher' || user.role === 'Admin' || user.role === 'Sales') 
+                                && (project.status === 'Ready for Retouching' || project.status === 'Assigned') && (
+                                <Select
+                                  value={project.assignedTo || ""}
+                                  onValueChange={(value) => handleAssign(project.id, value)}
+                                >
+                                  <SelectTrigger className="w-40">
+                                    <SelectValue placeholder={project.assignedTo ? "Reassign to..." : "Assign to..."} />
                                   </SelectTrigger>
                                   <SelectContent>
-                                    <SelectItem value="1">1 – Poor</SelectItem>
-                                    <SelectItem value="2">2 – Fair</SelectItem>
-                                    <SelectItem value="3">3 – Good</SelectItem>
-                                    <SelectItem value="4">4 – Very Good</SelectItem>
-                                    <SelectItem value="5">5 – Excellent</SelectItem>
+                                    {/* Unassign option */}
+                                    <SelectItem value="__UNASSIGN__">Unassign</SelectItem>
+                                    {/* All retouchers + Admin as retoucher */}
+                                    {allUsers
+                                      .filter(u => u.role === "Retoucher" || (u.role === "Admin" && u.name === "Anesu's Pops"))
+                                      .map(retoucher => (
+                                        <SelectItem key={retoucher.value || retoucher.name} value={retoucher.name}>
+                                          {retoucher.name}
+                                        </SelectItem>
+                                      ))
+                                    }
                                   </SelectContent>
                                 </Select>
-                              </div>
-                            ) : (
-                              project.rating || "-"
-                            )}
-                          </TableCell>
-                        )}
-                        <TableCell>
-                          <ProjectNotes 
-                            projectId={project.id} 
-                            userRole={user.role} 
-                            hasNotes={(allNotesQuery.data?.[project.id] || 0) > 0}
-                          />
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            {/* Lead Retoucher, Admin, or Sales can assign tasks */}
-                            {(user.role === 'LeadRetoucher' || user.role === 'Admin' || user.role === 'Sales') 
-                              && (project.status === 'Ready for Retouching' || project.status === 'Assigned') && (
-                              <Select
-                                value={project.assignedTo || ""}
-                                onValueChange={(value) => handleAssign(project.id, value)}
-                              >
-                                <SelectTrigger className="w-40">
-                                  <SelectValue placeholder={project.assignedTo ? "Reassign to..." : "Assign to..."} />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  {/* Unassign option */}
-                                  <SelectItem value="__UNASSIGN__">Unassign</SelectItem>
-                                  {/* All retouchers + Admin as retoucher */}
-                                  {allUsers
-                                    .filter(u => u.role === "Retoucher" || (u.role === "Admin" && u.name === "Anesu's Pops"))
-                                    .map(retoucher => (
-                                      <SelectItem key={retoucher.value || retoucher.name} value={retoucher.name}>
-                                        {retoucher.name}
-                                      </SelectItem>
-                                    ))
-                                  }
-                                </SelectContent>
-                              </Select>
-                            )}
-                            
-                            {/* Admin or Sales can mark invoice paid */}
-                            {(user.role === 'Admin' || user.role === 'Sales') && project.status === 'Awaiting Payment' && (
-                              <Button 
-                                size="sm" 
-                                onClick={() => handleMarkPaid(project.id)}
-                                disabled={updateProjectMutation.isPending}
-                              >
-                                Mark Paid
-                              </Button>
-                            )}
-                            
-                            {/* Retoucher can mark done on their assigned task */}
-                            {user.role === 'Retoucher' && 
-                             project.assignedTo && 
-                             project.assignedTo.toLowerCase() === user.name.toLowerCase() && 
-                             project.status === 'Assigned' && (
-                              <Button 
-                                size="sm" 
-                                onClick={() => handleMarkDone(project.id)}
-                                disabled={updateProjectMutation.isPending}
-                              >
-                                Mark Done
-                              </Button>
-                            )}
-                            
-                            {/* Admin or Sales can deliver or request revision when in Review */}
-                            {(user.role === 'Admin' || user.role === 'Sales') && project.status === 'Review' && (
-                              <>
+                              )}
+                              
+                              {/* Admin or Sales can mark invoice paid */}
+                              {(user.role === 'Admin' || user.role === 'Sales') && project.status === 'Awaiting Payment' && (
                                 <Button 
                                   size="sm" 
-                                  onClick={() => handleDeliver(project.id)}
+                                  onClick={() => handleMarkPaid(project.id)}
                                   disabled={updateProjectMutation.isPending}
-                                  className="bg-green-600 hover:bg-green-700"
                                 >
-                                  Deliver
+                                  Mark Paid
                                 </Button>
+                              )}
+                              
+                              {/* Retoucher can mark done on their assigned task */}
+                              {user.role === 'Retoucher' && 
+                               project.assignedTo && 
+                               project.assignedTo.toLowerCase() === user.name.toLowerCase() && 
+                               project.status === 'Assigned' && (
+                                <Button 
+                                  size="sm" 
+                                  onClick={() => handleMarkDone(project.id)}
+                                  disabled={updateProjectMutation.isPending}
+                                >
+                                  Mark Done
+                                </Button>
+                              )}
+                              
+                              {/* Admin or Sales can deliver or request revision when in Review */}
+                              {(user.role === 'Admin' || user.role === 'Sales') && project.status === 'Review' && (
+                                <>
+                                  <Button 
+                                    size="sm" 
+                                    onClick={() => handleDeliver(project.id)}
+                                    disabled={updateProjectMutation.isPending}
+                                    className="bg-green-600 hover:bg-green-700"
+                                  >
+                                    Deliver
+                                  </Button>
+                                  <Button 
+                                    size="sm" 
+                                    variant="outline"
+                                    onClick={() => handleRequestRevision(project.id)}
+                                    disabled={updateProjectMutation.isPending}
+                                  >
+                                    Revision
+                                  </Button>
+                                </>
+                              )}
+                              
+                              {/* Duplicate button for Admin, Sales, Data Wrangler */}
+                              {['Admin', 'Sales', 'DataWrangler'].includes(user.role) && (
                                 <Button 
                                   size="sm" 
                                   variant="outline"
-                                  onClick={() => handleRequestRevision(project.id)}
-                                  disabled={updateProjectMutation.isPending}
+                                  onClick={() => handleDuplicateProject(project.id)}
+                                  disabled={duplicateProjectMutation.isPending}
+                                  className="ml-2"
                                 >
-                                  Revision
+                                  <Copy className="h-4 w-4 mr-1" />
+                                  Duplicate
                                 </Button>
-                              </>
-                            )}
-                            
-                            {/* Duplicate button for Admin, Sales, Data Wrangler */}
-                            {['Admin', 'Sales', 'DataWrangler'].includes(user.role) && (
-                              <Button 
-                                size="sm" 
-                                variant="outline"
-                                onClick={() => handleDuplicateProject(project.id)}
-                                disabled={duplicateProjectMutation.isPending}
-                                className="ml-2"
-                              >
-                                <Copy className="h-4 w-4 mr-1" />
-                                Duplicate
-                              </Button>
-                            )}
+                              )}
 
-                            {/* Delete button for Admin and Lead Retoucher */}
-                            {['Admin', 'LeadRetoucher'].includes(user.role) && (
-                              <Button 
-                                size="sm" 
-                                variant="destructive"
-                                onClick={() => handleDeleteProject(project.id)}
-                                disabled={updateProjectMutation.isPending || deleteProjectMutation.isPending}
-                                className="ml-2"
-                              >
-                                Delete
-                              </Button>
-                            )}
-                          </div>
-                        </TableCell>
+                              {/* Delete button for Admin and Lead Retoucher */}
+                              {['Admin', 'LeadRetoucher'].includes(user.role) && (
+                                <Button 
+                                  size="sm" 
+                                  variant="destructive"
+                                  onClick={() => handleDeleteProject(project.id)}
+                                  disabled={updateProjectMutation.isPending || deleteProjectMutation.isPending}
+                                  className="ml-2"
+                                >
+                                  Delete
+                                </Button>
+                              )}
+                            </div>
+                          </TableCell>
+                        )}
                       </TableRow>
                     ))}
                   </TableBody>
