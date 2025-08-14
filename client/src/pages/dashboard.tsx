@@ -422,34 +422,91 @@ export default function Dashboard() {
             </div>
           )}
           
-          {/* Archive Status Header */}
-          <div className="bg-white rounded-lg shadow-sm p-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Archive className="h-5 w-5 text-gray-600" />
-                <h2 className="text-lg font-semibold">
-                  {user.role === "Admin" && user.name === "Anesu's Pops" && !showArchive ? 
-                    "All Projects" : 
-                    showArchive ? "Archive Projects" : "Current Projects"
-                  }
-                </h2>
-                <span className="text-sm text-gray-500">
-                  {showArchive ? "(Older than 1 week)" : "(From last 7 days)"}
-                </span>
+          {/* Sales Dashboard - Payment & Delivery Management */}
+          {user.role === "Sales" ? (
+            <div className="space-y-6">
+              {/* Pending Payments Section */}
+              <div className="bg-white rounded-lg shadow-sm">
+                <div className="px-6 py-4 border-b border-gray-200">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="w-3 h-3 rounded-full bg-orange-500"></div>
+                      <h2 className="text-lg font-semibold text-gray-900">Pending Payments</h2>
+                      <span className="text-sm text-gray-500">Awaiting client payment</span>
+                    </div>
+                    <div className="text-sm text-gray-600">
+                      {projects.filter(p => p.status === "Awaiting Payment").length} project{projects.filter(p => p.status === "Awaiting Payment").length !== 1 ? 's' : ''}
+                    </div>
+                  </div>
+                </div>
+                <div className="px-6 py-4">
+                  <TaskTable 
+                    projects={projects.filter(p => p.status === "Awaiting Payment")} 
+                    user={user} 
+                    allUsers={users} 
+                    isPersonalView={true}
+                  />
+                </div>
               </div>
-              <div className="text-sm text-gray-600">
-                {projects.length} project{projects.length !== 1 ? 's' : ''}
+
+              {/* Ready for Delivery Section */}
+              <div className="bg-white rounded-lg shadow-sm">
+                <div className="px-6 py-4 border-b border-gray-200">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="w-3 h-3 rounded-full bg-red-500"></div>
+                      <h2 className="text-lg font-semibold text-gray-900">Ready for Delivery</h2>
+                      <span className="text-sm text-gray-500">Completed by retouchers</span>
+                    </div>
+                    <div className="text-sm text-gray-600">
+                      {projects.filter(p => p.status === "Review").length} project{projects.filter(p => p.status === "Review").length !== 1 ? 's' : ''}
+                    </div>
+                  </div>
+                </div>
+                <div className="px-6 py-4">
+                  <TaskTable 
+                    projects={projects.filter(p => p.status === "Review")} 
+                    user={user} 
+                    allUsers={users} 
+                    isPersonalView={true}
+                  />
+                </div>
               </div>
             </div>
-          </div>
+          ) : (
+            <>
+              {/* Archive Status Header for non-Sales roles */}
+              <div className="bg-white rounded-lg shadow-sm p-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Archive className="h-5 w-5 text-gray-600" />
+                    <h2 className="text-lg font-semibold">
+                      {user.role === "Admin" && user.name === "Anesu's Pops" && !showArchive ? 
+                        "All Projects" : 
+                        showArchive ? "Archive Projects" : "Current Projects"
+                      }
+                    </h2>
+                    <span className="text-sm text-gray-500">
+                      {showArchive ? "(Older than 1 week)" : "(From last 7 days)"}
+                    </span>
+                  </div>
+                  <div className="text-sm text-gray-600">
+                    {projects.length} project{projects.length !== 1 ? 's' : ''}
+                  </div>
+                </div>
+              </div>
 
-          {/* Show project creation form for roles that can add projects - only in current view */}
-          {!showArchive && user.role !== "Retoucher" && (
-            <AddProjectForm onAddProject={() => {}} />
+              {/* Show project creation form for non-Sales roles that can add projects - only in current view */}
+              {!showArchive && user.role !== "Retoucher" && user.role !== "Sales" && (
+                <AddProjectForm onAddProject={() => {}} />
+              )}
+            </>
           )}
           
-          {/* Show the task table for the visible projects */}
-          <TaskTable projects={projects} user={user} allUsers={users} />
+          {/* Show the task table for the visible projects - only for non-Sales roles */}
+          {user.role !== "Sales" && (
+            <TaskTable projects={projects} user={user} allUsers={users} />
+          )}
 
           {/* Team Progress Analytics - only in current view */}
           {!showArchive && (

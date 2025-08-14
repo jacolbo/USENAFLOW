@@ -590,7 +590,7 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
                       <TableHead>Due</TableHead>
                       <TableHead>Retoucher</TableHead>
                       <TableHead>Status</TableHead>
-                      {(user.role === 'Admin' || user.role === 'Sales') && <TableHead>Rating</TableHead>}
+                      {user.role === 'Sales' && <TableHead>Rating</TableHead>}
                       <TableHead>Notes</TableHead>
                       <TableHead>Actions</TableHead>
                     </TableRow>
@@ -680,7 +680,7 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
                            getRetoucherFullName(project.assignedTo)}
                         </TableCell>
                         <TableCell>{getStatusBadge(project.status)}</TableCell>
-                        {(user.role === 'Admin' || user.role === 'Sales') && (
+                        {user.role === 'Sales' && (
                           <TableCell>
                             {project.status === "Delivered" ? (
                               <div className="flex items-center gap-2">
