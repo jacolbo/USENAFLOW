@@ -5,9 +5,7 @@ import { RegisterForm } from "@/components/register-form";
 import { SettingsPanel } from "@/components/settings-panel";
 import { AddProjectForm } from "@/components/add-project-form";
 import { TaskTable } from "@/components/task-table";
-import { TaskCreationForm } from "@/components/task-creation-form";
-import { UrgentTasksView } from "@/components/urgent-tasks-view";
-import { TaskLiveLog } from "@/components/task-live-log";
+
 
 import { TeamAnalytics } from "@/components/team-analytics";
 import { DailyQuote } from "@/components/daily-quote";
@@ -369,11 +367,6 @@ export default function Dashboard() {
         <div className="space-y-8">  
           {/* Daily Quote */}
           <DailyQuote userId={user.value} />
-
-          {/* Urgent Tasks Section for Retouchers */}
-          {user.role === 'Retoucher' && !showArchive && (
-            <UrgentTasksView user={user} />
-          )}
           
           {/* Admin Personal Dashboard - Show assigned tasks for Anesu's Pops */}
           {user.role === "Admin" && user.name === "Anesu's Pops" && !showArchive && (
@@ -452,14 +445,7 @@ export default function Dashboard() {
 
           {/* Show project creation form for roles that can add projects - only in current view */}
           {!showArchive && user.role !== "Retoucher" && (
-            <div className="flex gap-4">
-              <AddProjectForm onAddProject={() => {}} />
-              <TaskCreationForm 
-                projects={projects} 
-                user={user} 
-                allUsers={users} 
-              />
-            </div>
+            <AddProjectForm onAddProject={() => {}} />
           )}
           
           {/* Show the task table for the visible projects */}
@@ -468,11 +454,6 @@ export default function Dashboard() {
           {/* Team Progress Analytics - only in current view */}
           {!showArchive && (
             <TeamAnalytics user={user} />
-          )}
-
-          {/* Task Live Log - only in current view and for Admin/Sales/Lead Retoucher */}
-          {!showArchive && (user.role === 'Admin' || user.role === 'Sales' || user.role === 'LeadRetoucher') && (
-            <TaskLiveLog activities={[]} />
           )}
         </div>
       </div>
