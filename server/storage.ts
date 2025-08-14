@@ -53,6 +53,7 @@ export class MemStorage implements IStorage {
         invoicePaid: false,
         assignedTo: null,
         rating: null,
+        deliveredAt: null,
         createdAt: new Date(),
       },
       {
@@ -66,6 +67,7 @@ export class MemStorage implements IStorage {
         invoicePaid: true,
         assignedTo: null,
         rating: null,
+        deliveredAt: null,
         createdAt: new Date(),
       },
       {
@@ -79,6 +81,7 @@ export class MemStorage implements IStorage {
         invoicePaid: true,
         assignedTo: "Retoucher 2",
         rating: null,
+        deliveredAt: null,
         createdAt: new Date(),
       },
       {
@@ -92,6 +95,7 @@ export class MemStorage implements IStorage {
         invoicePaid: true,
         assignedTo: "Retoucher 1",
         rating: 5,
+        deliveredAt: new Date(),
         createdAt: new Date(),
       },
       {
@@ -105,6 +109,7 @@ export class MemStorage implements IStorage {
         invoicePaid: true,
         assignedTo: "Retoucher 3",
         rating: null,
+        deliveredAt: null,
         createdAt: new Date(),
       },
     ];
@@ -207,6 +212,46 @@ export class MemStorage implements IStorage {
 
   async deleteProjectNote(id: string): Promise<boolean> {
     return this.projectNotes.delete(id);
+  }
+
+  // Team task methods (stub implementations for MemStorage)
+  async getTeamTasks(): Promise<TeamTask[]> {
+    return [];
+  }
+
+  async getTeamTasksForUser(userId: string): Promise<TeamTask[]> {
+    return [];
+  }
+
+  async getTeamTasksCreatedBy(userId: string): Promise<TeamTask[]> {
+    return [];
+  }
+
+  async createTeamTask(task: InsertTeamTask): Promise<TeamTask> {
+    const teamTask: TeamTask = {
+      id: randomUUID(),
+      projectId: task.projectId,
+      clientName: task.clientName,
+      title: task.title,
+      description: task.description,
+      assignedTo: task.assignedTo,
+      assignedBy: task.assignedBy,
+      priority: task.priority,
+      status: 'pending',
+      dueDate: task.dueDate,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      completedAt: null,
+    };
+    return teamTask;
+  }
+
+  async updateTeamTask(id: string, updates: UpdateTeamTask): Promise<TeamTask | undefined> {
+    return undefined;
+  }
+
+  async deleteTeamTask(id: string): Promise<boolean> {
+    return false;
   }
 }
 

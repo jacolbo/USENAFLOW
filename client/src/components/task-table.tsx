@@ -66,6 +66,7 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
 
   // Helper function to get task status for a project
   const getProjectTaskStatus = (projectId: string) => {
+    if (!teamTasks || !Array.isArray(teamTasks)) return null;
     const projectTasks = teamTasks.filter(task => task.projectId === projectId);
     if (projectTasks.length === 0) return null;
     

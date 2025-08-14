@@ -102,7 +102,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Broadcast project creation notification
       const notification: Notification = {
         id: `notif_${Date.now()}_${Math.random()}`,
-        type: 'PROJECT_CREATED',
+        type: 'project_created',
         title: 'New Project Created',
         message: `Project "${project.clientName}" has been created`,
         projectId: project.id,
@@ -138,7 +138,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         if (project.status === ProjectStatus.DELIVERED) {
           notification = {
             id: `notif_${Date.now()}_${Math.random()}`,
-            type: 'PROJECT_COMPLETED',
+            type: 'project_completed',
             title: 'Project Completed!',
             message: `Project "${project.clientName}" has been marked as delivered`,
             projectId: project.id,
@@ -149,7 +149,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         } else {
           notification = {
             id: `notif_${Date.now()}_${Math.random()}`,
-            type: 'PROJECT_STATUS_CHANGED',
+            type: 'status_change',
             title: 'Project Status Updated',
             message: `Project "${project.clientName}" status changed from "${oldProject.status}" to "${project.status}"`,
             projectId: project.id,
@@ -193,7 +193,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (assignedTo && assignedTo !== "__UNASSIGN__") {
         const notification: Notification = {
           id: `notif_${Date.now()}_${Math.random()}`,
-          type: 'PROJECT_ASSIGNED',
+          type: 'project_assigned',
           title: 'New Project Assignment',
           message: `You have been assigned to project "${project.clientName}"`,
           projectId: project.id,
