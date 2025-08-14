@@ -167,7 +167,7 @@ export default function Dashboard() {
 
   const handleLogin = (loggedInUser: User) => {
     setUser(loggedInUser);
-    setCurrentView('login');
+    setCurrentView('dashboard'); // Show dashboard after login
     saveSession(loggedInUser);
     
     // Sync with users array for consistency
