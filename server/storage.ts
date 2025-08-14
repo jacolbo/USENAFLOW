@@ -1,4 +1,4 @@
-import { type User, type InsertUser, type Project, type InsertProject, type UpdateProject, type ProjectNote, type InsertProjectNote, type UpdateProjectNote, ProjectStatus, users, projects, projectNotes } from "@shared/schema";
+import { type User, type InsertUser, type Project, type InsertProject, type UpdateProject, type ProjectNote, type InsertProjectNote, type UpdateProjectNote, type Task, type InsertTask, type UpdateTask, ProjectStatus, users, projects, projectNotes, tasks } from "@shared/schema";
 import { db } from "./db";
 import { eq, sql } from "drizzle-orm";
 import { randomUUID } from "crypto";
@@ -18,6 +18,14 @@ export interface IStorage {
   createProjectNote(note: InsertProjectNote): Promise<ProjectNote>;
   updateProjectNote(id: string, updates: UpdateProjectNote): Promise<ProjectNote | undefined>;
   deleteProjectNote(id: string): Promise<boolean>;
+  
+  getAllTasks(): Promise<Task[]>;
+  getTask(id: string): Promise<Task | undefined>;
+  getTasksByProject(projectId: string): Promise<Task[]>;
+  getTasksByAssignee(assignedTo: string): Promise<Task[]>;
+  createTask(task: InsertTask): Promise<Task>;
+  updateTask(id: string, updates: UpdateTask): Promise<Task | undefined>;
+  deleteTask(id: string): Promise<boolean>;
 }
 
 export class MemStorage implements IStorage {
@@ -305,6 +313,51 @@ export class DatabaseStorage implements IStorage {
 
   async deleteProjectNote(id: string): Promise<boolean> {
     const result = await db.delete(projectNotes).where(eq(projectNotes.id, id));
+    return (result.rowCount || 0) > 0;
+  }
+
+  // Task methods
+  async getAllTasks(): Promise<Task[]> {
+    return await db.select().from(tasks);
+  }
+
+  async getTask(id: string): Promise<Task | undefined> {
+    const [task] = await db.select().from(tasks).where(eq(tasks.id, id));
+    return task || undefined;
+  }
+
+  async getTasksByProject(projectId: string): Promise<Task[]> {
+    return await db.select().from(tasks).where(eq(tasks.projectId, projectId));
+  }
+
+  async getTasksByAssignee(assignedTo: string): Promise<Task[]> {
+    return await db.select().from(tasks).where(eq(tasks.assignedTo, assignedTo));
+  }
+
+  async createTask(insertTask: InsertTask): Promise<Task> {
+    const [task] = await db
+      .insert(tasks)
+      .values(insertTask)
+      .returning();
+    return task;
+  }
+
+  async updateTask(id: string, updates: UpdateTask): Promise<Task | undefined> {
+    // Add completion timestamp when marking as completed
+    if (updates.status === "completed" && !updates.completedAt) {
+      updates.completedAt = new Date();
+    }
+
+    const [task] = await db
+      .update(tasks)
+      .set(updates)
+      .where(eq(tasks.id, id))
+      .returning();
+    return task || undefined;
+  }
+
+  async deleteTask(id: string): Promise<boolean> {
+    const result = await db.delete(tasks).where(eq(tasks.id, id));
     return (result.rowCount || 0) > 0;
   }
 }
