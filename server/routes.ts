@@ -2,7 +2,7 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { WebSocketServer, WebSocket } from "ws";
 import { storage } from "./storage";
-import { insertProjectSchema, updateProjectSchema, insertProjectNoteSchema, updateProjectNoteSchema, insertTeamTaskSchema, updateTeamTaskSchema, ProjectStatus } from "@shared/schema";
+import { insertProjectSchema, updateProjectSchema, insertProjectNoteSchema, updateProjectNoteSchema, insertTaskSchema, updateTaskSchema, ProjectStatus } from "@shared/schema";
 import { ObjectStorageService, ObjectNotFoundError } from "./objectStorage";
 import type { Notification, WebSocketMessage } from "@shared/schema";
 
@@ -16,7 +16,7 @@ let sseConnections: Map<string, { res: any; userId: string; username: string }>;
 function broadcastSSE(message: { type: string; payload?: any }, targetUserId?: string) {
   if (!sseConnections) return;
 
-  for (const [connectionId, connection] of Array.from(sseConnections.entries())) {
+  for (const [connectionId, connection] of sseConnections.entries()) {
     if (targetUserId && connection.userId !== targetUserId) {
       continue; // Skip if targeting specific user and this isn't them
     }
@@ -83,51 +83,6 @@ function broadcastProjectUpdate(project: any) {
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
-  // Initialize SSE connections
-  sseConnections = new Map();
-
-  // Built-in user credentials for authentication
-  const userCredentials = [
-    { id: "admin", username: "admin", password: "admin123", role: "Admin", name: "Anesu's Pops", abbreviation: "AP" },
-    { id: "sales", username: "sales", password: "sales123", role: "Sales", name: "sales", abbreviation: "SAL" },
-    { id: "workflow", username: "workflow", password: "workflow123", role: "LeadRetoucher", name: "Workflow Manager", abbreviation: "WFM" },
-    { id: "data", username: "data", password: "data123", role: "DataWrangler", name: "Data Wrangler", abbreviation: "DW" },
-    { id: "earl", username: "earl", password: "earl123", role: "Retoucher", name: "Earl", abbreviation: "EC" },
-    { id: "asa", username: "asa", password: "asa123", role: "Retoucher", name: "Dr Asa", abbreviation: "ASA" },
-    { id: "lucky", username: "lucky", password: "lm123", role: "Retoucher", name: "Lucky", abbreviation: "LM" }
-  ];
-
-  // Authentication endpoints
-  app.post("/api/auth/login", (req, res) => {
-    const { username, password } = req.body;
-    const user = userCredentials.find(u => u.username === username && u.password === password);
-    
-    if (user) {
-      res.json({
-        success: true,
-        user: {
-          id: user.id,
-          username: user.username,
-          name: user.name,
-          role: user.role,
-          abbreviation: user.abbreviation,
-          value: user.role
-        }
-      });
-    } else {
-      res.status(401).json({ success: false, error: "Invalid credentials" });
-    }
-  });
-
-  app.get("/api/auth/status", (req, res) => {
-    // For simplicity, just return success - in production would check session/JWT
-    res.json({ authenticated: true });
-  });
-
-  app.post("/api/auth/logout", (req, res) => {
-    res.json({ success: true });
-  });
-
   // Get all projects
   app.get("/api/projects", async (req, res) => {
     try {
@@ -147,10 +102,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Broadcast project creation notification
       const notification: Notification = {
         id: `notif_${Date.now()}_${Math.random()}`,
-        type: 'project_created',
+        type: 'PROJECT_CREATED',
         title: 'New Project Created',
         message: `Project "${project.clientName}" has been created`,
         projectId: project.id,
+        projectName: project.clientName,
         createdAt: new Date(),
         read: false
       };
@@ -182,20 +138,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
         if (project.status === ProjectStatus.DELIVERED) {
           notification = {
             id: `notif_${Date.now()}_${Math.random()}`,
-            type: 'project_completed',
+            type: 'PROJECT_COMPLETED',
             title: 'Project Completed!',
             message: `Project "${project.clientName}" has been marked as delivered`,
             projectId: project.id,
+            projectName: project.clientName,
             createdAt: new Date(),
             read: false
           };
         } else {
           notification = {
             id: `notif_${Date.now()}_${Math.random()}`,
-            type: 'status_change',
+            type: 'PROJECT_STATUS_CHANGED',
             title: 'Project Status Updated',
             message: `Project "${project.clientName}" status changed from "${oldProject.status}" to "${project.status}"`,
             projectId: project.id,
+            projectName: project.clientName,
             createdAt: new Date(),
             read: false
           };
@@ -235,10 +193,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (assignedTo && assignedTo !== "__UNASSIGN__") {
         const notification: Notification = {
           id: `notif_${Date.now()}_${Math.random()}`,
-          type: 'project_assigned',
+          type: 'PROJECT_ASSIGNED',
           title: 'New Project Assignment',
           message: `You have been assigned to project "${project.clientName}"`,
           projectId: project.id,
+          projectName: project.clientName,
           userId: assignedTo,
           createdAt: new Date(),
           read: false
@@ -513,131 +472,153 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Team Task endpoints
-  // Get all team tasks
-  app.get("/api/team-tasks", async (req, res) => {
+  // ===== TASK MANAGEMENT ENDPOINTS =====
+  
+  // Get all tasks
+  app.get("/api/tasks", async (req, res) => {
     try {
-      const tasks = await storage.getTeamTasks();
+      const tasks = await storage.getAllTasks();
       res.json(tasks);
     } catch (error) {
-      res.status(500).json({ error: "Failed to fetch team tasks" });
+      console.error("Error fetching tasks:", error);
+      res.status(500).json({ error: "Failed to fetch tasks" });
     }
   });
 
-  // Get team tasks for a specific user
-  app.get("/api/team-tasks/assigned/:userId", async (req, res) => {
+  // Get tasks for a specific project
+  app.get("/api/projects/:projectId/tasks", async (req, res) => {
     try {
-      const { userId } = req.params;
-      const tasks = await storage.getTeamTasksForUser(userId);
+      const tasks = await storage.getTasksByProject(req.params.projectId);
       res.json(tasks);
     } catch (error) {
-      res.status(500).json({ error: "Failed to fetch user tasks" });
+      console.error("Error fetching tasks for project:", error);
+      res.status(500).json({ error: "Failed to fetch tasks for project" });
     }
   });
 
-  // Get team tasks created by a specific user
-  app.get("/api/team-tasks/created/:userId", async (req, res) => {
+  // Get tasks assigned to a specific user
+  app.get("/api/tasks/assigned/:assignedTo", async (req, res) => {
     try {
-      const { userId } = req.params;
-      const tasks = await storage.getTeamTasksCreatedBy(userId);
+      const tasks = await storage.getTasksByAssignee(req.params.assignedTo);
       res.json(tasks);
     } catch (error) {
-      res.status(500).json({ error: "Failed to fetch created tasks" });
+      console.error("Error fetching assigned tasks:", error);
+      res.status(500).json({ error: "Failed to fetch assigned tasks" });
     }
   });
 
-  // Create a new team task
-  app.post("/api/team-tasks", async (req, res) => {
+  // Create a new task
+  app.post("/api/tasks", async (req, res) => {
     try {
-      const validatedData = insertTeamTaskSchema.parse(req.body);
-      const task = await storage.createTeamTask(validatedData);
+      const taskData = insertTaskSchema.parse(req.body);
+      const task = await storage.createTask(taskData);
+      
+      // Get project and assignee details for notification
+      const project = await storage.getProject(taskData.projectId);
       
       // Broadcast notification to assigned user
-      if (task.assignedTo !== task.assignedBy) {
-        const notification: Notification = {
-          id: `task_${task.id}`,
-          type: 'task_assigned',
-          title: 'New Task Assigned',
-          message: `${task.assignedBy} assigned you a task: ${task.title}`,
-          projectId: task.projectId,
-          userId: task.assignedTo,
-          createdAt: new Date(),
-          read: false
-        };
-        broadcastNotification(notification, task.assignedTo);
-      }
-
-      // Broadcast task creation to all users for live log
-      broadcastSSE({
-        type: 'task_created',
-        payload: task
-      });
-
+      const notification: Notification = {
+        id: Date.now().toString(),
+        type: "task_assigned",
+        title: "New Task Assigned",
+        message: `${taskData.assignedBy} assigned you a task: "${taskData.title}" for project "${project?.clientName || 'Unknown'}"`,
+        timestamp: new Date(),
+        isRead: false,
+        projectId: taskData.projectId,
+        assignedTo: taskData.assignedTo
+      };
+      
+      // Send notification to the assigned user
+      broadcastNotification(notification, taskData.assignedTo);
+      
+      // Broadcast task creation to live log
+      const logNotification: Notification = {
+        id: (Date.now() + 1).toString(),
+        type: "task_created",
+        title: "Task Created",
+        message: `${taskData.assignedBy} created task "${taskData.title}" for ${taskData.assignedTo} on project "${project?.clientName || 'Unknown'}"`,
+        timestamp: new Date(),
+        isRead: false,
+        projectId: taskData.projectId,
+        isGlobal: true
+      };
+      
+      // Broadcast to all users for live task log
+      broadcastNotification(logNotification);
+      
       res.status(201).json(task);
     } catch (error) {
-      console.error('Create team task error:', error);
-      res.status(400).json({ error: "Invalid task data" });
+      console.error("Error creating task:", error);
+      res.status(400).json({ error: "Failed to create task" });
     }
   });
 
-  // Update team task status
-  app.patch("/api/team-tasks/:id", async (req, res) => {
+  // Update task (including completion)
+  app.patch("/api/tasks/:taskId", async (req, res) => {
     try {
-      const { id } = req.params;
-      const validatedData = updateTeamTaskSchema.parse(req.body);
-      const task = await storage.updateTeamTask(id, validatedData);
+      const updateData = updateTaskSchema.parse(req.body);
+      const task = await storage.updateTask(req.params.taskId, updateData);
       
       if (!task) {
         return res.status(404).json({ error: "Task not found" });
       }
 
-      // If task is being marked as completed
-      if (validatedData.status === 'completed') {
-        // Notify the task creator
-        const notification: Notification = {
-          id: `task_completed_${task.id}`,
-          type: 'task_completed',
-          title: 'Task Completed',
-          message: `${task.assignedTo} completed task: ${task.title}`,
+      // Get project details for notification
+      const project = await storage.getProject(task.projectId);
+      
+      // If task is being completed, send notifications
+      if (updateData.status === "completed" && task.status === "completed") {
+        // Notify task creator
+        const completionNotification: Notification = {
+          id: Date.now().toString(),
+          type: "task_completed",
+          title: "Task Completed",
+          message: `${task.assignedTo} completed the task: "${task.title}" for project "${project?.clientName || 'Unknown'}"`,
+          timestamp: new Date(),
+          isRead: false,
           projectId: task.projectId,
-          userId: task.assignedBy,
-          createdAt: new Date(),
-          read: false
+          completedBy: task.assignedTo
         };
-        broadcastNotification(notification, task.assignedBy);
+        
+        // Send to task creator
+        broadcastNotification(completionNotification, task.assignedBy);
+        
+        // Broadcast completion to live log
+        const logNotification: Notification = {
+          id: (Date.now() + 1).toString(),
+          type: "task_completed",
+          title: "Task Completed",
+          message: `${task.assignedTo} completed task "${task.title}" on project "${project?.clientName || 'Unknown'}"`,
+          timestamp: new Date(),
+          isRead: false,
+          projectId: task.projectId,
+          isGlobal: true
+        };
+        
+        // Broadcast to all users for live task log
+        broadcastNotification(logNotification);
       }
-
-      // Broadcast task update to all users
-      broadcastSSE({
-        type: 'task_updated',
-        payload: task
-      });
-
+      
       res.json(task);
     } catch (error) {
+      console.error("Error updating task:", error);
       res.status(400).json({ error: "Failed to update task" });
     }
   });
 
-  // Delete a team task
-  app.delete("/api/team-tasks/:id", async (req, res) => {
+  // Delete a task
+  app.delete("/api/tasks/:taskId", async (req, res) => {
     try {
-      const { id } = req.params;
-      const deleted = await storage.deleteTeamTask(id);
+      const deleted = await storage.deleteTask(req.params.taskId);
       
       if (!deleted) {
         return res.status(404).json({ error: "Task not found" });
       }
-
-      // Broadcast task deletion
-      broadcastSSE({
-        type: 'task_deleted',
-        payload: { id }
-      });
-
+      
       res.json({ message: "Task deleted successfully" });
     } catch (error) {
-      res.status(400).json({ error: "Failed to delete task" });
+      console.error("Error deleting task:", error);
+      res.status(500).json({ error: "Failed to delete task" });
     }
   });
 

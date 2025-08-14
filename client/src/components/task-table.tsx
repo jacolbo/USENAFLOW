@@ -5,11 +5,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import { ProjectNotes } from "./project-notes";
+import { TaskStatusIndicator } from "./task-status-indicator";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { Project, TeamTask } from "@shared/schema";
+import { Project } from "@shared/schema";
 import { User, formatRetoucherAbbr, getRetoucherFullName } from "@/lib/types";
-import { Calendar, Star, ChevronDown, ChevronRight, Copy, CheckCircle, Clock } from "lucide-react";
+import { Calendar, Star, ChevronDown, ChevronRight, Copy } from "lucide-react";
 import { useState, useMemo, useCallback, useRef } from "react";
 
 
@@ -54,33 +55,6 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
       return notesData;
     },
   });
-
-  // Query for all team tasks to show visual indicators
-  const { data: teamTasks = [] } = useQuery<TeamTask[]>({
-    queryKey: ["/api/team-tasks"],
-    queryFn: async () => {
-      const response = await fetch("/api/team-tasks");
-      return response.json();
-    },
-  });
-
-  // Helper function to get task status for a project
-  const getProjectTaskStatus = (projectId: string) => {
-    if (!teamTasks || !Array.isArray(teamTasks)) return null;
-    const projectTasks = teamTasks.filter(task => task.projectId === projectId);
-    if (projectTasks.length === 0) return null;
-    
-    const pendingTasks = projectTasks.filter(task => task.status === 'pending');
-    const completedTasks = projectTasks.filter(task => task.status === 'completed');
-    
-    return {
-      total: projectTasks.length,
-      pending: pendingTasks.length,
-      completed: completedTasks.length,
-      hasPending: pendingTasks.length > 0,
-      allCompleted: completedTasks.length === projectTasks.length
-    };
-  };
 
   // Helper function to get week start
   const getWeekStart = (date: Date) => {
@@ -619,38 +593,14 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
                       <TableHead>Status</TableHead>
                       {(user.role === 'Admin' || user.role === 'Sales') && <TableHead>Rating</TableHead>}
                       <TableHead>Notes</TableHead>
+                      <TableHead>Tasks</TableHead>
                       <TableHead>Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {group.projects.map(project => (
                       <TableRow key={project.id}>
-                        <TableCell className="font-medium">
-                          <div className="flex items-center gap-2">
-                            <span>{project.clientName}</span>
-                            {(() => {
-                              const taskStatus = getProjectTaskStatus(project.id);
-                              if (!taskStatus) return null;
-                              
-                              if (taskStatus.hasPending) {
-                                return (
-                                  <div className="flex items-center gap-1">
-                                    <div className="w-2 h-2 bg-red-500 rounded-full" title={`${taskStatus.pending} pending task(s)`} />
-                                    <Clock className="h-3 w-3 text-red-600" />
-                                  </div>
-                                );
-                              } else if (taskStatus.allCompleted) {
-                                return (
-                                  <div className="flex items-center gap-1">
-                                    <div className="w-2 h-2 bg-green-500 rounded-full" title={`${taskStatus.completed} completed task(s)`} />
-                                    <CheckCircle className="h-3 w-3 text-green-600" />
-                                  </div>
-                                );
-                              }
-                              return null;
-                            })()}
-                          </div>
-                        </TableCell>
+                        <TableCell className="font-medium">{project.clientName}</TableCell>
                         <TableCell>
                           {['Admin', 'Sales', 'DataWrangler', 'LeadRetoucher'].includes(user.role) ? (
                             <input
@@ -768,6 +718,12 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
                             projectId={project.id} 
                             userRole={user.role} 
                             hasNotes={(allNotesQuery.data?.[project.id] || 0) > 0}
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <TaskStatusIndicator 
+                            projectId={project.id} 
+                            clientName={project.clientName} 
                           />
                         </TableCell>
                         <TableCell>

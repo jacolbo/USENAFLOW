@@ -1,4 +1,4 @@
-import { type User, type InsertUser, type Project, type InsertProject, type UpdateProject, type ProjectNote, type InsertProjectNote, type UpdateProjectNote, type TeamTask, type InsertTeamTask, type UpdateTeamTask, ProjectStatus, users, projects, projectNotes, teamTasks } from "@shared/schema";
+import { type User, type InsertUser, type Project, type InsertProject, type UpdateProject, type ProjectNote, type InsertProjectNote, type UpdateProjectNote, type Task, type InsertTask, type UpdateTask, ProjectStatus, users, projects, projectNotes, tasks } from "@shared/schema";
 import { db } from "./db";
 import { eq, sql } from "drizzle-orm";
 import { randomUUID } from "crypto";
@@ -19,12 +19,13 @@ export interface IStorage {
   updateProjectNote(id: string, updates: UpdateProjectNote): Promise<ProjectNote | undefined>;
   deleteProjectNote(id: string): Promise<boolean>;
   
-  getTeamTasks(): Promise<TeamTask[]>;
-  getTeamTasksForUser(userId: string): Promise<TeamTask[]>;
-  getTeamTasksCreatedBy(userId: string): Promise<TeamTask[]>;
-  createTeamTask(task: InsertTeamTask): Promise<TeamTask>;
-  updateTeamTask(id: string, updates: UpdateTeamTask): Promise<TeamTask | undefined>;
-  deleteTeamTask(id: string): Promise<boolean>;
+  getAllTasks(): Promise<Task[]>;
+  getTask(id: string): Promise<Task | undefined>;
+  getTasksByProject(projectId: string): Promise<Task[]>;
+  getTasksByAssignee(assignedTo: string): Promise<Task[]>;
+  createTask(task: InsertTask): Promise<Task>;
+  updateTask(id: string, updates: UpdateTask): Promise<Task | undefined>;
+  deleteTask(id: string): Promise<boolean>;
 }
 
 export class MemStorage implements IStorage {
@@ -53,7 +54,6 @@ export class MemStorage implements IStorage {
         invoicePaid: false,
         assignedTo: null,
         rating: null,
-        deliveredAt: null,
         createdAt: new Date(),
       },
       {
@@ -67,7 +67,6 @@ export class MemStorage implements IStorage {
         invoicePaid: true,
         assignedTo: null,
         rating: null,
-        deliveredAt: null,
         createdAt: new Date(),
       },
       {
@@ -81,7 +80,6 @@ export class MemStorage implements IStorage {
         invoicePaid: true,
         assignedTo: "Retoucher 2",
         rating: null,
-        deliveredAt: null,
         createdAt: new Date(),
       },
       {
@@ -95,7 +93,6 @@ export class MemStorage implements IStorage {
         invoicePaid: true,
         assignedTo: "Retoucher 1",
         rating: 5,
-        deliveredAt: new Date(),
         createdAt: new Date(),
       },
       {
@@ -109,7 +106,6 @@ export class MemStorage implements IStorage {
         invoicePaid: true,
         assignedTo: "Retoucher 3",
         rating: null,
-        deliveredAt: null,
         createdAt: new Date(),
       },
     ];
@@ -212,46 +208,6 @@ export class MemStorage implements IStorage {
 
   async deleteProjectNote(id: string): Promise<boolean> {
     return this.projectNotes.delete(id);
-  }
-
-  // Team task methods (stub implementations for MemStorage)
-  async getTeamTasks(): Promise<TeamTask[]> {
-    return [];
-  }
-
-  async getTeamTasksForUser(userId: string): Promise<TeamTask[]> {
-    return [];
-  }
-
-  async getTeamTasksCreatedBy(userId: string): Promise<TeamTask[]> {
-    return [];
-  }
-
-  async createTeamTask(task: InsertTeamTask): Promise<TeamTask> {
-    const teamTask: TeamTask = {
-      id: randomUUID(),
-      projectId: task.projectId,
-      clientName: task.clientName,
-      title: task.title,
-      description: task.description,
-      assignedTo: task.assignedTo,
-      assignedBy: task.assignedBy,
-      priority: task.priority,
-      status: 'pending',
-      dueDate: task.dueDate,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-      completedAt: null,
-    };
-    return teamTask;
-  }
-
-  async updateTeamTask(id: string, updates: UpdateTeamTask): Promise<TeamTask | undefined> {
-    return undefined;
-  }
-
-  async deleteTeamTask(id: string): Promise<boolean> {
-    return false;
   }
 }
 
@@ -360,42 +316,48 @@ export class DatabaseStorage implements IStorage {
     return (result.rowCount || 0) > 0;
   }
 
-  async getTeamTasks(): Promise<TeamTask[]> {
-    return await db.select().from(teamTasks);
+  // Task methods
+  async getAllTasks(): Promise<Task[]> {
+    return await db.select().from(tasks);
   }
 
-  async getTeamTasksForUser(userId: string): Promise<TeamTask[]> {
-    return await db.select().from(teamTasks).where(eq(teamTasks.assignedTo, userId));
+  async getTask(id: string): Promise<Task | undefined> {
+    const [task] = await db.select().from(tasks).where(eq(tasks.id, id));
+    return task || undefined;
   }
 
-  async getTeamTasksCreatedBy(userId: string): Promise<TeamTask[]> {
-    return await db.select().from(teamTasks).where(eq(teamTasks.assignedBy, userId));
+  async getTasksByProject(projectId: string): Promise<Task[]> {
+    return await db.select().from(tasks).where(eq(tasks.projectId, projectId));
   }
 
-  async createTeamTask(task: InsertTeamTask): Promise<TeamTask> {
-    const [teamTask] = await db
-      .insert(teamTasks)
-      .values(task)
+  async getTasksByAssignee(assignedTo: string): Promise<Task[]> {
+    return await db.select().from(tasks).where(eq(tasks.assignedTo, assignedTo));
+  }
+
+  async createTask(insertTask: InsertTask): Promise<Task> {
+    const [task] = await db
+      .insert(tasks)
+      .values(insertTask)
       .returning();
-    return teamTask;
+    return task;
   }
 
-  async updateTeamTask(id: string, updates: UpdateTeamTask): Promise<TeamTask | undefined> {
-    // Set completedAt if status is being changed to completed
-    if (updates.status === 'completed' && updates.completedAt === undefined) {
+  async updateTask(id: string, updates: UpdateTask): Promise<Task | undefined> {
+    // Add completion timestamp when marking as completed
+    if (updates.status === "completed" && !updates.completedAt) {
       updates.completedAt = new Date();
     }
 
-    const [teamTask] = await db
-      .update(teamTasks)
-      .set({ ...updates, updatedAt: new Date() })
-      .where(eq(teamTasks.id, id))
+    const [task] = await db
+      .update(tasks)
+      .set(updates)
+      .where(eq(tasks.id, id))
       .returning();
-    return teamTask || undefined;
+    return task || undefined;
   }
 
-  async deleteTeamTask(id: string): Promise<boolean> {
-    const result = await db.delete(teamTasks).where(eq(teamTasks.id, id));
+  async deleteTask(id: string): Promise<boolean> {
+    const result = await db.delete(tasks).where(eq(tasks.id, id));
     return (result.rowCount || 0) > 0;
   }
 }
