@@ -5,7 +5,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import { ProjectNotes } from "./project-notes";
-import { TaskStatusIndicator } from "./task-status-indicator";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Project } from "@shared/schema";
@@ -593,7 +592,6 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
                       <TableHead>Status</TableHead>
                       {(user.role === 'Admin' || user.role === 'Sales') && <TableHead>Rating</TableHead>}
                       <TableHead>Notes</TableHead>
-                      <TableHead>Tasks</TableHead>
                       <TableHead>Actions</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -718,12 +716,6 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
                             projectId={project.id} 
                             userRole={user.role} 
                             hasNotes={(allNotesQuery.data?.[project.id] || 0) > 0}
-                          />
-                        </TableCell>
-                        <TableCell>
-                          <TaskStatusIndicator 
-                            projectId={project.id} 
-                            clientName={project.clientName} 
                           />
                         </TableCell>
                         <TableCell>

@@ -34,19 +34,6 @@ export const projectNotes = pgTable("project_notes", {
   updatedAt: timestamp("updated_at").notNull().default(sql`now()`),
 });
 
-export const tasks = pgTable("tasks", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  projectId: varchar("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
-  title: text("title").notNull(),
-  note: text("note"),
-  assignedTo: text("assigned_to").notNull(),
-  assignedBy: text("assigned_by").notNull(),
-  dueDate: timestamp("due_date").notNull(),
-  status: text("status").notNull().default("pending"), // pending, completed
-  createdAt: timestamp("created_at").notNull().default(sql`now()`),
-  completedAt: timestamp("completed_at"),
-});
-
 export const insertUserSchema = createInsertSchema(users).pick({
   username: true,
   password: true,
@@ -82,28 +69,10 @@ export const updateProjectNoteSchema = createInsertSchema(projectNotes).partial(
   updatedAt: true,
 });
 
-export const insertTaskSchema = createInsertSchema(tasks).omit({
-  id: true,
-  createdAt: true,
-  completedAt: true,
-}).extend({
-  dueDate: z.string().transform((str) => new Date(str)),
-});
-
-export const updateTaskSchema = createInsertSchema(tasks).partial().omit({
-  id: true,
-  createdAt: true,
-}).extend({
-  dueDate: z.string().transform((str) => new Date(str)).optional(),
-});
-
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
 export type InsertProject = z.infer<typeof insertProjectSchema>;
 export type UpdateProject = z.infer<typeof updateProjectSchema>;
-export type InsertTask = z.infer<typeof insertTaskSchema>;
-export type UpdateTask = z.infer<typeof updateTaskSchema>;
-export type Task = typeof tasks.$inferSelect;
 export type Project = typeof projects.$inferSelect;
 export type InsertProjectNote = z.infer<typeof insertProjectNoteSchema>;
 export type UpdateProjectNote = z.infer<typeof updateProjectNoteSchema>;
