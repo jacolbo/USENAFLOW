@@ -1,4 +1,4 @@
-import { type User, type InsertUser, type Project, type InsertProject, type UpdateProject, type ProjectNote, type InsertProjectNote, type UpdateProjectNote, ProjectStatus, users, projects, projectNotes } from "@shared/schema";
+import { type User, type InsertUser, type Project, type InsertProject, type UpdateProject, type ProjectNote, type InsertProjectNote, type UpdateProjectNote, type TeamTask, type InsertTeamTask, type UpdateTeamTask, ProjectStatus, users, projects, projectNotes, teamTasks } from "@shared/schema";
 import { db } from "./db";
 import { eq, sql } from "drizzle-orm";
 import { randomUUID } from "crypto";
@@ -18,6 +18,13 @@ export interface IStorage {
   createProjectNote(note: InsertProjectNote): Promise<ProjectNote>;
   updateProjectNote(id: string, updates: UpdateProjectNote): Promise<ProjectNote | undefined>;
   deleteProjectNote(id: string): Promise<boolean>;
+  
+  getTeamTasks(): Promise<TeamTask[]>;
+  getTeamTasksForUser(userId: string): Promise<TeamTask[]>;
+  getTeamTasksCreatedBy(userId: string): Promise<TeamTask[]>;
+  createTeamTask(task: InsertTeamTask): Promise<TeamTask>;
+  updateTeamTask(id: string, updates: UpdateTeamTask): Promise<TeamTask | undefined>;
+  deleteTeamTask(id: string): Promise<boolean>;
 }
 
 export class MemStorage implements IStorage {
@@ -305,6 +312,45 @@ export class DatabaseStorage implements IStorage {
 
   async deleteProjectNote(id: string): Promise<boolean> {
     const result = await db.delete(projectNotes).where(eq(projectNotes.id, id));
+    return (result.rowCount || 0) > 0;
+  }
+
+  async getTeamTasks(): Promise<TeamTask[]> {
+    return await db.select().from(teamTasks);
+  }
+
+  async getTeamTasksForUser(userId: string): Promise<TeamTask[]> {
+    return await db.select().from(teamTasks).where(eq(teamTasks.assignedTo, userId));
+  }
+
+  async getTeamTasksCreatedBy(userId: string): Promise<TeamTask[]> {
+    return await db.select().from(teamTasks).where(eq(teamTasks.assignedBy, userId));
+  }
+
+  async createTeamTask(task: InsertTeamTask): Promise<TeamTask> {
+    const [teamTask] = await db
+      .insert(teamTasks)
+      .values(task)
+      .returning();
+    return teamTask;
+  }
+
+  async updateTeamTask(id: string, updates: UpdateTeamTask): Promise<TeamTask | undefined> {
+    // Set completedAt if status is being changed to completed
+    if (updates.status === 'completed' && updates.completedAt === undefined) {
+      updates.completedAt = new Date();
+    }
+
+    const [teamTask] = await db
+      .update(teamTasks)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(teamTasks.id, id))
+      .returning();
+    return teamTask || undefined;
+  }
+
+  async deleteTeamTask(id: string): Promise<boolean> {
+    const result = await db.delete(teamTasks).where(eq(teamTasks.id, id));
     return (result.rowCount || 0) > 0;
   }
 }

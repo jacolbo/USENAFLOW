@@ -34,6 +34,22 @@ export const projectNotes = pgTable("project_notes", {
   updatedAt: timestamp("updated_at").notNull().default(sql`now()`),
 });
 
+export const teamTasks = pgTable("team_tasks", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  projectId: varchar("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
+  clientName: text("client_name").notNull(),
+  title: text("title").notNull(),
+  description: text("description"),
+  assignedTo: text("assigned_to").notNull(),
+  assignedBy: text("assigned_by").notNull(),
+  status: text("status").notNull().default("pending"), // 'pending', 'completed'
+  priority: text("priority").notNull().default("normal"), // 'normal', 'urgent'
+  dueDate: timestamp("due_date").notNull(),
+  completedAt: timestamp("completed_at"),
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+  updatedAt: timestamp("updated_at").notNull().default(sql`now()`),
+});
+
 export const insertUserSchema = createInsertSchema(users).pick({
   username: true,
   password: true,
@@ -69,10 +85,30 @@ export const updateProjectNoteSchema = createInsertSchema(projectNotes).partial(
   updatedAt: true,
 });
 
+export const insertTeamTaskSchema = createInsertSchema(teamTasks).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  completedAt: true,
+}).extend({
+  dueDate: z.string().transform((str) => new Date(str)),
+});
+
+export const updateTeamTaskSchema = createInsertSchema(teamTasks).partial().omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  dueDate: z.string().transform((str) => new Date(str)).optional(),
+});
+
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
 export type InsertProject = z.infer<typeof insertProjectSchema>;
 export type UpdateProject = z.infer<typeof updateProjectSchema>;
+export type InsertTeamTask = z.infer<typeof insertTeamTaskSchema>;
+export type UpdateTeamTask = z.infer<typeof updateTeamTaskSchema>;
+export type TeamTask = typeof teamTasks.$inferSelect;
 export type Project = typeof projects.$inferSelect;
 export type InsertProjectNote = z.infer<typeof insertProjectNoteSchema>;
 export type UpdateProjectNote = z.infer<typeof updateProjectNoteSchema>;
@@ -98,18 +134,20 @@ export const ProjectStatus = {
 // Notification system schemas
 export interface Notification {
   id: string;
-  type: 'PROJECT_ASSIGNED' | 'PROJECT_COMPLETED' | 'PROJECT_STATUS_CHANGED' | 'PROJECT_CREATED';
+  type: 'project_assigned' | 'project_completed' | 'project_created' | 'status_change' | 'task_assigned' | 'task_completed';
   title: string;
   message: string;
-  projectId: string;
-  projectName: string;
-  userId?: string; // Target user for the notification
-  createdAt: Date;
-  read: boolean;
+  timestamp: Date;
+  isRead: boolean;
+  projectId?: string;
+  assignedBy?: string;
+  assignedTo?: string;
+  clientName?: string;
+  taskId?: string;
 }
 
 export interface WebSocketMessage {
-  type: 'NOTIFICATION' | 'PROJECT_UPDATE' | 'SYNC_REQUEST' | 'USER_IDENTIFY';
+  type: 'NOTIFICATION' | 'PROJECT_UPDATE' | 'SYNC_REQUEST' | 'USER_IDENTIFY' | 'TASK_UPDATE';
   data: any;
   timestamp: Date;
 }

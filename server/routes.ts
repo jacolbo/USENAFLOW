@@ -2,7 +2,7 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { WebSocketServer, WebSocket } from "ws";
 import { storage } from "./storage";
-import { insertProjectSchema, updateProjectSchema, insertProjectNoteSchema, updateProjectNoteSchema, ProjectStatus } from "@shared/schema";
+import { insertProjectSchema, updateProjectSchema, insertProjectNoteSchema, updateProjectNoteSchema, insertTeamTaskSchema, updateTeamTaskSchema, ProjectStatus } from "@shared/schema";
 import { ObjectStorageService, ObjectNotFoundError } from "./objectStorage";
 import type { Notification, WebSocketMessage } from "@shared/schema";
 
@@ -16,7 +16,7 @@ let sseConnections: Map<string, { res: any; userId: string; username: string }>;
 function broadcastSSE(message: { type: string; payload?: any }, targetUserId?: string) {
   if (!sseConnections) return;
 
-  for (const [connectionId, connection] of sseConnections.entries()) {
+  for (const [connectionId, connection] of Array.from(sseConnections.entries())) {
     if (targetUserId && connection.userId !== targetUserId) {
       continue; // Skip if targeting specific user and this isn't them
     }
@@ -469,6 +469,136 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error setting note image:", error);
       res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // Team Task endpoints
+  // Get all team tasks
+  app.get("/api/team-tasks", async (req, res) => {
+    try {
+      const tasks = await storage.getTeamTasks();
+      res.json(tasks);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch team tasks" });
+    }
+  });
+
+  // Get team tasks for a specific user
+  app.get("/api/team-tasks/assigned/:userId", async (req, res) => {
+    try {
+      const { userId } = req.params;
+      const tasks = await storage.getTeamTasksForUser(userId);
+      res.json(tasks);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch user tasks" });
+    }
+  });
+
+  // Get team tasks created by a specific user
+  app.get("/api/team-tasks/created/:userId", async (req, res) => {
+    try {
+      const { userId } = req.params;
+      const tasks = await storage.getTeamTasksCreatedBy(userId);
+      res.json(tasks);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch created tasks" });
+    }
+  });
+
+  // Create a new team task
+  app.post("/api/team-tasks", async (req, res) => {
+    try {
+      const validatedData = insertTeamTaskSchema.parse(req.body);
+      const task = await storage.createTeamTask(validatedData);
+      
+      // Broadcast notification to assigned user
+      if (task.assignedTo !== task.assignedBy) {
+        const notification: Notification = {
+          id: `task_${task.id}`,
+          type: 'task_assigned',
+          title: 'New Task Assigned',
+          message: `${task.assignedBy} assigned you a task: ${task.title}`,
+          timestamp: new Date(),
+          isRead: false,
+          taskId: task.id,
+          projectId: task.projectId,
+          clientName: task.clientName
+        };
+        broadcastNotification(notification, task.assignedTo);
+      }
+
+      // Broadcast task creation to all users for live log
+      broadcastSSE({
+        type: 'task_created',
+        payload: task
+      });
+
+      res.status(201).json(task);
+    } catch (error) {
+      console.error('Create team task error:', error);
+      res.status(400).json({ error: "Invalid task data" });
+    }
+  });
+
+  // Update team task status
+  app.patch("/api/team-tasks/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const validatedData = updateTeamTaskSchema.parse(req.body);
+      const task = await storage.updateTeamTask(id, validatedData);
+      
+      if (!task) {
+        return res.status(404).json({ error: "Task not found" });
+      }
+
+      // If task is being marked as completed
+      if (validatedData.status === 'completed') {
+        // Notify the task creator
+        const notification: Notification = {
+          id: `task_completed_${task.id}`,
+          type: 'task_completed',
+          title: 'Task Completed',
+          message: `${task.assignedTo} completed task: ${task.title}`,
+          timestamp: new Date(),
+          isRead: false,
+          taskId: task.id,
+          projectId: task.projectId,
+          clientName: task.clientName
+        };
+        broadcastNotification(notification, task.assignedBy);
+      }
+
+      // Broadcast task update to all users
+      broadcastSSE({
+        type: 'task_updated',
+        payload: task
+      });
+
+      res.json(task);
+    } catch (error) {
+      res.status(400).json({ error: "Failed to update task" });
+    }
+  });
+
+  // Delete a team task
+  app.delete("/api/team-tasks/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const deleted = await storage.deleteTeamTask(id);
+      
+      if (!deleted) {
+        return res.status(404).json({ error: "Task not found" });
+      }
+
+      // Broadcast task deletion
+      broadcastSSE({
+        type: 'task_deleted',
+        payload: { id }
+      });
+
+      res.json({ message: "Task deleted successfully" });
+    } catch (error) {
+      res.status(400).json({ error: "Failed to delete task" });
     }
   });
 

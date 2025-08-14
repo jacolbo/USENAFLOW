@@ -5,8 +5,9 @@ import { RegisterForm } from "@/components/register-form";
 import { SettingsPanel } from "@/components/settings-panel";
 import { AddProjectForm } from "@/components/add-project-form";
 import { TaskTable } from "@/components/task-table";
-
-
+import { TaskCreationForm } from "@/components/task-creation-form";
+import { TeamTasksPanel } from "@/components/team-tasks-panel";
+import { LiveTaskLog } from "@/components/live-task-log";
 import { TeamAnalytics } from "@/components/team-analytics";
 import { DailyQuote } from "@/components/daily-quote";
 import { NotificationCenter } from "@/components/notification-center";
@@ -443,9 +444,34 @@ export default function Dashboard() {
             </div>
           </div>
 
-          {/* Show project creation form for roles that can add projects - only in current view */}
+          {/* Show project creation form and task creation for roles that can add projects - only in current view */}
           {!showArchive && user.role !== "Retoucher" && (
-            <AddProjectForm onAddProject={() => {}} />
+            <div className="space-y-6">
+              <AddProjectForm onAddProject={() => {}} />
+              
+              {/* Task Creation and Management Section */}
+              <div className="bg-white rounded-lg shadow-sm p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-semibold text-gray-900">Team Task Management</h3>
+                  <TaskCreationForm 
+                    projects={projects.filter(p => p.status !== "Delivered")} 
+                    users={users} 
+                    currentUser={user} 
+                  />
+                </div>
+                
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                  {/* My Tasks Panel */}
+                  <TeamTasksPanel user={user} showMyTasks={true} />
+                  
+                  {/* Tasks I Created Panel */}
+                  <TeamTasksPanel user={user} showMyTasks={false} />
+                  
+                  {/* Live Task Activity Log */}
+                  <LiveTaskLog user={user} />
+                </div>
+              </div>
+            </div>
           )}
           
           {/* Show the task table for the visible projects */}
