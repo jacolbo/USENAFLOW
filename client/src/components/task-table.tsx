@@ -871,8 +871,8 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
                                 </Button>
                               )}
                               
-                              {/* Retoucher can mark done on their assigned task */}
-                              {user.role === 'Retoucher' && 
+                              {/* Retoucher or Admin (as Anesu's Pops) can mark done on their assigned task */}
+                              {(user.role === 'Retoucher' || (user.role === 'Admin' && user.name === "Anesu's Pops")) && 
                                project.assignedTo && 
                                project.assignedTo.toLowerCase() === user.name.toLowerCase() && 
                                project.status === 'Assigned' && (
