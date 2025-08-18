@@ -1,4 +1,4 @@
-import { useState } from "react";
+import React, { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -35,14 +35,36 @@ export function TradeOffersPanel({ currentUser, projects, isAdmin = false }: Tra
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  // Fetch trade offers
-  const { data: tradeOffers = [], isLoading } = useQuery({
+  // Fetch trade offers with error handling
+  const { data: tradeOffersData = [], isLoading, error } = useQuery({
     queryKey: isAdmin ? ["/api/admin/trade-offers"] : ["/api/trade-offers", currentUser],
-    queryFn: () => {
-      const endpoint = isAdmin ? "/api/admin/trade-offers" : `/api/trade-offers?username=${encodeURIComponent(currentUser)}`;
-      return apiRequest("GET", endpoint);
+    queryFn: async () => {
+      try {
+        const endpoint = isAdmin ? "/api/admin/trade-offers" : `/api/trade-offers?username=${encodeURIComponent(currentUser)}`;
+        const result = await apiRequest("GET", endpoint);
+        return result;
+      } catch (err) {
+        console.error("Failed to fetch trade offers:", err);
+        return [];
+      }
     },
-  }) as { data: TradeOffer[], isLoading: boolean };
+  });
+
+  // Ensure tradeOffers is always an array with proper error handling
+  const tradeOffers: TradeOffer[] = React.useMemo(() => {
+    if (error) {
+      console.error("Trade offers query error:", error);
+      return [];
+    }
+    if (!tradeOffersData) {
+      return [];
+    }
+    if (Array.isArray(tradeOffersData)) {
+      return tradeOffersData;
+    }
+    console.warn("Trade offers data is not an array:", tradeOffersData);
+    return [];
+  }, [tradeOffersData, error]);
 
   // Get user's available projects for trading
   const userProjects = projects.filter(project => 
@@ -64,6 +86,7 @@ export function TradeOffersPanel({ currentUser, projects, isAdmin = false }: Tra
         description: "Projects have been successfully swapped!",
       });
       queryClient.invalidateQueries({ queryKey: ["/api/trade-offers"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/trade-offers"] });
       queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
       setAcceptingOffer(null);
       setSelectedProjectForTrade("");
@@ -89,6 +112,7 @@ export function TradeOffersPanel({ currentUser, projects, isAdmin = false }: Tra
         description: "Trade offer has been declined.",
       });
       queryClient.invalidateQueries({ queryKey: ["/api/trade-offers"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/trade-offers"] });
     },
     onError: () => {
       toast({
@@ -186,7 +210,13 @@ export function TradeOffersPanel({ currentUser, projects, isAdmin = false }: Tra
               </div>
             ) : (
               <div className="space-y-4">
-                {tradeOffers.map((offer, index) => {
+                {tradeOffers.filter(offer => offer && offer.id).map((offer, index) => {
+                  // Safety check for offer data
+                  if (!offer || !offer.id) {
+                    console.warn("Invalid trade offer data:", offer);
+                    return null;
+                  }
+                  
                   const offeringProject = getProjectDetails(offer.offeringProjectId);
                   const acceptedProject = offer.acceptedProjectId ? getProjectDetails(offer.acceptedProjectId) : null;
 
