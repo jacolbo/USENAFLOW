@@ -812,11 +812,12 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
                         };
 
                         const getProjectColor = (project: Project, prefix: string) => {
-                          // Project type colors (highest priority)
+                          // Project type colors (highest priority - override rollover colors)
                           switch (prefix) {
                             case 'EC': return 'bg-black text-white dark:bg-black dark:text-white';
                             case 'ASA': return 'bg-purple-600 text-white dark:bg-purple-600 dark:text-white';
                             case 'LM': return 'bg-blue-600 text-white dark:bg-blue-600 dark:text-white';
+                            case 'AP': return 'bg-pink-600 text-white dark:bg-pink-600 dark:text-white';
                             default: break; // Continue to rollover logic for other types
                           }
                           
@@ -831,24 +832,21 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
                           const projectCreatedDate = new Date(project.createdAt);
                           const projectWeek = getWeekStart(projectCreatedDate);
                           
-                          // Projects rolled over from two weeks ago or older → Red
+                          // Projects rolled over from two weeks ago or older (rolled over twice) → Red
                           if (projectWeek <= twoWeeksAgo) {
                             return 'bg-red-600 text-white dark:bg-red-600 dark:text-white';
                           }
-                          // Projects rolled over from previous week → Orange
+                          // Projects rolled over from previous week (rolled over once) → Orange
                           else if (projectWeek.getTime() === previousWeek.getTime()) {
                             return 'bg-orange-600 text-white dark:bg-orange-600 dark:text-white';
                           }
-                          // Projects newly added for current week → Green
+                          // Projects added by wrangler for current week (new projects) → Green
                           else if (projectWeek.getTime() === currentWeek.getTime()) {
                             return 'bg-green-600 text-white dark:bg-green-600 dark:text-white';
                           }
                           
                           // Default color for other cases
-                          switch (prefix) {
-                            case 'AP': return 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200';
-                            default: return 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200';
-                          }
+                          return 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200';
                         };
 
                         return (
