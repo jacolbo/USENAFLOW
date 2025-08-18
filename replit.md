@@ -44,6 +44,8 @@ Preferred communication style: Simple, everyday language.
 - **Unassigned Project Handling**: Unassigned projects automatically roll over to the next week and are prioritized.
 - **Drag & Drop**: Projects can be moved between days within a week by clicking and dragging project badges.
 - **Quick Assignment**: Double-click any project badge to open assignment options without leaving the calendar view.
+- **Client Search**: Real-time search functionality for each week to filter projects by client name or assigned retoucher.
+- **Assignment Ratio Display**: Week headers show assigned vs total project counts (e.g., "5/48 projects") with green for assigned and red for total.
 
 ## External Dependencies
 
