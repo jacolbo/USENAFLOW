@@ -55,6 +55,13 @@ export function useSSE(user?: { id: string; username: string } | null) {
             queryClient.invalidateQueries({ queryKey: ['/api/projects'] });
             break;
 
+          case 'trade_completed':
+            console.log('Trade completed via SSE');
+            queryClient.invalidateQueries({ queryKey: ['/api/projects'] });
+            queryClient.invalidateQueries({ queryKey: ['/api/trade-offers'] });
+            queryClient.invalidateQueries({ queryKey: ['/api/admin/trade-offers'] });
+            break;
+
           case 'connected':
             console.log('SSE connection confirmed');
             break;
@@ -66,8 +73,8 @@ export function useSSE(user?: { id: string; username: string } | null) {
             // Refresh projects after rollover
             queryClient.invalidateQueries({ queryKey: ['/api/projects'] });
             // Show notification if there were rolled over projects
-            if (data.payload?.rolledOverCount > 0) {
-              playNotificationSound();
+            if (data.payload?.rolledOverCount > 0 && audioRef.current) {
+              audioRef.current.play().catch(console.error);
             }
             break;
           }

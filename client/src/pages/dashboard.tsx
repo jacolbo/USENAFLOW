@@ -6,15 +6,16 @@ import { RegisterForm } from "@/components/register-form";
 import { SettingsPanel } from "@/components/settings-panel";
 import { AddProjectForm } from "@/components/add-project-form";
 import { TaskTable } from "@/components/task-table";
-
-
 import { TeamAnalytics } from "@/components/team-analytics";
 import { DailyQuote } from "@/components/daily-quote";
 import { NotificationCenter } from "@/components/notification-center";
+import { TradeOfferModal } from "@/components/TradeOfferModal";
+import { TradeOffersPanel } from "@/components/TradeOffersPanel";
+import { WRUButton } from "@/components/WRUButton";
 import { useSSE } from "@/hooks/use-sse";
 import { User } from "@/lib/types";
 import { Project } from "@shared/schema";
-import { User as UserIcon, LogOut, Settings, Archive } from "lucide-react";
+import { User as UserIcon, LogOut, Settings, Archive, ArrowRightLeft } from "lucide-react";
 import logoImage from "@assets/USENA-FLOW_1754522507856.png";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -42,6 +43,7 @@ export default function Dashboard() {
   const [user, setUser] = useState<User | null>(null);
   const [currentView, setCurrentView] = useState<'login' | 'register'>('login');
   const [showArchive, setShowArchive] = useState(false);
+  const [showTradeModal, setShowTradeModal] = useState(false);
 
   // Initialize SSE for live sync and notifications
   const {
@@ -395,6 +397,27 @@ export default function Dashboard() {
                       onClearAll={clearAllNotifications}
                     />
 
+                    {/* Trade Offer Button for Retouchers */}
+                    {user.role === "Retoucher" && (
+                      <Button 
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setShowTradeModal(true)}
+                        className="flex items-center gap-2 bg-gradient-to-r from-blue-50 to-purple-50 hover:from-blue-100 hover:to-purple-100 border-blue-200"
+                        data-testid="button-open-trade-modal"
+                      >
+                        <ArrowRightLeft className="h-4 w-4" />
+                        Trade Project
+                      </Button>
+                    )}
+
+                    {/* WRU Button for Admin */}
+                    <WRUButton 
+                      projects={projects} 
+                      currentUser={user.name} 
+                      isAdmin={user.role === "Admin"} 
+                    />
+
                     {/* Archive Button */}
                     <Button 
                       variant={showArchive ? "default" : "outline"}
@@ -600,8 +623,25 @@ export default function Dashboard() {
           {!showArchive && (
             <TeamAnalytics user={user} />
           )}
+
+          {/* Trade Offers Panel - Show for retouchers and admin when not in archive view */}
+          {!showArchive && (user.role === "Retoucher" || user.role === "Admin") && (
+            <TradeOffersPanel 
+              currentUser={user.name} 
+              projects={projects} 
+              isAdmin={user.role === "Admin"}
+            />
+          )}
         </div>
       </div>
+
+      {/* Trade Offer Modal */}
+      <TradeOfferModal
+        open={showTradeModal}
+        onOpenChange={setShowTradeModal}
+        currentUser={user.name}
+        projects={projects}
+      />
     </div>
   );
 }

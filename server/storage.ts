@@ -1,4 +1,4 @@
-import { type User, type InsertUser, type Project, type InsertProject, type UpdateProject, type ProjectNote, type InsertProjectNote, type UpdateProjectNote, ProjectStatus, users, projects, projectNotes } from "@shared/schema";
+import { type User, type InsertUser, type Project, type InsertProject, type UpdateProject, type ProjectNote, type InsertProjectNote, type UpdateProjectNote, type TradeOffer, type InsertTradeOffer, type UpdateTradeOffer, ProjectStatus, TradeOfferStatus, users, projects, projectNotes, tradeOffers } from "@shared/schema";
 import { db } from "./db";
 import { eq, sql } from "drizzle-orm";
 import { randomUUID } from "crypto";
@@ -18,17 +18,28 @@ export interface IStorage {
   createProjectNote(note: InsertProjectNote): Promise<ProjectNote>;
   updateProjectNote(id: string, updates: UpdateProjectNote): Promise<ProjectNote | undefined>;
   deleteProjectNote(id: string): Promise<boolean>;
+  
+  // Trade offer methods
+  getAllTradeOffers(): Promise<TradeOffer[]>;
+  getTradeOffer(id: string): Promise<TradeOffer | undefined>;
+  getTradeOffersForUser(username: string): Promise<TradeOffer[]>;
+  createTradeOffer(offer: InsertTradeOffer): Promise<TradeOffer>;
+  updateTradeOffer(id: string, updates: UpdateTradeOffer): Promise<TradeOffer | undefined>;
+  deleteTradeOffer(id: string): Promise<boolean>;
+  executeTradeSwap(tradeOfferId: string): Promise<boolean>;
 }
 
 export class MemStorage implements IStorage {
   private users: Map<string, User>;
   private projects: Map<string, Project>;
   private projectNotes: Map<string, ProjectNote>;
+  private tradeOffers: Map<string, TradeOffer>;
 
   constructor() {
     this.users = new Map();
     this.projects = new Map();
     this.projectNotes = new Map();
+    this.tradeOffers = new Map();
     this.initializeData();
   }
 
@@ -46,6 +57,7 @@ export class MemStorage implements IStorage {
         invoicePaid: false,
         assignedTo: null,
         rating: null,
+        deliveredAt: null,
         createdAt: new Date(),
       },
       {
@@ -59,6 +71,7 @@ export class MemStorage implements IStorage {
         invoicePaid: true,
         assignedTo: null,
         rating: null,
+        deliveredAt: null,
         createdAt: new Date(),
       },
       {
@@ -72,6 +85,7 @@ export class MemStorage implements IStorage {
         invoicePaid: true,
         assignedTo: "Retoucher 2",
         rating: null,
+        deliveredAt: null,
         createdAt: new Date(),
       },
       {
@@ -85,6 +99,7 @@ export class MemStorage implements IStorage {
         invoicePaid: true,
         assignedTo: "Retoucher 1",
         rating: 5,
+        deliveredAt: new Date(2025, 7, 3), // Aug 3, 2025
         createdAt: new Date(),
       },
       {
@@ -98,6 +113,7 @@ export class MemStorage implements IStorage {
         invoicePaid: true,
         assignedTo: "Retoucher 3",
         rating: null,
+        deliveredAt: null,
         createdAt: new Date(),
       },
     ];
@@ -146,6 +162,7 @@ export class MemStorage implements IStorage {
       invoicePaid,
       assignedTo: null,
       rating: null,
+      deliveredAt: null,
       createdAt: new Date(),
     };
     
@@ -200,6 +217,95 @@ export class MemStorage implements IStorage {
 
   async deleteProjectNote(id: string): Promise<boolean> {
     return this.projectNotes.delete(id);
+  }
+
+  // Trade offer methods
+  async getAllTradeOffers(): Promise<TradeOffer[]> {
+    return Array.from(this.tradeOffers.values());
+  }
+
+  async getTradeOffer(id: string): Promise<TradeOffer | undefined> {
+    return this.tradeOffers.get(id);
+  }
+
+  async getTradeOffersForUser(username: string): Promise<TradeOffer[]> {
+    return Array.from(this.tradeOffers.values()).filter(offer => 
+      offer.offeringUser === username || 
+      offer.targetUser === username || 
+      offer.acceptedBy === username ||
+      offer.targetUser === null // Open offers
+    );
+  }
+
+  async createTradeOffer(insertOffer: InsertTradeOffer): Promise<TradeOffer> {
+    const id = randomUUID();
+    const offer: TradeOffer = { 
+      ...insertOffer, 
+      id,
+      createdAt: new Date(),
+      completedAt: null,
+    };
+    this.tradeOffers.set(id, offer);
+    return offer;
+  }
+
+  async updateTradeOffer(id: string, updates: UpdateTradeOffer): Promise<TradeOffer | undefined> {
+    const offer = this.tradeOffers.get(id);
+    if (!offer) return undefined;
+    
+    const updatedOffer = { ...offer, ...updates };
+    this.tradeOffers.set(id, updatedOffer);
+    return updatedOffer;
+  }
+
+  async deleteTradeOffer(id: string): Promise<boolean> {
+    return this.tradeOffers.delete(id);
+  }
+
+  async executeTradeSwap(tradeOfferId: string): Promise<boolean> {
+    const offer = this.tradeOffers.get(tradeOfferId);
+    if (!offer || offer.status !== TradeOfferStatus.ACCEPTED) {
+      return false;
+    }
+
+    if (!offer.acceptedProjectId) {
+      return false;
+    }
+
+    const offeringProject = this.projects.get(offer.offeringProjectId);
+    const acceptedProject = this.projects.get(offer.acceptedProjectId);
+    
+    if (!offeringProject || !acceptedProject) {
+      return false;
+    }
+
+    try {
+      // Swap the assignments
+      const offeringUserAssignment = offeringProject.assignedTo;
+      const acceptedUserAssignment = acceptedProject.assignedTo;
+
+      this.projects.set(offer.offeringProjectId, {
+        ...offeringProject,
+        assignedTo: acceptedUserAssignment,
+      });
+
+      this.projects.set(offer.acceptedProjectId, {
+        ...acceptedProject,
+        assignedTo: offeringUserAssignment,
+      });
+
+      // Mark trade as completed
+      this.tradeOffers.set(tradeOfferId, {
+        ...offer,
+        status: TradeOfferStatus.COMPLETED,
+        completedAt: new Date(),
+      });
+
+      return true;
+    } catch (error) {
+      console.error('Failed to execute trade swap:', error);
+      return false;
+    }
   }
 }
 
@@ -306,6 +412,90 @@ export class DatabaseStorage implements IStorage {
   async deleteProjectNote(id: string): Promise<boolean> {
     const result = await db.delete(projectNotes).where(eq(projectNotes.id, id));
     return (result.rowCount || 0) > 0;
+  }
+
+  // Trade offer methods
+  async getAllTradeOffers(): Promise<TradeOffer[]> {
+    return await db.select().from(tradeOffers);
+  }
+
+  async getTradeOffer(id: string): Promise<TradeOffer | undefined> {
+    const [offer] = await db.select().from(tradeOffers).where(eq(tradeOffers.id, id));
+    return offer || undefined;
+  }
+
+  async getTradeOffersForUser(username: string): Promise<TradeOffer[]> {
+    return await db.select().from(tradeOffers).where(
+      sql`${tradeOffers.offeringUser} = ${username} OR ${tradeOffers.targetUser} = ${username} OR ${tradeOffers.acceptedBy} = ${username} OR ${tradeOffers.targetUser} IS NULL`
+    );
+  }
+
+  async createTradeOffer(insertOffer: InsertTradeOffer): Promise<TradeOffer> {
+    const [offer] = await db
+      .insert(tradeOffers)
+      .values(insertOffer)
+      .returning();
+    return offer;
+  }
+
+  async updateTradeOffer(id: string, updates: UpdateTradeOffer): Promise<TradeOffer | undefined> {
+    const [offer] = await db
+      .update(tradeOffers)
+      .set(updates)
+      .where(eq(tradeOffers.id, id))
+      .returning();
+    return offer || undefined;
+  }
+
+  async deleteTradeOffer(id: string): Promise<boolean> {
+    const result = await db.delete(tradeOffers).where(eq(tradeOffers.id, id));
+    return (result.rowCount || 0) > 0;
+  }
+
+  async executeTradeSwap(tradeOfferId: string): Promise<boolean> {
+    // Get the trade offer
+    const offer = await this.getTradeOffer(tradeOfferId);
+    if (!offer || offer.status !== TradeOfferStatus.ACCEPTED) {
+      return false;
+    }
+
+    if (!offer.acceptedProjectId) {
+      return false;
+    }
+
+    // Get both projects
+    const offeringProject = await this.getProject(offer.offeringProjectId);
+    const acceptedProject = await this.getProject(offer.acceptedProjectId);
+    
+    if (!offeringProject || !acceptedProject) {
+      return false;
+    }
+
+    try {
+      // Start transaction-like operations
+      // Swap the assignments
+      const offeringUserAssignment = offeringProject.assignedTo;
+      const acceptedUserAssignment = acceptedProject.assignedTo;
+
+      await this.updateProject(offer.offeringProjectId, {
+        assignedTo: acceptedUserAssignment,
+      });
+
+      await this.updateProject(offer.acceptedProjectId, {
+        assignedTo: offeringUserAssignment,
+      });
+
+      // Mark trade as completed
+      await this.updateTradeOffer(tradeOfferId, {
+        status: TradeOfferStatus.COMPLETED,
+        completedAt: new Date(),
+      });
+
+      return true;
+    } catch (error) {
+      console.error('Failed to execute trade swap:', error);
+      return false;
+    }
   }
 }
 

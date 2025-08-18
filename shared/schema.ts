@@ -34,6 +34,21 @@ export const projectNotes = pgTable("project_notes", {
   updatedAt: timestamp("updated_at").notNull().default(sql`now()`),
 });
 
+// Trade offers system for project swapping
+export const tradeOffers = pgTable("trade_offers", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  offeringUser: text("offering_user").notNull(),
+  offeringProjectId: varchar("offering_project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
+  targetUser: text("target_user"), // null means open to anyone
+  requestedProjectId: varchar("requested_project_id").references(() => projects.id, { onDelete: "cascade" }), // null means open offer
+  status: text("status").notNull().default("pending"), // pending, accepted, declined, cancelled, completed
+  acceptedBy: text("accepted_by"), // user who accepted the trade
+  acceptedProjectId: varchar("accepted_project_id").references(() => projects.id, { onDelete: "cascade" }), // project offered in return
+  message: text("message"), // optional message from offering user
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+  completedAt: timestamp("completed_at"),
+});
+
 export const insertUserSchema = createInsertSchema(users).pick({
   username: true,
   password: true,
@@ -69,6 +84,19 @@ export const updateProjectNoteSchema = createInsertSchema(projectNotes).partial(
   updatedAt: true,
 });
 
+export const insertTradeOfferSchema = createInsertSchema(tradeOffers).omit({
+  id: true,
+  createdAt: true,
+  completedAt: true,
+});
+
+export const updateTradeOfferSchema = createInsertSchema(tradeOffers).partial().omit({
+  id: true,
+  offeringUser: true,
+  offeringProjectId: true,
+  createdAt: true,
+});
+
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
 export type InsertProject = z.infer<typeof insertProjectSchema>;
@@ -77,6 +105,9 @@ export type Project = typeof projects.$inferSelect;
 export type InsertProjectNote = z.infer<typeof insertProjectNoteSchema>;
 export type UpdateProjectNote = z.infer<typeof updateProjectNoteSchema>;
 export type ProjectNote = typeof projectNotes.$inferSelect;
+export type InsertTradeOffer = z.infer<typeof insertTradeOfferSchema>;
+export type UpdateTradeOffer = z.infer<typeof updateTradeOfferSchema>;
+export type TradeOffer = typeof tradeOffers.$inferSelect;
 
 export const UserRoles = {
   ADMIN: "Admin",
@@ -98,18 +129,27 @@ export const ProjectStatus = {
 // Notification system schemas
 export interface Notification {
   id: string;
-  type: 'PROJECT_ASSIGNED' | 'PROJECT_COMPLETED' | 'PROJECT_STATUS_CHANGED' | 'PROJECT_CREATED';
+  type: 'PROJECT_ASSIGNED' | 'PROJECT_COMPLETED' | 'PROJECT_STATUS_CHANGED' | 'PROJECT_CREATED' | 'TRADE_OFFER_RECEIVED' | 'TRADE_OFFER_ACCEPTED' | 'TRADE_COMPLETED';
   title: string;
   message: string;
   projectId: string;
   projectName: string;
   userId?: string; // Target user for the notification
+  tradeOfferId?: string; // For trade-related notifications
   createdAt: Date;
   read: boolean;
 }
 
 export interface WebSocketMessage {
-  type: 'NOTIFICATION' | 'PROJECT_UPDATE' | 'SYNC_REQUEST' | 'USER_IDENTIFY';
+  type: 'NOTIFICATION' | 'PROJECT_UPDATE' | 'SYNC_REQUEST' | 'USER_IDENTIFY' | 'TRADE_UPDATE';
   data: any;
   timestamp: Date;
 }
+
+export const TradeOfferStatus = {
+  PENDING: "pending",
+  ACCEPTED: "accepted", 
+  DECLINED: "declined",
+  CANCELLED: "cancelled",
+  COMPLETED: "completed",
+} as const;

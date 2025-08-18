@@ -2,7 +2,7 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { WebSocketServer, WebSocket } from "ws";
 import { storage } from "./storage";
-import { insertProjectSchema, updateProjectSchema, insertProjectNoteSchema, updateProjectNoteSchema, ProjectStatus } from "@shared/schema";
+import { insertProjectSchema, updateProjectSchema, insertProjectNoteSchema, updateProjectNoteSchema, insertTradeOfferSchema, updateTradeOfferSchema, ProjectStatus, TradeOfferStatus } from "@shared/schema";
 import { ObjectStorageService, ObjectNotFoundError } from "./objectStorage";
 import type { Notification, WebSocketMessage } from "@shared/schema";
 import { triggerManualRollover } from "./rolloverScheduler";
@@ -581,6 +581,193 @@ export async function registerRoutes(app: Express): Promise<Server> {
       data: { status: 'connected' },
       timestamp: new Date()
     }));
+  });
+
+  // TRADE OFFER ENDPOINTS
+
+  // Get all trade offers for the current user
+  app.get("/api/trade-offers", async (req, res) => {
+    try {
+      const username = req.query.username as string;
+      if (!username) {
+        return res.status(400).json({ error: "Username is required" });
+      }
+      
+      const offers = await storage.getTradeOffersForUser(username);
+      res.json(offers);
+    } catch (error) {
+      console.error("Error fetching trade offers:", error);
+      res.status(500).json({ error: "Failed to fetch trade offers" });
+    }
+  });
+
+  // Get all trade offers for admin visibility
+  app.get("/api/admin/trade-offers", async (req, res) => {
+    try {
+      const offers = await storage.getAllTradeOffers();
+      res.json(offers);
+    } catch (error) {
+      console.error("Error fetching all trade offers:", error);
+      res.status(500).json({ error: "Failed to fetch trade offers" });
+    }
+  });
+
+  // Create a new trade offer
+  app.post("/api/trade-offers", async (req, res) => {
+    try {
+      const validatedData = insertTradeOfferSchema.parse(req.body);
+      const offer = await storage.createTradeOffer(validatedData);
+      
+      // Send notification to target user (if specified) or broadcast to all eligible users
+      const notification: Notification = {
+        id: `trade-offer-${offer.id}`,
+        type: 'TRADE_OFFER_RECEIVED',
+        title: 'New Trade Offer',
+        message: `${offer.offeringUser} wants to trade their project${offer.message ? ': ' + offer.message : ''}`,
+        projectId: offer.offeringProjectId,
+        projectName: `Trade Offer from ${offer.offeringUser}`,
+        tradeOfferId: offer.id,
+        createdAt: new Date(),
+        read: false
+      };
+
+      if (offer.targetUser) {
+        broadcastNotification(notification, offer.targetUser);
+      } else {
+        broadcastNotification(notification); // Broadcast to all users
+      }
+
+      res.status(201).json(offer);
+    } catch (error) {
+      console.error("Error creating trade offer:", error);
+      res.status(400).json({ error: "Failed to create trade offer" });
+    }
+  });
+
+  // Accept a trade offer
+  app.post("/api/trade-offers/:id/accept", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { acceptedBy, acceptedProjectId } = req.body;
+      
+      if (!acceptedBy || !acceptedProjectId) {
+        return res.status(400).json({ error: "acceptedBy and acceptedProjectId are required" });
+      }
+
+      const updatedOffer = await storage.updateTradeOffer(id, {
+        status: TradeOfferStatus.ACCEPTED,
+        acceptedBy,
+        acceptedProjectId,
+      });
+
+      if (!updatedOffer) {
+        return res.status(404).json({ error: "Trade offer not found" });
+      }
+
+      // Execute the trade swap
+      const swapSuccess = await storage.executeTradeSwap(id);
+      
+      if (!swapSuccess) {
+        // Roll back the acceptance if swap failed
+        await storage.updateTradeOffer(id, {
+          status: TradeOfferStatus.PENDING,
+          acceptedBy: null,
+          acceptedProjectId: null,
+        });
+        return res.status(500).json({ error: "Failed to execute trade swap" });
+      }
+
+      // Send notifications to both parties
+      const acceptedNotification: Notification = {
+        id: `trade-accepted-${updatedOffer.id}`,
+        type: 'TRADE_OFFER_ACCEPTED',
+        title: 'Trade Offer Accepted',
+        message: `${acceptedBy} accepted your trade offer`,
+        projectId: updatedOffer.offeringProjectId,
+        projectName: `Trade with ${acceptedBy}`,
+        tradeOfferId: updatedOffer.id,
+        createdAt: new Date(),
+        read: false
+      };
+
+      const completedNotification: Notification = {
+        id: `trade-completed-${updatedOffer.id}`,
+        type: 'TRADE_COMPLETED',
+        title: 'Trade Completed',
+        message: `Project trade with ${updatedOffer.offeringUser} has been completed`,
+        projectId: updatedOffer.acceptedProjectId,
+        projectName: `Trade with ${updatedOffer.offeringUser}`,
+        tradeOfferId: updatedOffer.id,
+        createdAt: new Date(),
+        read: false
+      };
+
+      // Send to offering user
+      broadcastNotification(acceptedNotification, updatedOffer.offeringUser);
+      // Send to accepting user
+      broadcastNotification(completedNotification, acceptedBy);
+
+      // Broadcast project updates
+      broadcastSSE({ type: 'trade_completed', payload: { tradeId: id, projects: [updatedOffer.offeringProjectId, updatedOffer.acceptedProjectId] } });
+
+      res.json(updatedOffer);
+    } catch (error) {
+      console.error("Error accepting trade offer:", error);
+      res.status(500).json({ error: "Failed to accept trade offer" });
+    }
+  });
+
+  // Decline a trade offer
+  app.post("/api/trade-offers/:id/decline", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { declinedBy } = req.body;
+
+      const updatedOffer = await storage.updateTradeOffer(id, {
+        status: TradeOfferStatus.DECLINED,
+      });
+
+      if (!updatedOffer) {
+        return res.status(404).json({ error: "Trade offer not found" });
+      }
+
+      // Send notification to offering user
+      const notification: Notification = {
+        id: `trade-declined-${updatedOffer.id}`,
+        type: 'TRADE_OFFER_ACCEPTED', // Reusing type for simplicity
+        title: 'Trade Offer Declined',
+        message: `${declinedBy || 'Someone'} declined your trade offer`,
+        projectId: updatedOffer.offeringProjectId,
+        projectName: `Trade declined by ${declinedBy || 'user'}`,
+        tradeOfferId: updatedOffer.id,
+        createdAt: new Date(),
+        read: false
+      };
+
+      broadcastNotification(notification, updatedOffer.offeringUser);
+
+      res.json(updatedOffer);
+    } catch (error) {
+      console.error("Error declining trade offer:", error);
+      res.status(500).json({ error: "Failed to decline trade offer" });
+    }
+  });
+
+  // Cancel a trade offer (by the offering user)
+  app.delete("/api/trade-offers/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const deleted = await storage.deleteTradeOffer(id);
+      
+      if (!deleted) {
+        return res.status(404).json({ error: "Trade offer not found" });
+      }
+
+      res.json({ message: "Trade offer cancelled successfully" });
+    } catch (error) {
+      console.error("Error cancelling trade offer:", error);
+      res.status(500).json({ error: "Failed to cancel trade offer" });
+    }
   });
 
   // Manual rollover endpoint for testing
