@@ -46,6 +46,7 @@ Preferred communication style: Simple, everyday language.
 - **Quick Assignment**: Double-click any project badge to open assignment options without leaving the calendar view.
 - **Client Search**: Real-time search functionality for each week to filter projects by client name or assigned retoucher.
 - **Assignment Ratio Display**: Week headers show assigned vs total project counts (e.g., "5/48 projects") with green for assigned and red for total.
+- **Color-Coded Calendar**: Projects display with color rules - EC (black), ASA (purple), LM (blue) override rollover colors; rollover projects show orange (1 week old) or red (2+ weeks old); new projects show green.
 
 ## External Dependencies
 

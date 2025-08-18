@@ -811,13 +811,43 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
                           return formatRetoucherAbbr(assignedTo);
                         };
 
-                        const getRetoucherColor = (prefix: string) => {
+                        const getProjectColor = (project: Project, prefix: string) => {
+                          // Project type colors (highest priority)
                           switch (prefix) {
-                            case 'EC': return 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200';
-                            case 'ASA': return 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200';
-                            case 'LM': return 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200';
+                            case 'EC': return 'bg-black text-white dark:bg-black dark:text-white';
+                            case 'ASA': return 'bg-purple-600 text-white dark:bg-purple-600 dark:text-white';
+                            case 'LM': return 'bg-blue-600 text-white dark:bg-blue-600 dark:text-white';
+                            default: break; // Continue to rollover logic for other types
+                          }
+                          
+                          // Rollover colors (if not overridden by project type)
+                          const now = new Date();
+                          const currentWeek = getWeekStart(now);
+                          const previousWeek = new Date(currentWeek);
+                          previousWeek.setDate(previousWeek.getDate() - 7);
+                          const twoWeeksAgo = new Date(currentWeek);
+                          twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14);
+                          
+                          const projectCreatedDate = new Date(project.createdAt);
+                          const projectWeek = getWeekStart(projectCreatedDate);
+                          
+                          // Projects rolled over from two weeks ago or older → Red
+                          if (projectWeek <= twoWeeksAgo) {
+                            return 'bg-red-600 text-white dark:bg-red-600 dark:text-white';
+                          }
+                          // Projects rolled over from previous week → Orange
+                          else if (projectWeek.getTime() === previousWeek.getTime()) {
+                            return 'bg-orange-600 text-white dark:bg-orange-600 dark:text-white';
+                          }
+                          // Projects newly added for current week → Green
+                          else if (projectWeek.getTime() === currentWeek.getTime()) {
+                            return 'bg-green-600 text-white dark:bg-green-600 dark:text-white';
+                          }
+                          
+                          // Default color for other cases
+                          switch (prefix) {
                             case 'AP': return 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200';
-                            default: return 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200'; // Custom users get indigo
+                            default: return 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200';
                           }
                         };
 
@@ -837,7 +867,7 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
                             <div className="space-y-1 min-h-[60px] p-1 rounded transition-colors hover:bg-gray-50 dark:hover:bg-gray-800">
                               {dayProjects.map(project => {
                                 const retoucherPrefix = getRetoucherPrefix(project.assignedTo);
-                                const colorClass = getRetoucherColor(retoucherPrefix);
+                                const colorClass = getProjectColor(project, retoucherPrefix);
                                 const isDragging = draggedProject?.id === project.id;
                                 
                                 return (
