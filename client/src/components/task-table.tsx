@@ -55,7 +55,7 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
     },
   });
 
-  // Helper function to get week start
+  // Helper function to get week start (Sunday-based)
   const getWeekStart = (date: Date) => {
     const d = new Date(date.getFullYear(), date.getMonth(), date.getDate());
     // Ensure valid year range
@@ -63,12 +63,11 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
       d.setFullYear(2024);
     }
     const day = d.getDay(); // 0 = Sunday, 1 = Monday, etc.
-    const diff = day === 0 ? -6 : 1 - day; // adjust Sunday to previous Monday
-    d.setDate(d.getDate() + diff);
+    d.setDate(d.getDate() - day); // Go back to Sunday
     return d;
   };
 
-  // State for collapsed weeks
+  // State for collapsed weeks (Sunday-start)
   const [collapsedWeeks, setCollapsedWeeks] = useState<Record<string, boolean>>(() => {
     const now = new Date();
     const currentWeekStart = getWeekStart(now);
@@ -83,6 +82,9 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
       initialState[weekKey] = weekKey !== currentWeekKey;
     });
     
+    // Keep rollover section expanded by default
+    initialState["rollover"] = false;
+    
     return initialState;
   });
 
@@ -96,7 +98,9 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
   const formatWeekRange = (weekStart: Date) => {
     const weekEnd = new Date(weekStart);
     weekEnd.setDate(weekStart.getDate() + 6);
-    return `${weekStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} – ${weekEnd.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
+    const sunday = weekStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    const saturday = weekEnd.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    return `${sunday} – ${saturday}`;
   };
 
 
@@ -451,9 +455,51 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
   
   // For personal view (admin's personal dashboard), projects are already filtered
 
-  // Re-group the filtered projects
-  const visibleGroups: { key: number; weekStart: Date; projects: Project[] }[] = [];
+  // Re-group the filtered projects with unassigned rollover handling
+  const today = new Date();
+  const currentWeekStart = new Date(today);
+  currentWeekStart.setDate(today.getDate() - today.getDay()); // Go back to Sunday
+  currentWeekStart.setHours(0, 0, 0, 0);
+  
+  const previousWeekStart = new Date(currentWeekStart);
+  previousWeekStart.setDate(currentWeekStart.getDate() - 7);
+
+  // Separate unassigned rollover projects from regular projects
+  const unassignedRollover: Project[] = [];
+  const regularProjects: Project[] = [];
+  
   visibleProjects.forEach(project => {
+    const projectDate = new Date(project.dueDate || project.createdAt);
+    const isUnassigned = !project.assignedTo || project.assignedTo === "__UNASSIGN__";
+    const isFromPastWeek = projectDate < previousWeekStart;
+    
+    if (isUnassigned && isFromPastWeek) {
+      unassignedRollover.push(project);
+    } else {
+      regularProjects.push(project);
+    }
+  });
+
+  // Group regular projects by weeks
+  const visibleGroups: { key: number; weekStart: Date; projects: Project[]; isRollover?: boolean }[] = [];
+  
+  // Add unassigned rollover group at the top if there are any
+  if (unassignedRollover.length > 0) {
+    // Sort unassigned by creation date (oldest first)
+    unassignedRollover.sort((a, b) => 
+      new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+    );
+    
+    visibleGroups.push({
+      key: -1, // Special key to ensure it appears first
+      weekStart: new Date(0), // Dummy date for rollover
+      projects: unassignedRollover,
+      isRollover: true
+    });
+  }
+
+  // Group regular projects by week
+  regularProjects.forEach(project => {
     const weekStart = getWeekStart(new Date(project.dueDate));
     const key = weekStart.getTime();
     let group = visibleGroups.find(g => g.key === key);
@@ -464,24 +510,34 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
     group.projects.push(project);
   });
 
-  visibleGroups.sort((a, b) => a.weekStart.getTime() - b.weekStart.getTime());
+  // Sort groups: rollover first, then by week start date
+  visibleGroups.sort((a, b) => {
+    if (a.isRollover) return -1; // Rollover always first
+    if (b.isRollover) return 1;
+    return a.weekStart.getTime() - b.weekStart.getTime();
+  });
 
   return (
     <div className="space-y-8">
       {visibleGroups.map(group => {
-        const monday = group.weekStart;
+        const isRollover = group.isRollover;
+        const monday = isRollover ? new Date() : group.weekStart; // Use today for rollover
         const sunday = new Date(monday);
         sunday.setDate(monday.getDate() + 6);
-        const weekLabel = formatWeekRange(monday);
-        const weekKey = monday.toISOString().split('T')[0];
+        const weekLabel = isRollover ? "🔄 Unassigned Rollover" : formatWeekRange(monday);
+        const weekKey = isRollover ? "rollover" : monday.toISOString().split('T')[0];
         const isCollapsed = collapsedWeeks[weekKey];
         
-        // Sort projects in each week by due date, then by ID for stability
-        group.projects.sort((a, b) => {
-          const dateComparison = new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
-          if (dateComparison !== 0) return dateComparison;
-          return a.id.localeCompare(b.id); // Secondary sort by ID for stability
-        });
+        // Sort projects: rollover by creation date (oldest first), regular by due date
+        if (isRollover) {
+          // Already sorted by creation date in the grouping logic
+        } else {
+          group.projects.sort((a, b) => {
+            const dateComparison = new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
+            if (dateComparison !== 0) return dateComparison;
+            return a.id.localeCompare(b.id); // Secondary sort by ID for stability
+          });
+        }
         
         return (
           <Card key={group.key}>

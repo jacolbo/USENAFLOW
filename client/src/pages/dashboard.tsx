@@ -81,15 +81,14 @@ export default function Dashboard() {
     enabled: !!user,
   });
 
-  // Filter projects based on archive view
+  // Filter projects based on archive view with Sunday-start weeks and unassigned rollover
   const getFilteredProjects = () => {
     const today = new Date();
     
-    // Get start of current week (Monday)
+    // Get start of current week (Sunday)
     const currentWeekStart = new Date(today);
     const dayOfWeek = today.getDay(); // 0 = Sunday, 1 = Monday, etc.
-    const daysToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek; // If Sunday, go back 6 days
-    currentWeekStart.setDate(today.getDate() + daysToMonday);
+    currentWeekStart.setDate(today.getDate() - dayOfWeek); // Go back to Sunday
     currentWeekStart.setHours(0, 0, 0, 0);
     
     // Calculate week boundaries
@@ -107,44 +106,48 @@ export default function Dashboard() {
     const archiveCutoff = new Date(currentWeekStart);
     archiveCutoff.setDate(currentWeekStart.getDate() - 14);
 
-    console.log('Filter Debug:', {
-      showArchive,
-      today: today.toISOString().split('T')[0],
-      currentWeekStart: currentWeekStart.toISOString().split('T')[0],
-      previousWeekStart: previousWeekStart.toISOString().split('T')[0],
-      nextWeekEnd: nextWeekEnd.toISOString().split('T')[0],
-      archiveCutoff: archiveCutoff.toISOString().split('T')[0],
-      totalProjects: allProjects.length
-    });
+
+
+    let filteredProjects = [];
 
     if (showArchive) {
       // Archive: Projects from weeks that are 2+ weeks old
-      const archived = allProjects.filter(project => {
+      filteredProjects = allProjects.filter(project => {
         const projectDate = new Date(project.dueDate || project.createdAt);
         return projectDate < archiveCutoff;
       });
-      console.log('Archived projects:', archived.length);
-      return archived;
     } else {
       // Current: Previous week, current week, and next week
-      const current = allProjects.filter(project => {
+      filteredProjects = allProjects.filter(project => {
         const projectDate = new Date(project.dueDate || project.createdAt);
         return projectDate >= previousWeekStart && projectDate <= nextWeekEnd;
       });
-      console.log('Current projects:', current.length);
-      return current;
+
+      // Handle unassigned project rollover for current view
+      const unassignedFromPastWeeks = allProjects.filter(project => {
+        const projectDate = new Date(project.dueDate || project.createdAt);
+        return projectDate < previousWeekStart && (!project.assignedTo || project.assignedTo === "__UNASSIGN__");
+      });
+
+      // Merge and sort: unassigned projects first (by creation date), then regular projects
+      const sortedUnassigned = unassignedFromPastWeeks.sort((a, b) => 
+        new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+      );
+      
+      filteredProjects = [...sortedUnassigned, ...filteredProjects];
     }
+
+    return filteredProjects;
   };
 
   const projects = getFilteredProjects();
   
-  // Get counts for both current and archive for the button display
+  // Get counts for both current and archive for the button display (Sunday-start)
   const getCurrentProjectCount = () => {
     const today = new Date();
     const currentWeekStart = new Date(today);
     const dayOfWeek = today.getDay();
-    const daysToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
-    currentWeekStart.setDate(today.getDate() + daysToMonday);
+    currentWeekStart.setDate(today.getDate() - dayOfWeek); // Go back to Sunday
     currentWeekStart.setHours(0, 0, 0, 0);
     
     const previousWeekStart = new Date(currentWeekStart);
@@ -157,18 +160,25 @@ export default function Dashboard() {
     nextWeekEnd.setDate(nextWeekStart.getDate() + 6);
     nextWeekEnd.setHours(23, 59, 59, 999);
     
-    return allProjects.filter(project => {
+    // Include projects in 3-week window plus unassigned rollover
+    const inCurrentRange = allProjects.filter(project => {
       const projectDate = new Date(project.dueDate || project.createdAt);
       return projectDate >= previousWeekStart && projectDate <= nextWeekEnd;
     }).length;
+
+    const unassignedRollover = allProjects.filter(project => {
+      const projectDate = new Date(project.dueDate || project.createdAt);
+      return projectDate < previousWeekStart && (!project.assignedTo || project.assignedTo === "__UNASSIGN__");
+    }).length;
+
+    return inCurrentRange + unassignedRollover;
   };
   
   const getArchiveProjectCount = () => {
     const today = new Date();
     const currentWeekStart = new Date(today);
     const dayOfWeek = today.getDay();
-    const daysToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
-    currentWeekStart.setDate(today.getDate() + daysToMonday);
+    currentWeekStart.setDate(today.getDate() - dayOfWeek); // Go back to Sunday
     currentWeekStart.setHours(0, 0, 0, 0);
     
     const archiveCutoff = new Date(currentWeekStart);
@@ -564,7 +574,7 @@ export default function Dashboard() {
                       }
                     </h2>
                     <span className="text-sm text-gray-500">
-                      {showArchive ? "(2+ weeks old)" : "(Previous, current & next week)"}
+                      {showArchive ? "(2+ weeks old)" : "(Previous, current & next week + unassigned rollover)"}
                     </span>
                   </div>
                   <div className="text-sm text-gray-600">
