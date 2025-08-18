@@ -39,6 +39,12 @@ export function NotificationCenter({
         return '📝';
       case 'PROJECT_STATUS_CHANGED':
         return '🔄';
+      case 'TRADE_OFFER_RECEIVED':
+        return '🔄';
+      case 'TRADE_OFFER_ACCEPTED':
+        return '✅';
+      case 'TRADE_COMPLETED':
+        return '🔄';
       default:
         return '📢';
     }
@@ -54,6 +60,12 @@ export function NotificationCenter({
         return 'bg-purple-50 border-purple-200';
       case 'PROJECT_STATUS_CHANGED':
         return 'bg-orange-50 border-orange-200';
+      case 'TRADE_OFFER_RECEIVED':
+        return 'bg-yellow-50 border-yellow-200';
+      case 'TRADE_OFFER_ACCEPTED':
+        return 'bg-green-50 border-green-200';
+      case 'TRADE_COMPLETED':
+        return 'bg-blue-50 border-blue-200';
       default:
         return 'bg-gray-50 border-gray-200';
     }

@@ -10,7 +10,7 @@ import { TeamAnalytics } from "@/components/team-analytics";
 import { DailyQuote } from "@/components/daily-quote";
 import { NotificationCenter } from "@/components/notification-center";
 import { TradeOfferModal } from "@/components/TradeOfferModal";
-import { TradeOffersPanel } from "@/components/TradeOffersPanel";
+
 import { WRUButton } from "@/components/WRUButton";
 import { useSSE } from "@/hooks/use-sse";
 import { User } from "@/lib/types";
@@ -625,14 +625,7 @@ export default function Dashboard() {
             <TeamAnalytics user={user} />
           )}
 
-          {/* Trade Offers Panel - Show for retouchers and admin when not in archive view */}
-          {!showArchive && (user.role === "Retoucher" || user.role === "Admin") && (
-            <TradeOffersPanel 
-              currentUser={user.name} 
-              projects={projects} 
-              isAdmin={user.role === "Admin"}
-            />
-          )}
+
         </div>
       </div>
 
