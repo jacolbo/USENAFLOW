@@ -107,18 +107,32 @@ export default function Dashboard() {
     const archiveCutoff = new Date(currentWeekStart);
     archiveCutoff.setDate(currentWeekStart.getDate() - 14);
 
+    console.log('Filter Debug:', {
+      showArchive,
+      today: today.toISOString().split('T')[0],
+      currentWeekStart: currentWeekStart.toISOString().split('T')[0],
+      previousWeekStart: previousWeekStart.toISOString().split('T')[0],
+      nextWeekEnd: nextWeekEnd.toISOString().split('T')[0],
+      archiveCutoff: archiveCutoff.toISOString().split('T')[0],
+      totalProjects: allProjects.length
+    });
+
     if (showArchive) {
       // Archive: Projects from weeks that are 2+ weeks old
-      return allProjects.filter(project => {
+      const archived = allProjects.filter(project => {
         const projectDate = new Date(project.dueDate || project.createdAt);
         return projectDate < archiveCutoff;
       });
+      console.log('Archived projects:', archived.length);
+      return archived;
     } else {
       // Current: Previous week, current week, and next week
-      return allProjects.filter(project => {
+      const current = allProjects.filter(project => {
         const projectDate = new Date(project.dueDate || project.createdAt);
         return projectDate >= previousWeekStart && projectDate <= nextWeekEnd;
       });
+      console.log('Current projects:', current.length);
+      return current;
     }
   };
 
