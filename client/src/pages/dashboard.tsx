@@ -83,25 +83,88 @@ export default function Dashboard() {
 
   // Filter projects based on archive view
   const getFilteredProjects = () => {
-    const oneWeekAgo = new Date();
-    oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+    const today = new Date();
+    
+    // Get start of current week (Monday)
+    const currentWeekStart = new Date(today);
+    const dayOfWeek = today.getDay(); // 0 = Sunday, 1 = Monday, etc.
+    const daysToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek; // If Sunday, go back 6 days
+    currentWeekStart.setDate(today.getDate() + daysToMonday);
+    currentWeekStart.setHours(0, 0, 0, 0);
+    
+    // Calculate week boundaries
+    const previousWeekStart = new Date(currentWeekStart);
+    previousWeekStart.setDate(currentWeekStart.getDate() - 7);
+    
+    const nextWeekStart = new Date(currentWeekStart);
+    nextWeekStart.setDate(currentWeekStart.getDate() + 7);
+    
+    const nextWeekEnd = new Date(nextWeekStart);
+    nextWeekEnd.setDate(nextWeekStart.getDate() + 6);
+    nextWeekEnd.setHours(23, 59, 59, 999);
+    
+    // Archive cutoff: 2 weeks before current week
+    const archiveCutoff = new Date(currentWeekStart);
+    archiveCutoff.setDate(currentWeekStart.getDate() - 14);
 
     if (showArchive) {
-      // Show projects older than one week
+      // Archive: Projects from weeks that are 2+ weeks old
       return allProjects.filter(project => {
-        const projectDate = new Date(project.createdAt || project.dueDate);
-        return projectDate < oneWeekAgo;
+        const projectDate = new Date(project.dueDate || project.createdAt);
+        return projectDate < archiveCutoff;
       });
     } else {
-      // Show projects from the last week
+      // Current: Previous week, current week, and next week
       return allProjects.filter(project => {
-        const projectDate = new Date(project.createdAt || project.dueDate);
-        return projectDate >= oneWeekAgo;
+        const projectDate = new Date(project.dueDate || project.createdAt);
+        return projectDate >= previousWeekStart && projectDate <= nextWeekEnd;
       });
     }
   };
 
   const projects = getFilteredProjects();
+  
+  // Get counts for both current and archive for the button display
+  const getCurrentProjectCount = () => {
+    const today = new Date();
+    const currentWeekStart = new Date(today);
+    const dayOfWeek = today.getDay();
+    const daysToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+    currentWeekStart.setDate(today.getDate() + daysToMonday);
+    currentWeekStart.setHours(0, 0, 0, 0);
+    
+    const previousWeekStart = new Date(currentWeekStart);
+    previousWeekStart.setDate(currentWeekStart.getDate() - 7);
+    
+    const nextWeekStart = new Date(currentWeekStart);
+    nextWeekStart.setDate(currentWeekStart.getDate() + 7);
+    
+    const nextWeekEnd = new Date(nextWeekStart);
+    nextWeekEnd.setDate(nextWeekStart.getDate() + 6);
+    nextWeekEnd.setHours(23, 59, 59, 999);
+    
+    return allProjects.filter(project => {
+      const projectDate = new Date(project.dueDate || project.createdAt);
+      return projectDate >= previousWeekStart && projectDate <= nextWeekEnd;
+    }).length;
+  };
+  
+  const getArchiveProjectCount = () => {
+    const today = new Date();
+    const currentWeekStart = new Date(today);
+    const dayOfWeek = today.getDay();
+    const daysToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+    currentWeekStart.setDate(today.getDate() + daysToMonday);
+    currentWeekStart.setHours(0, 0, 0, 0);
+    
+    const archiveCutoff = new Date(currentWeekStart);
+    archiveCutoff.setDate(currentWeekStart.getDate() - 14);
+    
+    return allProjects.filter(project => {
+      const projectDate = new Date(project.dueDate || project.createdAt);
+      return projectDate < archiveCutoff;
+    }).length;
+  };
 
   // Check for existing session on component mount and periodically
   useEffect(() => {
@@ -315,7 +378,7 @@ export default function Dashboard() {
                       className="flex items-center gap-2"
                     >
                       <Archive className="h-4 w-4" />
-                      {showArchive ? "Current" : "Archive"}
+                      {showArchive ? `Current (${getCurrentProjectCount()})` : `Archive (${getArchiveProjectCount()})`}
                     </Button>
 
                     {/* Settings Icon - Only visible to Admin users */}
@@ -487,11 +550,11 @@ export default function Dashboard() {
                       }
                     </h2>
                     <span className="text-sm text-gray-500">
-                      {showArchive ? "(Older than 1 week)" : "(From last 7 days)"}
+                      {showArchive ? "(2+ weeks old)" : "(Previous, current & next week)"}
                     </span>
                   </div>
                   <div className="text-sm text-gray-600">
-                    {projects.length} project{projects.length !== 1 ? 's' : ''}
+                    {projects.length} project{projects.length !== 1 ? 's' : ''} {showArchive ? 'archived' : 'current'}
                   </div>
                 </div>
               </div>

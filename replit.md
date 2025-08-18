@@ -177,11 +177,11 @@ Preferred communication style: Simple, everyday language.
 - **Input Optimization**: Fixed smooth editing for Pkg/Sel/Extra fields with 500ms debouncing and stable project positioning
 
 ### Archive System Implementation (January 2025)
-- **Current vs Archive Views**: Toggle between current projects (last 7 days) and archive projects (older than 1 week)
+- **Week-Based Organization**: Current view shows previous week, current week, and next week; Archive shows projects 2+ weeks old
 - **Smart Interface**: Add Project form and Team Analytics only show in current view for focus on active work
-- **Visual Indicators**: Archive button shows current view state with project count indicators
-- **Date-Based Filtering**: Automatic separation based on project creation/due dates
-- **Clean Organization**: Maintains all project accessibility while reducing dashboard clutter
+- **Visual Indicators**: Archive button shows current view state with project count indicators for each view
+- **Proper Date Logic**: Monday-to-Sunday week boundaries prevent duplicate calendar entries and ensure each week exists only once
+- **Clean Organization**: Projects can be moved between current and archive based on due dates, maintaining project accessibility
 
 ### Live Sync & Notification System Implementation (January 2025)
 - **WebSocket Integration**: Real-time bidirectional communication between client and server
