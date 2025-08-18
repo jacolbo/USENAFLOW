@@ -433,7 +433,10 @@ export class DatabaseStorage implements IStorage {
   async createTradeOffer(insertOffer: InsertTradeOffer): Promise<TradeOffer> {
     const [offer] = await db
       .insert(tradeOffers)
-      .values(insertOffer)
+      .values({
+        ...insertOffer,
+        id: randomUUID(),
+      })
       .returning();
     return offer;
   }
