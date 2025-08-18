@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { motion, AnimatePresence } from "framer-motion";
 import { LoginForm } from "@/components/login-form";
 import { RegisterForm } from "@/components/register-form";
 import { SettingsPanel } from "@/components/settings-panel";

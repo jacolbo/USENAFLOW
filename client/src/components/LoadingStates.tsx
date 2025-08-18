@@ -225,3 +225,36 @@ export const PulseWrapper = ({ children, isActive }: { children: React.ReactNode
     {children}
   </motion.div>
 );
+
+// Floating action wrapper with hover animations
+export const FloatingAction = ({ children, className = "" }: { children: React.ReactNode; className?: string }) => (
+  <motion.div
+    className={className}
+    whileHover={{ 
+      y: -2, 
+      transition: { type: "spring", stiffness: 300, damping: 20 } 
+    }}
+    whileTap={{ scale: 0.98 }}
+    initial={{ opacity: 0, scale: 0.9 }}
+    animate={{ opacity: 1, scale: 1 }}
+    transition={{ type: "spring", stiffness: 300, damping: 25 }}
+  >
+    {children}
+  </motion.div>
+);
+
+// Staggered list animation wrapper
+export const StaggeredList = ({ children, className = "" }: { children: React.ReactNode[]; className?: string }) => (
+  <div className={className}>
+    {children.map((child, index) => (
+      <motion.div
+        key={index}
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: index * 0.05 }}
+      >
+        {child}
+      </motion.div>
+    ))}
+  </div>
+);

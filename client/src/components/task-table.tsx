@@ -12,7 +12,8 @@ import { Project } from "@shared/schema";
 import { User, formatRetoucherAbbr, getRetoucherFullName } from "@/lib/types";
 import { Calendar, Star, ChevronDown, ChevronRight, Copy, UserPlus, Search, X } from "lucide-react";
 import { useState, useMemo, useCallback, useRef } from "react";
-import { LoadingSpinner } from './LoadingStates';
+import { motion, AnimatePresence } from 'framer-motion';
+import { LoadingSpinner, FloatingAction, StaggeredList } from './LoadingStates';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 
 
@@ -743,49 +744,128 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
         }
         
         return (
-          <Card key={group.key}>
-            <CardHeader 
-              className="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
-              onClick={() => toggleWeek(weekKey)}
-            >
-              <CardTitle className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  {isCollapsed ? (
+          <motion.div
+            key={group.key}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3, ease: "easeOut" }}
+            layout
+          >
+            <Card>
+              <motion.div
+                whileHover={{ backgroundColor: "rgba(0, 0, 0, 0.02)" }}
+                transition={{ duration: 0.2 }}
+              >
+                <CardHeader 
+                  className="cursor-pointer transition-colors"
+                  onClick={() => toggleWeek(weekKey)}
+                >
+                  <CardTitle className="flex items-center justify-between">
+                <motion.div 
+                  className="flex items-center gap-2"
+                  whileHover={{ x: 4 }}
+                  transition={{ type: "spring", stiffness: 300, damping: 30 }}
+                >
+                  <motion.div
+                    animate={{ rotate: isCollapsed ? 0 : 90 }}
+                    transition={{ duration: 0.2, ease: "easeInOut" }}
+                  >
                     <ChevronRight className="h-5 w-5 text-gray-600" />
-                  ) : (
-                    <ChevronDown className="h-5 w-5 text-gray-600" />
-                  )}
-                  <Calendar className="h-5 w-5 text-gray-600" />
-                  Week of {weekLabel}
-                </div>
-                <div className="flex items-center gap-2 text-sm text-gray-500">
+                  </motion.div>
+                  <motion.div
+                    animate={{ 
+                      scale: [1, 1.05, 1],
+                      rotate: [0, -2, 2, 0]
+                    }}
+                    transition={{ 
+                      duration: 2,
+                      repeat: Infinity,
+                      ease: "easeInOut"
+                    }}
+                  >
+                    <Calendar className="h-5 w-5 text-gray-600" />
+                  </motion.div>
+                  <span>Week of {weekLabel}</span>
+                </motion.div>
+                <motion.div 
+                  className="flex items-center gap-2 text-sm text-gray-500"
+                  initial={{ opacity: 0, x: 20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: 0.1 }}
+                >
                   {(() => {
                     const totalProjects = group.projects.length;
                     const assignedProjects = group.projects.filter(p => p.assignedTo && p.assignedTo !== "__UNASSIGN__").length;
                     
                     return (
                       <div className="flex items-center gap-1">
-                        <span>📅</span>
-                        <span className="text-green-600 dark:text-green-400 font-semibold">
+                        <motion.span
+                          animate={{ 
+                            scale: [1, 1.2, 1],
+                            rotate: [0, -10, 10, 0]
+                          }}
+                          transition={{ 
+                            duration: 3,
+                            repeat: Infinity,
+                            ease: "easeInOut"
+                          }}
+                        >
+                          📅
+                        </motion.span>
+                        <motion.span 
+                          className="text-green-600 dark:text-green-400 font-semibold"
+                          animate={{ scale: assignedProjects > 0 ? [1, 1.1, 1] : 1 }}
+                          transition={{ duration: 0.5, ease: "easeInOut" }}
+                        >
                           {assignedProjects}
-                        </span>
+                        </motion.span>
                         <span>/</span>
-                        <span className="text-red-600 dark:text-red-400 font-semibold">
+                        <motion.span 
+                          className="text-red-600 dark:text-red-400 font-semibold"
+                          animate={{ scale: totalProjects > 0 ? [1, 1.05, 1] : 1 }}
+                          transition={{ duration: 0.5, ease: "easeInOut", delay: 0.1 }}
+                        >
                           {totalProjects}
-                        </span>
+                        </motion.span>
                         <span className="text-gray-400">projects</span>
                       </div>
                     );
                   })()}
-                </div>
-              </CardTitle>
-            </CardHeader>
-            {!isCollapsed && (
-              <CardContent>
+                </motion.div>
+                  </CardTitle>
+                </CardHeader>
+              </motion.div>
+              <AnimatePresence>
+                {!isCollapsed && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: "auto" }}
+                    exit={{ opacity: 0, height: 0 }}
+                    transition={{ 
+                      duration: 0.3, 
+                      ease: "easeInOut",
+                      opacity: { duration: 0.2 }
+                    }}
+                  >
+                    <CardContent>
                 {/* Client Search Input */}
                 <div className="mb-4 flex items-center gap-2">
-                  <div className="relative flex-1">
-                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                  <motion.div 
+                    className="relative flex-1"
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.2 }}
+                  >
+                    <motion.div
+                      animate={{ 
+                        scale: weekSearchTerms[weekKey] ? 1.1 : 1,
+                        color: weekSearchTerms[weekKey] ? "#3b82f6" : "#9ca3af"
+                      }}
+                      transition={{ duration: 0.2 }}
+                      className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4"
+                    >
+                      <Search className="h-4 w-4" />
+                    </motion.div>
                     <Input
                       placeholder="Search clients or retouchers in this week..."
                       value={weekSearchTerms[weekKey] || ''}
@@ -793,24 +873,39 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
                         ...prev,
                         [weekKey]: e.target.value
                       }))}
-                      className="pl-10 pr-10"
+                      className="pl-10 pr-10 transition-all duration-200 focus:shadow-lg"
                       data-testid={`search-week-${weekKey}`}
                     />
-                    {weekSearchTerms[weekKey] && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="absolute right-2 top-1/2 transform -translate-y-1/2 h-6 w-6 p-0 hover:bg-gray-100 dark:hover:bg-gray-700"
-                        onClick={() => setWeekSearchTerms(prev => ({
-                          ...prev,
-                          [weekKey]: ''
-                        }))}
-                        data-testid={`clear-search-${weekKey}`}
-                      >
-                        <X className="h-3 w-3" />
-                      </Button>
-                    )}
-                  </div>
+                    <AnimatePresence>
+                      {weekSearchTerms[weekKey] && (
+                        <motion.div
+                          initial={{ opacity: 0, scale: 0.8 }}
+                          animate={{ opacity: 1, scale: 1 }}
+                          exit={{ opacity: 0, scale: 0.8 }}
+                          transition={{ duration: 0.2 }}
+                          className="absolute right-2 top-1/2 transform -translate-y-1/2"
+                        >
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-6 w-6 p-0 hover:bg-red-100 hover:text-red-600 transition-colors duration-200"
+                            onClick={() => setWeekSearchTerms(prev => ({
+                              ...prev,
+                              [weekKey]: ''
+                            }))}
+                            data-testid={`clear-search-${weekKey}`}
+                          >
+                            <motion.div
+                              whileHover={{ rotate: 90 }}
+                              transition={{ duration: 0.2 }}
+                            >
+                              <X className="h-3 w-3" />
+                            </motion.div>
+                          </Button>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </motion.div>
                 </div>
                 
                 {/* Mini Weekly Calendar - only for Admin, LeadRetoucher, and DataWrangler */}
@@ -899,38 +994,147 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
                         const isLoading = loadingStates[project.id + 'assign'] || loadingStates[project.id + 'move'];
                                 
                                 return (
-                                  <div key={project.id} className="text-xs">
-                                    <div
+                                  <motion.div 
+                                    key={project.id} 
+                                    className="text-xs"
+                                    initial={{ opacity: 0, scale: 0.8, y: 10 }}
+                                    animate={{ opacity: 1, scale: 1, y: 0 }}
+                                    transition={{ 
+                                      duration: 0.2, 
+                                      delay: project.id.slice(-2).charCodeAt(0) * 0.01,
+                                      ease: "easeOut" 
+                                    }}
+                                    layout
+                                  >
+                                    <motion.div
                                       draggable
-                                      onDragStart={(e) => handleDragStart(e, project)}
-                                      onDragEnd={handleDragEnd}
+                                      onDragStart={(e) => handleDragStart(e as any, project)}
+                                      onDragEnd={(e) => handleDragEnd(e as any)}
                                       onDoubleClick={() => handleDoubleClick(project)}
-                                      className={`cursor-move relative ${isDragging ? 'opacity-50 scale-95' : ''} transition-all duration-200`}
+                                      className="cursor-move relative"
                                       data-testid={`project-badge-${project.id}`}
                                       title="Drag to move to another day, double-click to assign"
+                                      whileHover={{ 
+                                        scale: 1.02,
+                                        y: -2,
+                                        transition: { type: "spring", stiffness: 400, damping: 30 }
+                                      }}
+                                      whileTap={{ scale: 0.98 }}
+                                      animate={{ 
+                                        opacity: isDragging ? 0.6 : 1,
+                                        scale: isDragging ? 0.95 : 1,
+                                        rotate: isDragging ? 5 : 0
+                                      }}
+                                      transition={{ duration: 0.2, ease: "easeInOut" }}
                                     >
-                                      <Badge 
-                                        variant="secondary" 
-                                        className={`${colorClass} px-1 py-0 text-xs font-medium w-full justify-start hover:shadow-md transition-all select-none pointer-events-none ${isLoading ? 'animate-pulse' : ''}`}
+                                      <motion.div
+                                        animate={isLoading ? {
+                                          scale: [1, 1.05, 1],
+                                          opacity: [1, 0.8, 1]
+                                        } : {}}
+                                        transition={{
+                                          duration: 1.5,
+                                          repeat: isLoading ? Infinity : 0,
+                                          ease: "easeInOut"
+                                        }}
                                       >
-                                        {isLoading && <LoadingSpinner size={12} className="mr-1" />}
-                                        {retoucherPrefix} {project.clientName}
-                                      </Badge>
-                                    </div>
-                                  </div>
+                                        <Badge 
+                                          variant="secondary" 
+                                          className={`${colorClass} px-1 py-0 text-xs font-medium w-full justify-start hover:shadow-lg transition-all select-none pointer-events-none overflow-hidden relative`}
+                                        >
+                                          <AnimatePresence>
+                                            {isLoading && (
+                                              <motion.div
+                                                initial={{ opacity: 0, x: -10 }}
+                                                animate={{ opacity: 1, x: 0 }}
+                                                exit={{ opacity: 0, x: 10 }}
+                                                className="mr-1"
+                                              >
+                                                <LoadingSpinner size={12} />
+                                              </motion.div>
+                                            )}
+                                          </AnimatePresence>
+                                          <motion.span
+                                            initial={{ x: isLoading ? 20 : 0 }}
+                                            animate={{ x: 0 }}
+                                            transition={{ duration: 0.2 }}
+                                          >
+                                            {retoucherPrefix} {project.clientName}
+                                          </motion.span>
+                                        </Badge>
+                                      </motion.div>
+                                    </motion.div>
+                                  </motion.div>
                                 );
                               })}
                             </div>
-                            {dayProjects.length === 0 && (
-                              <div 
-                                className={`text-xs text-gray-400 dark:text-gray-600 opacity-50 h-[60px] flex items-center justify-center border-2 border-dashed border-gray-200 dark:border-gray-700 rounded transition-colors hover:border-gray-300 dark:hover:border-gray-600 relative ${
-                                  draggedProject ? 'border-blue-400 bg-blue-50 dark:bg-blue-900/20' : ''
-                                }`}
-                              >
-                                {draggedProject && <span className="text-blue-500 mr-1">⭳</span>}
-                                Drop here
-                              </div>
-                            )}
+                            <AnimatePresence>
+                              {dayProjects.length === 0 && (
+                                <motion.div 
+                                  initial={{ opacity: 0, scale: 0.95 }}
+                                  animate={{ opacity: 1, scale: 1 }}
+                                  exit={{ opacity: 0, scale: 0.95 }}
+                                  className={`text-xs text-gray-400 dark:text-gray-600 opacity-50 h-[60px] flex items-center justify-center border-2 border-dashed border-gray-200 dark:border-gray-700 rounded transition-all duration-300 hover:border-gray-300 dark:hover:border-gray-600 relative overflow-hidden ${
+                                    draggedProject ? 'border-blue-400 bg-blue-50 dark:bg-blue-900/20 shadow-inner' : ''
+                                  }`}
+                                  whileHover={{ 
+                                    borderColor: "#3b82f6", 
+                                    backgroundColor: "rgba(59, 130, 246, 0.05)",
+                                    scale: 1.02
+                                  }}
+                                  transition={{ duration: 0.2 }}
+                                >
+                                  <AnimatePresence>
+                                    {draggedProject && (
+                                      <motion.div
+                                        initial={{ opacity: 0, y: -10 }}
+                                        animate={{ 
+                                          opacity: 1, 
+                                          y: 0,
+                                          rotate: [0, -5, 5, 0]
+                                        }}
+                                        exit={{ opacity: 0, y: 10 }}
+                                        transition={{ 
+                                          duration: 0.3,
+                                          rotate: { repeat: Infinity, duration: 2, ease: "easeInOut" }
+                                        }}
+                                        className="text-blue-500 mr-2 text-lg"
+                                      >
+                                        ⭳
+                                      </motion.div>
+                                    )}
+                                  </AnimatePresence>
+                                  <motion.span
+                                    animate={draggedProject ? { 
+                                      scale: [1, 1.05, 1],
+                                      color: "#3b82f6"
+                                    } : {}}
+                                    transition={{ 
+                                      duration: 1.5, 
+                                      repeat: draggedProject ? Infinity : 0,
+                                      ease: "easeInOut"
+                                    }}
+                                  >
+                                    Drop here
+                                  </motion.span>
+                                  {/* Animated background effect when dragging */}
+                                  {draggedProject && (
+                                    <motion.div
+                                      className="absolute inset-0 bg-gradient-to-r from-blue-100 to-blue-200 dark:from-blue-900/30 dark:to-blue-800/30 opacity-30"
+                                      animate={{
+                                        backgroundPosition: ["0% 0%", "100% 100%"],
+                                      }}
+                                      transition={{
+                                        duration: 2,
+                                        repeat: Infinity,
+                                        repeatType: "reverse",
+                                        ease: "linear"
+                                      }}
+                                    />
+                                  )}
+                                </motion.div>
+                              )}
+                            </AnimatePresence>
                           </div>
                         );
                       })}
@@ -1308,61 +1512,139 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
                   </TableBody>
                 </Table>
               </div>
-              </CardContent>
-            )}
-          </Card>
+                    </CardContent>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </Card>
+          </motion.div>
         );
       })}
       
       {/* Assignment Modal */}
-    {assignProject && (
-      <div className="fixed inset-0 flex items-center justify-center z-50 bg-black/20">
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-4 min-w-[200px] border border-gray-200 dark:border-gray-600">
-          <h3 className="font-medium mb-3 flex items-center gap-2">
-            Assign Project: {assignProject.clientName}
-            {loadingStates[assignProject.id + 'assign'] && (
-              <LoadingSpinner size={16} />
-            )}
-          </h3>
-          <div className="space-y-2">
-            <Button
-              variant="outline"
-              className="w-full justify-start hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-              onClick={() => handleAssignProject(null)}
-              data-testid="assign-unassigned"
-              disabled={loadingStates[assignProject.id + 'assign']}
-            >
-              <UserPlus className="w-4 h-4 mr-2" />
-              Unassigned
-            </Button>
-            {allUsers
-              .filter(u => u.role === 'Retoucher' || u.role === 'Admin')
-              .map((retoucher, index) => (
-                <Button
-                  key={`retoucher-${retoucher.id}-${index}`}
-                  variant="outline"
-                  className="w-full justify-start hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-                  onClick={() => handleAssignProject(retoucher.name)}
-                  data-testid={`assign-${retoucher.name}`}
-                  disabled={loadingStates[assignProject.id + 'assign']}
-                >
-                  <UserPlus className="w-4 h-4 mr-2" />
-                  {getRetoucherFullName(retoucher.name)}
-                </Button>
-              ))
-            }
-            <Button
-              variant="ghost"
-              className="w-full mt-4"
+      <AnimatePresence>
+        {assignProject && (
+          <motion.div 
+            className="fixed inset-0 flex items-center justify-center z-50"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+          >
+            {/* Backdrop */}
+            <motion.div 
+              className="absolute inset-0 bg-black/20 backdrop-blur-sm"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
               onClick={() => setAssignProject(null)}
-              disabled={loadingStates[assignProject.id + 'assign']}
+            />
+            
+            {/* Modal */}
+            <motion.div 
+              className="relative bg-white dark:bg-gray-800 rounded-xl shadow-2xl p-6 min-w-[250px] border border-gray-200 dark:border-gray-600"
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              transition={{ type: "spring", damping: 25, stiffness: 300 }}
             >
-              Cancel
-            </Button>
-          </div>
-        </div>
-      </div>
-    )}
+              <motion.h3 
+                className="font-semibold mb-4 flex items-center gap-2 text-gray-800 dark:text-gray-200"
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: 0.1 }}
+              >
+                <motion.span
+                  animate={{ rotate: [0, 10, -10, 0] }}
+                  transition={{ duration: 0.5, delay: 0.2 }}
+                >
+                  👤
+                </motion.span>
+                Assign Project: {assignProject.clientName}
+                <AnimatePresence>
+                  {loadingStates[assignProject.id + 'assign'] && (
+                    <motion.div
+                      initial={{ opacity: 0, scale: 0.8 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      exit={{ opacity: 0, scale: 0.8 }}
+                    >
+                      <LoadingSpinner size={16} />
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </motion.h3>
+              
+              <motion.div 
+                className="space-y-2"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.15 }}
+              >
+                <FloatingAction className="w-full">
+                  <Button
+                    variant="outline"
+                    className="w-full justify-start group transition-all duration-200 hover:shadow-md hover:border-blue-300"
+                    onClick={() => handleAssignProject(null)}
+                    data-testid="assign-unassigned"
+                    disabled={loadingStates[assignProject.id + 'assign']}
+                  >
+                    <motion.div
+                      whileHover={{ scale: 1.1 }}
+                      transition={{ duration: 0.2 }}
+                    >
+                      <UserPlus className="w-4 h-4 mr-2 group-hover:text-blue-500" />
+                    </motion.div>
+                    Unassigned
+                  </Button>
+                </FloatingAction>
+                
+                <StaggeredList>
+                  {allUsers
+                    .filter(u => u.role === 'Retoucher' || u.role === 'Admin')
+                    .map((retoucher, index) => (
+                      <FloatingAction key={`retoucher-${retoucher.id}-${index}`} className="w-full">
+                        <Button
+                          variant="outline"
+                          className="w-full justify-start group transition-all duration-200 hover:shadow-md hover:border-green-300"
+                          onClick={() => handleAssignProject(retoucher.name)}
+                          data-testid={`assign-${retoucher.name}`}
+                          disabled={loadingStates[assignProject.id + 'assign']}
+                        >
+                          <motion.div
+                            whileHover={{ scale: 1.1 }}
+                            transition={{ duration: 0.2 }}
+                          >
+                            <UserPlus className="w-4 h-4 mr-2 group-hover:text-green-500" />
+                          </motion.div>
+                          {getRetoucherFullName(retoucher.name)}
+                        </Button>
+                      </FloatingAction>
+                    ))
+                  }
+                </StaggeredList>
+                
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ delay: 0.3 }}
+                  className="pt-3 border-t border-gray-200 dark:border-gray-700"
+                >
+                  <FloatingAction>
+                    <Button
+                      variant="ghost"
+                      className="w-full hover:bg-red-50 hover:text-red-600 transition-colors duration-200"
+                      onClick={() => setAssignProject(null)}
+                      disabled={loadingStates[assignProject.id + 'assign']}
+                    >
+                      Cancel
+                    </Button>
+                  </FloatingAction>
+                </motion.div>
+              </motion.div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
