@@ -3,13 +3,14 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Input } from "@/components/ui/input";
 import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import { ProjectNotes } from "./project-notes";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Project } from "@shared/schema";
 import { User, formatRetoucherAbbr, getRetoucherFullName } from "@/lib/types";
-import { Calendar, Star, ChevronDown, ChevronRight, Copy, UserPlus } from "lucide-react";
+import { Calendar, Star, ChevronDown, ChevronRight, Copy, UserPlus, Search, X } from "lucide-react";
 import { useState, useMemo, useCallback, useRef } from "react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 
@@ -98,6 +99,20 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
       ...prev,
       [weekKey]: !prev[weekKey]
     }));
+  };
+
+  // State for client search per week
+  const [weekSearchTerms, setWeekSearchTerms] = useState<Record<string, string>>({});
+
+  // Function to filter projects based on search term for a specific week
+  const filterProjectsBySearch = (projects: Project[], weekKey: string) => {
+    const searchTerm = weekSearchTerms[weekKey]?.toLowerCase().trim();
+    if (!searchTerm) return projects;
+    
+    return projects.filter(project => 
+      project.clientName?.toLowerCase().includes(searchTerm) ||
+      project.assignedTo?.toLowerCase().includes(searchTerm)
+    );
   };
 
   const formatWeekRange = (weekStart: Date) => {
@@ -715,12 +730,60 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
                   Week of {weekLabel}
                 </div>
                 <div className="flex items-center gap-2 text-sm text-gray-500">
-                  <span>📅 ({group.projects.length} projects)</span>
+                  {(() => {
+                    const totalProjects = group.projects.length;
+                    const assignedProjects = group.projects.filter(p => p.assignedTo && p.assignedTo !== "__UNASSIGN__").length;
+                    
+                    return (
+                      <div className="flex items-center gap-1">
+                        <span>📅</span>
+                        <span className="text-green-600 dark:text-green-400 font-semibold">
+                          {assignedProjects}
+                        </span>
+                        <span>/</span>
+                        <span className="text-red-600 dark:text-red-400 font-semibold">
+                          {totalProjects}
+                        </span>
+                        <span className="text-gray-400">projects</span>
+                      </div>
+                    );
+                  })()}
                 </div>
               </CardTitle>
             </CardHeader>
             {!isCollapsed && (
               <CardContent>
+                {/* Client Search Input */}
+                <div className="mb-4 flex items-center gap-2">
+                  <div className="relative flex-1">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                    <Input
+                      placeholder="Search clients or retouchers in this week..."
+                      value={weekSearchTerms[weekKey] || ''}
+                      onChange={(e) => setWeekSearchTerms(prev => ({
+                        ...prev,
+                        [weekKey]: e.target.value
+                      }))}
+                      className="pl-10 pr-10"
+                      data-testid={`search-week-${weekKey}`}
+                    />
+                    {weekSearchTerms[weekKey] && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="absolute right-2 top-1/2 transform -translate-y-1/2 h-6 w-6 p-0 hover:bg-gray-100 dark:hover:bg-gray-700"
+                        onClick={() => setWeekSearchTerms(prev => ({
+                          ...prev,
+                          [weekKey]: ''
+                        }))}
+                        data-testid={`clear-search-${weekKey}`}
+                      >
+                        <X className="h-3 w-3" />
+                      </Button>
+                    )}
+                  </div>
+                </div>
+                
                 {/* Mini Weekly Calendar - only for Admin, LeadRetoucher, and DataWrangler */}
                 {['Admin', 'LeadRetoucher', 'DataWrangler'].includes(user.role) && (
                   <div className="mb-6 border rounded-lg p-4 bg-gray-50 dark:bg-gray-900">
@@ -731,11 +794,12 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
                         const dayName = dayDate.toLocaleDateString('en-US', { weekday: 'short' });
                         const dayNumber = dayDate.getDate();
                         
-                        // Get projects due on this specific day
-                        const dayProjects = group.projects.filter(project => {
+                        // Get projects due on this specific day and apply search filter
+                        const allDayProjects = group.projects.filter(project => {
                           const projectDate = new Date(project.dueDate);
                           return projectDate.toDateString() === dayDate.toDateString();
                         });
+                        const dayProjects = filterProjectsBySearch(allDayProjects, weekKey);
 
                         const getRetoucherPrefix = (assignedTo: string | null) => {
                           // Check if it's a custom user first
@@ -844,7 +908,7 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {group.projects.map(project => (
+                    {filterProjectsBySearch(group.projects, weekKey).map(project => (
                       <TableRow key={project.id}>
                         {user.role === 'Sales' ? (
                           <>
