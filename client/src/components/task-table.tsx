@@ -9,8 +9,9 @@ import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Project } from "@shared/schema";
 import { User, formatRetoucherAbbr, getRetoucherFullName } from "@/lib/types";
-import { Calendar, Star, ChevronDown, ChevronRight, Copy } from "lucide-react";
+import { Calendar, Star, ChevronDown, ChevronRight, Copy, UserPlus } from "lucide-react";
 import { useState, useMemo, useCallback, useRef } from "react";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 
 
 interface TaskTableProps {
@@ -23,6 +24,10 @@ interface TaskTableProps {
 export function TaskTable({ projects, user, allUsers, isPersonalView = false }: TaskTableProps) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  
+  // State for drag and drop
+  const [draggedProject, setDraggedProject] = useState<Project | null>(null);
+  const [assignProject, setAssignProject] = useState<Project | null>(null);
   
   // Local state for input values to ensure smooth typing
   const [localInputValues, setLocalInputValues] = useState<Record<string, {
@@ -441,6 +446,101 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
     }
   };
 
+  // Mutation for updating project assignment
+  const assignProjectMutation = useMutation({
+    mutationFn: async ({ projectId, assignedTo }: { projectId: string; assignedTo: string | null }) => {
+      return await apiRequest(`/api/projects/${projectId}`, "PATCH", { assignedTo });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/projects'] });
+      toast({
+        title: "Project assigned",
+        description: "Project has been assigned successfully.",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to assign project. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Mutation for updating project due date (drag & drop)
+  const updateProjectDateMutation = useMutation({
+    mutationFn: async ({ projectId, dueDate }: { projectId: string; dueDate: Date }) => {
+      return await apiRequest(`/api/projects/${projectId}`, "PATCH", { dueDate: dueDate.toISOString() });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/projects'] });
+      toast({
+        title: "Project moved",
+        description: "Project due date has been updated.",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to move project. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Drag and drop handlers
+  const handleDragStart = (e: React.DragEvent, project: Project) => {
+    setDraggedProject(project);
+    e.dataTransfer.effectAllowed = 'move';
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+  };
+
+  const handleDrop = (e: React.DragEvent, targetDate: Date) => {
+    e.preventDefault();
+    if (draggedProject) {
+      // Only allow moving within the same week
+      const draggedWeekStart = getWeekStart(new Date(draggedProject.dueDate));
+      const targetWeekStart = getWeekStart(targetDate);
+      
+      if (draggedWeekStart.getTime() === targetWeekStart.getTime()) {
+        updateProjectDateMutation.mutate({
+          projectId: draggedProject.id,
+          dueDate: targetDate,
+        });
+      } else {
+        toast({
+          title: "Cannot move project",
+          description: "Projects can only be moved within the same week.",
+          variant: "destructive",
+        });
+      }
+    }
+    setDraggedProject(null);
+  };
+
+  const handleDragEnd = () => {
+    setDraggedProject(null);
+  };
+
+  // Double-click handler for assignment
+  const handleDoubleClick = (project: Project) => {
+    setAssignProject(project);
+  };
+
+  const handleAssignProject = (assignedTo: string | null) => {
+    if (assignProject) {
+      assignProjectMutation.mutate({
+        projectId: assignProject.id,
+        assignedTo,
+      });
+    }
+    setAssignProject(null);
+  };
+
 
 
   // Filter projects for retouchers
@@ -599,33 +699,51 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
                         };
 
                         return (
-                          <div key={dayIndex} className="text-center">
+                          <div 
+                            key={dayIndex} 
+                            className="text-center"
+                            onDragOver={handleDragOver}
+                            onDrop={(e) => handleDrop(e, dayDate)}
+                          >
                             <div className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
                               {dayName}
                             </div>
                             <div className="text-xs text-gray-500 mb-2">
                               {dayNumber}
                             </div>
-                            <div className="space-y-1">
+                            <div className="space-y-1 min-h-[60px] p-1 rounded transition-colors hover:bg-gray-50 dark:hover:bg-gray-800">
                               {dayProjects.map(project => {
                                 const retoucherPrefix = getRetoucherPrefix(project.assignedTo);
                                 const colorClass = getRetoucherColor(retoucherPrefix);
+                                const isDragging = draggedProject?.id === project.id;
                                 
                                 return (
                                   <div key={project.id} className="text-xs">
-                                    <Badge 
-                                      variant="secondary" 
-                                      className={`${colorClass} px-1 py-0 text-xs font-medium w-full justify-start`}
+                                    <div
+                                      draggable
+                                      onDragStart={(e) => handleDragStart(e, project)}
+                                      onDragEnd={handleDragEnd}
+                                      onDoubleClick={() => handleDoubleClick(project)}
+                                      className="cursor-move"
+                                      data-testid={`project-badge-${project.id}`}
+                                      title="Drag to move to another day, double-click to assign"
                                     >
-                                      {retoucherPrefix} {project.clientName}
-                                    </Badge>
+                                      <Badge 
+                                        variant="secondary" 
+                                        className={`${colorClass} px-1 py-0 text-xs font-medium w-full justify-start hover:shadow-md transition-all ${
+                                          isDragging ? 'opacity-50 scale-95' : ''
+                                        } select-none pointer-events-none`}
+                                      >
+                                        {retoucherPrefix} {project.clientName}
+                                      </Badge>
+                                    </div>
                                   </div>
                                 );
                               })}
                             </div>
                             {dayProjects.length === 0 && (
-                              <div className="text-xs text-gray-400 dark:text-gray-600 opacity-50">
-                                —
+                              <div className="text-xs text-gray-400 dark:text-gray-600 opacity-50 h-[60px] flex items-center justify-center border-2 border-dashed border-gray-200 dark:border-gray-700 rounded transition-colors hover:border-gray-300 dark:hover:border-gray-600">
+                                Drop here
                               </div>
                             )}
                           </div>
@@ -1002,6 +1120,48 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
           </Card>
         );
       })}
+      
+      {/* Assignment Modal */}
+    {assignProject && (
+      <div className="fixed inset-0 flex items-center justify-center z-50 bg-black/20">
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-4 min-w-[200px]">
+          <h3 className="font-medium mb-3">Assign Project: {assignProject.clientName}</h3>
+          <div className="space-y-2">
+            <Button
+              variant="outline"
+              className="w-full justify-start"
+              onClick={() => handleAssignProject(null)}
+              data-testid="assign-unassigned"
+            >
+              <UserPlus className="w-4 h-4 mr-2" />
+              Unassigned
+            </Button>
+            {allUsers
+              .filter(u => u.role === 'Retoucher' || u.role === 'Admin')
+              .map(retoucher => (
+                <Button
+                  key={retoucher.id}
+                  variant="outline"
+                  className="w-full justify-start"
+                  onClick={() => handleAssignProject(retoucher.name)}
+                  data-testid={`assign-${retoucher.name}`}
+                >
+                  <UserPlus className="w-4 h-4 mr-2" />
+                  {getRetoucherFullName(retoucher.name)}
+                </Button>
+              ))
+            }
+            <Button
+              variant="ghost"
+              className="w-full"
+              onClick={() => setAssignProject(null)}
+            >
+              Cancel
+            </Button>
+          </div>
+        </div>
+      </div>
+    )}
     </div>
   );
 }

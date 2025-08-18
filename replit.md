@@ -42,6 +42,8 @@ Preferred communication style: Simple, everyday language.
 - **Admin Capabilities**: Admin users can function as both administrators and retouchers.
 - **Calendar Logic**: Sunday-start weeks for consistent scheduling.
 - **Unassigned Project Handling**: Unassigned projects automatically roll over to the next week and are prioritized.
+- **Drag & Drop**: Projects can be moved between days within a week by clicking and dragging project badges.
+- **Quick Assignment**: Double-click any project badge to open assignment options without leaving the calendar view.
 
 ## External Dependencies
 
