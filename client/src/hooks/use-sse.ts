@@ -60,7 +60,19 @@ export function useSSE(user?: { id: string; username: string } | null) {
             break;
 
           default:
-            console.log('Unknown SSE message type:', data.type);
+            // Handle rollover completion
+          if (data.type === 'rollover_complete') {
+            console.log(`🔄 Rollover completed: ${data.payload?.message}`);
+            // Refresh projects after rollover
+            queryClient.invalidateQueries({ queryKey: ['/api/projects'] });
+            // Show notification if there were rolled over projects
+            if (data.payload?.rolledOverCount > 0) {
+              playNotificationSound();
+            }
+            break;
+          }
+          
+          console.log('Unknown SSE message type:', data.type);
         }
       } catch (error) {
         console.error('Error parsing SSE message:', error);

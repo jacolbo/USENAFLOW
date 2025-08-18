@@ -5,6 +5,7 @@ import { storage } from "./storage";
 import { insertProjectSchema, updateProjectSchema, insertProjectNoteSchema, updateProjectNoteSchema, ProjectStatus } from "@shared/schema";
 import { ObjectStorageService, ObjectNotFoundError } from "./objectStorage";
 import type { Notification, WebSocketMessage } from "@shared/schema";
+import { triggerManualRollover } from "./rolloverScheduler";
 
 // Global WebSocket connections store
 const wsConnections = new Map<string, { ws: WebSocket, userId?: string }>();
@@ -13,7 +14,7 @@ const wsConnections = new Map<string, { ws: WebSocket, userId?: string }>();
 const sseConnections = new Map<string, { res: any; userId: string; username: string }>();
 
 // Function to broadcast via SSE
-function broadcastSSE(message: { type: string; payload?: any }, targetUserId?: string) {
+export function broadcastSSE(message: { type: string; payload?: any }, targetUserId?: string) {
   if (!sseConnections) return;
 
   console.log(`Broadcasting SSE message to ${sseConnections.size} connections:`, message.type, targetUserId ? `(target: ${targetUserId})` : '(all users)');
@@ -580,6 +581,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       data: { status: 'connected' },
       timestamp: new Date()
     }));
+  });
+
+  // Manual rollover endpoint for testing
+  app.post("/api/rollover", async (req, res) => {
+    try {
+      await triggerManualRollover();
+      res.json({ success: true, message: "Manual rollover completed" });
+    } catch (error) {
+      console.error("Manual rollover error:", error);
+      res.status(500).json({ success: false, error: "Rollover failed" });
+    }
   });
 
   return httpServer;
