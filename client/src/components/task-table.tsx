@@ -451,19 +451,46 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
     mutationFn: async ({ projectId, assignedTo }: { projectId: string; assignedTo: string | null }) => {
       return await apiRequest("PATCH", `/api/projects/${projectId}`, { assignedTo });
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/projects'] });
-      toast({
-        title: "Project assigned",
-        description: "Project has been assigned successfully.",
+    onMutate: async ({ projectId, assignedTo }) => {
+      // Cancel outgoing refetches
+      await queryClient.cancelQueries({ queryKey: ['/api/projects'] });
+
+      // Snapshot the previous value
+      const previousProjects = queryClient.getQueryData(['/api/projects']);
+
+      // Optimistically update to the new value
+      queryClient.setQueryData(['/api/projects'], (old: Project[] | undefined) => {
+        if (!old) return old;
+        return old.map(project => 
+          project.id === projectId 
+            ? { ...project, assignedTo }
+            : project
+        );
       });
+
+      // Return a context object with the snapshotted value
+      return { previousProjects };
     },
-    onError: () => {
+    onError: (err, variables, context) => {
+      // If the mutation fails, use the context returned from onMutate to roll back
+      if (context?.previousProjects) {
+        queryClient.setQueryData(['/api/projects'], context.previousProjects);
+      }
       toast({
         title: "Error",
         description: "Failed to assign project. Please try again.",
         variant: "destructive",
       });
+    },
+    onSuccess: () => {
+      toast({
+        title: "Project assigned",
+        description: "Project has been assigned successfully.",
+      });
+    },
+    onSettled: () => {
+      // Always refetch after error or success to ensure server state
+      queryClient.invalidateQueries({ queryKey: ['/api/projects'] });
     },
   });
 
@@ -472,19 +499,46 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
     mutationFn: async ({ projectId, dueDate }: { projectId: string; dueDate: Date }) => {
       return await apiRequest("PATCH", `/api/projects/${projectId}`, { dueDate: dueDate.toISOString() });
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/projects'] });
-      toast({
-        title: "Project moved",
-        description: "Project due date has been updated.",
+    onMutate: async ({ projectId, dueDate }) => {
+      // Cancel outgoing refetches
+      await queryClient.cancelQueries({ queryKey: ['/api/projects'] });
+
+      // Snapshot the previous value
+      const previousProjects = queryClient.getQueryData(['/api/projects']);
+
+      // Optimistically update to the new value
+      queryClient.setQueryData(['/api/projects'], (old: Project[] | undefined) => {
+        if (!old) return old;
+        return old.map(project => 
+          project.id === projectId 
+            ? { ...project, dueDate: dueDate.toISOString() }
+            : project
+        );
       });
+
+      // Return a context object with the snapshotted value
+      return { previousProjects };
     },
-    onError: () => {
+    onError: (err, variables, context) => {
+      // If the mutation fails, use the context returned from onMutate to roll back
+      if (context?.previousProjects) {
+        queryClient.setQueryData(['/api/projects'], context.previousProjects);
+      }
       toast({
         title: "Error",
         description: "Failed to move project. Please try again.",
         variant: "destructive",
       });
+    },
+    onSuccess: () => {
+      toast({
+        title: "Project moved",
+        description: "Project due date has been updated.",
+      });
+    },
+    onSettled: () => {
+      // Always refetch after error or success to ensure server state
+      queryClient.invalidateQueries({ queryKey: ['/api/projects'] });
     },
   });
 
@@ -537,12 +591,13 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
   const handleAssignProject = (assignedTo: string | null) => {
     if (assignProject) {
       console.log('Assigning project', assignProject.clientName, 'to', assignedTo);
+      // Close modal immediately for better UX
+      setAssignProject(null);
       assignProjectMutation.mutate({
         projectId: assignProject.id,
         assignedTo,
       });
     }
-    setAssignProject(null);
   };
 
 
