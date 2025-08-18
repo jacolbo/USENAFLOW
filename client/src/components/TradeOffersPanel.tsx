@@ -39,32 +39,37 @@ export function TradeOffersPanel({ currentUser, projects, isAdmin = false }: Tra
   const { data: tradeOffersData = [], isLoading, error } = useQuery({
     queryKey: isAdmin ? ["/api/admin/trade-offers"] : ["/api/trade-offers", currentUser],
     queryFn: async () => {
-      try {
-        const endpoint = isAdmin ? "/api/admin/trade-offers" : `/api/trade-offers?username=${encodeURIComponent(currentUser)}`;
-        const result = await apiRequest("GET", endpoint);
-        return result;
-      } catch (err) {
-        console.error("Failed to fetch trade offers:", err);
-        return [];
-      }
+      const endpoint = isAdmin ? "/api/admin/trade-offers" : `/api/trade-offers?username=${encodeURIComponent(currentUser)}`;
+      console.log("Fetching trade offers from:", endpoint);
+      const response = await apiRequest("GET", endpoint);
+      const result = await response.json();
+      console.log("Trade offers result:", result);
+      return result;
     },
   });
 
   // Ensure tradeOffers is always an array with proper error handling
   const tradeOffers: TradeOffer[] = React.useMemo(() => {
+    console.log("Processing trade offers data:", { tradeOffersData, error, isLoading });
+    
     if (error) {
       console.error("Trade offers query error:", error);
       return [];
     }
+    if (isLoading) {
+      return [];
+    }
     if (!tradeOffersData) {
+      console.log("No trade offers data");
       return [];
     }
     if (Array.isArray(tradeOffersData)) {
+      console.log("Trade offers array length:", tradeOffersData.length);
       return tradeOffersData;
     }
     console.warn("Trade offers data is not an array:", tradeOffersData);
     return [];
-  }, [tradeOffersData, error]);
+  }, [tradeOffersData, error, isLoading]);
 
   // Get user's available projects for trading
   const userProjects = projects.filter(project => 
