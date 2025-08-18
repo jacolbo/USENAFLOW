@@ -35,40 +35,45 @@ export function TradeOffersPanel({ currentUser, projects, isAdmin = false }: Tra
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  // Fetch trade offers with error handling
+  // Fetch trade offers with comprehensive error handling
   const { data: tradeOffersData = [], isLoading, error } = useQuery({
     queryKey: isAdmin ? ["/api/admin/trade-offers"] : ["/api/trade-offers", currentUser],
     queryFn: async () => {
-      const endpoint = isAdmin ? "/api/admin/trade-offers" : `/api/trade-offers?username=${encodeURIComponent(currentUser)}`;
-      console.log("Fetching trade offers from:", endpoint);
-      const response = await apiRequest("GET", endpoint);
-      const result = await response.json();
-      console.log("Trade offers result:", result);
-      return result;
+      try {
+        const endpoint = isAdmin ? "/api/admin/trade-offers" : `/api/trade-offers?username=${encodeURIComponent(currentUser)}`;
+        const response = await apiRequest("GET", endpoint);
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        const result = await response.json();
+        return Array.isArray(result) ? result : [];
+      } catch (err) {
+        console.error("Failed to fetch trade offers:", err);
+        return [];
+      }
     },
+    staleTime: 30000,
+    retry: 1,
   });
 
-  // Ensure tradeOffers is always an array with proper error handling
+  // Ensure tradeOffers is always an array with bulletproof error handling
   const tradeOffers: TradeOffer[] = React.useMemo(() => {
-    console.log("Processing trade offers data:", { tradeOffersData, error, isLoading });
-    
-    if (error) {
-      console.error("Trade offers query error:", error);
+    try {
+      if (error || isLoading || !tradeOffersData) {
+        return [];
+      }
+      
+      if (Array.isArray(tradeOffersData)) {
+        return tradeOffersData.filter(offer => offer && typeof offer === 'object' && offer.id);
+      }
+      
+      // Handle edge case where API returns non-array
+      console.warn("Trade offers data is not an array, returning empty array");
+      return [];
+    } catch (err) {
+      console.error("Error processing trade offers:", err);
       return [];
     }
-    if (isLoading) {
-      return [];
-    }
-    if (!tradeOffersData) {
-      console.log("No trade offers data");
-      return [];
-    }
-    if (Array.isArray(tradeOffersData)) {
-      console.log("Trade offers array length:", tradeOffersData.length);
-      return tradeOffersData;
-    }
-    console.warn("Trade offers data is not an array:", tradeOffersData);
-    return [];
   }, [tradeOffersData, error, isLoading]);
 
   // Get user's available projects for trading

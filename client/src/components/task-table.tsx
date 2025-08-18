@@ -1452,8 +1452,8 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
                                 </Button>
                               )}
                               
-                              {/* Retoucher or Admin (as Anesu's Pops) can mark done on their assigned task */}
-                              {(user.role === 'Retoucher' || (user.role === 'Admin' && user.name === "Anesu's Pops")) && 
+                              {/* All retouchers and admins can mark done on their assigned tasks */}
+                              {(user.role === 'Retoucher' || user.role === 'Admin') && 
                                project.assignedTo && 
                                project.assignedTo.toLowerCase() === user.name.toLowerCase() && 
                                project.status === 'Assigned' && (
@@ -1461,6 +1461,7 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
                                   size="sm" 
                                   onClick={() => handleMarkDone(project.id)}
                                   disabled={updateProjectMutation.isPending}
+                                  data-testid={`button-mark-done-${project.id}`}
                                 >
                                   Mark Done
                                 </Button>
