@@ -531,6 +531,8 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
         title: "Project assigned",
         description: "Project has been assigned successfully.",
       });
+      // Clear assignment modal immediately to prevent lag
+      setAssignProject(null);
     },
     onSettled: () => {
       // Always refetch after error or success to ensure server state
@@ -636,12 +638,20 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
     if (assignProject) {
       console.log('Assigning project', assignProject.clientName, 'to', assignedTo);
       setLoadingStates(prev => ({ ...prev, [assignProject.id + 'assign']: true }));
-      // Close modal immediately for better UX
-      setAssignProject(null);
+      
       assignProjectMutation.mutate({
         projectId: assignProject.id,
         assignedTo,
       });
+      
+      // Clear loading state after a brief delay
+      setTimeout(() => {
+        setLoadingStates(prev => {
+          const updated = { ...prev };
+          delete updated[assignProject.id + 'assign'];
+          return updated;
+        });
+      }, 1000);
     }
   };
 
@@ -1009,7 +1019,7 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
                                     <motion.div
                                       draggable
                                       onDragStart={(e) => handleDragStart(e as any, project)}
-                                      onDragEnd={(e) => handleDragEnd(e as any)}
+                                      onDragEnd={handleDragEnd}
                                       onDoubleClick={() => handleDoubleClick(project)}
                                       className="cursor-move relative"
                                       data-testid={`project-badge-${project.id}`}
@@ -1478,18 +1488,29 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
                                 </>
                               )}
                               
-                              {/* Duplicate button for Admin, Sales, Data Wrangler */}
-                              {['Admin', 'Sales', 'DataWrangler'].includes(user.role) && (
-                                <Button 
-                                  size="sm" 
-                                  variant="outline"
-                                  onClick={() => handleDuplicateProject(project.id)}
-                                  disabled={duplicateProjectMutation.isPending}
-                                  className="ml-2"
+                              {/* Duplicate button for Admin, Sales, Data Wrangler, and Lead Retoucher (Manager) */}
+                              {['Admin', 'Sales', 'DataWrangler', 'LeadRetoucher'].includes(user.role) && (
+                                <motion.div
+                                  whileHover={{ scale: 1.02 }}
+                                  whileTap={{ scale: 0.98 }}
+                                  transition={{ type: "spring", stiffness: 300, damping: 20 }}
                                 >
-                                  <Copy className="h-4 w-4 mr-1" />
-                                  Duplicate
-                                </Button>
+                                  <Button 
+                                    size="sm" 
+                                    variant="outline"
+                                    onClick={() => handleDuplicateProject(project.id)}
+                                    disabled={duplicateProjectMutation.isPending}
+                                    className="ml-2 hover:bg-blue-50 dark:hover:bg-blue-900/20 border-blue-200 dark:border-blue-700"
+                                  >
+                                    <motion.div
+                                      animate={{ rotate: duplicateProjectMutation.isPending ? 360 : 0 }}
+                                      transition={{ duration: 1, repeat: duplicateProjectMutation.isPending ? Infinity : 0, ease: "linear" }}
+                                    >
+                                      <Copy className="h-4 w-4 mr-1" />
+                                    </motion.div>
+                                    {duplicateProjectMutation.isPending ? "Duplicating..." : "Duplicate"}
+                                  </Button>
+                                </motion.div>
                               )}
 
                               {/* Delete button for Admin and Lead Retoucher */}
