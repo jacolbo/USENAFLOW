@@ -40,11 +40,11 @@ export function NotificationCenter({
       case 'PROJECT_STATUS_CHANGED':
         return '🔄';
       case 'TRADE_OFFER_RECEIVED':
-        return '🔄';
+        return '🔁';
       case 'TRADE_OFFER_ACCEPTED':
-        return '✅';
+        return '🤝';
       case 'TRADE_COMPLETED':
-        return '🔄';
+        return '🎯';
       default:
         return '📢';
     }
