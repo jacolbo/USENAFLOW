@@ -6,6 +6,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Input } from "@/components/ui/input";
 import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import { ProjectNotes } from "./project-notes";
+import { ErrorBoundary } from "./ErrorBoundary";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Project } from "@shared/schema";
@@ -1327,11 +1328,13 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
                               )}
                             </TableCell>
                             <TableCell>
-                              <ProjectNotes 
-                                projectId={project.id} 
-                                userRole={user.role} 
-                                hasNotes={(allNotesQuery.data?.[project.id] || 0) > 0}
-                              />
+                              <ErrorBoundary fallback={<div className="text-sm text-gray-500">Notes unavailable</div>}>
+                                <ProjectNotes 
+                                  projectId={project.id} 
+                                  userRole={user.role} 
+                                  hasNotes={(allNotesQuery.data?.[project.id] || 0) > 0}
+                                />
+                              </ErrorBoundary>
                             </TableCell>
                           </>
                         ) : (
@@ -1403,11 +1406,13 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
                             </TableCell>
                             <TableCell>{getStatusBadge(project.status)}</TableCell>
                             <TableCell>
-                              <ProjectNotes 
-                                projectId={project.id} 
-                                userRole={user.role} 
-                                hasNotes={(allNotesQuery.data?.[project.id] || 0) > 0}
-                              />
+                              <ErrorBoundary fallback={<div className="text-sm text-gray-500">Notes unavailable</div>}>
+                                <ProjectNotes 
+                                  projectId={project.id} 
+                                  userRole={user.role} 
+                                  hasNotes={(allNotesQuery.data?.[project.id] || 0) > 0}
+                                />
+                              </ErrorBoundary>
                             </TableCell>
                           </>
                         )}

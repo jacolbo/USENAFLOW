@@ -22,22 +22,13 @@ interface ProjectNotesProps {
 }
 
 export function ProjectNotes({ projectId, userRole, hasNotes }: ProjectNotesProps) {
-  // Check permissions first to avoid conditional hooks
-  const canManageNotes = ["Admin", "Sales", "DataWrangler"].includes(userRole);
-  const isRetoucher = ["Retoucher"].includes(userRole);
-  
-  // Always declare hooks, even if component returns early
+  // ALL hooks declared first, NO conditions or early returns before ALL hooks
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [activeTab, setActiveTab] = useState("text");
   const [newTextNote, setNewTextNote] = useState("");
   const [editingNote, setEditingNote] = useState<ProjectNote | null>(null);
   const [editingContent, setEditingContent] = useState("");
   const { toast } = useToast();
-  
-  // Early return AFTER all hooks are declared
-  if (isRetoucher && !hasNotes) {
-    return null;
-  }
 
   const notesQuery = useQuery({
     queryKey: ["/api/projects", projectId, "notes"],
@@ -160,6 +151,15 @@ export function ProjectNotes({ projectId, userRole, hasNotes }: ProjectNotesProp
       });
     }
   };
+
+  // ONLY NOW check permissions after ALL hooks are declared
+  const canManageNotes = ["Admin", "Sales", "DataWrangler"].includes(userRole);
+  const isRetoucher = ["Retoucher"].includes(userRole);
+  
+  // Early return for retouchers without notes - AFTER all hooks
+  if (isRetoucher && !hasNotes) {
+    return null;
+  }
 
   const startEditing = (note: ProjectNote) => {
     setEditingNote(note);
