@@ -43,7 +43,8 @@ export function TradeOfferModal({ open, onOpenChange, currentUser, projects }: T
 
   const createTradeMutation = useMutation({
     mutationFn: async (data: InsertTradeOffer) => {
-      return apiRequest("/api/trade-offers", "POST", data);
+      const response = await apiRequest("POST", "/api/trade-offers", data);
+      return response.json();
     },
     onSuccess: () => {
       toast({
@@ -55,10 +56,11 @@ export function TradeOfferModal({ open, onOpenChange, currentUser, projects }: T
       onOpenChange(false);
       resetForm();
     },
-    onError: () => {
+    onError: (error: any) => {
+      console.error("Trade offer creation error:", error);
       toast({
         title: "Error",
-        description: "Failed to create trade offer. Please try again.",
+        description: error?.message || "Failed to create trade offer. Please try again.",
         variant: "destructive",
       });
     },
