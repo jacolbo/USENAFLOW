@@ -602,8 +602,15 @@ export default function Dashboard() {
                       {showArchive ? "(2+ weeks old)" : "(Previous, current & next week + unassigned rollover)"}
                     </span>
                   </div>
-                  <div className="text-sm text-gray-600">
-                    {projects.length} project{projects.length !== 1 ? 's' : ''} {showArchive ? 'archived' : 'current'}
+                  <div className="flex items-center gap-4">
+                    <div className="text-sm text-gray-600">
+                      {projects.length} project{projects.length !== 1 ? 's' : ''} {showArchive ? 'archived' : 'current'}
+                    </div>
+                    {!showArchive && (
+                      <div className="text-sm font-medium text-blue-600 bg-blue-50 px-3 py-1 rounded-full">
+                        📸 {projects.reduce((total, p) => total + (p.selectedCount || 0), 0)} photos total
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>

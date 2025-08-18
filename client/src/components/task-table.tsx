@@ -807,38 +807,75 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
                   {(() => {
                     const totalProjects = group.projects.length;
                     const assignedProjects = group.projects.filter(p => p.assignedTo && p.assignedTo !== "__UNASSIGN__").length;
+                    const totalPhotos = group.projects.reduce((sum, p) => sum + (p.selectedCount || 0), 0);
+                    const assignedPhotos = group.projects
+                      .filter(p => p.assignedTo && p.assignedTo !== "__UNASSIGN__")
+                      .reduce((sum, p) => sum + (p.selectedCount || 0), 0);
                     
                     return (
-                      <div className="flex items-center gap-1">
-                        <motion.span
-                          animate={{ 
-                            scale: [1, 1.2, 1],
-                            rotate: [0, -10, 10, 0]
-                          }}
-                          transition={{ 
-                            duration: 3,
-                            repeat: Infinity,
-                            ease: "easeInOut"
-                          }}
-                        >
-                          📅
-                        </motion.span>
-                        <motion.span 
-                          className="text-green-600 dark:text-green-400 font-semibold"
-                          animate={{ scale: assignedProjects > 0 ? [1, 1.1, 1] : 1 }}
-                          transition={{ duration: 0.5, ease: "easeInOut" }}
-                        >
-                          {assignedProjects}
-                        </motion.span>
-                        <span>/</span>
-                        <motion.span 
-                          className="text-red-600 dark:text-red-400 font-semibold"
-                          animate={{ scale: totalProjects > 0 ? [1, 1.05, 1] : 1 }}
-                          transition={{ duration: 0.5, ease: "easeInOut", delay: 0.1 }}
-                        >
-                          {totalProjects}
-                        </motion.span>
-                        <span className="text-gray-400">projects</span>
+                      <div className="flex items-center gap-4">
+                        <div className="flex items-center gap-1">
+                          <motion.span
+                            animate={{ 
+                              scale: [1, 1.2, 1],
+                              rotate: [0, -10, 10, 0]
+                            }}
+                            transition={{ 
+                              duration: 3,
+                              repeat: Infinity,
+                              ease: "easeInOut"
+                            }}
+                          >
+                            📅
+                          </motion.span>
+                          <motion.span 
+                            className="text-green-600 dark:text-green-400 font-semibold"
+                            animate={{ scale: assignedProjects > 0 ? [1, 1.1, 1] : 1 }}
+                            transition={{ duration: 0.5, ease: "easeInOut" }}
+                          >
+                            {assignedProjects}
+                          </motion.span>
+                          <span>/</span>
+                          <motion.span 
+                            className="text-red-600 dark:text-red-400 font-semibold"
+                            animate={{ scale: totalProjects > 0 ? [1, 1.05, 1] : 1 }}
+                            transition={{ duration: 0.5, ease: "easeInOut", delay: 0.1 }}
+                          >
+                            {totalProjects}
+                          </motion.span>
+                          <span className="text-gray-400">projects</span>
+                        </div>
+                        
+                        <div className="flex items-center gap-1 bg-blue-50 px-2 py-1 rounded-full">
+                          <motion.span
+                            animate={{ 
+                              scale: [1, 1.1, 1]
+                            }}
+                            transition={{ 
+                              duration: 2,
+                              repeat: Infinity,
+                              ease: "easeInOut"
+                            }}
+                          >
+                            📸
+                          </motion.span>
+                          <motion.span 
+                            className="text-blue-600 font-semibold"
+                            animate={{ scale: assignedPhotos > 0 ? [1, 1.1, 1] : 1 }}
+                            transition={{ duration: 0.5, ease: "easeInOut" }}
+                          >
+                            {assignedPhotos}
+                          </motion.span>
+                          <span>/</span>
+                          <motion.span 
+                            className="text-blue-800 font-semibold"
+                            animate={{ scale: totalPhotos > 0 ? [1, 1.05, 1] : 1 }}
+                            transition={{ duration: 0.5, ease: "easeInOut", delay: 0.1 }}
+                          >
+                            {totalPhotos}
+                          </motion.span>
+                          <span className="text-blue-600 text-xs">photos</span>
+                        </div>
                       </div>
                     );
                   })()}
