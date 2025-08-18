@@ -12,6 +12,7 @@ import { Project } from "@shared/schema";
 import { User, formatRetoucherAbbr, getRetoucherFullName } from "@/lib/types";
 import { Calendar, Star, ChevronDown, ChevronRight, Copy, UserPlus, Search, X } from "lucide-react";
 import { useState, useMemo, useCallback, useRef } from "react";
+import { LoadingSpinner } from './LoadingStates';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 
 
@@ -29,6 +30,9 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
   // State for drag and drop
   const [draggedProject, setDraggedProject] = useState<Project | null>(null);
   const [assignProject, setAssignProject] = useState<Project | null>(null);
+  
+  // Loading states for different operations
+  const [loadingStates, setLoadingStates] = useState<Record<string, boolean>>({});
   
   // Local state for input values to ensure smooth typing
   const [localInputValues, setLocalInputValues] = useState<Record<string, {
@@ -127,13 +131,35 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
 
   const updateProjectMutation = useMutation({
     mutationFn: async ({ id, endpoint, data }: { id: string; endpoint: string; data?: any }) => {
+      setLoadingStates(prev => ({ ...prev, [id + endpoint]: true }));
       const response = await apiRequest("PATCH", `/api/projects/${id}/${endpoint}`, data);
       return response.json();
     },
-    onSuccess: () => {
+    onSuccess: (_, variables) => {
+      // Clear all loading states for this project
+      setLoadingStates(prev => {
+        const newStates = { ...prev };
+        delete newStates[variables.id + variables.endpoint];
+        delete newStates[variables.id + 'mark-paid'];
+        delete newStates[variables.id + 'deliver'];
+        delete newStates[variables.id + 'assign'];
+        return newStates;
+      });
       queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
+      toast({
+        description: "Project updated successfully!",
+      });
     },
-    onError: () => {
+    onError: (_, variables) => {
+      // Clear all loading states for this project
+      setLoadingStates(prev => {
+        const newStates = { ...prev };
+        delete newStates[variables.id + variables.endpoint];
+        delete newStates[variables.id + 'mark-paid'];
+        delete newStates[variables.id + 'deliver'];
+        delete newStates[variables.id + 'assign'];
+        return newStates;
+      });
       toast({
         title: "Error",
         description: "Failed to update project. Please try again.",
@@ -188,6 +214,7 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
   };
 
   const handleMarkPaid = (projectId: string) => {
+    setLoadingStates(prev => ({ ...prev, [projectId + 'mark-paid']: true }));
     updateProjectMutation.mutate({
       id: projectId,
       endpoint: "mark-paid",
@@ -209,6 +236,7 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
   };
 
   const handleDeliver = (projectId: string) => {
+    setLoadingStates(prev => ({ ...prev, [projectId + 'deliver']: true }));
     updateProjectMutation.mutate({
       id: projectId,
       endpoint: "deliver",
@@ -606,6 +634,7 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
   const handleAssignProject = (assignedTo: string | null) => {
     if (assignProject) {
       console.log('Assigning project', assignProject.clientName, 'to', assignedTo);
+      setLoadingStates(prev => ({ ...prev, [assignProject.id + 'assign']: true }));
       // Close modal immediately for better UX
       setAssignProject(null);
       assignProjectMutation.mutate({
@@ -867,6 +896,7 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
                                 const retoucherPrefix = getRetoucherPrefix(project.assignedTo);
                                 const colorClass = getProjectColor(project, retoucherPrefix);
                                 const isDragging = draggedProject?.id === project.id;
+                        const isLoading = loadingStates[project.id + 'assign'] || loadingStates[project.id + 'move'];
                                 
                                 return (
                                   <div key={project.id} className="text-xs">
@@ -875,16 +905,15 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
                                       onDragStart={(e) => handleDragStart(e, project)}
                                       onDragEnd={handleDragEnd}
                                       onDoubleClick={() => handleDoubleClick(project)}
-                                      className="cursor-move"
+                                      className={`cursor-move relative ${isDragging ? 'opacity-50 scale-95' : ''} transition-all duration-200`}
                                       data-testid={`project-badge-${project.id}`}
                                       title="Drag to move to another day, double-click to assign"
                                     >
                                       <Badge 
                                         variant="secondary" 
-                                        className={`${colorClass} px-1 py-0 text-xs font-medium w-full justify-start hover:shadow-md transition-all ${
-                                          isDragging ? 'opacity-50 scale-95' : ''
-                                        } select-none pointer-events-none`}
+                                        className={`${colorClass} px-1 py-0 text-xs font-medium w-full justify-start hover:shadow-md transition-all select-none pointer-events-none ${isLoading ? 'animate-pulse' : ''}`}
                                       >
+                                        {isLoading && <LoadingSpinner size={12} className="mr-1" />}
                                         {retoucherPrefix} {project.clientName}
                                       </Badge>
                                     </div>
@@ -893,7 +922,12 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
                               })}
                             </div>
                             {dayProjects.length === 0 && (
-                              <div className="text-xs text-gray-400 dark:text-gray-600 opacity-50 h-[60px] flex items-center justify-center border-2 border-dashed border-gray-200 dark:border-gray-700 rounded transition-colors hover:border-gray-300 dark:hover:border-gray-600">
+                              <div 
+                                className={`text-xs text-gray-400 dark:text-gray-600 opacity-50 h-[60px] flex items-center justify-center border-2 border-dashed border-gray-200 dark:border-gray-700 rounded transition-colors hover:border-gray-300 dark:hover:border-gray-600 relative ${
+                                  draggedProject ? 'border-blue-400 bg-blue-50 dark:bg-blue-900/20' : ''
+                                }`}
+                              >
+                                {draggedProject && <span className="text-blue-500 mr-1">⭳</span>}
                                 Drop here
                               </div>
                             )}
@@ -962,7 +996,11 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
                                     size="sm"
                                     className="text-green-600 hover:text-green-700"
                                     data-testid={`button-mark-paid-${project.id}`}
+                                    disabled={loadingStates[project.id + 'mark-paid']}
                                   >
+                                    {loadingStates[project.id + 'mark-paid'] ? (
+                                      <LoadingSpinner size={14} className="mr-2" />
+                                    ) : null}
                                     Mark Paid
                                   </Button>
                                 )}
@@ -973,7 +1011,11 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
                                     size="sm"
                                     className="text-blue-600 hover:text-blue-700"
                                     data-testid={`button-deliver-${project.id}`}
+                                    disabled={loadingStates[project.id + 'deliver']}
                                   >
+                                    {loadingStates[project.id + 'deliver'] ? (
+                                      <LoadingSpinner size={14} className="mr-2" />
+                                    ) : null}
                                     Deliver
                                   </Button>
                                 )}
@@ -1275,14 +1317,20 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
       {/* Assignment Modal */}
     {assignProject && (
       <div className="fixed inset-0 flex items-center justify-center z-50 bg-black/20">
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-4 min-w-[200px]">
-          <h3 className="font-medium mb-3">Assign Project: {assignProject.clientName}</h3>
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-4 min-w-[200px] border border-gray-200 dark:border-gray-600">
+          <h3 className="font-medium mb-3 flex items-center gap-2">
+            Assign Project: {assignProject.clientName}
+            {loadingStates[assignProject.id + 'assign'] && (
+              <LoadingSpinner size={16} />
+            )}
+          </h3>
           <div className="space-y-2">
             <Button
               variant="outline"
-              className="w-full justify-start"
+              className="w-full justify-start hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
               onClick={() => handleAssignProject(null)}
               data-testid="assign-unassigned"
+              disabled={loadingStates[assignProject.id + 'assign']}
             >
               <UserPlus className="w-4 h-4 mr-2" />
               Unassigned
@@ -1293,9 +1341,10 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
                 <Button
                   key={`retoucher-${retoucher.id}-${index}`}
                   variant="outline"
-                  className="w-full justify-start"
+                  className="w-full justify-start hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
                   onClick={() => handleAssignProject(retoucher.name)}
                   data-testid={`assign-${retoucher.name}`}
+                  disabled={loadingStates[assignProject.id + 'assign']}
                 >
                   <UserPlus className="w-4 h-4 mr-2" />
                   {getRetoucherFullName(retoucher.name)}
@@ -1304,8 +1353,9 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
             }
             <Button
               variant="ghost"
-              className="w-full"
+              className="w-full mt-4"
               onClick={() => setAssignProject(null)}
+              disabled={loadingStates[assignProject.id + 'assign']}
             >
               Cancel
             </Button>
