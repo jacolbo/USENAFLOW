@@ -76,7 +76,10 @@ export default function Dashboard() {
     { id: "data", username: "data", password: "data123", role: "DataWrangler", name: "Data Wrangler", abbreviation: "DW" },
     { id: "earl", username: "earl", password: "earl123", role: "Retoucher", name: "Earl", abbreviation: "EC" },
     { id: "asa", username: "asa", password: "asa123", role: "Retoucher", name: "Dr Asa", abbreviation: "ASA" },
-    { id: "lucky", username: "lucky", password: "lm123", role: "Retoucher", name: "Lucky", abbreviation: "LM" },
+    // Multiple login options for Lucky to fix his computer login issues
+    { id: "lucky", username: "lucky", password: "lucky123", role: "Retoucher", name: "Lucky", abbreviation: "LM" },
+    { id: "lucky2", username: "lm", password: "lm123", role: "Retoucher", name: "Lucky", abbreviation: "LM" },
+    { id: "lucky3", username: "Lucky", password: "lucky", role: "Retoucher", name: "Lucky", abbreviation: "LM" },
   ]);
 
   const { data: allProjects = [], isLoading } = useQuery<Project[]>({
@@ -397,8 +400,8 @@ export default function Dashboard() {
                       onClearAll={clearAllNotifications}
                     />
 
-                    {/* Trade Offer Button for Retouchers */}
-                    {user.role === "Retoucher" && (
+                    {/* Trade Offer Button for Retouchers and Admin */}
+                    {(user.role === "Retoucher" || user.role === "Admin") && (
                       <Button 
                         variant="outline"
                         size="sm"

@@ -83,7 +83,7 @@ export function TradeOfferModal({ open, onOpenChange, currentUser, projects }: T
     const tradeData: InsertTradeOffer = {
       offeringUser: currentUser,
       offeringProjectId: selectedProject,
-      targetUser: targetUser || null,
+      targetUser: targetUser === "__ANYONE__" ? null : (targetUser || null),
       requestedProjectId: null,
       message: message || null,
       status: "pending",
@@ -160,7 +160,7 @@ export function TradeOfferModal({ open, onOpenChange, currentUser, projects }: T
                 <SelectValue placeholder="Anyone can accept (leave empty) or select specific user..." />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">
+                <SelectItem value="__ANYONE__">
                   <div className="flex items-center gap-2">
                     <User className="h-4 w-4" />
                     <span>Open to Anyone</span>
