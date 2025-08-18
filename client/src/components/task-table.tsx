@@ -836,9 +836,9 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
                           if (projectWeek <= twoWeeksAgo) {
                             return 'bg-red-600 text-white dark:bg-red-600 dark:text-white';
                           }
-                          // Projects rolled over from previous week (rolled over once) → Orange
+                          // Projects rolled over from previous week (rolled over once) → Green
                           else if (projectWeek.getTime() === previousWeek.getTime()) {
-                            return 'bg-orange-600 text-white dark:bg-orange-600 dark:text-white';
+                            return 'bg-green-600 text-white dark:bg-green-600 dark:text-white';
                           }
                           // Projects added by wrangler for current week (new projects) → Green
                           else if (projectWeek.getTime() === currentWeek.getTime()) {
