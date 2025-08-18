@@ -76,10 +76,8 @@ export default function Dashboard() {
     { id: "data", username: "data", password: "data123", role: "DataWrangler", name: "Data Wrangler", abbreviation: "DW" },
     { id: "earl", username: "earl", password: "earl123", role: "Retoucher", name: "Earl", abbreviation: "EC" },
     { id: "asa", username: "asa", password: "asa123", role: "Retoucher", name: "Dr Asa", abbreviation: "ASA" },
-    // Multiple login options for Lucky to fix his computer login issues
+    // Single working account for Lucky with all his projects
     { id: "lucky", username: "lucky", password: "lucky123", role: "Retoucher", name: "Lucky", abbreviation: "LM" },
-    { id: "lucky2", username: "lm", password: "lm123", role: "Retoucher", name: "Lucky", abbreviation: "LM" },
-    { id: "lucky3", username: "Lucky", password: "lucky", role: "Retoucher", name: "Lucky", abbreviation: "LM" },
   ]);
 
   const { data: allProjects = [], isLoading } = useQuery<Project[]>({
