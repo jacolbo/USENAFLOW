@@ -329,6 +329,17 @@ export class DatabaseStorage implements IStorage {
     return user;
   }
 
+  async updateUserPassword(userId: string, hashedPassword: string): Promise<void> {
+    await db
+      .update(users)
+      .set({ 
+        password: hashedPassword,
+        mustChangePassword: false,
+        updatedAt: new Date()
+      })
+      .where(eq(users.id, userId));
+  }
+
   async getAllProjects(): Promise<Project[]> {
     return await db.select().from(projects);
   }

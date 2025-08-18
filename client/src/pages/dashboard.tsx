@@ -1,8 +1,8 @@
 import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
-import { LoginForm } from "@/components/login-form";
-import { RegisterForm } from "@/components/register-form";
+import { SecureLoginForm } from "@/components/SecureLoginForm";
+import { ChangePasswordModal } from "@/components/ChangePasswordModal";
 import { SettingsPanel } from "@/components/settings-panel";
 import { AddProjectForm } from "@/components/add-project-form";
 import { TaskTable } from "@/components/task-table";
@@ -14,36 +14,20 @@ import { TradeOfferModal } from "@/components/TradeOfferModal";
 import { WRUButton } from "@/components/WRUButton";
 import { useSSE } from "@/hooks/use-sse";
 import { User } from "@/lib/types";
-import { Project } from "@shared/schema";
+import { Project, User as DbUser } from "@shared/schema";
 import { User as UserIcon, LogOut, Settings, Archive, ArrowRightLeft } from "lucide-react";
 import logoImage from "@assets/USENA-FLOW_1754522507856.png";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 
-interface UserCredential {
-  username: string;
-  password: string;
-  role: string;
-  name: string;
-  abbr: string;
-  id?: string;
-}
 
-interface UserCredentials {
-  id: string;
-  username: string;
-  password: string;
-  name: string;
-  role: string;
-  abbreviation: string;
-}
 
 export default function Dashboard() {
   const [user, setUser] = useState<User | null>(null);
-  const [currentView, setCurrentView] = useState<'login' | 'register'>('login');
   const [showArchive, setShowArchive] = useState(false);
   const [showTradeModal, setShowTradeModal] = useState(false);
+  const [showChangePassword, setShowChangePassword] = useState(false);
 
   // Initialize SSE for live sync and notifications
   const {
@@ -54,8 +38,7 @@ export default function Dashboard() {
     unreadCount
   } = useSSE(user ? { id: user.role, username: user.name } : null);
   
-  // Session timeout duration (2 hours in milliseconds)
-  const SESSION_TIMEOUT = 2 * 60 * 60 * 1000;
+
   const [users, setUsers] = useState<User[]>([
     { id: "1", name: "Earl", role: "Retoucher", value: "Retoucher1", abbr: "EC" },
     { id: "2", name: "Dr Asa", role: "Retoucher", value: "Retoucher2", abbr: "ASA" },
@@ -66,18 +49,6 @@ export default function Dashboard() {
     { name: "Sales", role: "Sales", value: "Sales" },
     { name: "Workflow Manager", role: "LeadRetoucher", value: "LeadRetoucher" },
     { name: "Data Wrangler", role: "DataWrangler", value: "DataWrangler" },
-  ]);
-
-  // User credentials for login/register system
-  const [userCredentials, setUserCredentials] = useState<UserCredentials[]>([
-    { id: "admin", username: "admin", password: "admin123", role: "Admin", name: "Anesu's Pops", abbreviation: "AP" },
-    { id: "sales", username: "sales", password: "sales123", role: "Sales", name: "sales", abbreviation: "SAL" },
-    { id: "workflow", username: "workflow", password: "workflow123", role: "LeadRetoucher", name: "Workflow Manager", abbreviation: "WFM" },
-    { id: "data", username: "data", password: "data123", role: "DataWrangler", name: "Data Wrangler", abbreviation: "DW" },
-    { id: "earl", username: "earl", password: "earl123", role: "Retoucher", name: "Earl", abbreviation: "EC" },
-    { id: "asa", username: "asa", password: "asa123", role: "Retoucher", name: "Dr Asa", abbreviation: "ASA" },
-    // Single working account for Lucky with all his projects
-    { id: "lucky", username: "lucky", password: "lucky123", role: "Retoucher", name: "Lucky", abbreviation: "LM" },
   ]);
 
   const { data: allProjects = [], isLoading } = useQuery<Project[]>({
@@ -194,113 +165,76 @@ export default function Dashboard() {
     }).length;
   };
 
-  // Check for existing session on component mount and periodically
+  // Load saved session on component mount
   useEffect(() => {
-    const storedUser = getStoredSession();
-    if (storedUser && !user) {
-      setUser(storedUser);
-      // Sync with users array for consistency
-      const existingUserIndex = users.findIndex(u => u.name === storedUser.name);
-      if (existingUserIndex === -1) {
-        setUsers(prev => [...prev, storedUser]);
-      }
-    }
-
-    // Set up interval to check session expiry every minute
-    const sessionCheckInterval = setInterval(() => {
-      if (user) {
-        const storedUser = getStoredSession();
-        if (!storedUser) {
-          // Session expired, log out user
-          setUser(null);
-          setCurrentView('login');
+    const token = localStorage.getItem('usenaflow_token');
+    if (token) {
+      // Verify token with server and get user data
+      fetch('/api/auth/me', {
+        headers: {
+          'Authorization': `Bearer ${token}`
         }
-      }
-    }, 60000); // Check every minute
+      })
+      .then(response => {
+        if (response.ok) {
+          return response.json();
+        } else {
+          // Token is invalid, clear it
+          localStorage.removeItem('usenaflow_token');
+          throw new Error('Invalid token');
+        }
+      })
+      .then(userData => {
+        // Convert database user to local User type
+        const localUser: User = {
+          id: userData.id,
+          name: userData.name,
+          role: userData.role,
+          value: userData.role,
+          abbr: userData.abbreviation
+        };
+        
+        setUser(localUser);
+        
+        // Show password change modal if required
+        if (userData.mustChangePassword) {
+          setShowChangePassword(true);
+        }
+      })
+      .catch(() => {
+        localStorage.removeItem('usenaflow_token');
+      });
+    }
+  }, []);
 
-    return () => clearInterval(sessionCheckInterval);
-  }, [user]); // Dependencies: user state and users array
 
-  // Session management functions
-  const saveSession = (user: User) => {
-    const sessionData = {
-      user,
-      timestamp: Date.now()
+
+  const handleSecureLogin = (loggedInUser: DbUser, token: string) => {
+    // Convert database user to local User type
+    const localUser: User = {
+      id: loggedInUser.id,
+      name: loggedInUser.name,
+      role: loggedInUser.role,
+      value: loggedInUser.role,
+      abbr: loggedInUser.abbreviation
     };
-    localStorage.setItem('usenaflow_session', JSON.stringify(sessionData));
-  };
-
-  const getStoredSession = () => {
-    try {
-      const sessionStr = localStorage.getItem('usenaflow_session');
-      if (!sessionStr) return null;
-      
-      const sessionData = JSON.parse(sessionStr);
-      const currentTime = Date.now();
-      
-      // Check if session is expired (older than 2 hours)
-      if (currentTime - sessionData.timestamp > SESSION_TIMEOUT) {
-        localStorage.removeItem('usenaflow_session');
-        return null;
-      }
-      
-      return sessionData.user;
-    } catch (error) {
-      localStorage.removeItem('usenaflow_session');
-      return null;
+    
+    setUser(localUser);
+    
+    // Show password change modal if required
+    if (loggedInUser.mustChangePassword) {
+      setShowChangePassword(true);
     }
   };
 
-  const clearSession = () => {
-    localStorage.removeItem('usenaflow_session');
-  };
 
-  const handleLogin = (loggedInUser: User) => {
-    setUser(loggedInUser);
-    setCurrentView('login');
-    saveSession(loggedInUser);
-    
-    // Sync with users array for consistency
-    const existingUserIndex = users.findIndex(u => u.name === loggedInUser.name);
-    if (existingUserIndex === -1) {
-      setUsers(prev => [...prev, loggedInUser]);
-    }
-  };
-
-  const handleRegister = (newUserCredential: UserCredential) => {
-    // Convert to UserCredentials format and add to credentials array
-    const newCredentials: UserCredentials = {
-      id: newUserCredential.id || Date.now().toString(),
-      username: newUserCredential.username,
-      password: newUserCredential.password,
-      name: newUserCredential.name,
-      role: newUserCredential.role,
-      abbreviation: newUserCredential.abbr
-    };
-    setUserCredentials(prev => [...prev, newCredentials]);
-    
-    // Create User object for immediate login
-    const newUser: User = {
-      id: newUserCredential.id,
-      name: newUserCredential.name,
-      role: newUserCredential.role,
-      value: newUserCredential.role === "Retoucher" ? `${newUserCredential.name}_${Date.now()}` : newUserCredential.role,
-      abbr: newUserCredential.abbr
-    };
-    
-    // Auto-login after registration
-    handleLogin(newUser);
-  };
 
   const handleLogout = () => {
     setUser(null);
-    setCurrentView('login');
-    clearSession();
+    localStorage.removeItem('usenaflow_token');
   };
 
-  const handleUpdateUserCredentials = (credentials: UserCredentials[]) => {
-    setUserCredentials(credentials);
-  };
+
 
   const handleAddUser = (newUser: User) => {
     setUsers(prev => [...prev, newUser]);
@@ -326,24 +260,16 @@ export default function Dashboard() {
     }
   };
 
-  // Show login/register form if user is not logged in
+  // Show secure login form if user is not logged in
   if (!user) {
-    if (currentView === 'register') {
-      return (
-        <RegisterForm 
-          onRegister={handleRegister}
-          onBackToLogin={() => setCurrentView('login')}
-          existingUsers={userCredentials}
-        />
-      );
-    }
-    
     return (
-      <LoginForm 
-        onLogin={handleLogin}
-        onShowRegister={() => {}} // No longer used, kept for compatibility
-        userCredentials={userCredentials}
-      />
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.5 }}
+      >
+        <SecureLoginForm onLogin={handleSecureLogin} />
+      </motion.div>
     );
   }
 
@@ -449,16 +375,25 @@ export default function Dashboard() {
                           </DialogHeader>
                           <SettingsPanel
                             users={users}
-                            userCredentials={userCredentials}
                             onAddUser={handleAddUser}
                             onEditUser={handleEditUser}
                             onDeleteUser={handleDeleteUser}
-                            onUpdateUserCredentials={handleUpdateUserCredentials}
                             currentUser={user}
                           />
                         </DialogContent>
                       </Dialog>
                     )}
+
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={() => setShowChangePassword(true)}
+                      className="flex items-center gap-2"
+                      data-testid="button-change-password"
+                    >
+                      <UserIcon className="h-4 w-4" />
+                      Change Password
+                    </Button>
 
                     <Button 
                       variant="outline" 
@@ -635,6 +570,16 @@ export default function Dashboard() {
         onOpenChange={setShowTradeModal}
         currentUser={user.name}
         projects={projects}
+      />
+
+      {/* Change Password Modal */}
+      <ChangePasswordModal
+        open={showChangePassword}
+        onOpenChange={setShowChangePassword}
+        onPasswordChanged={() => {
+          setShowChangePassword(false);
+          setUser(prev => prev ? { ...prev, mustChangePassword: false } : null);
+        }}
       />
     </div>
   );
