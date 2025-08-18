@@ -12,7 +12,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Project } from "@shared/schema";
 import { User, formatRetoucherAbbr, getRetoucherFullName } from "@/lib/types";
 import { Calendar, Star, ChevronDown, ChevronRight, Copy, UserPlus, Search, X } from "lucide-react";
-import { useState, useMemo, useCallback, useRef } from "react";
+import { useState, useMemo, useCallback, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from 'framer-motion';
 import { LoadingSpinner, FloatingAction, StaggeredList } from './LoadingStates';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -45,6 +45,44 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
   
   // Debounce timeouts
   const timeoutRefs = useRef<Record<string, NodeJS.Timeout>>({});
+
+  // Clear local input values when server data changes (to prevent stale state)
+  useEffect(() => {
+    setLocalInputValues(prev => {
+      const updated = { ...prev };
+      let hasChanges = false;
+      
+      // Remove local values that match server values (no longer being edited)
+      Object.keys(updated).forEach(projectId => {
+        const project = projects.find(p => p.id === projectId);
+        if (project && updated[projectId]) {
+          const localData = updated[projectId];
+          
+          // Clear local state if it matches server state (indicating update completed)
+          if (localData.selectedCount !== undefined && localData.selectedCount === project.selectedCount) {
+            delete updated[projectId].selectedCount;
+            hasChanges = true;
+          }
+          if (localData.packageCount !== undefined && localData.packageCount === project.packageCount) {
+            delete updated[projectId].packageCount;
+            hasChanges = true;
+          }
+          if (localData.extras !== undefined && localData.extras === project.extras) {
+            delete updated[projectId].extras;
+            hasChanges = true;
+          }
+          
+          // Remove empty project entries
+          if (Object.keys(updated[projectId]).length === 0) {
+            delete updated[projectId];
+            hasChanges = true;
+          }
+        }
+      });
+      
+      return hasChanges ? updated : prev;
+    });
+  }, [projects]);
 
   // Query to get all notes for all projects to determine which have notes
   const allNotesQuery = useQuery({
@@ -301,6 +339,7 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
       return response.json();
     },
     onSuccess: () => {
+      // Don't clear local state immediately - let the query update handle it
       queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
       toast({
         title: "Project updated",
@@ -342,18 +381,6 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
         selectedCount,
         extras,
       });
-      
-      // Clear local state after successful update
-      setLocalInputValues(prev => {
-        const updated = { ...prev };
-        if (updated[projectId]) {
-          delete updated[projectId].selectedCount;
-          if (Object.keys(updated[projectId]).length === 0) {
-            delete updated[projectId];
-          }
-        }
-        return updated;
-      });
     }, 500);
   }, [projects, localInputValues, changeSelectedCountMutation]);
 
@@ -383,18 +410,6 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
         packageCount,
         extras,
       });
-      
-      // Clear local state after successful update
-      setLocalInputValues(prev => {
-        const updated = { ...prev };
-        if (updated[projectId]) {
-          delete updated[projectId].packageCount;
-          if (Object.keys(updated[projectId]).length === 0) {
-            delete updated[projectId];
-          }
-        }
-        return updated;
-      });
     }, 500);
   }, [projects, localInputValues, changeSelectedCountMutation]);
 
@@ -423,18 +438,6 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
         id: projectId,
         selectedCount: newSelectedCount,
         extras,
-      });
-      
-      // Clear local state after successful update
-      setLocalInputValues(prev => {
-        const updated = { ...prev };
-        if (updated[projectId]) {
-          delete updated[projectId].extras;
-          if (Object.keys(updated[projectId]).length === 0) {
-            delete updated[projectId];
-          }
-        }
-        return updated;
       });
     }, 500);
   }, [projects, localInputValues, changeSelectedCountMutation]);
