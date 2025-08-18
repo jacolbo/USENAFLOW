@@ -49,7 +49,7 @@ export default function Dashboard() {
     markNotificationAsRead,
     clearAllNotifications,
     unreadCount
-  } = useSSE(user ? { id: user.value, username: user.name } : null);
+  } = useSSE(user ? { id: user.role, username: user.name } : null);
   
   // Session timeout duration (2 hours in milliseconds)
   const SESSION_TIMEOUT = 2 * 60 * 60 * 1000;

@@ -10,24 +10,27 @@ import type { Notification, WebSocketMessage } from "@shared/schema";
 const wsConnections = new Map<string, { ws: WebSocket, userId?: string }>();
 
 // Global SSE connections store
-let sseConnections: Map<string, { res: any; userId: string; username: string }>;
+const sseConnections = new Map<string, { res: any; userId: string; username: string }>();
 
 // Function to broadcast via SSE
 function broadcastSSE(message: { type: string; payload?: any }, targetUserId?: string) {
   if (!sseConnections) return;
 
-  for (const [connectionId, connection] of sseConnections.entries()) {
+  console.log(`Broadcasting SSE message to ${sseConnections.size} connections:`, message.type, targetUserId ? `(target: ${targetUserId})` : '(all users)');
+
+  sseConnections.forEach((connection, connectionId) => {
     if (targetUserId && connection.userId !== targetUserId) {
-      continue; // Skip if targeting specific user and this isn't them
+      return; // Skip if targeting specific user and this isn't them
     }
 
     try {
       connection.res.write(`data: ${JSON.stringify(message)}\n\n`);
+      console.log(`Sent SSE message to ${connection.username} (${connection.userId})`);
     } catch (error) {
       console.error(`Failed to send SSE message to ${connectionId}:`, error);
       sseConnections.delete(connectionId);
     }
-  }
+  });
 }
 
 // Helper function to broadcast notifications
@@ -164,6 +167,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
+      console.log('Broadcasting project update for:', project.clientName);
       broadcastProjectUpdate(project);
       res.json(project);
     } catch (error) {
@@ -205,6 +209,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         broadcastNotification(notification, assignedTo);
       }
 
+      console.log('Broadcasting assignment update for:', updatedProject.clientName);
       broadcastProjectUpdate(updatedProject);
       res.json(updatedProject);
     } catch (error) {
@@ -473,7 +478,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Server-Sent Events for real-time notifications
-  sseConnections = new Map<string, { res: any; userId: string; username: string }>();
 
   app.get('/api/events', (req, res) => {
     const userId = req.query.userId as string;
