@@ -7,8 +7,6 @@ USENA FLOW is a full-stack photography workflow management application designed 
 ## User Preferences
 
 Preferred communication style: Simple, everyday language.
-Authentication preference: Local authentication system only (no Firebase or external services).
-Security requirement: All users can create and change their own passwords.
 
 ## System Architecture
 
@@ -29,12 +27,11 @@ Security requirement: All users can create and change their own passwords.
 - **API Design**: RESTful API with structured error handling.
 - **Database**: PostgreSQL with Drizzle ORM (using Neon Database serverless PostgreSQL).
 - **Data Validation**: Zod schemas for runtime type checking and API validation.
-- **Authentication**: Secure JWT-based authentication with bcryptjs password hashing, role-based access control with seven distinct user roles, and password change functionality. Admin credentials: username "admin", password "rEx-sPort-1996".
+- **Authentication**: Role-based access control with seven distinct user roles, cross-device login, and admin-controlled team management.
 - **State Management**: TanStack Query for server state management in the frontend.
 - **Routing**: Wouter for client-side routing.
 - **Forms**: React Hook Form with Zod validation.
-- **Data Persistence**: All user data persists across deployments with PostgreSQL database storage.
-- **Security**: Server-side authentication with JWT tokens, bcryptjs password hashing, and protected API endpoints.
+- **Data Persistence**: All user data persists across deployments.
 - **Real-time Communication**: WebSocket integration for live project updates and smart notifications (including browser notifications and custom sounds).
 - **Project Workflow**: Five-stage status tracking (Awaiting Payment → Ready → Assigned → Review → Delivered), project assignment, quality rating, and automatic due date calculation.
 - **Notes System**: Support for text and image notes with role-based access.

@@ -2,11 +2,10 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { WebSocketServer, WebSocket } from "ws";
 import { storage } from "./storage";
-import { insertProjectSchema, updateProjectSchema, insertProjectNoteSchema, updateProjectNoteSchema, insertTradeOfferSchema, updateTradeOfferSchema, ProjectStatus, TradeOfferStatus, loginSchema, changePasswordSchema } from "@shared/schema";
+import { insertProjectSchema, updateProjectSchema, insertProjectNoteSchema, updateProjectNoteSchema, insertTradeOfferSchema, updateTradeOfferSchema, ProjectStatus, TradeOfferStatus } from "@shared/schema";
 import { ObjectStorageService, ObjectNotFoundError } from "./objectStorage";
 import type { Notification, WebSocketMessage } from "@shared/schema";
 import { triggerManualRollover } from "./rolloverScheduler";
-import { authenticateToken, generateToken, verifyPassword, hashPassword, type AuthenticatedRequest } from "./auth";
 
 // Global WebSocket connections store
 const wsConnections = new Map<string, { ws: WebSocket, userId?: string }>();
@@ -88,97 +87,8 @@ function broadcastProjectUpdate(project: any) {
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
-  // Authentication routes
-  app.post("/api/auth/login", async (req, res) => {
-    try {
-      const { username, password } = loginSchema.parse(req.body);
-      
-      const user = await storage.getUserByUsername(username);
-      if (!user) {
-        return res.status(401).json({ error: "Invalid username or password" });
-      }
-
-      const isValidPassword = await verifyPassword(password, user.password);
-      if (!isValidPassword) {
-        return res.status(401).json({ error: "Invalid username or password" });
-      }
-
-      const token = generateToken({
-        id: user.id,
-        username: user.username,
-        role: user.role
-      });
-
-      res.json({
-        user: {
-          id: user.id,
-          username: user.username,
-          name: user.name,
-          role: user.role,
-          abbreviation: user.abbreviation,
-          mustChangePassword: user.mustChangePassword
-        },
-        token
-      });
-    } catch (error) {
-      res.status(400).json({ error: "Invalid login data" });
-    }
-  });
-
-  app.post("/api/auth/change-password", authenticateToken, async (req: AuthenticatedRequest, res) => {
-    try {
-      const { currentPassword, newPassword } = changePasswordSchema.parse(req.body);
-      
-      if (!req.user) {
-        return res.status(401).json({ error: "Authentication required" });
-      }
-
-      const user = await storage.getUserByUsername(req.user.username);
-      if (!user) {
-        return res.status(404).json({ error: "User not found" });
-      }
-
-      const isValidPassword = await verifyPassword(currentPassword, user.password);
-      if (!isValidPassword) {
-        return res.status(400).json({ error: "Current password is incorrect" });
-      }
-
-      const hashedNewPassword = await hashPassword(newPassword);
-      await storage.updateUserPassword(user.id, hashedNewPassword);
-
-      res.json({ message: "Password changed successfully" });
-    } catch (error) {
-      res.status(400).json({ error: "Invalid password change data" });
-    }
-  });
-
-  // Get current user profile
-  app.get("/api/auth/me", authenticateToken, async (req: AuthenticatedRequest, res) => {
-    try {
-      if (!req.user) {
-        return res.status(401).json({ error: "Authentication required" });
-      }
-
-      const user = await storage.getUserByUsername(req.user.username);
-      if (!user) {
-        return res.status(404).json({ error: "User not found" });
-      }
-
-      res.json({
-        id: user.id,
-        username: user.username,
-        name: user.name,
-        role: user.role,
-        abbreviation: user.abbreviation,
-        mustChangePassword: user.mustChangePassword
-      });
-    } catch (error) {
-      res.status(500).json({ error: "Failed to fetch user profile" });
-    }
-  });
-
-  // Get all projects (protected)
-  app.get("/api/projects", authenticateToken, async (req, res) => {
+  // Get all projects
+  app.get("/api/projects", async (req, res) => {
     try {
       const projects = await storage.getAllProjects();
       res.json(projects);

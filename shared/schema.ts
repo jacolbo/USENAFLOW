@@ -2,17 +2,12 @@ import { sql } from "drizzle-orm";
 import { pgTable, text, varchar, integer, timestamp, boolean } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
+import { randomUUID } from "crypto";
 
 export const users = pgTable("users", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   username: text("username").notNull().unique(),
   password: text("password").notNull(),
-  name: text("name").notNull(),
-  role: text("role").notNull(),
-  abbreviation: text("abbreviation").notNull(),
-  mustChangePassword: boolean("must_change_password").notNull().default(false),
-  createdAt: timestamp("created_at").notNull().default(sql`now()`),
-  updatedAt: timestamp("updated_at").notNull().default(sql`now()`),
 });
 
 export const projects = pgTable("projects", {
@@ -42,7 +37,7 @@ export const projectNotes = pgTable("project_notes", {
 
 // Trade offers system for project swapping
 export const tradeOffers = pgTable("trade_offers", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  id: varchar("id").primaryKey().$defaultFn(() => randomUUID()),
   offeringUser: text("offering_user").notNull(),
   offeringProjectId: varchar("offering_project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
   targetUser: text("target_user"), // null means open to anyone
@@ -58,24 +53,6 @@ export const tradeOffers = pgTable("trade_offers", {
 export const insertUserSchema = createInsertSchema(users).pick({
   username: true,
   password: true,
-  name: true,
-  role: true,
-  abbreviation: true,
-  mustChangePassword: true,
-});
-
-export const changePasswordSchema = z.object({
-  currentPassword: z.string().min(1, "Current password is required"),
-  newPassword: z.string().min(6, "New password must be at least 6 characters"),
-  confirmPassword: z.string().min(1, "Please confirm your new password"),
-}).refine((data) => data.newPassword === data.confirmPassword, {
-  message: "Passwords don't match",
-  path: ["confirmPassword"],
-});
-
-export const loginSchema = z.object({
-  username: z.string().min(1, "Username is required"),
-  password: z.string().min(1, "Password is required"),
 });
 
 export const insertProjectSchema = createInsertSchema(projects).omit({
@@ -122,8 +99,6 @@ export const updateTradeOfferSchema = createInsertSchema(tradeOffers).partial().
 });
 
 export type InsertUser = z.infer<typeof insertUserSchema>;
-export type ChangePassword = z.infer<typeof changePasswordSchema>;
-export type Login = z.infer<typeof loginSchema>;
 export type User = typeof users.$inferSelect;
 export type InsertProject = z.infer<typeof insertProjectSchema>;
 export type UpdateProject = z.infer<typeof updateProjectSchema>;
