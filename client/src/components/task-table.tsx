@@ -449,7 +449,7 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
   // Mutation for updating project assignment
   const assignProjectMutation = useMutation({
     mutationFn: async ({ projectId, assignedTo }: { projectId: string; assignedTo: string | null }) => {
-      return await apiRequest(`/api/projects/${projectId}`, "PATCH", { assignedTo });
+      return await apiRequest("PATCH", `/api/projects/${projectId}`, { assignedTo });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/projects'] });
@@ -470,7 +470,7 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
   // Mutation for updating project due date (drag & drop)
   const updateProjectDateMutation = useMutation({
     mutationFn: async ({ projectId, dueDate }: { projectId: string; dueDate: Date }) => {
-      return await apiRequest(`/api/projects/${projectId}`, "PATCH", { dueDate: dueDate.toISOString() });
+      return await apiRequest("PATCH", `/api/projects/${projectId}`, { dueDate: dueDate.toISOString() });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/projects'] });
@@ -502,6 +502,8 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
   const handleDrop = (e: React.DragEvent, targetDate: Date) => {
     e.preventDefault();
     if (draggedProject) {
+      console.log('Dropping project:', draggedProject.clientName, 'to date:', targetDate.toDateString());
+      
       // Only allow moving within the same week
       const draggedWeekStart = getWeekStart(new Date(draggedProject.dueDate));
       const targetWeekStart = getWeekStart(targetDate);
@@ -528,11 +530,13 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
 
   // Double-click handler for assignment
   const handleDoubleClick = (project: Project) => {
+    console.log('Double-clicked project:', project.clientName);
     setAssignProject(project);
   };
 
   const handleAssignProject = (assignedTo: string | null) => {
     if (assignProject) {
+      console.log('Assigning project', assignProject.clientName, 'to', assignedTo);
       assignProjectMutation.mutate({
         projectId: assignProject.id,
         assignedTo,
@@ -1138,9 +1142,9 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
             </Button>
             {allUsers
               .filter(u => u.role === 'Retoucher' || u.role === 'Admin')
-              .map(retoucher => (
+              .map((retoucher, index) => (
                 <Button
-                  key={retoucher.id}
+                  key={`retoucher-${retoucher.id}-${index}`}
                   variant="outline"
                   className="w-full justify-start"
                   onClick={() => handleAssignProject(retoucher.name)}
