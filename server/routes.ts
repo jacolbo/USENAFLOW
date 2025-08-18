@@ -187,10 +187,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "Project not found" });
       }
       
-      const status = project.status === ProjectStatus.READY_FOR_RETOUCHING ? ProjectStatus.ASSIGNED : project.status;
+      // Always set status to ASSIGNED when assigning to someone, or READY_FOR_RETOUCHING when unassigning
+      const status = assignedTo && assignedTo !== "__UNASSIGN__" 
+        ? ProjectStatus.ASSIGNED 
+        : ProjectStatus.READY_FOR_RETOUCHING;
+      
+      console.log(`Updating project ${project.clientName}: assignedTo=${assignedTo}, status: ${project.status} -> ${status}`);
       
       const updatedProject = await storage.updateProject(id, {
-        assignedTo,
+        assignedTo: assignedTo === "__UNASSIGN__" ? null : assignedTo,
         status,
       });
 
@@ -210,9 +215,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         broadcastNotification(notification, assignedTo);
       }
 
-      console.log('Broadcasting assignment update for:', updatedProject.clientName);
-      broadcastProjectUpdate(updatedProject);
-      res.json(updatedProject);
+      if (updatedProject) {
+        console.log('Broadcasting assignment update for:', updatedProject.clientName);
+        broadcastProjectUpdate(updatedProject);
+        res.json(updatedProject);
+      } else {
+        res.status(500).json({ error: "Failed to update project" });
+      }
     } catch (error) {
       res.status(400).json({ error: "Failed to assign project" });
     }
