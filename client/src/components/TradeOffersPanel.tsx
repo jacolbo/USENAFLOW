@@ -37,10 +37,10 @@ export function TradeOffersPanel({ currentUser, projects, isAdmin = false }: Tra
 
   // Fetch trade offers
   const { data: tradeOffers = [], isLoading } = useQuery({
-    queryKey: isAdmin ? ["/api/admin/trade-offers"] : ["/api/trade-offers"],
+    queryKey: isAdmin ? ["/api/admin/trade-offers"] : ["/api/trade-offers", currentUser],
     queryFn: () => {
-      const endpoint = isAdmin ? "/api/admin/trade-offers" : `/api/trade-offers?username=${currentUser}`;
-      return apiRequest(endpoint);
+      const endpoint = isAdmin ? "/api/admin/trade-offers" : `/api/trade-offers?username=${encodeURIComponent(currentUser)}`;
+      return apiRequest("GET", endpoint);
     },
   }) as { data: TradeOffer[], isLoading: boolean };
 
@@ -53,7 +53,7 @@ export function TradeOffersPanel({ currentUser, projects, isAdmin = false }: Tra
   // Accept trade mutation
   const acceptTradeMutation = useMutation({
     mutationFn: async ({ offerId, acceptedProjectId }: { offerId: string; acceptedProjectId: string }) => {
-      return apiRequest(`/api/trade-offers/${offerId}/accept`, "POST", {
+      return apiRequest("POST", `/api/trade-offers/${offerId}/accept`, {
         acceptedBy: currentUser,
         acceptedProjectId,
       });
@@ -81,7 +81,7 @@ export function TradeOffersPanel({ currentUser, projects, isAdmin = false }: Tra
   // Decline trade mutation
   const declineTradeMutation = useMutation({
     mutationFn: async (offerId: string) => {
-      return apiRequest(`/api/trade-offers/${offerId}/decline`, "POST", { declinedBy: currentUser });
+      return apiRequest("POST", `/api/trade-offers/${offerId}/decline`, { declinedBy: currentUser });
     },
     onSuccess: () => {
       toast({
