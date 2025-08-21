@@ -29,6 +29,11 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
   const queryClient = useQueryClient();
   const { toast } = useToast();
   
+  // Helper function to check if user has retouching abilities
+  const hasRetouchingAbilities = (userRole: string) => {
+    return ['Admin', 'LeadRetoucher', 'Retoucher'].includes(userRole);
+  };
+  
   // State for drag and drop
   const [draggedProject, setDraggedProject] = useState<Project | null>(null);
   const [assignProject, setAssignProject] = useState<Project | null>(null);
@@ -1497,8 +1502,8 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
                                 </Button>
                               )}
                               
-                              {/* All retouchers and admins can mark done on their assigned tasks */}
-                              {(user.role === 'Retoucher' || user.role === 'Admin') && 
+                              {/* All users with retouching abilities can mark done on their assigned tasks */}
+                              {hasRetouchingAbilities(user.role) && 
                                project.assignedTo && 
                                project.assignedTo.toLowerCase() === user.name.toLowerCase() && 
                                project.status === 'Assigned' && (
@@ -1667,7 +1672,7 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
                 
                 <StaggeredList>
                   {allUsers
-                    .filter(u => u.role === 'Retoucher' || u.role === 'Admin')
+                    .filter(u => hasRetouchingAbilities(u.role))
                     .map((retoucher, index) => (
                       <FloatingAction key={`retoucher-${retoucher.id}-${index}`} className="w-full">
                         <Button
