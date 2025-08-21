@@ -1502,10 +1502,8 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
                                 </Button>
                               )}
                               
-                              {/* All users with retouching abilities can mark done on their assigned tasks */}
+                              {/* All users with retouching abilities can mark done on any assigned project */}
                               {hasRetouchingAbilities(user.role) && 
-                               project.assignedTo && 
-                               project.assignedTo.toLowerCase() === user.name.toLowerCase() && 
                                project.status === 'Assigned' && (
                                 <Button 
                                   size="sm" 
