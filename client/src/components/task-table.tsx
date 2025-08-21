@@ -16,6 +16,9 @@ import { useState, useMemo, useCallback, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from 'framer-motion';
 import { LoadingSpinner, FloatingAction, StaggeredList } from './LoadingStates';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogClose } from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
+import { AlertTriangle, RefreshCw } from "lucide-react";
 
 
 interface TaskTableProps {
