@@ -6,7 +6,6 @@ import { insertProjectSchema, updateProjectSchema, insertProjectNoteSchema, upda
 import { ObjectStorageService, ObjectNotFoundError } from "./objectStorage";
 import type { Notification, WebSocketMessage } from "@shared/schema";
 import { triggerManualRollover } from "./rolloverScheduler";
-import { accessLogger } from "./user-access-logs";
 
 // Global WebSocket connections store
 const wsConnections = new Map<string, { ws: WebSocket, userId?: string }>();
@@ -293,12 +292,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.patch("/api/projects/:id/request-corrections", async (req, res) => {
     try {
       const { id } = req.params;
-      const { username } = req.body || {};
-      
-      const project = await storage.getProject(id);
-      if (!project) {
-        return res.status(404).json({ error: "Project not found" });
-      }
       
       const updatedProject = await storage.updateProject(id, {
         status: "Corrections",
@@ -308,19 +301,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "Project not found" });
       }
       
-      // Log the corrections request
-      await accessLogger.logCorrectionsRequest(
-        username || "unknown", 
-        id, 
-        project.clientName,
-        "Corrections requested via API"
-      );
-      
-      console.log(`📝 Corrections requested by ${username || "unknown"} for project: ${project.clientName}`);
-      
       res.json(updatedProject);
     } catch (error) {
-      console.error("Error requesting corrections:", error);
       res.status(400).json({ error: "Failed to request corrections" });
     }
   });
