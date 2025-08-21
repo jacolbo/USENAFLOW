@@ -1550,7 +1550,7 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
                               )}
                               
                               {/* Admin or Sales can mark invoice paid */}
-                              {(user.role === 'Admin' || user.role === 'Sales') && project.status === 'Awaiting Payment' && (
+                              {(user.role === 'Admin' || user.role === 'Sales' || user.name === 'sales') && project.status === 'Awaiting Payment' && (
                                 <Button 
                                   size="sm" 
                                   onClick={() => handleMarkPaid(project.id)}
@@ -1574,7 +1574,7 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
                               )}
                               
                               {/* Admin or Sales can deliver or request corrections when in Review */}
-                              {(user.role === 'Admin' || user.role === 'Sales') && project.status === 'Review' && (
+                              {(user.role === 'Admin' || user.role === 'Sales' || user.name === 'sales') && project.status === 'Review' && (
                                 <>
                                   <Button 
                                     size="sm" 
@@ -1597,7 +1597,7 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
                               )}
                               
                               {/* Duplicate button for Admin, Sales, Data Wrangler, and Lead Retoucher (Manager) */}
-                              {['Admin', 'Sales', 'DataWrangler', 'LeadRetoucher'].includes(user.role) && (
+                              {(['Admin', 'Sales', 'DataWrangler', 'LeadRetoucher'].includes(user.role) || user.name === 'sales') && (
                                 <motion.div
                                   whileHover={{ scale: 1.02 }}
                                   whileTap={{ scale: 0.98 }}
