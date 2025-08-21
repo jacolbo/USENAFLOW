@@ -71,7 +71,7 @@ export default function Dashboard() {
   // User credentials for login/register system
   const [userCredentials, setUserCredentials] = useState<UserCredentials[]>([
     { id: "admin", username: "admin", password: "admin720", role: "Admin", name: "Anesu's Pops", abbreviation: "AP" },
-    { id: "sales", username: "sales", password: "sales123", role: "Sales", name: "Sales", abbreviation: "SAL" },
+    { id: "sales", username: "sales", password: "sales420", role: "Sales", name: "Sales", abbreviation: "SAL" },
     { id: "workflow", username: "workflow", password: "Chabs360", role: "LeadRetoucher", name: "Workflow Manager", abbreviation: "WFM" },
     { id: "data", username: "data", password: "Data360", role: "DataWrangler", name: "Data Wrangler", abbreviation: "DW" },
     { id: "earl", username: "earl", password: "earl123", role: "Retoucher", name: "Earl", abbreviation: "EC" },
