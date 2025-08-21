@@ -1,0 +1,15 @@
+{
+  "user_prompt": "Draft a professional but friendly WhatsApp message inviting a past maternity client to book a 1st birthday photoshoot.",
+  "mode": "DETAIL",
+  "target_ai": "ChatGPT",
+  "request_type": "creative",
+  "audience": "Past maternity clients (parents)",
+  "tone": "friendly, respectful, not pushy",
+  "style": "short, human, conversational",
+  "output_format": "One WhatsApp message (<=90 words) plus 2 shorter variants",
+  "constraints": [
+    "Sound like a favor, not a hard sell",
+    "Include booking link placeholder"
+  ],
+  "additional_context": "We shot their maternity photos last year; pricing unchanged."
+}
