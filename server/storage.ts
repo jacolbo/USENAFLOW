@@ -242,8 +242,11 @@ export class MemStorage implements IStorage {
     const offer: TradeOffer = { 
       ...insertOffer, 
       id,
+      status: "pending",
       createdAt: new Date(),
       completedAt: null,
+      acceptedBy: null,
+      acceptedProjectId: null,
     };
     this.tradeOffers.set(id, offer);
     return offer;
