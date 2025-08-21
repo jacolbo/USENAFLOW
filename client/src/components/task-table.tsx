@@ -31,7 +31,10 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
   
   // Helper function to check if user has retouching abilities
   const hasRetouchingAbilities = (userRole: string) => {
-    return ['Admin', 'LeadRetoucher', 'Retoucher'].includes(userRole);
+    console.log('Checking retouching abilities for role:', userRole);
+    const hasAbility = ['Admin', 'LeadRetoucher', 'Retoucher'].includes(userRole);
+    console.log('Has retouching abilities:', hasAbility);
+    return hasAbility;
   };
   
   // State for drag and drop
@@ -1502,9 +1505,13 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
                                 </Button>
                               )}
                               
-                              {/* All users with retouching abilities can mark done on any assigned project */}
-                              {hasRetouchingAbilities(user.role) && 
-                               project.status === 'Assigned' && (
+                              {/* All users with retouching abilities can mark done on projects ready for retouching or assigned */}
+                              {(() => {
+                                const hasAbilities = hasRetouchingAbilities(user.role);
+                                const isCorrectStatus = project.status === 'Assigned' || project.status === 'Ready for Retouching';
+                                console.log(`Project ${project.clientName}: hasAbilities=${hasAbilities}, status=${project.status}, isCorrectStatus=${isCorrectStatus}`);
+                                return hasAbilities && isCorrectStatus;
+                              })() && (
                                 <Button 
                                   size="sm" 
                                   onClick={() => handleMarkDone(project.id)}
