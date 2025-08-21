@@ -1269,7 +1269,7 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
                           <TableHead>Due</TableHead>
                           <TableHead>Retoucher</TableHead>
                           <TableHead>Status</TableHead>
-                          <TableHead>Rating</TableHead>
+                          <TableHead>Corrections</TableHead>
                           <TableHead>Notes</TableHead>
                         </>
                       ) : (
@@ -1402,32 +1402,65 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
                             </TableCell>
                             <TableCell>{getStatusBadge(project.status)}</TableCell>
                             <TableCell>
-                              {project.status === "Delivered" ? (
-                                <div className="flex items-center gap-2">
-                                  {project.rating && (
-                                    <div className="flex items-center gap-1">
-                                      <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
-                                      <span>{project.rating}</span>
-                                    </div>
-                                  )}
-                                  <Select
-                                    value={project.rating?.toString() || ""}
-                                    onValueChange={(value) => handleSetRating(project.id, parseInt(value, 10))}
-                                  >
-                                    <SelectTrigger className="w-32">
-                                      <SelectValue placeholder="Rate..." />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                      <SelectItem value="1">1 – Poor</SelectItem>
-                                      <SelectItem value="2">2 – Fair</SelectItem>
-                                      <SelectItem value="3">3 – Good</SelectItem>
-                                      <SelectItem value="4">4 – Very Good</SelectItem>
-                                      <SelectItem value="5">5 – Excellent</SelectItem>
-                                    </SelectContent>
-                                  </Select>
-                                </div>
+                              {project.status === 'Review' ? (
+                                <Dialog>
+                                  <DialogTrigger asChild>
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      className="text-orange-600 hover:text-orange-700 border-orange-300 hover:border-orange-400"
+                                      data-testid={`button-request-corrections-${project.id}`}
+                                    >
+                                      <AlertTriangle className="h-4 w-4 mr-1" />
+                                      Request Corrections
+                                    </Button>
+                                  </DialogTrigger>
+                                  <DialogContent>
+                                    <DialogHeader>
+                                      <DialogTitle>Request Corrections</DialogTitle>
+                                      <DialogDescription>
+                                        Request corrections for {project.clientName}'s project. Describe what needs to be fixed.
+                                      </DialogDescription>
+                                    </DialogHeader>
+                                    <form onSubmit={(e) => handleRequestCorrections(e, project.id)}>
+                                      <div className="space-y-4">
+                                        <div>
+                                          <label htmlFor="corrections-note" className="block text-sm font-medium mb-2">
+                                            Corrections needed (optional)
+                                          </label>
+                                          <Textarea
+                                            id="corrections-note"
+                                            placeholder="Describe what needs to be corrected..."
+                                            className="min-h-[100px]"
+                                            name="note"
+                                          />
+                                        </div>
+                                        <div className="flex justify-end gap-2">
+                                          <DialogClose asChild>
+                                            <Button type="button" variant="outline">Cancel</Button>
+                                          </DialogClose>
+                                          <Button 
+                                            type="submit" 
+                                            className="bg-orange-600 hover:bg-orange-700"
+                                            disabled={loadingStates[project.id + 'corrections']}
+                                          >
+                                            {loadingStates[project.id + 'corrections'] ? (
+                                              <LoadingSpinner size={14} className="mr-2" />
+                                            ) : null}
+                                            Request Corrections
+                                          </Button>
+                                        </div>
+                                      </div>
+                                    </form>
+                                  </DialogContent>
+                                </Dialog>
+                              ) : project.status === 'Corrections' ? (
+                                <Badge variant="secondary" className="bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300">
+                                  <RefreshCw className="h-3 w-3 mr-1" />
+                                  In Corrections
+                                </Badge>
                               ) : (
-                                project.rating || "-"
+                                "-"
                               )}
                             </TableCell>
                             <TableCell>
@@ -1573,27 +1606,16 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
                                 </Button>
                               )}
                               
-                              {/* Admin or Sales can deliver or request corrections when in Review */}
-                              {(user.role === 'Admin' || user.role === 'Sales' || user.name === 'Sales') && project.status === 'Review' && (
-                                <>
-                                  <Button 
-                                    size="sm" 
-                                    onClick={() => handleDeliver(project.id)}
-                                    disabled={updateProjectMutation.isPending}
-                                    className="bg-green-600 hover:bg-green-700"
-                                  >
-                                    Deliver
-                                  </Button>
-                                  <Button 
-                                    size="sm" 
-                                    variant="outline"
-                                    onClick={() => setCorrectionsProject(project)}
-                                    disabled={updateProjectMutation.isPending}
-                                    className="bg-orange-600 hover:bg-orange-700 text-white"
-                                  >
-                                    Request Corrections
-                                  </Button>
-                                </>
+                              {/* Admin can deliver when in Review */}
+                              {user.role === 'Admin' && project.status === 'Review' && (
+                                <Button 
+                                  size="sm" 
+                                  onClick={() => handleDeliver(project.id)}
+                                  disabled={updateProjectMutation.isPending}
+                                  className="bg-green-600 hover:bg-green-700"
+                                >
+                                  Deliver
+                                </Button>
                               )}
                               
                               {/* Duplicate button for Admin, Sales, Data Wrangler, and Lead Retoucher (Manager) */}
