@@ -72,6 +72,7 @@ export default function Dashboard() {
   const [userCredentials, setUserCredentials] = useState<UserCredentials[]>([
     { id: "admin", username: "admin", password: "admin123", role: "Admin", name: "Anesu's Pops", abbreviation: "AP" },
     { id: "sales", username: "sales", password: "sales123", role: "Sales", name: "sales", abbreviation: "SAL" },
+    { id: "Sales", username: "Sales", password: "Sales2025!", role: "Sales", name: "Sales", abbreviation: "SALES" },
     { id: "workflow", username: "workflow", password: "workflow123", role: "LeadRetoucher", name: "Workflow Manager", abbreviation: "WFM" },
     { id: "data", username: "data", password: "data123", role: "DataWrangler", name: "Data Wrangler", abbreviation: "DW" },
     { id: "earl", username: "earl", password: "earl123", role: "Retoucher", name: "Earl", abbreviation: "EC" },
