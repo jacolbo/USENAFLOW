@@ -72,8 +72,8 @@ export default function Dashboard() {
   const [userCredentials, setUserCredentials] = useState<UserCredentials[]>([
     { id: "admin", username: "admin", password: "admin123", role: "Admin", name: "Anesu's Pops", abbreviation: "AP" },
     { id: "sales", username: "sales", password: "sales123", role: "Sales", name: "Sales", abbreviation: "SAL" },
-    { id: "workflow", username: "workflow", password: "workflow123", role: "LeadRetoucher", name: "Workflow Manager", abbreviation: "WFM" },
-    { id: "data", username: "data", password: "Chabs360", role: "DataWrangler", name: "Data Wrangler", abbreviation: "DW" },
+    { id: "workflow", username: "workflow", password: "Chabs360", role: "LeadRetoucher", name: "Workflow Manager", abbreviation: "WFM" },
+    { id: "data", username: "data", password: "Data360", role: "DataWrangler", name: "Data Wrangler", abbreviation: "DW" },
     { id: "earl", username: "earl", password: "earl123", role: "Retoucher", name: "Earl", abbreviation: "EC" },
     { id: "asa", username: "asa", password: "asa123", role: "Retoucher", name: "Dr Asa", abbreviation: "ASA" },
     // Single working account for Lucky with all his projects
