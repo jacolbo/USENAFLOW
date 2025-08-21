@@ -124,6 +124,7 @@ export const ProjectStatus = {
   READY_FOR_RETOUCHING: "Ready for Retouching",
   ASSIGNED: "Assigned",
   REVIEW: "Review",
+  CORRECTIONS: "Corrections",
   DELIVERED: "Delivered",
 } as const;
 

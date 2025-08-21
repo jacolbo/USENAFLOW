@@ -288,6 +288,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Request corrections endpoint
+  app.patch("/api/projects/:id/request-corrections", async (req, res) => {
+    try {
+      const { id } = req.params;
+      
+      const updatedProject = await storage.updateProject(id, {
+        status: "Corrections",
+      });
+      
+      if (!updatedProject) {
+        return res.status(404).json({ error: "Project not found" });
+      }
+      
+      res.json(updatedProject);
+    } catch (error) {
+      res.status(400).json({ error: "Failed to request corrections" });
+    }
+  });
+
   // Deliver project (admin action)
   app.patch("/api/projects/:id/deliver", async (req, res) => {
     try {

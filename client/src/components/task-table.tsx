@@ -31,11 +31,12 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
   
   // Helper function to check if user has retouching abilities
   const hasRetouchingAbilities = (userRole: string) => {
-    console.log('Checking retouching abilities for role:', userRole);
-    const hasAbility = ['Admin', 'LeadRetoucher', 'Retoucher'].includes(userRole);
-    console.log('Has retouching abilities:', hasAbility);
-    return hasAbility;
+    return ['Admin', 'LeadRetoucher', 'Retoucher'].includes(userRole);
   };
+  
+  // State for corrections modal
+  const [correctionsProject, setCorrectionsProject] = useState<Project | null>(null);
+  const [correctionsNote, setCorrectionsNote] = useState("");
   
   // State for drag and drop
   const [draggedProject, setDraggedProject] = useState<Project | null>(null);
@@ -242,6 +243,7 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
       "Ready for Retouching": { variant: "secondary" as const, className: "bg-blue-500 text-white hover:bg-blue-600" },
       "Assigned": { variant: "secondary" as const, className: "bg-purple-500 text-white hover:bg-purple-600" },
       "Review": { variant: "secondary" as const, className: "bg-red-500 text-white hover:bg-red-600" },
+      "Corrections": { variant: "secondary" as const, className: "bg-orange-600 text-white hover:bg-orange-700" },
       "Delivered": { variant: "secondary" as const, className: "bg-green-500 text-white hover:bg-green-600" },
     };
 
@@ -281,6 +283,43 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
       id: projectId,
       endpoint: "request-revision",
     });
+  };
+
+  const handleRequestCorrections = async (projectId: string, note: string) => {
+    try {
+      // First, add the corrections note
+      if (note.trim()) {
+        await fetch(`/api/projects/${projectId}/notes`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            noteType: 'text',
+            content: `CORRECTIONS REQUESTED: ${note}`,
+            createdBy: user.name,
+          }),
+        });
+      }
+      
+      // Then update project status to Corrections
+      updateProjectMutation.mutate({
+        id: projectId,
+        endpoint: "request-corrections",
+      });
+      
+      setCorrectionsProject(null);
+      setCorrectionsNote("");
+      
+      toast({
+        title: "Corrections Requested",
+        description: `Project sent back for corrections with note.`,
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to request corrections",
+        variant: "destructive",
+      });
+    }
   };
 
   const handleDeliver = (projectId: string) => {
@@ -1505,13 +1544,9 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
                                 </Button>
                               )}
                               
-                              {/* All users with retouching abilities can mark done on projects ready for retouching or assigned */}
-                              {(() => {
-                                const hasAbilities = hasRetouchingAbilities(user.role);
-                                const isCorrectStatus = project.status === 'Assigned' || project.status === 'Ready for Retouching';
-                                console.log(`Project ${project.clientName}: hasAbilities=${hasAbilities}, status=${project.status}, isCorrectStatus=${isCorrectStatus}`);
-                                return hasAbilities && isCorrectStatus;
-                              })() && (
+                              {/* All users with retouching abilities can mark done on projects ready for retouching, assigned, or corrections */}
+                              {hasRetouchingAbilities(user.role) && 
+                               (project.status === 'Assigned' || project.status === 'Ready for Retouching' || project.status === 'Corrections') && (
                                 <Button 
                                   size="sm" 
                                   onClick={() => handleMarkDone(project.id)}
@@ -1522,7 +1557,7 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
                                 </Button>
                               )}
                               
-                              {/* Admin or Sales can deliver or request revision when in Review */}
+                              {/* Admin or Sales can deliver or request corrections when in Review */}
                               {(user.role === 'Admin' || user.role === 'Sales') && project.status === 'Review' && (
                                 <>
                                   <Button 
@@ -1536,10 +1571,11 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
                                   <Button 
                                     size="sm" 
                                     variant="outline"
-                                    onClick={() => handleRequestRevision(project.id)}
+                                    onClick={() => setCorrectionsProject(project)}
                                     disabled={updateProjectMutation.isPending}
+                                    className="bg-orange-600 hover:bg-orange-700 text-white"
                                   >
-                                    Revision
+                                    Request Corrections
                                   </Button>
                                 </>
                               )}
@@ -1717,6 +1753,97 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
                     </Button>
                   </FloatingAction>
                 </motion.div>
+              </motion.div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+      
+      {/* Corrections Modal */}
+      <AnimatePresence>
+        {correctionsProject && (
+          <motion.div 
+            className="fixed inset-0 flex items-center justify-center z-50"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+          >
+            {/* Backdrop */}
+            <motion.div 
+              className="absolute inset-0 bg-black/20 dark:bg-black/40"
+              onClick={() => setCorrectionsProject(null)}
+            />
+            
+            {/* Modal */}
+            <motion.div
+              className="relative bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 p-6 max-w-md w-full mx-4"
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              transition={{ duration: 0.2 }}
+            >
+              <motion.h3 
+                className="text-lg font-semibold mb-4 text-gray-900 dark:text-gray-100"
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.1 }}
+              >
+                Request Corrections
+              </motion.h3>
+              
+              <motion.p 
+                className="text-gray-600 dark:text-gray-400 mb-4"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 0.15 }}
+              >
+                Request corrections for <strong>{correctionsProject.clientName}</strong>
+              </motion.p>
+              
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.2 }}
+              >
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Corrections Note
+                </label>
+                <textarea
+                  value={correctionsNote}
+                  onChange={(e) => setCorrectionsNote(e.target.value)}
+                  placeholder="Describe what needs to be corrected..."
+                  className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                  rows={4}
+                  data-testid="corrections-note-input"
+                />
+              </motion.div>
+              
+              <motion.div
+                className="flex justify-end gap-3 mt-6"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 0.25 }}
+              >
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setCorrectionsProject(null);
+                    setCorrectionsNote("");
+                  }}
+                  disabled={updateProjectMutation.isPending}
+                  data-testid="cancel-corrections"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={() => handleRequestCorrections(correctionsProject.id, correctionsNote)}
+                  disabled={updateProjectMutation.isPending || !correctionsNote.trim()}
+                  className="bg-orange-600 hover:bg-orange-700"
+                  data-testid="confirm-corrections"
+                >
+                  {updateProjectMutation.isPending ? "Requesting..." : "Request Corrections"}
+                </Button>
               </motion.div>
             </motion.div>
           </motion.div>
