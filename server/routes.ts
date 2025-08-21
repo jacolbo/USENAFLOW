@@ -723,7 +723,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         type: 'TRADE_COMPLETED',
         title: 'Trade Completed',
         message: `Project trade with ${updatedOffer.offeringUser} has been completed`,
-        projectId: updatedOffer.acceptedProjectId,
+        projectId: updatedOffer.acceptedProjectId || "",
         projectName: `Trade with ${updatedOffer.offeringUser}`,
         tradeOfferId: updatedOffer.id,
         createdAt: new Date(),

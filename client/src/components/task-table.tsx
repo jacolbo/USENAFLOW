@@ -287,14 +287,25 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
 
   const handleRequestCorrections = async (projectId: string, note: string) => {
     try {
-      // First, add the corrections note
+      // First, add the corrections note if provided
       if (note.trim()) {
         await fetch(`/api/projects/${projectId}/notes`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             noteType: 'text',
-            content: `CORRECTIONS REQUESTED: ${note}`,
+            content: `🔄 CORRECTIONS REQUESTED: ${note}`,
+            createdBy: user.name,
+          }),
+        });
+      } else {
+        // Add a default note if none provided
+        await fetch(`/api/projects/${projectId}/notes`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            noteType: 'text',
+            content: `🔄 CORRECTIONS REQUESTED by ${user.name}`,
             createdBy: user.name,
           }),
         });
@@ -311,9 +322,14 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
       
       toast({
         title: "Corrections Requested",
-        description: `Project sent back for corrections with note.`,
+        description: `Project sent back for corrections.`,
       });
+      
+      // Invalidate queries to refresh data
+      queryClient.invalidateQueries({ queryKey: ['/api/projects'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/projects', projectId, 'notes'] });
     } catch (error) {
+      console.error('Error requesting corrections:', error);
       toast({
         title: "Error",
         description: "Failed to request corrections",
@@ -1558,7 +1574,7 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
                               )}
                               
                               {/* Admin or Sales can deliver or request corrections when in Review */}
-                              {(user.role === 'Admin' || user.role === 'Sales') && project.status === 'Review' && (
+                              {(user.name === 'Admin' || user.name === 'sales') && project.status === 'Review' && (
                                 <>
                                   <Button 
                                     size="sm" 
@@ -1807,7 +1823,7 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
                 transition={{ delay: 0.2 }}
               >
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Corrections Note
+                  Corrections Note (Optional)
                 </label>
                 <textarea
                   value={correctionsNote}
@@ -1838,7 +1854,7 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
                 </Button>
                 <Button
                   onClick={() => handleRequestCorrections(correctionsProject.id, correctionsNote)}
-                  disabled={updateProjectMutation.isPending || !correctionsNote.trim()}
+                  disabled={updateProjectMutation.isPending}
                   className="bg-orange-600 hover:bg-orange-700"
                   data-testid="confirm-corrections"
                 >
