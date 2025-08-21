@@ -1574,7 +1574,7 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
                               )}
                               
                               {/* Admin or Sales can deliver or request corrections when in Review */}
-                              {(user.name === 'Admin' || user.name === 'sales') && project.status === 'Review' && (
+                              {(user.role === 'Admin' || user.role === 'Sales') && project.status === 'Review' && (
                                 <>
                                   <Button 
                                     size="sm" 
