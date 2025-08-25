@@ -69,7 +69,7 @@ function CommissionView({ user }: { user: User }) {
   const totalExtraRevenue = currentMonthCommissions.reduce((sum: number, commission: any) => 
     sum + (commission.totalAmount || 0), 0);
 
-  const commissionPercentage = 1.5; // 1.5% commission rate
+  const commissionPercentage = 3; // 3% commission rate
 
   if (isLoading) {
     return (

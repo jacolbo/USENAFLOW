@@ -105,7 +105,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // If there's an extraPhotoPrice, create a commission record for the wrangler
       if (project.extraPhotoPrice && project.extras > 0) {
-        const commissionAmount = Math.round(project.extraPhotoPrice * 0.015); // 1.5% commission in cents
+        const commissionAmount = Math.round(project.extraPhotoPrice * 0.03); // 3% commission in cents
         await storage.createWranglerCommission({
           wranglerUsername: "Data Wrangler", // Default wrangler name
           projectId: project.id,
