@@ -71,7 +71,7 @@ app.use((req, res, next) => {
     reusePort: true,
   }, () => {
     log(`serving on port ${port}`);
-    // Start the rollover scheduler after server is running
-    startRolloverScheduler();
+    // Automatic rollover scheduler disabled - using manual controls only
+    // startRolloverScheduler();
   });
 })();
