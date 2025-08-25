@@ -201,6 +201,61 @@ export async function performManualRolloverToNextWeek(): Promise<void> {
   }
 }
 
+// Perform rollback from next week (manual admin action)
+export async function performManualRollbackFromNextWeek(): Promise<void> {
+  console.log('🔄 Manual rollback from next week triggered');
+  
+  try {
+    const currentWeekStart = getCurrentWeekStart();
+    const nextWeekStart = getNextWeekStart();
+    const projects = await storage.getAllProjects();
+    
+    // Find all unassigned projects from next week (Sunday)
+    const unassignedFromNextWeek = projects.filter((project: Project) => {
+      const isUnassigned = !project.assignedTo || project.assignedTo === '__UNASSIGN__';
+      const projectWeekStart = new Date(project.dueDate);
+      projectWeekStart.setDate(projectWeekStart.getDate() - projectWeekStart.getDay());
+      projectWeekStart.setHours(0, 0, 0, 0);
+      
+      // Only move projects from next week's Sunday
+      return isUnassigned && projectWeekStart.getTime() === nextWeekStart.getTime();
+    });
+    
+    if (unassignedFromNextWeek.length === 0) {
+      console.log('✅ No unassigned projects in next week to roll back to current week');
+      return;
+    }
+    
+    console.log(`📦 Rolling back ${unassignedFromNextWeek.length} unassigned projects to current week`);
+    
+    // Update each unassigned project's due date to current Sunday
+    for (const project of unassignedFromNextWeek) {
+      const updatedProject = await storage.updateProject(project.id, {
+        dueDate: currentWeekStart
+      });
+      
+      if (updatedProject) {
+        console.log(`✓ Rolled back project to current week: ${project.clientName} (${project.id})`);
+      }
+    }
+    
+    // Broadcast update to all connected clients
+    broadcastSSE({
+      type: 'rollover_complete',
+      payload: {
+        rolledOverCount: unassignedFromNextWeek.length,
+        message: `${unassignedFromNextWeek.length} unassigned projects moved back to current week`
+      }
+    });
+    
+    console.log('🎉 Manual rollback from next week complete! Clients notified via SSE');
+    
+  } catch (error) {
+    console.error('❌ Error during manual rollback from next week:', error);
+    throw error;
+  }
+}
+
 // Manual rollover trigger (for testing - moves to current week)
 export async function triggerManualRollover(): Promise<void> {
   console.log('🔧 Manual rollover triggered');

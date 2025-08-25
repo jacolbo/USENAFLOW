@@ -353,9 +353,38 @@ export default function Dashboard() {
     }
   });
 
+  // Manual rollback mutation
+  const manualRollbackMutation = useMutation({
+    mutationFn: async () => {
+      const response = await apiRequest("POST", "/api/rollback-from-next-week");
+      return response.json();
+    },
+    onSuccess: () => {
+      toast({
+        title: "Rollback Complete",
+        description: "Unassigned projects have been moved back to current week.",
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
+    },
+    onError: (error: any) => {
+      console.error("Manual rollback error:", error);
+      toast({
+        title: "Rollback Failed",
+        description: "Failed to rollback projects. Please try again.",
+        variant: "destructive",
+      });
+    }
+  });
+
   const handleManualRollover = () => {
     if (window.confirm("Are you sure you want to move all unassigned projects from this Sunday to next Sunday?")) {
       manualRolloverMutation.mutate();
+    }
+  };
+
+  const handleManualRollback = () => {
+    if (window.confirm("Are you sure you want to move all unassigned projects from next Sunday back to this Sunday?")) {
+      manualRollbackMutation.mutate();
     }
   };
 
@@ -463,18 +492,30 @@ export default function Dashboard() {
                       {showArchive ? `Current (${getCurrentProjectCount()})` : `Archive (${getArchiveProjectCount()})`}
                     </Button>
 
-                    {/* Manual Rollover Button for Admin */}
+                    {/* Manual Rollover Buttons for Admin */}
                     {user.role === "Admin" && (
-                      <Button 
-                        variant="outline"
-                        size="sm"
-                        onClick={handleManualRollover}
-                        className="flex items-center gap-2 bg-orange-50 hover:bg-orange-100 border-orange-200 text-orange-700"
-                        data-testid="button-manual-rollover"
-                      >
-                        <ArrowRightLeft className="h-4 w-4" />
-                        Roll to Next Week
-                      </Button>
+                      <div className="flex items-center gap-2">
+                        <Button 
+                          variant="outline"
+                          size="sm"
+                          onClick={handleManualRollover}
+                          className="flex items-center gap-2 bg-orange-50 hover:bg-orange-100 border-orange-200 text-orange-700"
+                          data-testid="button-manual-rollover"
+                        >
+                          <ArrowRightLeft className="h-4 w-4" />
+                          Roll Forward
+                        </Button>
+                        <Button 
+                          variant="outline"
+                          size="sm"
+                          onClick={handleManualRollback}
+                          className="flex items-center gap-2 bg-blue-50 hover:bg-blue-100 border-blue-200 text-blue-700"
+                          data-testid="button-manual-rollback"
+                        >
+                          <ArrowRightLeft className="h-4 w-4 rotate-180" />
+                          Roll Back
+                        </Button>
+                      </div>
                     )}
 
                     {/* Settings Icon - Only visible to Admin users */}
