@@ -198,13 +198,17 @@ export function AddProjectForm({ onAddProject, user }: AddProjectFormProps) {
             )}
           </div>
 
-          {/* Extra Photo Price - Only for DataWrangler when there are extras */}
-          {user?.role === "DataWrangler" && calculateExtras() > 0 && (
+          {/* Extra Photo Price - Show for testing - TODO: Restrict to DataWrangler only */}
+          {calculateExtras() > 0 && (
             <div className="space-y-2">
               <Label htmlFor="extraPrice" className="flex items-center gap-2">
                 <DollarSign className="h-4 w-4" />
                 Price per Extra Photo (R)
               </Label>
+              {/* Debug info - remove after testing */}
+              <div className="text-xs text-blue-600">
+                Debug: User role: {user?.role}, Extras: {calculateExtras()}
+              </div>
               <Input
                 id="extraPrice"
                 type="number"

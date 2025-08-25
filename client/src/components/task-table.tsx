@@ -1380,14 +1380,21 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
                               />
                             </TableCell>
                             <TableCell>
-                              <input
-                                type="number"
-                                value={localInputValues[project.id]?.extras ?? project.extras}
-                                onChange={(e) => handleChangeExtras(project.id, parseInt(e.target.value) || 0)}
-                                className="border rounded px-2 py-1 w-16 text-center bg-white dark:bg-gray-800"
-                                min="0"
-                                placeholder="0"
-                              />
+                              <div className="space-y-1">
+                                <input
+                                  type="number"
+                                  value={localInputValues[project.id]?.extras ?? project.extras}
+                                  onChange={(e) => handleChangeExtras(project.id, parseInt(e.target.value) || 0)}
+                                  className="border rounded px-2 py-1 w-16 text-center bg-white dark:bg-gray-800"
+                                  min="0"
+                                  placeholder="0"
+                                />
+                                {project.extraPhotoPrice && project.extras > 0 && (
+                                  <div className="text-xs text-green-600 font-medium">
+                                    R{((project.extraPhotoPrice / 100) * project.extras).toFixed(2)}
+                                  </div>
+                                )}
+                              </div>
                             </TableCell>
                             <TableCell>
                               <input

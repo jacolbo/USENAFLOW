@@ -109,10 +109,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         await storage.createWranglerCommission({
           wranglerUsername: "Data Wrangler", // Default wrangler name
           projectId: project.id,
-          extraPhotos: project.extras,
+          extraCount: project.extras,
           extraPhotoPrice: project.extraPhotoPrice,
+          totalAmount: project.extraPhotoPrice,
           commissionAmount,
-          createdAt: new Date(),
         });
       }
       
