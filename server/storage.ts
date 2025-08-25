@@ -346,10 +346,22 @@ export class DatabaseStorage implements IStorage {
     const status = extras > 0 ? ProjectStatus.AWAITING_PAYMENT : ProjectStatus.READY_FOR_RETOUCHING;
     const invoicePaid = extras === 0;
     
+    // Convert due date to Sunday of that week
+    const getSundayOfWeek = (date: Date): Date => {
+      const sunday = new Date(date);
+      const day = date.getDay(); // 0 = Sunday
+      sunday.setDate(date.getDate() - day); // Go back to Sunday
+      sunday.setHours(0, 0, 0, 0); // Set to start of day
+      return sunday;
+    };
+    
+    const sundayDueDate = getSundayOfWeek(new Date(insertProject.dueDate));
+    
     const [project] = await db
       .insert(projects)
       .values({
         ...insertProject,
+        dueDate: sundayDueDate,
         extras,
         status,
         invoicePaid,
