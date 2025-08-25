@@ -1,4 +1,4 @@
-import { type User, type InsertUser, type Project, type InsertProject, type UpdateProject, type ProjectNote, type InsertProjectNote, type UpdateProjectNote, type TradeOffer, type InsertTradeOffer, type UpdateTradeOffer, ProjectStatus, TradeOfferStatus, users, projects, projectNotes, tradeOffers } from "@shared/schema";
+import { type User, type InsertUser, type Project, type InsertProject, type UpdateProject, type ProjectNote, type InsertProjectNote, type UpdateProjectNote, type TradeOffer, type InsertTradeOffer, type UpdateTradeOffer, type WranglerCommission, type InsertWranglerCommission, ProjectStatus, TradeOfferStatus, users, projects, projectNotes, tradeOffers, wranglerCommissions } from "@shared/schema";
 import { db } from "./db";
 import { eq, sql } from "drizzle-orm";
 import { randomUUID } from "crypto";
@@ -27,6 +27,10 @@ export interface IStorage {
   updateTradeOffer(id: string, updates: UpdateTradeOffer): Promise<TradeOffer | undefined>;
   deleteTradeOffer(id: string): Promise<boolean>;
   executeTradeSwap(tradeOfferId: string): Promise<boolean>;
+  
+  // Wrangler commission methods
+  getWranglerCommissions(wranglerUsername: string): Promise<WranglerCommission[]>;
+  createWranglerCommission(commission: InsertWranglerCommission): Promise<WranglerCommission>;
 }
 
 export class MemStorage implements IStorage {
@@ -52,6 +56,7 @@ export class MemStorage implements IStorage {
         packageCount: 10,
         selectedCount: 12,
         extras: 2,
+        extraPhotoPrice: 2500, // R25.00 per extra photo in cents
         dueDate: new Date(2025, 7, 7), // Aug 7, 2025
         status: ProjectStatus.AWAITING_PAYMENT,
         invoicePaid: false,
@@ -66,6 +71,7 @@ export class MemStorage implements IStorage {
         packageCount: 5,
         selectedCount: 5,
         extras: 0,
+        extraPhotoPrice: null,
         dueDate: new Date(2025, 7, 9), // Aug 9, 2025
         status: ProjectStatus.READY_FOR_RETOUCHING,
         invoicePaid: true,
@@ -80,6 +86,7 @@ export class MemStorage implements IStorage {
         packageCount: 8,
         selectedCount: 8,
         extras: 0,
+        extraPhotoPrice: null,
         dueDate: new Date(2025, 7, 1), // Aug 1, 2025
         status: ProjectStatus.REVIEW,
         invoicePaid: true,
@@ -94,6 +101,7 @@ export class MemStorage implements IStorage {
         packageCount: 7,
         selectedCount: 10,
         extras: 3,
+        extraPhotoPrice: 3000, // R30.00 per extra photo in cents
         dueDate: new Date(2025, 7, 2), // Aug 2, 2025
         status: ProjectStatus.DELIVERED,
         invoicePaid: true,
@@ -108,6 +116,7 @@ export class MemStorage implements IStorage {
         packageCount: 4,
         selectedCount: 4,
         extras: 0,
+        extraPhotoPrice: null,
         dueDate: new Date(2025, 7, 8), // Aug 8, 2025
         status: ProjectStatus.ASSIGNED,
         invoicePaid: true,
@@ -367,6 +376,7 @@ export class DatabaseStorage implements IStorage {
         invoicePaid,
         assignedTo: null,
         rating: null,
+        extraPhotoPrice: insertProject.extraPhotoPrice || null,
       })
       .returning();
     return project;
@@ -514,6 +524,21 @@ export class DatabaseStorage implements IStorage {
       console.error('Failed to execute trade swap:', error);
       return false;
     }
+  }
+
+  async getWranglerCommissions(wranglerUsername: string): Promise<WranglerCommission[]> {
+    return await db
+      .select()
+      .from(wranglerCommissions)
+      .where(eq(wranglerCommissions.wranglerUsername, wranglerUsername));
+  }
+
+  async createWranglerCommission(commission: InsertWranglerCommission): Promise<WranglerCommission> {
+    const [wranglerCommission] = await db
+      .insert(wranglerCommissions)
+      .values(commission)
+      .returning();
+    return wranglerCommission;
   }
 }
 

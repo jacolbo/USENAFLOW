@@ -16,6 +16,7 @@ export const projects = pgTable("projects", {
   packageCount: integer("package_count").notNull(),
   selectedCount: integer("selected_count").notNull(),
   extras: integer("extras").notNull().default(0),
+  extraPhotoPrice: integer("extra_photo_price").default(0), // Price per extra photo in cents
   dueDate: timestamp("due_date").notNull(),
   status: text("status").notNull(),
   invoicePaid: boolean("invoice_paid").notNull().default(false),
@@ -50,6 +51,18 @@ export const tradeOffers = pgTable("trade_offers", {
   completedAt: timestamp("completed_at"),
 });
 
+// Wrangler commission tracking
+export const wranglerCommissions = pgTable("wrangler_commissions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  wranglerUsername: text("wrangler_username").notNull(),
+  projectId: varchar("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
+  extraPhotoPrice: integer("extra_photo_price").notNull(), // Price per extra photo in cents
+  extraCount: integer("extra_count").notNull(),
+  totalAmount: integer("total_amount").notNull(), // Total amount charged in cents
+  commissionAmount: integer("commission_amount").notNull(), // 1.5% commission in cents
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+});
+
 export const insertUserSchema = createInsertSchema(users).pick({
   username: true,
   password: true,
@@ -63,6 +76,7 @@ export const insertProjectSchema = createInsertSchema(projects).omit({
   invoicePaid: true,
 }).extend({
   dueDate: z.string().transform((str) => new Date(str)),
+  extraPhotoPrice: z.number().min(0).optional(),
 });
 
 export const updateProjectSchema = createInsertSchema(projects).partial().omit({
@@ -98,17 +112,25 @@ export const updateTradeOfferSchema = createInsertSchema(tradeOffers).partial().
   createdAt: true,
 });
 
-export type InsertUser = z.infer<typeof insertUserSchema>;
+export const insertWranglerCommissionSchema = createInsertSchema(wranglerCommissions).omit({
+  id: true,
+  createdAt: true,
+});
+
+// Type definitions
 export type User = typeof users.$inferSelect;
+export type InsertUser = z.infer<typeof insertUserSchema>;
+export type Project = typeof projects.$inferSelect;
 export type InsertProject = z.infer<typeof insertProjectSchema>;
 export type UpdateProject = z.infer<typeof updateProjectSchema>;
-export type Project = typeof projects.$inferSelect;
+export type ProjectNote = typeof projectNotes.$inferSelect;
 export type InsertProjectNote = z.infer<typeof insertProjectNoteSchema>;
 export type UpdateProjectNote = z.infer<typeof updateProjectNoteSchema>;
-export type ProjectNote = typeof projectNotes.$inferSelect;
+export type TradeOffer = typeof tradeOffers.$inferSelect;
 export type InsertTradeOffer = z.infer<typeof insertTradeOfferSchema>;
 export type UpdateTradeOffer = z.infer<typeof updateTradeOfferSchema>;
-export type TradeOffer = typeof tradeOffers.$inferSelect;
+export type WranglerCommission = typeof wranglerCommissions.$inferSelect;
+export type InsertWranglerCommission = z.infer<typeof insertWranglerCommissionSchema>;
 
 export const UserRoles = {
   ADMIN: "Admin",

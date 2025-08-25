@@ -7,10 +7,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { Camera, Plus } from "lucide-react";
+import { Camera, Plus, DollarSign } from "lucide-react";
 
 interface AddProjectFormProps {
   onAddProject: () => void;
+  user?: any; // Current user context
 }
 
 // Helper function to get Monday of the current week
@@ -58,11 +59,12 @@ const generateWeekOptions = () => {
   return options;
 };
 
-export function AddProjectForm({ onAddProject }: AddProjectFormProps) {
+export function AddProjectForm({ onAddProject, user }: AddProjectFormProps) {
   const [clientName, setClientName] = useState("");
   const [packageCount, setPackageCount] = useState("");
   const [selectedCount, setSelectedCount] = useState("");
   const [dueWeek, setDueWeek] = useState("");
+  const [extraPhotoPrice, setExtraPhotoPrice] = useState("");
   
   // Calculate extras in real-time
   const calculateExtras = () => {
@@ -85,6 +87,7 @@ export function AddProjectForm({ onAddProject }: AddProjectFormProps) {
       setPackageCount("");
       setSelectedCount("");
       setDueWeek("");
+      setExtraPhotoPrice("");
       onAddProject();
       toast({
         title: "Project created",
@@ -112,6 +115,17 @@ export function AddProjectForm({ onAddProject }: AddProjectFormProps) {
       return;
     }
 
+    // Validate extra photo price if user is DataWrangler and there are extras
+    const extras = calculateExtras();
+    if (user?.role === "DataWrangler" && extras > 0 && !extraPhotoPrice) {
+      toast({
+        title: "Validation Error",
+        description: "Please enter the extra photo price.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     const pkgCount = parseInt(packageCount, 10);
     const selCount = parseInt(selectedCount, 10);
 
@@ -129,6 +143,7 @@ export function AddProjectForm({ onAddProject }: AddProjectFormProps) {
       packageCount: pkgCount,
       selectedCount: selCount,
       dueDate: dueWeek,
+      extraPhotoPrice: extraPhotoPrice ? parseFloat(extraPhotoPrice) * 100 : undefined, // Convert to cents
     });
   };
 
@@ -182,6 +197,29 @@ export function AddProjectForm({ onAddProject }: AddProjectFormProps) {
               </div>
             )}
           </div>
+
+          {/* Extra Photo Price - Only for DataWrangler when there are extras */}
+          {user?.role === "DataWrangler" && calculateExtras() > 0 && (
+            <div className="space-y-2">
+              <Label htmlFor="extraPrice" className="flex items-center gap-2">
+                <DollarSign className="h-4 w-4" />
+                Price per Extra Photo (R)
+              </Label>
+              <Input
+                id="extraPrice"
+                type="number"
+                step="0.01"
+                min="0"
+                value={extraPhotoPrice}
+                onChange={(e) => setExtraPhotoPrice(e.target.value)}
+                placeholder="25.00"
+                required
+              />
+              <div className="text-xs text-gray-500">
+                Total: R{extraPhotoPrice ? (parseFloat(extraPhotoPrice) * calculateExtras()).toFixed(2) : '0.00'} ({calculateExtras()} extras)
+              </div>
+            </div>
+          )}
           
           <div className="space-y-2">
             <Label htmlFor="dueWeek">Slot into Week</Label>

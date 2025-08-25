@@ -705,7 +705,7 @@ export default function Dashboard() {
 
               {/* Show project creation form for non-Sales roles that can add projects - only in current view */}
               {!showArchive && user.role !== "Retoucher" && user.role !== "Sales" && (
-                <AddProjectForm onAddProject={() => {}} />
+                <AddProjectForm onAddProject={() => {}} user={user} />
               )}
             </>
           )}

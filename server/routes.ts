@@ -103,6 +103,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const validatedData = insertProjectSchema.parse(req.body);
       const project = await storage.createProject(validatedData);
       
+      // If there's an extraPhotoPrice, create a commission record for the wrangler
+      if (project.extraPhotoPrice && project.extras > 0) {
+        const commissionAmount = Math.round(project.extraPhotoPrice * 0.015); // 1.5% commission in cents
+        await storage.createWranglerCommission({
+          wranglerUsername: "Data Wrangler", // Default wrangler name
+          projectId: project.id,
+          extraPhotos: project.extras,
+          extraPhotoPrice: project.extraPhotoPrice,
+          commissionAmount,
+          createdAt: new Date(),
+        });
+      }
+      
       // Broadcast project creation notification
       const notification: Notification = {
         id: `notif_${Date.now()}_${Math.random()}`,
@@ -828,6 +841,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Manual rollback from next week error:", error);
       res.status(500).json({ success: false, error: "Rollback from next week failed" });
+    }
+  });
+
+  // Get wrangler commissions
+  app.get("/api/commissions/:wrangler", async (req, res) => {
+    try {
+      const { wrangler } = req.params;
+      const commissions = await storage.getWranglerCommissions(wrangler);
+      res.json(commissions);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch commissions" });
     }
   });
 
