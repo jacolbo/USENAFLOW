@@ -118,7 +118,82 @@ export function stopRolloverScheduler(): void {
   }
 }
 
-// Manual rollover trigger (for testing)
+// Get next Sunday start
+function getNextWeekStart(): Date {
+  const now = new Date();
+  const nextSunday = new Date(now);
+  const day = now.getDay(); // 0 = Sunday
+  
+  // Calculate days until next Sunday
+  const daysUntilNextSunday = (7 - day) % 7;
+  if (daysUntilNextSunday === 0) {
+    // If today is Sunday, next Sunday is 7 days away
+    nextSunday.setDate(now.getDate() + 7);
+  } else {
+    // Move to next Sunday
+    nextSunday.setDate(now.getDate() + daysUntilNextSunday);
+  }
+  
+  nextSunday.setHours(0, 0, 0, 0); // Set to start of day
+  return nextSunday;
+}
+
+// Perform rollover to next week (manual admin action)
+export async function performManualRolloverToNextWeek(): Promise<void> {
+  console.log('🔧 Manual rollover to next week triggered');
+  
+  try {
+    const currentWeekStart = getCurrentWeekStart();
+    const nextWeekStart = getNextWeekStart();
+    const projects = await storage.getAllProjects();
+    
+    // Find all unassigned projects from current week (Sunday)
+    const unassignedFromCurrentWeek = projects.filter((project: Project) => {
+      const isUnassigned = !project.assignedTo || project.assignedTo === '__UNASSIGN__';
+      const projectWeekStart = new Date(project.dueDate);
+      projectWeekStart.setDate(projectWeekStart.getDate() - projectWeekStart.getDay());
+      projectWeekStart.setHours(0, 0, 0, 0);
+      
+      // Only move projects from current week's Sunday
+      return isUnassigned && projectWeekStart.getTime() === currentWeekStart.getTime();
+    });
+    
+    if (unassignedFromCurrentWeek.length === 0) {
+      console.log('✅ No unassigned projects in current week to roll over to next week');
+      return;
+    }
+    
+    console.log(`📦 Rolling over ${unassignedFromCurrentWeek.length} unassigned projects to next week`);
+    
+    // Update each unassigned project's due date to next Sunday
+    for (const project of unassignedFromCurrentWeek) {
+      const updatedProject = await storage.updateProject(project.id, {
+        dueDate: nextWeekStart
+      });
+      
+      if (updatedProject) {
+        console.log(`✓ Rolled over project to next week: ${project.clientName} (${project.id})`);
+      }
+    }
+    
+    // Broadcast update to all connected clients
+    broadcastSSE({
+      type: 'rollover_complete',
+      payload: {
+        rolledOverCount: unassignedFromCurrentWeek.length,
+        message: `${unassignedFromCurrentWeek.length} unassigned projects moved to next week`
+      }
+    });
+    
+    console.log('🎉 Manual rollover to next week complete! Clients notified via SSE');
+    
+  } catch (error) {
+    console.error('❌ Error during manual rollover to next week:', error);
+    throw error;
+  }
+}
+
+// Manual rollover trigger (for testing - moves to current week)
 export async function triggerManualRollover(): Promise<void> {
   console.log('🔧 Manual rollover triggered');
   await performUnassignedRollover();

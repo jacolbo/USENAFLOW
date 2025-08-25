@@ -1,6 +1,8 @@
 import { useState, useEffect } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
+import { apiRequest } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 import { LoginForm } from "@/components/login-form";
 import { RegisterForm } from "@/components/register-form";
 import { SettingsPanel } from "@/components/settings-panel";
@@ -44,6 +46,8 @@ export default function Dashboard() {
   const [currentView, setCurrentView] = useState<'login' | 'register'>('login');
   const [showArchive, setShowArchive] = useState(false);
   const [showTradeModal, setShowTradeModal] = useState(false);
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
 
   // Initialize SSE for live sync and notifications
   const {
@@ -326,6 +330,35 @@ export default function Dashboard() {
     }
   };
 
+  // Manual rollover mutation
+  const manualRolloverMutation = useMutation({
+    mutationFn: async () => {
+      const response = await apiRequest("POST", "/api/rollover-next-week");
+      return response.json();
+    },
+    onSuccess: () => {
+      toast({
+        title: "Rollover Complete",
+        description: "Unassigned projects have been moved to next week.",
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
+    },
+    onError: (error: any) => {
+      console.error("Manual rollover error:", error);
+      toast({
+        title: "Rollover Failed",
+        description: "Failed to rollover projects. Please try again.",
+        variant: "destructive",
+      });
+    }
+  });
+
+  const handleManualRollover = () => {
+    if (window.confirm("Are you sure you want to move all unassigned projects from this Sunday to next Sunday?")) {
+      manualRolloverMutation.mutate();
+    }
+  };
+
   // Show login/register form if user is not logged in
   if (!user) {
     if (currentView === 'register') {
@@ -429,6 +462,20 @@ export default function Dashboard() {
                       <Archive className="h-4 w-4" />
                       {showArchive ? `Current (${getCurrentProjectCount()})` : `Archive (${getArchiveProjectCount()})`}
                     </Button>
+
+                    {/* Manual Rollover Button for Admin */}
+                    {user.role === "Admin" && (
+                      <Button 
+                        variant="outline"
+                        size="sm"
+                        onClick={handleManualRollover}
+                        className="flex items-center gap-2 bg-orange-50 hover:bg-orange-100 border-orange-200 text-orange-700"
+                        data-testid="button-manual-rollover"
+                      >
+                        <ArrowRightLeft className="h-4 w-4" />
+                        Roll to Next Week
+                      </Button>
+                    )}
 
                     {/* Settings Icon - Only visible to Admin users */}
                     {user.role === "Admin" && (

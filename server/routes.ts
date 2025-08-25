@@ -5,7 +5,7 @@ import { storage } from "./storage";
 import { insertProjectSchema, updateProjectSchema, insertProjectNoteSchema, updateProjectNoteSchema, insertTradeOfferSchema, updateTradeOfferSchema, ProjectStatus, TradeOfferStatus } from "@shared/schema";
 import { ObjectStorageService, ObjectNotFoundError } from "./objectStorage";
 import type { Notification, WebSocketMessage } from "@shared/schema";
-import { triggerManualRollover } from "./rolloverScheduler";
+import { triggerManualRollover, performManualRolloverToNextWeek } from "./rolloverScheduler";
 
 // Global WebSocket connections store
 const wsConnections = new Map<string, { ws: WebSocket, userId?: string }>();
@@ -806,6 +806,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Manual rollover error:", error);
       res.status(500).json({ success: false, error: "Rollover failed" });
+    }
+  });
+
+  // Manual rollover to next week endpoint for admin
+  app.post("/api/rollover-next-week", async (req, res) => {
+    try {
+      await performManualRolloverToNextWeek();
+      res.json({ success: true, message: "Manual rollover to next week completed" });
+    } catch (error) {
+      console.error("Manual rollover to next week error:", error);
+      res.status(500).json({ success: false, error: "Rollover to next week failed" });
     }
   });
 
