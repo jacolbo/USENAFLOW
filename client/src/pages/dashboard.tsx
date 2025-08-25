@@ -41,6 +41,141 @@ interface UserCredentials {
   abbreviation: string;
 }
 
+// Extra Photos Sales View Component
+function ExtraPhotosSalesView({ projects }: { projects: Project[] }) {
+  const currentWeek = new Date();
+  const startOfWeek = new Date(currentWeek);
+  startOfWeek.setDate(currentWeek.getDate() - currentWeek.getDay()); // Sunday
+  startOfWeek.setHours(0, 0, 0, 0);
+  
+  const endOfWeek = new Date(startOfWeek);
+  endOfWeek.setDate(startOfWeek.getDate() + 6);
+  endOfWeek.setHours(23, 59, 59, 999);
+
+  const currentMonth = new Date();
+  const startOfMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1);
+  const endOfMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 0);
+
+  // Filter projects for current week
+  const weeklyProjects = projects.filter(project => {
+    const projectDate = new Date(project.createdAt);
+    return projectDate >= startOfWeek && projectDate <= endOfWeek && project.extras > 0;
+  });
+
+  // Filter projects for current month  
+  const monthlyProjects = projects.filter(project => {
+    const projectDate = new Date(project.createdAt);
+    return projectDate >= startOfMonth && projectDate <= endOfMonth && project.extras > 0;
+  });
+
+  // Calculate totals
+  const weeklyExtras = weeklyProjects.reduce((sum, project) => sum + (project.extras || 0), 0);
+  const weeklyRevenue = weeklyProjects.reduce((sum, project) => sum + ((project.extraPhotoPrice || 0) * (project.extras || 0)), 0);
+  
+  const monthlyExtras = monthlyProjects.reduce((sum, project) => sum + (project.extras || 0), 0);
+  const monthlyRevenue = monthlyProjects.reduce((sum, project) => sum + ((project.extraPhotoPrice || 0) * (project.extras || 0)), 0);
+
+  const weekName = `Week of ${startOfWeek.toLocaleDateString()}`;
+  const monthName = currentMonth.toLocaleString('default', { month: 'long', year: 'numeric' });
+
+  return (
+    <div className="space-y-6">
+      {/* Sales Header */}
+      <div className="bg-white rounded-lg shadow-sm p-6">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <DollarSign className="h-6 w-6 text-green-600" />
+            <div>
+              <h2 className="text-xl font-semibold text-gray-900">Extra Photos Sales</h2>
+              <p className="text-sm text-gray-600">Weekly and monthly extra photo statistics</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Weekly and Monthly Stats */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {/* Weekly Stats */}
+        <div className="bg-white rounded-lg shadow-sm p-6">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="w-4 h-4 rounded-full bg-blue-500"></div>
+            <h3 className="text-lg font-semibold text-gray-900">This Week</h3>
+          </div>
+          <div className="space-y-3">
+            <div className="text-sm text-gray-600">{weekName}</div>
+            <div className="text-3xl font-bold text-blue-600">{weeklyExtras}</div>
+            <div className="text-sm text-gray-500">Extra photos sold</div>
+            <div className="text-xl font-semibold text-green-600">
+              R{(weeklyRevenue / 100).toFixed(2)}
+            </div>
+            <div className="text-sm text-gray-500">Revenue from extras</div>
+            <div className="text-sm text-gray-600">
+              {weeklyProjects.length} projects with extras
+            </div>
+          </div>
+        </div>
+
+        {/* Monthly Stats */}
+        <div className="bg-white rounded-lg shadow-sm p-6">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="w-4 h-4 rounded-full bg-purple-500"></div>
+            <h3 className="text-lg font-semibold text-gray-900">This Month</h3>
+          </div>
+          <div className="space-y-3">
+            <div className="text-sm text-gray-600">{monthName}</div>
+            <div className="text-3xl font-bold text-purple-600">{monthlyExtras}</div>
+            <div className="text-sm text-gray-500">Extra photos sold</div>
+            <div className="text-xl font-semibold text-green-600">
+              R{(monthlyRevenue / 100).toFixed(2)}
+            </div>
+            <div className="text-sm text-gray-500">Revenue from extras</div>
+            <div className="text-sm text-gray-600">
+              {monthlyProjects.length} projects with extras
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Recent Projects with Extras */}
+      <div className="bg-white rounded-lg shadow-sm">
+        <div className="px-6 py-4 border-b border-gray-200">
+          <h3 className="text-lg font-semibold text-gray-900">Recent Projects with Extra Photos</h3>
+          <p className="text-sm text-gray-600">Latest projects that included extra photo charges</p>
+        </div>
+        <div className="divide-y divide-gray-200">
+          {monthlyProjects.slice(0, 10).map((project, index) => (
+            <div key={project.id} className="p-4 hover:bg-gray-50">
+              <div className="flex items-center justify-between">
+                <div className="flex-1">
+                  <div className="text-sm font-medium text-gray-900">
+                    {project.clientName}
+                  </div>
+                  <div className="text-xs text-gray-500 mt-1">
+                    {new Date(project.createdAt).toLocaleDateString()} • {project.clientName}
+                  </div>
+                </div>
+                <div className="text-right">
+                  <div className="text-sm font-medium text-purple-600">
+                    +{project.extras} extra photos
+                  </div>
+                  <div className="text-xs text-green-600">
+                    R{((project.extraPhotoPrice || 0) * (project.extras || 0) / 100).toFixed(2)}
+                  </div>
+                </div>
+              </div>
+            </div>
+          ))}
+          {monthlyProjects.length === 0 && (
+            <div className="p-6 text-center text-gray-500">
+              No extra photos sold this month
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // Commission View Component
 function CommissionView({ user }: { user: User }) {
   const currentMonth = new Date().toLocaleString('default', { month: 'long', year: 'numeric' });
@@ -148,6 +283,7 @@ export default function Dashboard() {
   const [currentView, setCurrentView] = useState<'login' | 'register'>('login');
   const [showArchive, setShowArchive] = useState(false);
   const [showCommissions, setShowCommissions] = useState(false);
+  const [showExtraPhotosSales, setShowExtraPhotosSales] = useState(false);
   const [showTradeModal, setShowTradeModal] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -591,6 +727,7 @@ export default function Dashboard() {
                       onClick={() => {
                         setShowArchive(!showArchive);
                         setShowCommissions(false);
+                        setShowExtraPhotosSales(false);
                       }}
                       className="flex items-center gap-2"
                     >
@@ -606,11 +743,29 @@ export default function Dashboard() {
                         onClick={() => {
                           setShowCommissions(!showCommissions);
                           setShowArchive(false);
+                          setShowExtraPhotosSales(false);
                         }}
                         className="flex items-center gap-2 bg-green-50 hover:bg-green-100 border-green-200 text-green-700"
                       >
                         <DollarSign className="h-4 w-4" />
                         Commissions
+                      </Button>
+                    )}
+
+                    {/* Extra Photos Sales Button - Only for Sales */}
+                    {user.role === "Sales" && (
+                      <Button 
+                        variant={showExtraPhotosSales ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => {
+                          setShowExtraPhotosSales(!showExtraPhotosSales);
+                          setShowArchive(false);
+                          setShowCommissions(false);
+                        }}
+                        className="flex items-center gap-2 bg-purple-50 hover:bg-purple-100 border-purple-200 text-purple-700"
+                      >
+                        <DollarSign className="h-4 w-4" />
+                        Extra Photos Sales
                       </Button>
                     )}
 
@@ -746,6 +901,11 @@ export default function Dashboard() {
           
           {/* Sales Dashboard - Payment & Delivery Management */}
           {user.role === "Sales" ? (
+            <>
+              {/* Extra Photos Sales View for Sales */}
+              {showExtraPhotosSales ? (
+                <ExtraPhotosSalesView projects={allProjects || []} />
+              ) : (
             <div className="space-y-6">
               {/* Pending Payments Section */}
               <div className="bg-white rounded-lg shadow-sm">
@@ -795,6 +955,8 @@ export default function Dashboard() {
                 </div>
               </div>
             </div>
+              )}
+            </>
           ) : (
             <>
               {/* Commission View for DataWrangler */}
@@ -841,12 +1003,12 @@ export default function Dashboard() {
           )}
           
           {/* Show the task table for the visible projects - only for non-Sales roles and not in commission view */}
-          {user.role !== "Sales" && !showCommissions && (
+          {user.role !== "Sales" && !showCommissions && !showExtraPhotosSales && (
             <TaskTable projects={projects} user={user} allUsers={users} />
           )}
 
           {/* Team Progress Analytics - only in current view and not in commission view */}
-          {!showArchive && !showCommissions && (
+          {!showArchive && !showCommissions && !showExtraPhotosSales && (
             <TeamAnalytics user={user} />
           )}
 
