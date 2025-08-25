@@ -2,29 +2,21 @@ import { storage } from "./storage";
 import { broadcastSSE } from "./routes";
 import type { Project } from "@shared/schema";
 
-// Calculate milliseconds until next Sunday 00:01
-function getMillisecondsUntilNextSunday(): number {
+// Calculate milliseconds until next midnight 00:01
+function getMillisecondsUntilNextMidnight(): number {
   const now = new Date();
-  const nextSunday = new Date(now);
+  const nextMidnight = new Date(now);
   
-  // Calculate days until Sunday (0 = Sunday)
-  const daysUntilSunday = (7 - now.getDay()) % 7;
-  
-  if (daysUntilSunday === 0) {
-    // If today is Sunday, check if it's past 00:01
-    if (now.getHours() > 0 || (now.getHours() === 0 && now.getMinutes() >= 1)) {
-      // Past 00:01, schedule for next Sunday
-      nextSunday.setDate(now.getDate() + 7);
-    }
-  } else {
-    // Not Sunday, schedule for next Sunday
-    nextSunday.setDate(now.getDate() + daysUntilSunday);
+  // Check if it's past 00:01 today
+  if (now.getHours() > 0 || (now.getHours() === 0 && now.getMinutes() >= 1)) {
+    // Past 00:01, schedule for next day
+    nextMidnight.setDate(now.getDate() + 1);
   }
   
   // Set time to 00:01:00
-  nextSunday.setHours(0, 1, 0, 0);
+  nextMidnight.setHours(0, 1, 0, 0);
   
-  return nextSunday.getTime() - now.getTime();
+  return nextMidnight.getTime() - now.getTime();
 }
 
 // Get Sunday start of current week
@@ -98,17 +90,17 @@ function scheduleRollover(): void {
     clearTimeout(rolloverTimeout);
   }
   
-  const msUntilSunday = getMillisecondsUntilNextSunday();
-  const nextSundayDate = new Date(Date.now() + msUntilSunday);
+  const msUntilMidnight = getMillisecondsUntilNextMidnight();
+  const nextMidnightDate = new Date(Date.now() + msUntilMidnight);
   
-  console.log(`⏰ Scheduling unassigned project rollover for: ${nextSundayDate.toLocaleString()}`);
-  console.log(`⌛ Time until rollover: ${Math.round(msUntilSunday / 1000 / 60)} minutes`);
+  console.log(`⏰ Scheduling unassigned project rollover for: ${nextMidnightDate.toLocaleString()}`);
+  console.log(`⌛ Time until rollover: ${Math.round(msUntilMidnight / 1000 / 60)} minutes`);
   
   rolloverTimeout = setTimeout(async () => {
     await performUnassignedRollover();
-    // Schedule next rollover (7 days later)
+    // Schedule next rollover (next day)
     scheduleRollover();
-  }, msUntilSunday);
+  }, msUntilMidnight);
 }
 
 // Start the scheduler
