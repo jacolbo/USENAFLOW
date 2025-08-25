@@ -17,7 +17,7 @@ import { WRUButton } from "@/components/WRUButton";
 import { useSSE } from "@/hooks/use-sse";
 import { User } from "@/lib/types";
 import { Project } from "@shared/schema";
-import { User as UserIcon, LogOut, Settings, Archive, ArrowRightLeft } from "lucide-react";
+import { User as UserIcon, LogOut, Settings, Archive, ArrowRightLeft, DollarSign } from "lucide-react";
 import logoImage from "@assets/USENA-FLOW_1754522507856.png";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -41,10 +41,113 @@ interface UserCredentials {
   abbreviation: string;
 }
 
+// Commission View Component
+function CommissionView({ user }: { user: User }) {
+  const currentMonth = new Date().toLocaleString('default', { month: 'long', year: 'numeric' });
+  
+  // Query commission data for the current user
+  const { data: commissions, isLoading } = useQuery({
+    queryKey: ["/api/commissions", user.name],
+    queryFn: async () => {
+      const response = await apiRequest("GET", `/api/commissions/${encodeURIComponent(user.name)}`);
+      return response.json();
+    },
+    enabled: user.role === "DataWrangler"
+  });
+
+  // Calculate current month totals
+  const currentMonthCommissions = commissions?.filter((commission: any) => {
+    const commissionDate = new Date(commission.createdAt);
+    const now = new Date();
+    return commissionDate.getMonth() === now.getMonth() && 
+           commissionDate.getFullYear() === now.getFullYear();
+  }) || [];
+
+  const totalCommissionAmount = currentMonthCommissions.reduce((sum: number, commission: any) => 
+    sum + (commission.commissionAmount || 0), 0);
+  
+  const totalExtraRevenue = currentMonthCommissions.reduce((sum: number, commission: any) => 
+    sum + (commission.totalAmount || 0), 0);
+
+  const commissionPercentage = 1.5; // 1.5% commission rate
+
+  if (isLoading) {
+    return (
+      <div className="bg-white rounded-lg shadow-sm p-8">
+        <div className="text-center">Loading commission data...</div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Commission Header */}
+      <div className="bg-white rounded-lg shadow-sm p-6">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <DollarSign className="h-6 w-6 text-green-600" />
+            <div>
+              <h2 className="text-xl font-semibold text-gray-900">Commissions - {currentMonth}</h2>
+              <p className="text-sm text-gray-600">Your {commissionPercentage}% commission on extra photo charges</p>
+            </div>
+          </div>
+          <div className="text-right">
+            <div className="text-2xl font-bold text-green-600">
+              R{(totalCommissionAmount / 100).toFixed(2)}
+            </div>
+            <div className="text-sm text-gray-500">
+              {commissionPercentage}% of R{(totalExtraRevenue / 100).toFixed(2)}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Commission Breakdown */}
+      <div className="bg-white rounded-lg shadow-sm">
+        <div className="px-6 py-4 border-b border-gray-200">
+          <h3 className="text-lg font-semibold text-gray-900">Commission Breakdown</h3>
+          <p className="text-sm text-gray-600">{currentMonthCommissions.length} projects with extra charges this month</p>
+        </div>
+        <div className="divide-y divide-gray-200">
+          {currentMonthCommissions.length === 0 ? (
+            <div className="p-6 text-center text-gray-500">
+              No commissions recorded for {currentMonth}
+            </div>
+          ) : (
+            currentMonthCommissions.map((commission: any, index: number) => (
+              <div key={index} className="p-4 hover:bg-gray-50">
+                <div className="flex items-center justify-between">
+                  <div className="flex-1">
+                    <div className="text-sm font-medium text-gray-900">
+                      Project ID: {commission.projectId?.slice(0, 8)}...
+                    </div>
+                    <div className="text-xs text-gray-500 mt-1">
+                      {commission.extraCount} extra photos @ R{(commission.extraPhotoPrice / 100).toFixed(2)} each
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-sm font-medium text-green-600">
+                      +R{(commission.commissionAmount / 100).toFixed(2)}
+                    </div>
+                    <div className="text-xs text-gray-500">
+                      {commissionPercentage}% of R{(commission.totalAmount / 100).toFixed(2)}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function Dashboard() {
   const [user, setUser] = useState<User | null>(null);
   const [currentView, setCurrentView] = useState<'login' | 'register'>('login');
   const [showArchive, setShowArchive] = useState(false);
+  const [showCommissions, setShowCommissions] = useState(false);
   const [showTradeModal, setShowTradeModal] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -485,12 +588,31 @@ export default function Dashboard() {
                     <Button 
                       variant={showArchive ? "default" : "outline"}
                       size="sm"
-                      onClick={() => setShowArchive(!showArchive)}
+                      onClick={() => {
+                        setShowArchive(!showArchive);
+                        setShowCommissions(false);
+                      }}
                       className="flex items-center gap-2"
                     >
                       <Archive className="h-4 w-4" />
                       {showArchive ? `Current (${getCurrentProjectCount()})` : `Archive (${getArchiveProjectCount()})`}
                     </Button>
+
+                    {/* Commissions Button - Only for DataWrangler */}
+                    {user.role === "DataWrangler" && (
+                      <Button 
+                        variant={showCommissions ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => {
+                          setShowCommissions(!showCommissions);
+                          setShowArchive(false);
+                        }}
+                        className="flex items-center gap-2 bg-green-50 hover:bg-green-100 border-green-200 text-green-700"
+                      >
+                        <DollarSign className="h-4 w-4" />
+                        Commissions
+                      </Button>
+                    )}
 
                     {/* Manual Rollover Buttons for Admin */}
                     {user.role === "Admin" && (
@@ -675,48 +797,56 @@ export default function Dashboard() {
             </div>
           ) : (
             <>
-              {/* Archive Status Header for non-Sales roles */}
-              <div className="bg-white rounded-lg shadow-sm p-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Archive className="h-5 w-5 text-gray-600" />
-                    <h2 className="text-lg font-semibold">
-                      {user.role === "Admin" && user.name === "Anesu's Pops" && !showArchive ? 
-                        "All Projects" : 
-                        showArchive ? "Archive Projects" : "Current Projects"
-                      }
-                    </h2>
-                    <span className="text-sm text-gray-500">
-                      {showArchive ? "(2+ weeks old)" : "(Previous, current & next week + unassigned rollover)"}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-4">
-                    <div className="text-sm text-gray-600">
-                      {projects.length} project{projects.length !== 1 ? 's' : ''} {showArchive ? 'archived' : 'current'}
-                    </div>
-                    {!showArchive && (
-                      <div className="text-sm font-medium text-blue-600 bg-blue-50 px-3 py-1 rounded-full">
-                        📸 {projects.reduce((total, p) => total + (p.selectedCount || 0), 0)} photos total
+              {/* Commission View for DataWrangler */}
+              {showCommissions && user.role === "DataWrangler" ? (
+                <CommissionView user={user} />
+              ) : (
+                <>
+                  {/* Archive Status Header for non-Sales roles */}
+                  <div className="bg-white rounded-lg shadow-sm p-4">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Archive className="h-5 w-5 text-gray-600" />
+                        <h2 className="text-lg font-semibold">
+                          {user.role === "Admin" && user.name === "Anesu's Pops" && !showArchive ? 
+                            "All Projects" : 
+                            showArchive ? "Archive Projects" : "Current Projects"
+                          }
+                        </h2>
+                        <span className="text-sm text-gray-500">
+                          {showArchive ? "(2+ weeks old)" : "(Previous, current & next week + unassigned rollover)"}
+                        </span>
                       </div>
-                    )}
+                      <div className="flex items-center gap-4">
+                        <div className="text-sm text-gray-600">
+                          {projects.length} project{projects.length !== 1 ? 's' : ''} {showArchive ? 'archived' : 'current'}
+                        </div>
+                        {!showArchive && (
+                          <div className="text-sm font-medium text-blue-600 bg-blue-50 px-3 py-1 rounded-full">
+                            📸 {projects.reduce((total, p) => total + (p.selectedCount || 0), 0)} photos total
+                          </div>
+                        )}
+                      </div>
+                    </div>
                   </div>
-                </div>
-              </div>
 
-              {/* Show project creation form for non-Sales roles that can add projects - only in current view */}
-              {!showArchive && user.role !== "Retoucher" && user.role !== "Sales" && (
-                <AddProjectForm onAddProject={() => {}} user={user} />
+                  {/* Show project creation form for non-Sales roles that can add projects - only in current view */}
+                  {!showArchive && user.role !== "Retoucher" && user.role !== "Sales" && (
+                    <AddProjectForm onAddProject={() => {}} user={user} />
+                  )}
+                </>
               )}
+
             </>
           )}
           
-          {/* Show the task table for the visible projects - only for non-Sales roles */}
-          {user.role !== "Sales" && (
+          {/* Show the task table for the visible projects - only for non-Sales roles and not in commission view */}
+          {user.role !== "Sales" && !showCommissions && (
             <TaskTable projects={projects} user={user} allUsers={users} />
           )}
 
-          {/* Team Progress Analytics - only in current view */}
-          {!showArchive && (
+          {/* Team Progress Analytics - only in current view and not in commission view */}
+          {!showArchive && !showCommissions && (
             <TeamAnalytics user={user} />
           )}
 
