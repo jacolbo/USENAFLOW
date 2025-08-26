@@ -35,7 +35,7 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
   
   // Helper function to check if user has retouching abilities
   const hasRetouchingAbilities = (userRole: string) => {
-    return ['Admin', 'LeadRetoucher', 'Retoucher'].includes(userRole);
+    return ['Admin', 'LeadRetoucher', 'Retoucher', 'Retoucher1', 'Retoucher2', 'Retoucher3'].includes(userRole);
   };
   
   // State for corrections modal
