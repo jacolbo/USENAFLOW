@@ -764,7 +764,7 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
     }
   });
 
-  // Group regular projects by weeks
+  // Group regular projects by weeks and generate all weeks in visible range
   const visibleGroups: { key: number; weekStart: Date; projects: Project[]; isRollover?: boolean }[] = [];
   
   // Add unassigned rollover group at the top if there are any
@@ -782,16 +782,39 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
     });
   }
 
-  // Group regular projects by week
+  // Generate all weeks in the visible range (previous, current, next, and future weeks with projects)
+  const weekStarts = new Set<number>();
+  
+  // Add current week range (previous, current, next)
+  const currentWeek = getWeekStart(today);
+  const prevWeek = new Date(currentWeek);
+  prevWeek.setDate(currentWeek.getDate() - 7);
+  const nextWeek = new Date(currentWeek);
+  nextWeek.setDate(currentWeek.getDate() + 7);
+  
+  weekStarts.add(prevWeek.getTime());
+  weekStarts.add(currentWeek.getTime());
+  weekStarts.add(nextWeek.getTime());
+  
+  // Add weeks from all projects (including future weeks)
   regularProjects.forEach(project => {
-    const weekStart = getWeekStart(new Date(project.dueDate));
-    const key = weekStart.getTime();
-    let group = visibleGroups.find(g => g.key === key);
-    if (!group) {
-      group = { key: key, weekStart: weekStart, projects: [] };
-      visibleGroups.push(group);
-    }
-    group.projects.push(project);
+    const projectWeekStart = getWeekStart(new Date(project.dueDate));
+    weekStarts.add(projectWeekStart.getTime());
+  });
+  
+  // Create groups for all weeks, whether they have projects or not
+  weekStarts.forEach(weekTime => {
+    const weekStart = new Date(weekTime);
+    const projectsInWeek = regularProjects.filter(project => {
+      const projectWeekStart = getWeekStart(new Date(project.dueDate));
+      return projectWeekStart.getTime() === weekTime;
+    });
+    
+    visibleGroups.push({
+      key: weekTime,
+      weekStart: weekStart,
+      projects: projectsInWeek
+    });
   });
 
   // Sort groups: rollover first, then by week start date
