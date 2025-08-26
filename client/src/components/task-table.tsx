@@ -778,7 +778,7 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
 
   // Filter projects for retouchers
   let visibleProjects = projects;
-  if (user.role === "Retoucher") {
+  if (hasRetouchingAbilities(user.role) && !['Admin', 'LeadRetoucher'].includes(user.role)) {
     visibleProjects = projects.filter(p => 
       p.assignedTo && 
       p.assignedTo.toLowerCase() === user.name.toLowerCase() && 
