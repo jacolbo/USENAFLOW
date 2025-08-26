@@ -327,9 +327,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         await storage.deleteProject(shadowProject.id);
       }
       
-      // Restore the original project to "Assigned" status
+      // Restore the original project to "Assigned" status, keeping the same assignee
       const updatedProject = await storage.updateProject(id, {
         status: ProjectStatus.ASSIGNED,
+        // Keep the original assignedTo - don't change it
       });
       
       if (!updatedProject) {
@@ -410,8 +411,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         selectedCount: project.selectedCount,
         extraPhotoPrice: project.extraPhotoPrice,
         dueDate: tomorrow,
-        status: project.status, // Keep original status for shadow
-        assignedTo: project.assignedTo,
+        status: ProjectStatus.ASSIGNED, // Shadow project should be assigned status
+        assignedTo: project.assignedTo, // Keep assigned to same user
         toEditRemaining: newRemaining,
         rolloverCount: project.rolloverCount + 1,
         originalProjectId: id, // Link back to original
