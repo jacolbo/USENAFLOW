@@ -414,7 +414,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         status: ProjectStatus.ASSIGNED, // Shadow project should be assigned status
         assignedTo: project.assignedTo, // Keep assigned to same user
         toEditRemaining: newRemaining,
-        rolloverCount: project.rolloverCount + 1,
+        rolloverCount: (project.rolloverCount || 0) + 1,
         originalProjectId: id, // Link back to original
         isRolloverShadow: true,
         originalDueDate: project.dueDate,

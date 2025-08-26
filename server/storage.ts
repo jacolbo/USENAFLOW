@@ -173,7 +173,7 @@ export class MemStorage implements IStorage {
       extras,
       status,
       invoicePaid,
-      assignedTo: null,
+      assignedTo: insertProject.assignedTo || null,
       rating: null,
       deliveredAt: null,
       createdAt: new Date(),
@@ -408,7 +408,7 @@ export class DatabaseStorage implements IStorage {
         extras,
         status,
         invoicePaid,
-        assignedTo: null,
+        assignedTo: insertProject.assignedTo || null,
         rating: null,
         extraPhotoPrice: insertProject.extraPhotoPrice ?? null,
         // Shadow project fields - explicitly include them
