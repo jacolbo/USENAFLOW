@@ -151,7 +151,7 @@ function ExtraPhotosSalesView({ projects }: { projects: Project[] }) {
                     {project.clientName}
                   </div>
                   <div className="text-xs text-gray-500 mt-1">
-                    {new Date(project.createdAt).toLocaleDateString()} • {project.clientName}
+                    {new Date(project.createdAt).toLocaleDateString()}
                   </div>
                 </div>
                 <div className="text-right">
@@ -338,16 +338,19 @@ export default function Dashboard() {
     currentWeekStart.setDate(today.getDate() - dayOfWeek); // Go back to Sunday
     currentWeekStart.setHours(0, 0, 0, 0);
     
-    // Calculate week boundaries
+    // Calculate week boundaries for 4 weeks: previous, current, next, next-of-next
     const previousWeekStart = new Date(currentWeekStart);
     previousWeekStart.setDate(currentWeekStart.getDate() - 7);
     
     const nextWeekStart = new Date(currentWeekStart);
     nextWeekStart.setDate(currentWeekStart.getDate() + 7);
     
-    const nextWeekEnd = new Date(nextWeekStart);
-    nextWeekEnd.setDate(nextWeekStart.getDate() + 6);
-    nextWeekEnd.setHours(23, 59, 59, 999);
+    const nextOfNextWeekStart = new Date(currentWeekStart);
+    nextOfNextWeekStart.setDate(currentWeekStart.getDate() + 14);
+    
+    const nextOfNextWeekEnd = new Date(nextOfNextWeekStart);
+    nextOfNextWeekEnd.setDate(nextOfNextWeekStart.getDate() + 6);
+    nextOfNextWeekEnd.setHours(23, 59, 59, 999);
     
     // Archive cutoff: 2 weeks before current week
     const archiveCutoff = new Date(currentWeekStart);
@@ -364,10 +367,10 @@ export default function Dashboard() {
         return projectDate < archiveCutoff;
       });
     } else {
-      // Current: Previous week, current week, and next week
+      // Current: Previous week, current week, next week, and next-of-next week
       filteredProjects = allProjects.filter(project => {
         const projectDate = new Date(project.dueDate || project.createdAt);
-        return projectDate >= previousWeekStart && projectDate <= nextWeekEnd;
+        return projectDate >= previousWeekStart && projectDate <= nextOfNextWeekEnd;
       });
 
       // Handle unassigned project rollover for current view
@@ -904,7 +907,7 @@ export default function Dashboard() {
             <>
               {/* Extra Photos Sales View for Sales */}
               {showExtraPhotosSales ? (
-                <ExtraPhotosSalesView projects={allProjects || []} />
+                <ExtraPhotosSalesView projects={allProjects.data || []} />
               ) : (
             <div className="space-y-6">
               {/* Pending Payments Section */}
@@ -976,7 +979,7 @@ export default function Dashboard() {
                           }
                         </h2>
                         <span className="text-sm text-gray-500">
-                          {showArchive ? "(2+ weeks old)" : "(Previous, current & next week + unassigned rollover)"}
+                          {showArchive ? "(2+ weeks old)" : "(Previous, current, next & next-of-next week + unassigned rollover)"}
                         </span>
                       </div>
                       <div className="flex items-center gap-4">

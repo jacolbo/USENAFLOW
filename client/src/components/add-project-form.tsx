@@ -32,8 +32,8 @@ const formatWeekRange = (monday: Date) => {
   const sunday = new Date(monday);
   sunday.setDate(monday.getDate() + 6);
   const formatDate = (date: Date) =>
-    date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-  return `${formatDate(monday)} – ${formatDate(sunday)}`;
+    date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  return `Week of ${formatDate(monday)} – ${formatDate(sunday)}`;
 };
 
 // Generate week options (current week + 4 weeks ahead)

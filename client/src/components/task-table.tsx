@@ -176,7 +176,7 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
     weekEnd.setDate(weekStart.getDate() + 6);
     const sunday = weekStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
     const saturday = weekEnd.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-    return `${sunday} – ${saturday}`;
+    return `Week of ${sunday} – ${saturday}`;
   };
 
 
