@@ -1643,7 +1643,7 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
                                     <SelectItem value="__UNASSIGN__">Unassign</SelectItem>
                                     {/* All retouchers + Admin as retoucher */}
                                     {allUsers
-                                      .filter(u => u.role === "Retoucher" || (u.role === "Admin" && u.name === "Anesu's Pops"))
+                                      .filter(u => hasRetouchingAbilities(u.role))
                                       .map(retoucher => (
                                         <SelectItem key={retoucher.value || retoucher.name} value={retoucher.name}>
                                           {retoucher.name}
@@ -1667,7 +1667,8 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
                               
                               {/* All users with retouching abilities can mark done on projects ready for retouching, assigned, or corrections */}
                               {hasRetouchingAbilities(user.role) && 
-                               (project.status === 'Assigned' || project.status === 'Ready for Retouching' || project.status === 'Corrections') && (
+                               (project.status === 'Assigned' || project.status === 'Ready for Retouching' || project.status === 'Corrections') && 
+                               (project.assignedTo === user.name || ['Admin', 'LeadRetoucher'].includes(user.role)) && (
                                 <>
                                   <Button 
                                     size="sm" 
