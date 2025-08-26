@@ -299,8 +299,8 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
 
   // Handle rollover action with useMutation
   const rolloverMutation = useMutation({
-    mutationFn: async ({ projectId, photosCompleted }: { projectId: string; photosCompleted: number }) => {
-      const response = await apiRequest("PATCH", `/api/projects/${projectId}/rollover`, { photosCompleted });
+    mutationFn: async ({ projectId, photosCompleted, rolloverDate }: { projectId: string; photosCompleted: number; rolloverDate?: string }) => {
+      const response = await apiRequest("PATCH", `/api/projects/${projectId}/rollover`, { photosCompleted, rolloverDate });
       return response.json();
     },
     onSuccess: (result) => {
@@ -326,8 +326,8 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
     },
   });
 
-  const handleRollover = (projectId: string, photosCompleted: number) => {
-    rolloverMutation.mutate({ projectId, photosCompleted });
+  const handleRollover = (projectId: string, photosCompleted: number, rolloverDate?: string) => {
+    rolloverMutation.mutate({ projectId, photosCompleted, rolloverDate });
   };
 
   const handleRequestRevision = (projectId: string) => {
@@ -1327,8 +1327,8 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
                       ) : (
                         <>
                           <TableHead>Client</TableHead>
-                          <TableHead>Pkg</TableHead>
-                          <TableHead>Sel</TableHead>
+                          <TableHead>{hasRetouchingAbilities(user.role) ? 'Done Photos' : 'Pkg'}</TableHead>
+                          <TableHead>{hasRetouchingAbilities(user.role) ? 'Rollover Photos' : 'Sel'}</TableHead>
                           <TableHead>To Edit</TableHead>
                           <TableHead>Extra</TableHead>
                           <TableHead>Due</TableHead>
@@ -1994,12 +1994,18 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
 // RolloverDialog component for handling rollover input
 interface RolloverDialogProps {
   project: any;
-  onRollover: (projectId: string, photosCompleted: number) => void;
+  onRollover: (projectId: string, photosCompleted: number, rolloverDate?: string) => void;
   formatClientDisplay: (project: any) => string;
 }
 
 function RolloverDialog({ project, onRollover, formatClientDisplay }: RolloverDialogProps) {
   const [photosCompleted, setPhotosCompleted] = useState(0);
+  const [rolloverDate, setRolloverDate] = useState(() => {
+    // Default to tomorrow
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    return tomorrow.toISOString().split('T')[0];
+  });
   const [isSubmitting, setIsSubmitting] = useState(false);
   
   const currentRemaining = project.toEditRemaining || project.selectedCount;
@@ -2015,8 +2021,13 @@ function RolloverDialog({ project, onRollover, formatClientDisplay }: RolloverDi
     
     setIsSubmitting(true);
     try {
-      await onRollover(project.id, photosCompleted);
+      // Pass rollover date along with photos completed
+      await onRollover(project.id, photosCompleted, rolloverDate);
       setPhotosCompleted(0); // Reset form
+      // Reset to tomorrow
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      setRolloverDate(tomorrow.toISOString().split('T')[0]);
     } finally {
       setIsSubmitting(false);
     }
@@ -2038,6 +2049,20 @@ function RolloverDialog({ project, onRollover, formatClientDisplay }: RolloverDi
         />
         <p className="text-sm text-gray-600">
           Maximum: {currentRemaining} photos remaining to edit
+        </p>
+      </div>
+      
+      <div className="space-y-2">
+        <Label htmlFor="rollover-date">Move remaining photos to date</Label>
+        <Input
+          id="rollover-date"
+          type="date"
+          value={rolloverDate}
+          onChange={(e) => setRolloverDate(e.target.value)}
+          className="w-full"
+        />
+        <p className="text-sm text-gray-600">
+          Select the date to move remaining photos to
         </p>
       </div>
       
