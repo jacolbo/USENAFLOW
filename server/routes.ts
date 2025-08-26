@@ -268,6 +268,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { id } = req.params;
       
+      const project = await storage.getProject(id);
+      if (!project) {
+        return res.status(404).json({ error: "Project not found" });
+      }
+      
       const updatedProject = await storage.updateProject(id, {
         status: ProjectStatus.DONE,
       });
@@ -275,6 +280,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!updatedProject) {
         return res.status(404).json({ error: "Project not found" });
       }
+      
+      // Log completion event
+      await storage.createProjectEvent({
+        projectId: id,
+        eventType: "completed",
+        eventDate: new Date(),
+        photosCompleted: project.toEditRemaining || project.selectedCount,
+        photosRemaining: 0,
+        details: "Project marked as complete",
+        createdBy: "system"
+      });
       
       res.json(updatedProject);
     } catch (error) {
@@ -327,6 +343,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!updatedProject) {
         return res.status(404).json({ error: "Project not found" });
       }
+      
+      // Log rollover event
+      await storage.createProjectEvent({
+        projectId: id,
+        eventType: "rollover",
+        eventDate: new Date(),
+        photosCompleted: photosCompleted,
+        photosRemaining: newRemaining,
+        details: `${photosCompleted} photos completed, ${newRemaining} photos rolled over to next day`,
+        createdBy: "system" // You might want to get this from the user session
+      });
       
       res.json({
         project: updatedProject,
@@ -908,6 +935,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(commissions);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch commissions" });
+    }
+  });
+
+  // Get project events (rollover history)
+  app.get("/api/projects/:id/events", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const events = await storage.getProjectEvents(id);
+      res.json(events);
+    } catch (error) {
+      res.status(400).json({ error: "Failed to fetch project events" });
     }
   });
 

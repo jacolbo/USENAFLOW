@@ -67,6 +67,19 @@ export const wranglerCommissions = pgTable("wrangler_commissions", {
   createdAt: timestamp("created_at").notNull().default(sql`now()`),
 });
 
+// Project events for tracking rollover history and completion
+export const projectEvents = pgTable("project_events", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  projectId: varchar("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
+  eventType: text("event_type").notNull(), // "rollover", "completed", "assigned"
+  eventDate: timestamp("event_date").notNull(),
+  photosCompleted: integer("photos_completed"),
+  photosRemaining: integer("photos_remaining"),
+  details: text("details"), // additional info like "rolled over to next day"
+  createdBy: text("created_by").notNull(),
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+});
+
 export const insertUserSchema = createInsertSchema(users).pick({
   username: true,
   password: true,
@@ -135,6 +148,14 @@ export type InsertTradeOffer = z.infer<typeof insertTradeOfferSchema>;
 export type UpdateTradeOffer = z.infer<typeof updateTradeOfferSchema>;
 export type WranglerCommission = typeof wranglerCommissions.$inferSelect;
 export type InsertWranglerCommission = z.infer<typeof insertWranglerCommissionSchema>;
+
+export const insertProjectEventSchema = createInsertSchema(projectEvents).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type ProjectEvent = typeof projectEvents.$inferSelect;
+export type InsertProjectEvent = z.infer<typeof insertProjectEventSchema>;
 
 export const UserRoles = {
   ADMIN: "Admin",

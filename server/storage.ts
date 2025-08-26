@@ -1,6 +1,6 @@
-import { type User, type InsertUser, type Project, type InsertProject, type UpdateProject, type ProjectNote, type InsertProjectNote, type UpdateProjectNote, type TradeOffer, type InsertTradeOffer, type UpdateTradeOffer, type WranglerCommission, type InsertWranglerCommission, ProjectStatus, TradeOfferStatus, users, projects, projectNotes, tradeOffers, wranglerCommissions } from "@shared/schema";
+import { type User, type InsertUser, type Project, type InsertProject, type UpdateProject, type ProjectNote, type InsertProjectNote, type UpdateProjectNote, type TradeOffer, type InsertTradeOffer, type UpdateTradeOffer, type WranglerCommission, type InsertWranglerCommission, type ProjectEvent, type InsertProjectEvent, ProjectStatus, TradeOfferStatus, users, projects, projectNotes, tradeOffers, wranglerCommissions, projectEvents } from "@shared/schema";
 import { db } from "./db";
-import { eq, sql } from "drizzle-orm";
+import { eq, sql, asc } from "drizzle-orm";
 import { randomUUID } from "crypto";
 
 export interface IStorage {
@@ -31,6 +31,10 @@ export interface IStorage {
   // Wrangler commission methods
   getWranglerCommissions(wranglerUsername: string): Promise<WranglerCommission[]>;
   createWranglerCommission(commission: InsertWranglerCommission): Promise<WranglerCommission>;
+  
+  // Project event methods for rollover tracking
+  getProjectEvents(projectId: string): Promise<ProjectEvent[]>;
+  createProjectEvent(event: InsertProjectEvent): Promise<ProjectEvent>;
 }
 
 export class MemStorage implements IStorage {
@@ -319,6 +323,26 @@ export class MemStorage implements IStorage {
       return false;
     }
   }
+
+  async getWranglerCommissions(wranglerUsername: string): Promise<WranglerCommission[]> {
+    // Not implemented for MemStorage
+    return [];
+  }
+
+  async createWranglerCommission(commission: InsertWranglerCommission): Promise<WranglerCommission> {
+    // Not implemented for MemStorage
+    throw new Error("Not implemented in MemStorage");
+  }
+
+  async getProjectEvents(projectId: string): Promise<ProjectEvent[]> {
+    // Not implemented for MemStorage
+    return [];
+  }
+
+  async createProjectEvent(event: InsertProjectEvent): Promise<ProjectEvent> {
+    // Not implemented for MemStorage
+    throw new Error("Not implemented in MemStorage");
+  }
 }
 
 // Database Storage Implementation
@@ -539,6 +563,22 @@ export class DatabaseStorage implements IStorage {
       .values(commission)
       .returning();
     return wranglerCommission;
+  }
+
+  async getProjectEvents(projectId: string): Promise<ProjectEvent[]> {
+    return await db
+      .select()
+      .from(projectEvents)
+      .where(eq(projectEvents.projectId, projectId))
+      .orderBy(asc(projectEvents.eventDate));
+  }
+
+  async createProjectEvent(event: InsertProjectEvent): Promise<ProjectEvent> {
+    const [projectEvent] = await db
+      .insert(projectEvents)
+      .values(event)
+      .returning();
+    return projectEvent;
   }
 }
 
