@@ -18,6 +18,7 @@ import { LoadingSpinner, FloatingAction, StaggeredList } from './LoadingStates';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogClose } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
 import { AlertTriangle, RefreshCw } from "lucide-react";
 
 
@@ -248,6 +249,7 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
       "Review": { variant: "secondary" as const, className: "bg-red-500 text-white hover:bg-red-600" },
       "Corrections": { variant: "secondary" as const, className: "bg-orange-600 text-white hover:bg-orange-700" },
       "Delivered": { variant: "secondary" as const, className: "bg-green-500 text-white hover:bg-green-600" },
+      "Done": { variant: "secondary" as const, className: "bg-gray-500 text-white hover:bg-gray-600" },
     };
 
     const config = statusConfig[status as keyof typeof statusConfig] || { variant: "secondary" as const, className: "" };
@@ -279,6 +281,53 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
       id: projectId,
       endpoint: "mark-done",
     });
+  };
+
+  // Helper function to format client display based on rollover count
+  const formatClientDisplay = (project: any) => {
+    const rolloverCount = project.rolloverCount || 0;
+    if (rolloverCount === 0) {
+      return project.clientName;
+    } else if (rolloverCount === 1) {
+      return `${project.clientName} (RO)`;
+    } else if (rolloverCount === 2) {
+      return `${project.clientName} (ROAO)`;
+    } else {
+      return `${project.clientName} (RO x${rolloverCount})`;
+    }
+  };
+
+  // Handle rollover action with useMutation
+  const rolloverMutation = useMutation({
+    mutationFn: async ({ projectId, photosCompleted }: { projectId: string; photosCompleted: number }) => {
+      const response = await apiRequest("PATCH", `/api/projects/${projectId}/rollover`, { photosCompleted });
+      return response.json();
+    },
+    onSuccess: (result) => {
+      if (result.allComplete) {
+        toast({
+          title: "All Photos Complete!",
+          description: result.message,
+        });
+      } else {
+        toast({
+          title: "Project Rolled Over",
+          description: result.message,
+        });
+      }
+      queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to rollover project",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleRollover = (projectId: string, photosCompleted: number) => {
+    rolloverMutation.mutate({ projectId, photosCompleted });
   };
 
   const handleRequestRevision = (projectId: string) => {
@@ -1268,11 +1317,11 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
                           <TableHead>Actions</TableHead>
                           <TableHead>Client</TableHead>
                           <TableHead>Sel</TableHead>
+                          <TableHead>To Edit</TableHead>
                           <TableHead>Extra</TableHead>
                           <TableHead>Due</TableHead>
                           <TableHead>Retoucher</TableHead>
                           <TableHead>Status</TableHead>
-                          <TableHead>Corrections</TableHead>
                           <TableHead>Notes</TableHead>
                         </>
                       ) : (
@@ -1280,6 +1329,7 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
                           <TableHead>Client</TableHead>
                           <TableHead>Pkg</TableHead>
                           <TableHead>Sel</TableHead>
+                          <TableHead>To Edit</TableHead>
                           <TableHead>Extra</TableHead>
                           <TableHead>Due</TableHead>
                           <TableHead>Retoucher</TableHead>
@@ -1343,12 +1393,12 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
                               </div>
                             </TableCell>
                             {/* Client column third for Sales */}
-                            <TableCell className="font-medium">{project.clientName}</TableCell>
+                            <TableCell className="font-medium">{formatClientDisplay(project)}</TableCell>
                           </>
                         ) : (
                           <>
                             {/* Standard order for other roles */}
-                            <TableCell className="font-medium">{project.clientName}</TableCell>
+                            <TableCell className="font-medium">{formatClientDisplay(project)}</TableCell>
                             <TableCell>
                               {['Admin', 'Sales', 'DataWrangler', 'LeadRetoucher'].includes(user.role) ? (
                                 <input
@@ -1378,6 +1428,12 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
                                 min="0"
                                 placeholder="0"
                               />
+                            </TableCell>
+                            {/* To Edit column for Sales */}
+                            <TableCell>
+                              <span className="text-sm font-medium text-purple-600">
+                                {project.toEditRemaining || project.selectedCount}
+                              </span>
                             </TableCell>
                             <TableCell>
                               <div className="space-y-1">
@@ -1500,6 +1556,12 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
                                 project.selectedCount
                               )}
                             </TableCell>
+                            {/* To Edit column for non-Sales */}
+                            <TableCell>
+                              <span className="text-sm font-medium text-purple-600">
+                                {project.toEditRemaining || project.selectedCount}
+                              </span>
+                            </TableCell>
                             <TableCell>
                               {['Admin', 'Sales', 'DataWrangler', 'LeadRetoucher'].includes(user.role) ? (
                                 <input
@@ -1606,14 +1668,42 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
                               {/* All users with retouching abilities can mark done on projects ready for retouching, assigned, or corrections */}
                               {hasRetouchingAbilities(user.role) && 
                                (project.status === 'Assigned' || project.status === 'Ready for Retouching' || project.status === 'Corrections') && (
-                                <Button 
-                                  size="sm" 
-                                  onClick={() => handleMarkDone(project.id)}
-                                  disabled={updateProjectMutation.isPending}
-                                  data-testid={`button-mark-done-${project.id}`}
-                                >
-                                  Mark Done
-                                </Button>
+                                <>
+                                  <Button 
+                                    size="sm" 
+                                    onClick={() => handleMarkDone(project.id)}
+                                    disabled={updateProjectMutation.isPending}
+                                    data-testid={`button-mark-done-${project.id}`}
+                                    className="bg-gray-600 hover:bg-gray-700 text-white"
+                                  >
+                                    Mark Done
+                                  </Button>
+                                  <Dialog>
+                                    <DialogTrigger asChild>
+                                      <Button 
+                                        size="sm" 
+                                        variant="outline"
+                                        className="text-orange-600 hover:text-orange-700 border-orange-300 hover:border-orange-400"
+                                        data-testid={`button-rollover-${project.id}`}
+                                      >
+                                        Rollover
+                                      </Button>
+                                    </DialogTrigger>
+                                    <DialogContent>
+                                      <DialogHeader>
+                                        <DialogTitle>Rollover Project</DialogTitle>
+                                        <DialogDescription>
+                                          Enter the number of photos you completed today for {formatClientDisplay(project)}.
+                                        </DialogDescription>
+                                      </DialogHeader>
+                                      <RolloverDialog 
+                                        project={project} 
+                                        onRollover={handleRollover}
+                                        formatClientDisplay={formatClientDisplay}
+                                      />
+                                    </DialogContent>
+                                  </Dialog>
+                                </>
                               )}
                               
                               {/* Admin can deliver when in Review */}
@@ -1897,6 +1987,98 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
           </motion.div>
         )}
       </AnimatePresence>
+    </div>
+  );
+}
+
+// RolloverDialog component for handling rollover input
+interface RolloverDialogProps {
+  project: any;
+  onRollover: (projectId: string, photosCompleted: number) => void;
+  formatClientDisplay: (project: any) => string;
+}
+
+function RolloverDialog({ project, onRollover, formatClientDisplay }: RolloverDialogProps) {
+  const [photosCompleted, setPhotosCompleted] = useState(0);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  
+  const currentRemaining = project.toEditRemaining || project.selectedCount;
+  
+  const handleSubmit = async () => {
+    if (photosCompleted < 0) {
+      return; // Validation already handled by input
+    }
+    
+    if (photosCompleted > currentRemaining) {
+      return; // Validation already handled by input
+    }
+    
+    setIsSubmitting(true);
+    try {
+      await onRollover(project.id, photosCompleted);
+      setPhotosCompleted(0); // Reset form
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+  
+  return (
+    <div className="space-y-4">
+      <div className="space-y-2">
+        <Label htmlFor="photos-completed">Photos completed today</Label>
+        <Input
+          id="photos-completed"
+          type="number"
+          min="0"
+          max={currentRemaining}
+          value={photosCompleted}
+          onChange={(e) => setPhotosCompleted(parseInt(e.target.value) || 0)}
+          placeholder="Enter number of photos completed"
+          className="w-full"
+        />
+        <p className="text-sm text-gray-600">
+          Maximum: {currentRemaining} photos remaining to edit
+        </p>
+      </div>
+      
+      <div className="bg-gray-50 p-3 rounded-md">
+        <p className="text-sm">
+          <strong>Project:</strong> {formatClientDisplay(project)}
+        </p>
+        <p className="text-sm">
+          <strong>Package photos:</strong> {project.packageCount}
+        </p>
+        <p className="text-sm">
+          <strong>Selected photos:</strong> {project.selectedCount}
+        </p>
+        <p className="text-sm">
+          <strong>To edit remaining:</strong> {currentRemaining}
+        </p>
+      </div>
+      
+      <div className="flex justify-end gap-2">
+        <DialogClose asChild>
+          <Button variant="outline" disabled={isSubmitting}>
+            Cancel
+          </Button>
+        </DialogClose>
+        <DialogClose asChild>
+          <Button 
+            onClick={handleSubmit}
+            disabled={isSubmitting || photosCompleted <= 0 || photosCompleted > currentRemaining}
+            className="bg-orange-600 hover:bg-orange-700 text-white"
+          >
+            {isSubmitting ? (
+              <>
+                <LoadingSpinner size={14} className="mr-2" />
+                Rolling over...
+              </>
+            ) : (
+              'Rollover'
+            )}
+          </Button>
+        </DialogClose>
+      </div>
     </div>
   );
 }

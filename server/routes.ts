@@ -269,7 +269,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { id } = req.params;
       
       const updatedProject = await storage.updateProject(id, {
-        status: ProjectStatus.REVIEW,
+        status: ProjectStatus.DONE,
       });
       
       if (!updatedProject) {
@@ -279,6 +279,62 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(updatedProject);
     } catch (error) {
       res.status(400).json({ error: "Failed to mark project as done" });
+    }
+  });
+
+  // Rollover project (retoucher action)
+  app.patch("/api/projects/:id/rollover", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { photosCompleted } = req.body;
+      
+      if (typeof photosCompleted !== 'number' || photosCompleted < 0) {
+        return res.status(400).json({ error: "Number can't be negative." });
+      }
+      
+      const project = await storage.getProject(id);
+      if (!project) {
+        return res.status(404).json({ error: "Project not found" });
+      }
+      
+      const currentRemaining = project.toEditRemaining || project.selectedCount;
+      
+      if (photosCompleted > currentRemaining) {
+        return res.status(400).json({ error: "You can't complete more than remaining." });
+      }
+      
+      const newRemaining = currentRemaining - photosCompleted;
+      
+      if (newRemaining <= 0) {
+        return res.json({ 
+          allComplete: true,
+          message: "All photos are complete. Please press Mark Done to close this project.",
+          project: project
+        });
+      }
+      
+      // Calculate new due date (tomorrow, same retoucher)
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      
+      const updatedProject = await storage.updateProject(id, {
+        toEditRemaining: newRemaining,
+        rolloverCount: (project.rolloverCount || 0) + 1,
+        lastRolloverDate: new Date(),
+        dueDate: tomorrow,
+      });
+      
+      if (!updatedProject) {
+        return res.status(404).json({ error: "Project not found" });
+      }
+      
+      res.json({
+        project: updatedProject,
+        message: `You marked ${photosCompleted} photos done today. ${newRemaining} will roll over to tomorrow.`
+      });
+    } catch (error) {
+      console.error('Rollover error:', error);
+      res.status(400).json({ error: "Failed to rollover project" });
     }
   });
 

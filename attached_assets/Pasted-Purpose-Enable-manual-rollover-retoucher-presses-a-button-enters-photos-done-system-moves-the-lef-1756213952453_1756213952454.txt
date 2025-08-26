@@ -1,0 +1,114 @@
+Purpose
+Enable manual rollover: retoucher presses a button, enters photos done, system moves the leftovers to tomorrow, labels the client row, and logs the rollover on both calendars. The project only becomes “Done” when the retoucher explicitly presses Mark Done.
+
+Data fields (assume exist)
+
+package_photos (int)
+
+selected_photos (int)
+
+to_edit_remaining (int)
+
+rollover_count (int, default 0)
+
+last_rollover_date (date|null)
+
+UI row format
+{clientDisplay} - package photos ({package_photos}) - selected photos ({selected_photos}) - to edit ({to_edit_remaining}) - [Mark Done] / [Rollover]
+
+Where clientDisplay is:
+
+First rollover: {ClientName} (RO)
+
+Second rollover: {ClientName} (ROAO) // matches Evans’ spec
+
+3rd+ rollover: {ClientName} (RO x{rollover_count}) // fallback counter to avoid weird strings
+
+Rules
+
+Mark Done button
+
+Action: Set project status = Done.
+
+Result: Row disappears from active schedule immediately.
+
+Calendars: Log a “Completed” entry on the project calendar and the weekly calendar for the completion date.
+
+Rollover button
+
+Prompt the retoucher: “Enter photos completed today.”
+
+Validate:
+
+If input < 0 → block: “Number can’t be negative.”
+
+If input > to_edit_remaining → block: “You can’t complete more than remaining.”
+
+Update:
+
+to_edit_remaining = to_edit_remaining - input
+
+If to_edit_remaining <= 0:
+
+Show: “All photos are complete. Please press Mark Done to close this project.”
+
+Do not auto-complete. The project only becomes done when Mark Done is pressed.
+
+Do not create a rollover entry for tomorrow.
+
+Else (still photos left):
+
+rollover_count += 1
+
+last_rollover_date = today()
+
+Schedule the row for tomorrow (same retoucher), not a new project. This is not a project replication—only remaining photos are carried forward.
+
+Label clientDisplay per the rules above.
+
+Calendars:
+
+Weekly Calendar: Add an entry on the rollover date (today) noting “Rollover” and remaining count.
+
+Project Calendar: Add an entry on the same date noting “Rollover” and remaining count.
+
+Confirmation toast to retoucher:
+
+“You marked {input} photos done today. {to_edit_remaining} will roll over to tomorrow.”
+
+Visibility & Status
+
+A project remains Not Done / In Progress until Mark Done is pressed—no exceptions.
+
+The row stays visible each day with updated to_edit_remaining and the current label.
+
+Admin/Sales/Lead views reflect rollover events in timeline/audit.
+
+Safety nets
+
+If a retoucher enters 0 completed:
+
+Keep counts unchanged.
+
+Still allow rollover (sometimes a day truly slips).
+
+Log to both calendars as a rollover with full remaining.
+
+If tomorrow is blocked by capacity or a conflict, place in the next available working day (respect your buffer/notice rules if you’ve set them elsewhere), but still log today’s rollover event on both calendars.
+
+Sample row evolution (as requested)
+
+Day 1 before rollover:
+Susan - package photos (10) - selected photos (30) - to edit (30) - Mark Done / Rollover
+
+After 1st rollover (did 10 today):
+Susan (RO) - package photos (10) - selected photos (30) - to edit (20) - Mark Done / Rollover
+
+After 2nd rollover (did 10 today):
+Susan (ROAO) - package photos (10) - selected photos (30) - to edit (10) - Mark Done / Rollover
+
+Admin/Sales messaging examples
+
+Rollover log: “Susan rolled over on 2025-08-26. 20 remaining.”
+
+Completion log: “Susan completed on 2025-08-28.”

@@ -24,6 +24,10 @@ export const projects = pgTable("projects", {
   rating: integer("rating"),
   deliveredAt: timestamp("delivered_at"),
   createdAt: timestamp("created_at").notNull().default(sql`now()`),
+  // Rollover tracking fields
+  toEditRemaining: integer("to_edit_remaining").notNull().default(0),
+  rolloverCount: integer("rollover_count").notNull().default(0),
+  lastRolloverDate: timestamp("last_rollover_date"),
 });
 
 export const projectNotes = pgTable("project_notes", {
@@ -148,6 +152,7 @@ export const ProjectStatus = {
   REVIEW: "Review",
   CORRECTIONS: "Corrections",
   DELIVERED: "Delivered",
+  DONE: "Done",
 } as const;
 
 // Notification system schemas
