@@ -1025,11 +1025,16 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
                   </motion.div>
                 </div>
                 
-                {/* Mini Weekly Calendar - only for Admin, LeadRetoucher, and DataWrangler */}
+                {/* Mini Weekly Calendars - Current and Next Week - only for Admin, LeadRetoucher, and DataWrangler */}
                 {['Admin', 'LeadRetoucher', 'DataWrangler'].includes(user.role) && (
-                  <div className="mb-6 border rounded-lg p-4 bg-gray-50 dark:bg-gray-900">
-                    <div className="grid grid-cols-7 gap-2">
-                      {Array.from({ length: 7 }).map((_, dayIndex) => {
+                  <div className="mb-6 space-y-4">
+                    {/* Current Week Calendar */}
+                    <div className="border rounded-lg p-4 bg-gray-50 dark:bg-gray-900">
+                      <div className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+                        This Week ({formatWeekRange(monday)})
+                      </div>
+                      <div className="grid grid-cols-7 gap-2">
+                        {Array.from({ length: 7 }).map((_, dayIndex) => {
                         const dayDate = new Date(monday);
                         dayDate.setDate(monday.getDate() + dayIndex);
                         const dayName = dayDate.toLocaleDateString('en-US', { weekday: 'short' });
