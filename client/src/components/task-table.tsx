@@ -35,7 +35,7 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
   
   // Helper function to check if user has retouching abilities
   const hasRetouchingAbilities = (userRole: string) => {
-    return ['Admin', 'LeadRetoucher', 'Retoucher', 'Retoucher1', 'Retoucher2', 'Retoucher3'].includes(userRole);
+    return ['Admin', 'LeadRetoucher', 'Retoucher'].includes(userRole);
   };
   
   // State for corrections modal
@@ -299,8 +299,8 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
 
   // Handle rollover action with useMutation
   const rolloverMutation = useMutation({
-    mutationFn: async ({ projectId, photosCompleted, rolloverDate }: { projectId: string; photosCompleted: number; rolloverDate?: string }) => {
-      const response = await apiRequest("PATCH", `/api/projects/${projectId}/rollover`, { photosCompleted, rolloverDate });
+    mutationFn: async ({ projectId, photosCompleted }: { projectId: string; photosCompleted: number }) => {
+      const response = await apiRequest("PATCH", `/api/projects/${projectId}/rollover`, { photosCompleted });
       return response.json();
     },
     onSuccess: (result) => {
@@ -326,8 +326,8 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
     },
   });
 
-  const handleRollover = (projectId: string, photosCompleted: number, rolloverDate?: string) => {
-    rolloverMutation.mutate({ projectId, photosCompleted, rolloverDate });
+  const handleRollover = (projectId: string, photosCompleted: number) => {
+    rolloverMutation.mutate({ projectId, photosCompleted });
   };
 
   const handleRequestRevision = (projectId: string) => {
@@ -778,7 +778,7 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
 
   // Filter projects for retouchers
   let visibleProjects = projects;
-  if (hasRetouchingAbilities(user.role) && !['Admin', 'LeadRetoucher'].includes(user.role)) {
+  if (user.role === "Retoucher") {
     visibleProjects = projects.filter(p => 
       p.assignedTo && 
       p.assignedTo.toLowerCase() === user.name.toLowerCase() && 
@@ -1327,8 +1327,8 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
                       ) : (
                         <>
                           <TableHead>Client</TableHead>
-                          <TableHead>{hasRetouchingAbilities(user.role) ? 'Done Photos' : 'Pkg'}</TableHead>
-                          <TableHead>{hasRetouchingAbilities(user.role) ? 'Rollover Photos' : 'Sel'}</TableHead>
+                          <TableHead>Pkg</TableHead>
+                          <TableHead>Sel</TableHead>
                           <TableHead>To Edit</TableHead>
                           <TableHead>Extra</TableHead>
                           <TableHead>Due</TableHead>
@@ -1643,7 +1643,7 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
                                     <SelectItem value="__UNASSIGN__">Unassign</SelectItem>
                                     {/* All retouchers + Admin as retoucher */}
                                     {allUsers
-                                      .filter(u => hasRetouchingAbilities(u.role))
+                                      .filter(u => u.role === "Retoucher" || (u.role === "Admin" && u.name === "Anesu's Pops"))
                                       .map(retoucher => (
                                         <SelectItem key={retoucher.value || retoucher.name} value={retoucher.name}>
                                           {retoucher.name}
@@ -1667,8 +1667,7 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
                               
                               {/* All users with retouching abilities can mark done on projects ready for retouching, assigned, or corrections */}
                               {hasRetouchingAbilities(user.role) && 
-                               (project.status === 'Assigned' || project.status === 'Ready for Retouching' || project.status === 'Corrections') && 
-                               (project.assignedTo === user.name || ['Admin', 'LeadRetoucher'].includes(user.role)) && (
+                               (project.status === 'Assigned' || project.status === 'Ready for Retouching' || project.status === 'Corrections') && (
                                 <>
                                   <Button 
                                     size="sm" 
@@ -1995,18 +1994,12 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
 // RolloverDialog component for handling rollover input
 interface RolloverDialogProps {
   project: any;
-  onRollover: (projectId: string, photosCompleted: number, rolloverDate?: string) => void;
+  onRollover: (projectId: string, photosCompleted: number) => void;
   formatClientDisplay: (project: any) => string;
 }
 
 function RolloverDialog({ project, onRollover, formatClientDisplay }: RolloverDialogProps) {
   const [photosCompleted, setPhotosCompleted] = useState(0);
-  const [rolloverDate, setRolloverDate] = useState(() => {
-    // Default to tomorrow
-    const tomorrow = new Date();
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    return tomorrow.toISOString().split('T')[0];
-  });
   const [isSubmitting, setIsSubmitting] = useState(false);
   
   const currentRemaining = project.toEditRemaining || project.selectedCount;
@@ -2022,13 +2015,8 @@ function RolloverDialog({ project, onRollover, formatClientDisplay }: RolloverDi
     
     setIsSubmitting(true);
     try {
-      // Pass rollover date along with photos completed
-      await onRollover(project.id, photosCompleted, rolloverDate);
+      await onRollover(project.id, photosCompleted);
       setPhotosCompleted(0); // Reset form
-      // Reset to tomorrow
-      const tomorrow = new Date();
-      tomorrow.setDate(tomorrow.getDate() + 1);
-      setRolloverDate(tomorrow.toISOString().split('T')[0]);
     } finally {
       setIsSubmitting(false);
     }
@@ -2050,20 +2038,6 @@ function RolloverDialog({ project, onRollover, formatClientDisplay }: RolloverDi
         />
         <p className="text-sm text-gray-600">
           Maximum: {currentRemaining} photos remaining to edit
-        </p>
-      </div>
-      
-      <div className="space-y-2">
-        <Label htmlFor="rollover-date">Move remaining photos to date</Label>
-        <Input
-          id="rollover-date"
-          type="date"
-          value={rolloverDate}
-          onChange={(e) => setRolloverDate(e.target.value)}
-          className="w-full"
-        />
-        <p className="text-sm text-gray-600">
-          Select the date to move remaining photos to
         </p>
       </div>
       

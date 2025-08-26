@@ -67,16 +67,6 @@ export const wranglerCommissions = pgTable("wrangler_commissions", {
   createdAt: timestamp("created_at").notNull().default(sql`now()`),
 });
 
-// Daily completion tracking for retoucher analytics
-export const dailyCompletions = pgTable("daily_completions", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  projectId: varchar("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
-  retoucherId: text("retoucher_id").notNull(),
-  photosCompleted: integer("photos_completed").notNull(),
-  completionDate: timestamp("completion_date").notNull(),
-  createdAt: timestamp("created_at").notNull().default(sql`now()`),
-});
-
 export const insertUserSchema = createInsertSchema(users).pick({
   username: true,
   password: true,
@@ -131,11 +121,6 @@ export const insertWranglerCommissionSchema = createInsertSchema(wranglerCommiss
   createdAt: true,
 });
 
-export const insertDailyCompletionSchema = createInsertSchema(dailyCompletions).omit({
-  id: true,
-  createdAt: true,
-});
-
 // Type definitions
 export type User = typeof users.$inferSelect;
 export type InsertUser = z.infer<typeof insertUserSchema>;
@@ -150,8 +135,6 @@ export type InsertTradeOffer = z.infer<typeof insertTradeOfferSchema>;
 export type UpdateTradeOffer = z.infer<typeof updateTradeOfferSchema>;
 export type WranglerCommission = typeof wranglerCommissions.$inferSelect;
 export type InsertWranglerCommission = z.infer<typeof insertWranglerCommissionSchema>;
-export type DailyCompletion = typeof dailyCompletions.$inferSelect;
-export type InsertDailyCompletion = z.infer<typeof insertDailyCompletionSchema>;
 
 export const UserRoles = {
   ADMIN: "Admin",

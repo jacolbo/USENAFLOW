@@ -286,7 +286,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.patch("/api/projects/:id/rollover", async (req, res) => {
     try {
       const { id } = req.params;
-      const { photosCompleted, rolloverDate } = req.body;
+      const { photosCompleted } = req.body;
       
       if (typeof photosCompleted !== 'number' || photosCompleted < 0) {
         return res.status(400).json({ error: "Number can't be negative." });
@@ -313,20 +313,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
       
-      // Calculate new due date (use provided date or default to tomorrow, same retoucher)
-      let newDueDate: Date;
-      if (rolloverDate) {
-        newDueDate = new Date(rolloverDate);
-      } else {
-        newDueDate = new Date();
-        newDueDate.setDate(newDueDate.getDate() + 1);
-      }
+      // Calculate new due date (tomorrow, same retoucher)
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
       
       const updatedProject = await storage.updateProject(id, {
         toEditRemaining: newRemaining,
         rolloverCount: (project.rolloverCount || 0) + 1,
         lastRolloverDate: new Date(),
-        dueDate: newDueDate,
+        dueDate: tomorrow,
       });
       
       if (!updatedProject) {
