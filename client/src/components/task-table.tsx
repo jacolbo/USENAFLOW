@@ -1427,7 +1427,10 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
                             <TableCell className="font-medium">
                               <div className="space-y-1">
                                 <div className="text-base">
-                                  {formatClientDisplay(project)} — to edit ({project.toEditRemaining || project.selectedCount}) — done {project.doneCumulative || 0}/{project.selectedCount}
+                                  {formatClientDisplay(project)}
+                                </div>
+                                <div className="text-sm text-blue-600">
+                                  to edit ({project.toEditRemaining || project.selectedCount}) — done {project.doneCumulative || 0}/{project.selectedCount}
                                 </div>
                                 <div className="text-xs text-gray-500">
                                   Due: {formatDate(new Date(project.dueDate))}
