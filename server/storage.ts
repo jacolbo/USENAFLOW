@@ -177,6 +177,13 @@ export class MemStorage implements IStorage {
       rating: null,
       deliveredAt: null,
       createdAt: new Date(),
+      // Shadow project fields
+      toEditRemaining: insertProject.toEditRemaining || 0,
+      rolloverCount: insertProject.rolloverCount || 0,
+      lastRolloverDate: insertProject.lastRolloverDate || null,
+      originalProjectId: insertProject.originalProjectId || null,
+      isRolloverShadow: insertProject.isRolloverShadow || false,
+      originalDueDate: insertProject.originalDueDate || null,
     };
     
     this.projects.set(id, project);
@@ -379,7 +386,7 @@ export class DatabaseStorage implements IStorage {
     const status = extras > 0 ? ProjectStatus.AWAITING_PAYMENT : ProjectStatus.READY_FOR_RETOUCHING;
     const invoicePaid = extras === 0;
     
-    // Convert due date to Sunday of that week
+    // Convert due date to Sunday of that week (only for original projects, not shadows)
     const getSundayOfWeek = (date: Date): Date => {
       const sunday = new Date(date);
       const day = date.getDay(); // 0 = Sunday
@@ -388,19 +395,29 @@ export class DatabaseStorage implements IStorage {
       return sunday;
     };
     
-    const sundayDueDate = getSundayOfWeek(new Date(insertProject.dueDate));
+    // For shadow projects, use the exact due date provided, for original projects convert to Sunday
+    const finalDueDate = insertProject.isRolloverShadow ? 
+      new Date(insertProject.dueDate) : 
+      getSundayOfWeek(new Date(insertProject.dueDate));
     
     const [project] = await db
       .insert(projects)
       .values({
         ...insertProject,
-        dueDate: sundayDueDate,
+        dueDate: finalDueDate,
         extras,
         status,
         invoicePaid,
         assignedTo: null,
         rating: null,
-        extraPhotoPrice: insertProject.extraPhotoPrice || null,
+        extraPhotoPrice: insertProject.extraPhotoPrice ?? null,
+        // Shadow project fields - explicitly include them
+        toEditRemaining: insertProject.toEditRemaining || 0,
+        rolloverCount: insertProject.rolloverCount || 0,
+        lastRolloverDate: insertProject.lastRolloverDate || null,
+        originalProjectId: insertProject.originalProjectId || null,
+        isRolloverShadow: insertProject.isRolloverShadow || false,
+        originalDueDate: insertProject.originalDueDate || null,
       })
       .returning();
     return project;
