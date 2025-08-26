@@ -1365,7 +1365,7 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
                   </TableHeader>
                   <TableBody>
                     {filterProjectsBySearch(group.projects, weekKey).map(project => (
-                      <TableRow key={project.id}>
+                      <TableRow key={project.id} className={project.isRolloverShadow ? 'opacity-50' : ''}>
                         {user.role === 'Sales' ? (
                           <>
                             {/* Pkg column first for Sales */}
