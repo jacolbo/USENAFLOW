@@ -808,7 +808,7 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
         const monday = isRollover ? new Date() : group.weekStart; // Use today for rollover
         const sunday = new Date(monday);
         sunday.setDate(monday.getDate() + 6);
-        const weekLabel = isRollover ? "" : formatWeekRange(monday);
+        const weekLabel = isRollover ? "🔄 Unassigned Rollover" : formatWeekRange(monday);
         const weekKey = isRollover ? "rollover" : monday.toISOString().split('T')[0];
         const isCollapsed = collapsedWeeks[weekKey];
         
