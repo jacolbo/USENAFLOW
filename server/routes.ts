@@ -305,6 +305,58 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Rollback project from "Rolled Over" status
+  app.patch("/api/projects/:id/rollback", async (req, res) => {
+    try {
+      const { id } = req.params;
+      
+      const project = await storage.getProject(id);
+      if (!project) {
+        return res.status(404).json({ error: "Project not found" });
+      }
+      
+      if (project.status !== ProjectStatus.ROLLED_OVER) {
+        return res.status(400).json({ error: "Project is not in 'Rolled Over' status" });
+      }
+      
+      // Find and delete any shadow projects created from this original project
+      const allProjects = await storage.getAllProjects();
+      const shadowProjects = allProjects.filter(p => p.originalProjectId === id);
+      
+      for (const shadowProject of shadowProjects) {
+        await storage.deleteProject(shadowProject.id);
+      }
+      
+      // Restore the original project to "Assigned" status
+      const updatedProject = await storage.updateProject(id, {
+        status: ProjectStatus.ASSIGNED,
+      });
+      
+      if (!updatedProject) {
+        return res.status(404).json({ error: "Project not found" });
+      }
+      
+      // Log rollback event
+      await storage.createProjectEvent({
+        projectId: id,
+        eventType: "rollback",
+        eventDate: new Date(),
+        photosCompleted: 0,
+        photosRemaining: project.toEditRemaining || project.selectedCount,
+        details: "Project rolled back from 'Rolled Over' status",
+        createdBy: "system"
+      });
+      
+      res.json({
+        project: updatedProject,
+        message: "Project has been rolled back successfully."
+      });
+    } catch (error) {
+      console.error('Rollback error:', error);
+      res.status(400).json({ error: "Failed to rollback project" });
+    }
+  });
+
   // Rollover project (retoucher action)
   app.patch("/api/projects/:id/rollover", async (req, res) => {
     try {

@@ -327,6 +327,32 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
     rolloverMutation.mutate({ projectId, photosCompleted });
   };
 
+  // Handle rollback action - restore original project from "Rolled Over" status
+  const rollbackMutation = useMutation({
+    mutationFn: async (projectId: string) => {
+      const response = await apiRequest("PATCH", `/api/projects/${projectId}/rollback`, {});
+      return response.json();
+    },
+    onSuccess: () => {
+      toast({
+        title: "Project Rolled Back",
+        description: "Project has been restored to its original status.",
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to rollback project",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleRollback = (projectId: string) => {
+    rollbackMutation.mutate(projectId);
+  };
+
   const handleRequestRevision = (projectId: string) => {
     updateProjectMutation.mutate({
       id: projectId,
@@ -1701,6 +1727,19 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
                                     </DialogContent>
                                   </Dialog>
                                 </>
+                              )}
+
+                              {/* Rollback button for projects with "Rolled Over" status */}
+                              {hasRetouchingAbilities(user.role) && project.status === 'Rolled Over' && (
+                                <Button 
+                                  size="sm" 
+                                  className="bg-blue-600 hover:bg-blue-700 text-white"
+                                  onClick={() => handleRollback(project.id)}
+                                  disabled={rollbackMutation.isPending}
+                                  data-testid={`button-rollback-${project.id}`}
+                                >
+                                  {rollbackMutation.isPending ? 'Rolling Back...' : 'ROLL BACK'}
+                                </Button>
                               )}
                               
                               {/* Admin can deliver when in Review */}
