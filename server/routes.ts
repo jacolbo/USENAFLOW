@@ -268,11 +268,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { id } = req.params;
       
-      const project = await storage.getProject(id);
-      if (!project) {
-        return res.status(404).json({ error: "Project not found" });
-      }
-      
       const updatedProject = await storage.updateProject(id, {
         status: ProjectStatus.DONE,
       });
@@ -281,14 +276,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "Project not found" });
       }
       
-      // TODO: Add calendar logging here
-      // Weekly Calendar entry: "Completed — Done {doneCumulative}/{selectedCount}"
-      // Project Calendar entry: same text
-      
-      res.json({
-        project: updatedProject,
-        message: `Project completed — Done ${updatedProject.doneCumulative || 0}/${updatedProject.selectedCount}`
-      });
+      res.json(updatedProject);
     } catch (error) {
       res.status(400).json({ error: "Failed to mark project as done" });
     }
@@ -316,19 +304,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       const newRemaining = currentRemaining - photosCompleted;
-      const newDoneCumulative = (project.doneCumulative || 0) + photosCompleted;
       
       if (newRemaining <= 0) {
-        // All photos complete but don't auto-complete
-        const updatedProject = await storage.updateProject(id, {
-          toEditRemaining: 0,
-          doneCumulative: newDoneCumulative,
-        });
-        
         return res.json({ 
           allComplete: true,
           message: "All photos are complete. Please press Mark Done to close this project.",
-          project: updatedProject
+          project: project
         });
       }
       
@@ -338,7 +319,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       const updatedProject = await storage.updateProject(id, {
         toEditRemaining: newRemaining,
-        doneCumulative: newDoneCumulative,
         rolloverCount: (project.rolloverCount || 0) + 1,
         lastRolloverDate: new Date(),
         dueDate: tomorrow,
@@ -348,13 +328,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "Project not found" });
       }
       
-      // TODO: Add calendar logging here
-      // Weekly Calendar entry: "Edited {photosCompleted} photos — Done {newDoneCumulative}/{project.selectedCount} (Rollover)"
-      // Project Calendar entry: same text
-      
       res.json({
         project: updatedProject,
-        message: `You marked ${photosCompleted} today. ${newRemaining} will roll over to tomorrow (Done ${newDoneCumulative}/${project.selectedCount}).`
+        message: `You marked ${photosCompleted} photos done today. ${newRemaining} will roll over to tomorrow.`
       });
     } catch (error) {
       console.error('Rollover error:', error);

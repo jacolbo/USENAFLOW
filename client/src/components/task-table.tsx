@@ -276,7 +276,12 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
     });
   };
 
-  // Remove old handleMarkDone - using new one with markDoneMutation instead
+  const handleMarkDone = (projectId: string) => {
+    updateProjectMutation.mutate({
+      id: projectId,
+      endpoint: "mark-done",
+    });
+  };
 
   // Helper function to format client display based on rollover count
   const formatClientDisplay = (project: any) => {
@@ -323,32 +328,6 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
 
   const handleRollover = (projectId: string, photosCompleted: number) => {
     rolloverMutation.mutate({ projectId, photosCompleted });
-  };
-
-  // Handle mark done action with useMutation
-  const markDoneMutation = useMutation({
-    mutationFn: async (projectId: string) => {
-      const response = await apiRequest("PATCH", `/api/projects/${projectId}/mark-done`, {});
-      return response.json();
-    },
-    onSuccess: (result) => {
-      toast({
-        title: "Project Completed",
-        description: `Project marked as Done.`,
-      });
-      queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
-    },
-    onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to mark project as done",
-        variant: "destructive",
-      });
-    },
-  });
-
-  const handleMarkDone = (projectId: string) => {
-    markDoneMutation.mutate(projectId);
   };
 
   const handleRequestRevision = (projectId: string) => {
@@ -1345,11 +1324,6 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
                           <TableHead>Status</TableHead>
                           <TableHead>Notes</TableHead>
                         </>
-                      ) : user.role === 'Retoucher' ? (
-                        <>
-                          <TableHead>Project</TableHead>
-                          <TableHead>Actions</TableHead>
-                        </>
                       ) : (
                         <>
                           <TableHead>Client</TableHead>
@@ -1420,66 +1394,6 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
                             </TableCell>
                             {/* Client column third for Sales */}
                             <TableCell className="font-medium">{formatClientDisplay(project)}</TableCell>
-                          </>
-                        ) : user.role === 'Retoucher' ? (
-                          <>
-                            {/* Retoucher simplified view: {ClientDisplay} — to edit ({to_edit_remaining}) — done {done_cumulative}/{selected_photos_total} */}
-                            <TableCell className="font-medium">
-                              <div className="space-y-1">
-                                <div className="text-base">
-                                  {formatClientDisplay(project)} — to edit ({project.toEditRemaining || project.selectedCount}) — done {project.doneCumulative || 0}/{project.selectedCount}
-                                </div>
-                                <div className="text-xs text-gray-500">
-                                  Due: {formatDate(new Date(project.dueDate))}
-                                </div>
-                              </div>
-                            </TableCell>
-                            {/* Actions for retoucher */}
-                            <TableCell>
-                              <div className="flex gap-2">
-                                {/* Mark Done Button */}
-                                <Button
-                                  onClick={() => handleMarkDone(project.id)}
-                                  variant="outline"
-                                  size="sm"
-                                  className="text-green-600 hover:text-green-700 border-green-300 hover:border-green-400"
-                                  data-testid={`button-mark-done-${project.id}`}
-                                  disabled={loadingStates[project.id + 'mark-done']}
-                                >
-                                  {loadingStates[project.id + 'mark-done'] ? (
-                                    <LoadingSpinner size={14} className="mr-2" />
-                                  ) : null}
-                                  Mark Done
-                                </Button>
-                                {/* Rollover Button */}
-                                <Dialog>
-                                  <DialogTrigger asChild>
-                                    <Button
-                                      variant="outline"
-                                      size="sm"
-                                      className="text-orange-600 hover:text-orange-700 border-orange-300 hover:border-orange-400"
-                                      data-testid={`button-rollover-${project.id}`}
-                                    >
-                                      <RefreshCw className="h-4 w-4 mr-1" />
-                                      Rollover
-                                    </Button>
-                                  </DialogTrigger>
-                                  <DialogContent>
-                                    <DialogHeader>
-                                      <DialogTitle>Rollover Project</DialogTitle>
-                                      <DialogDescription>
-                                        Enter the number of photos you completed today for {formatClientDisplay(project)}.
-                                      </DialogDescription>
-                                    </DialogHeader>
-                                    <RolloverDialog 
-                                      project={project}
-                                      onRollover={handleRollover}
-                                      formatClientDisplay={formatClientDisplay}
-                                    />
-                                  </DialogContent>
-                                </Dialog>
-                              </div>
-                            </TableCell>
                           </>
                         ) : (
                           <>
@@ -1574,12 +1488,7 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
                                         Request corrections for {project.clientName}'s project. Describe what needs to be fixed.
                                       </DialogDescription>
                                     </DialogHeader>
-                                    <form onSubmit={(e) => {
-                                      e.preventDefault();
-                                      const formData = new FormData(e.currentTarget);
-                                      const note = formData.get('note') as string || '';
-                                      handleRequestCorrections(project.id, note);
-                                    }}>
+                                    <form onSubmit={(e) => handleRequestCorrections(e, project.id)}>
                                       <div className="space-y-4">
                                         <div>
                                           <label htmlFor="corrections-note" className="block text-sm font-medium mb-2">
