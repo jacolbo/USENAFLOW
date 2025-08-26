@@ -273,6 +273,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "Project not found" });
       }
       
+      // If this is a shadow project, also mark the original as done
+      if (project.isRolloverShadow && project.originalProjectId) {
+        await storage.updateProject(project.originalProjectId, {
+          status: ProjectStatus.DONE,
+        });
+      }
+      
       const updatedProject = await storage.updateProject(id, {
         status: ProjectStatus.DONE,
       });
@@ -288,7 +295,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         eventDate: new Date(),
         photosCompleted: project.toEditRemaining || project.selectedCount,
         photosRemaining: 0,
-        details: "Project marked as complete",
+        details: project.isRolloverShadow ? "Shadow project marked as complete" : "Project marked as complete",
         createdBy: "system"
       });
       
@@ -333,30 +340,58 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const tomorrow = new Date();
       tomorrow.setDate(tomorrow.getDate() + 1);
       
-      const updatedProject = await storage.updateProject(id, {
-        toEditRemaining: newRemaining,
+      // Update original project to "Rolled Over" status
+      const updatedOriginal = await storage.updateProject(id, {
+        status: ProjectStatus.ROLLED_OVER,
         rolloverCount: (project.rolloverCount || 0) + 1,
         lastRolloverDate: new Date(),
-        dueDate: tomorrow,
       });
       
-      if (!updatedProject) {
+      if (!updatedOriginal) {
         return res.status(404).json({ error: "Project not found" });
       }
       
-      // Log rollover event
-      await storage.createProjectEvent({
-        projectId: id,
-        eventType: "rollover",
-        eventDate: new Date(),
-        photosCompleted: photosCompleted,
-        photosRemaining: newRemaining,
-        details: `${photosCompleted} photos completed, ${newRemaining} photos rolled over to next day`,
-        createdBy: "system" // You might want to get this from the user session
+      // Create shadow project for rollover date
+      const shadowProject = await storage.createProject({
+        clientName: project.clientName,
+        packageCount: project.packageCount,
+        selectedCount: project.selectedCount,
+        extraPhotoPrice: project.extraPhotoPrice,
+        dueDate: tomorrow,
+        status: project.status, // Keep original status for shadow
+        assignedTo: project.assignedTo,
+        toEditRemaining: newRemaining,
+        rolloverCount: project.rolloverCount + 1,
+        originalProjectId: id, // Link back to original
+        isRolloverShadow: true,
+        originalDueDate: project.dueDate,
       });
       
+      // Log rollover event for both original and shadow
+      await Promise.all([
+        storage.createProjectEvent({
+          projectId: id,
+          eventType: "rollover",
+          eventDate: new Date(),
+          photosCompleted: photosCompleted,
+          photosRemaining: newRemaining,
+          details: `${photosCompleted} photos completed, ${newRemaining} photos rolled over to next day`,
+          createdBy: "system"
+        }),
+        storage.createProjectEvent({
+          projectId: shadowProject.id,
+          eventType: "rollover",
+          eventDate: new Date(),
+          photosCompleted: 0, // Shadow starts with 0 completed
+          photosRemaining: newRemaining,
+          details: `Shadow project created for rollover from ${project.dueDate.toDateString()}`,
+          createdBy: "system"
+        })
+      ]);
+      
       res.json({
-        project: updatedProject,
+        originalProject: updatedOriginal,
+        shadowProject: shadowProject,
         message: `You marked ${photosCompleted} photos done today. ${newRemaining} will roll over to tomorrow.`
       });
     } catch (error) {

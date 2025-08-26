@@ -28,6 +28,10 @@ export const projects = pgTable("projects", {
   toEditRemaining: integer("to_edit_remaining").notNull().default(0),
   rolloverCount: integer("rollover_count").notNull().default(0),
   lastRolloverDate: timestamp("last_rollover_date"),
+  // Shadow project fields
+  originalProjectId: varchar("original_project_id"), // null for original projects, points to original for shadows
+  isRolloverShadow: boolean("is_rollover_shadow").notNull().default(false),
+  originalDueDate: timestamp("original_due_date"), // stores original due date for shadows
 });
 
 export const projectNotes = pgTable("project_notes", {
@@ -174,6 +178,7 @@ export const ProjectStatus = {
   CORRECTIONS: "Corrections",
   DELIVERED: "Delivered",
   DONE: "Done",
+  ROLLED_OVER: "Rolled Over",
 } as const;
 
 // Notification system schemas

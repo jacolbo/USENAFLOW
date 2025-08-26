@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
 import { apiRequest } from "@/lib/queryClient";
@@ -328,6 +328,17 @@ export default function Dashboard() {
     enabled: !!user,
   });
 
+  // Filter projects based on user role for shadow project visibility
+  const visibleProjects = useMemo(() => {
+    // For Sales users, only show original projects (not shadows)
+    if (user?.role === 'Sales') {
+      return allProjects.filter(project => !project.isRolloverShadow);
+    }
+    
+    // For Admin and other workflow roles, show all projects including shadows
+    return allProjects;
+  }, [allProjects, user?.role]);
+
   // Filter projects based on archive view with Sunday-start weeks and unassigned rollover
   const getFilteredProjects = () => {
     const today = new Date();
@@ -362,19 +373,19 @@ export default function Dashboard() {
 
     if (showArchive) {
       // Archive: Projects from weeks that are 2+ weeks old
-      filteredProjects = allProjects.filter(project => {
+      filteredProjects = visibleProjects.filter(project => {
         const projectDate = new Date(project.dueDate || project.createdAt);
         return projectDate < archiveCutoff;
       });
     } else {
       // Current: Previous week, current week, next week, and next-of-next week
-      filteredProjects = allProjects.filter(project => {
+      filteredProjects = visibleProjects.filter(project => {
         const projectDate = new Date(project.dueDate || project.createdAt);
         return projectDate >= previousWeekStart && projectDate <= nextOfNextWeekEnd;
       });
 
       // Handle unassigned project rollover for current view
-      const unassignedFromPastWeeks = allProjects.filter(project => {
+      const unassignedFromPastWeeks = visibleProjects.filter(project => {
         const projectDate = new Date(project.dueDate || project.createdAt);
         return projectDate < previousWeekStart && (!project.assignedTo || project.assignedTo === "__UNASSIGN__");
       });
@@ -411,12 +422,12 @@ export default function Dashboard() {
     nextWeekEnd.setHours(23, 59, 59, 999);
     
     // Include projects in 3-week window plus unassigned rollover
-    const inCurrentRange = allProjects.filter(project => {
+    const inCurrentRange = visibleProjects.filter(project => {
       const projectDate = new Date(project.dueDate || project.createdAt);
       return projectDate >= previousWeekStart && projectDate <= nextWeekEnd;
     }).length;
 
-    const unassignedRollover = allProjects.filter(project => {
+    const unassignedRollover = visibleProjects.filter(project => {
       const projectDate = new Date(project.dueDate || project.createdAt);
       return projectDate < previousWeekStart && (!project.assignedTo || project.assignedTo === "__UNASSIGN__");
     }).length;
@@ -434,7 +445,7 @@ export default function Dashboard() {
     const archiveCutoff = new Date(currentWeekStart);
     archiveCutoff.setDate(currentWeekStart.getDate() - 14);
     
-    return allProjects.filter(project => {
+    return visibleProjects.filter(project => {
       const projectDate = new Date(project.dueDate || project.createdAt);
       return projectDate < archiveCutoff;
     }).length;

@@ -283,18 +283,15 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
     });
   };
 
-  // Helper function to format client display based on rollover count
+  // Helper function to format client display based on rollover shadow status
   const formatClientDisplay = (project: any) => {
-    const rolloverCount = project.rolloverCount || 0;
-    if (rolloverCount === 0) {
-      return project.clientName;
-    } else if (rolloverCount === 1) {
+    // For shadow projects, always show (RO) suffix
+    if (project.isRolloverShadow) {
       return `${project.clientName} (RO)`;
-    } else if (rolloverCount === 2) {
-      return `${project.clientName} (ROAO)`;
-    } else {
-      return `${project.clientName} (RO x${rolloverCount})`;
     }
+    
+    // For original projects that have been rolled over, show without suffix since the shadow shows (RO)
+    return project.clientName;
   };
 
   // Handle rollover action with useMutation
