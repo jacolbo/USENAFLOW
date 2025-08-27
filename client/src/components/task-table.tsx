@@ -1325,6 +1325,7 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
                                         <Badge 
                                           variant="secondary" 
                                           className={`${colorClass} px-1 py-0 text-xs font-medium w-full justify-start hover:shadow-lg transition-all select-none pointer-events-none overflow-hidden relative`}
+                                          style={project.isRolloverShadow ? { opacity: 0.5 } : {}}
                                         >
                                           <AnimatePresence>
                                             {isLoading && (
