@@ -1235,53 +1235,6 @@ export default function Dashboard() {
             </div>
           )}
 
-          {/* Evans Complaints View - Shows regular weekly calendar with complaints instead of projects */}
-          {user.role === "Evans" && showComplaints && (
-            <>
-              <div className="bg-white rounded-lg shadow-sm p-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Archive className="h-5 w-5 text-gray-600" />
-                    <h2 className="text-lg font-semibold">Complaints Calendar</h2>
-                    <span className="text-sm text-gray-500">(Weekly view showing complaint assignments)</span>
-                  </div>
-                  <div className="flex items-center gap-4">
-                    <div className="text-sm text-gray-600">
-                      {complaints.length} complaint{complaints.length !== 1 ? 's' : ''} total
-                    </div>
-                  </div>
-                </div>
-              </div>
-              
-              <TaskTable 
-                projects={complaints.map((complaint: any) => ({
-                  id: complaint.id,
-                  clientName: `Issue: ${complaint.issueDescription.slice(0, 30)}...`,
-                  packageCount: 1,
-                  selectedCount: 1,
-                  extras: 0,
-                  extraPhotoPrice: null,
-                  dueDate: complaint.requestedDueDate,
-                  status: complaint.status === 'open' ? 'Awaiting Payment' : 
-                          complaint.status === 'in_progress' ? 'Assigned' : 'Delivered',
-                  invoicePaid: true,
-                  assignedTo: complaint.reportedBy,
-                  rating: null,
-                  deliveredAt: complaint.resolvedAt,
-                  createdAt: complaint.createdAt,
-                  toEditRemaining: 1,
-                  photosCompleted: complaint.status === 'resolved' ? 1 : 0,
-                  rolloverCount: 0,
-                  lastRolloverDate: null,
-                  isRolloverShadow: false,
-                  shadowProjectId: null,
-                  originalProjectId: null
-                }))} 
-                user={user} 
-                allUsers={users}
-              />
-            </>
-          )}
           
           {/* Sales Dashboard - Payment & Delivery Management */}
           {user.role === "Sales" ? (
