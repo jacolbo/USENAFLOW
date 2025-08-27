@@ -273,12 +273,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "Project not found" });
       }
       
-      // If this is a shadow project, also mark the original as done
+      // If this is a shadow project, also mark the original as done (but don't update its completion count)
       if (project.isRolloverShadow && project.originalProjectId) {
-        const originalProject = await storage.getProject(project.originalProjectId);
         await storage.updateProject(project.originalProjectId, {
           status: ProjectStatus.DONE,
-          photosCompleted: originalProject?.toEditRemaining || originalProject?.selectedCount || 0, // Mark all photos as completed
         });
       }
       
