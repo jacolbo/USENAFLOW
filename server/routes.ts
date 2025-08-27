@@ -390,6 +390,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
       
+      // Special case: If 0 photos completed, just move due date to tomorrow (no rollover shadow)
+      if (photosCompleted === 0) {
+        const tomorrow = new Date();
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        
+        // Simply update the project's due date to tomorrow
+        const updatedProject = await storage.updateProject(id, {
+          dueDate: tomorrow,
+        });
+        
+        if (!updatedProject) {
+          return res.status(404).json({ error: "Project not found" });
+        }
+        
+        // Log the postponement event
+        await storage.createProjectEvent({
+          projectId: id,
+          eventType: "postponed",
+          eventDate: new Date(),
+          photosCompleted: 0,
+          photosRemaining: currentRemaining,
+          details: `Project postponed to tomorrow due to no work completed`,
+          createdBy: "system"
+        });
+        
+        return res.json({
+          project: updatedProject,
+          message: `No photos were completed today. Project moved to tomorrow (${tomorrow.toDateString()}).`
+        });
+      }
+      
       // Calculate new due date (tomorrow, same retoucher)
       const tomorrow = new Date();
       tomorrow.setDate(tomorrow.getDate() + 1);
