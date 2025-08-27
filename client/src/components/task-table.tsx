@@ -35,16 +35,16 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
   const queryClient = useQueryClient();
   const { toast } = useToast();
   
+  // Helper function to check if user has retouching abilities
+  const hasRetouchingAbilities = (userRole: string) => {
+    return ['Admin', 'LeadRetoucher', 'Retoucher'].includes(userRole);
+  };
+  
   // Fetch complaints for all projects to show report button status
   const { data: complaints = [] } = useQuery({
     queryKey: ['/api/complaints'],
     enabled: hasRetouchingAbilities(user.role),
   });
-  
-  // Helper function to check if user has retouching abilities
-  const hasRetouchingAbilities = (userRole: string) => {
-    return ['Admin', 'LeadRetoucher', 'Retoucher'].includes(userRole);
-  };
   
   // Helper function to get complaint status for a project
   const getProjectComplaintStatus = (projectId: string) => {
