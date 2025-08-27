@@ -409,7 +409,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         clientName: project.clientName,
         packageCount: project.packageCount,
         selectedCount: project.selectedCount,
-        extraPhotoPrice: project.extraPhotoPrice,
+        extraPhotoPrice: project.extraPhotoPrice || undefined,
         dueDate: tomorrow,
         status: ProjectStatus.ASSIGNED, // Shadow project should be assigned status
         assignedTo: project.assignedTo, // Keep assigned to same user

@@ -163,7 +163,7 @@ export class MemStorage implements IStorage {
 
   async createProject(insertProject: InsertProject): Promise<Project> {
     const id = randomUUID();
-    const extras = Math.max(0, insertProject.selectedCount - insertProject.packageCount);
+    const extras = Math.max(0, (insertProject.toEditRemaining || insertProject.selectedCount) - insertProject.packageCount);
     const status = extras > 0 ? ProjectStatus.AWAITING_PAYMENT : ProjectStatus.READY_FOR_RETOUCHING;
     const invoicePaid = extras === 0;
     
@@ -178,7 +178,7 @@ export class MemStorage implements IStorage {
       deliveredAt: null,
       createdAt: new Date(),
       // Shadow project fields
-      toEditRemaining: insertProject.toEditRemaining || 0,
+      toEditRemaining: insertProject.toEditRemaining || insertProject.selectedCount,
       rolloverCount: insertProject.rolloverCount || 0,
       lastRolloverDate: insertProject.lastRolloverDate || null,
       originalProjectId: insertProject.originalProjectId || null,
@@ -194,6 +194,20 @@ export class MemStorage implements IStorage {
     const project = this.projects.get(id);
     if (!project) {
       return undefined;
+    }
+    
+    // Always recalculate extras if packageCount, toEditRemaining, or extras changed
+    if (updates.packageCount !== undefined || updates.toEditRemaining !== undefined || updates.extras !== undefined) {
+      const newPackageCount = updates.packageCount ?? project.packageCount;
+      const newToEditRemaining = updates.toEditRemaining ?? project.toEditRemaining;
+      
+      // If extras is being directly updated, ensure toEditRemaining matches
+      if (updates.extras !== undefined && updates.toEditRemaining === undefined) {
+        updates.toEditRemaining = newPackageCount + updates.extras;
+      } else {
+        // Otherwise calculate extras from To Edit count
+        updates.extras = Math.max(0, (updates.toEditRemaining ?? newToEditRemaining) - newPackageCount);
+      }
     }
     
     const updatedProject = { ...project, ...updates };
@@ -382,7 +396,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createProject(insertProject: InsertProject): Promise<Project> {
-    const extras = Math.max(0, insertProject.selectedCount - insertProject.packageCount);
+    const extras = Math.max(0, (insertProject.toEditRemaining || insertProject.selectedCount) - insertProject.packageCount);
     const status = extras > 0 ? ProjectStatus.AWAITING_PAYMENT : ProjectStatus.READY_FOR_RETOUCHING;
     const invoicePaid = extras === 0;
     
@@ -410,9 +424,9 @@ export class DatabaseStorage implements IStorage {
         invoicePaid,
         assignedTo: insertProject.assignedTo || null,
         rating: null,
-        extraPhotoPrice: insertProject.extraPhotoPrice ?? null,
+        extraPhotoPrice: insertProject.extraPhotoPrice || null,
         // Shadow project fields - explicitly include them
-        toEditRemaining: insertProject.toEditRemaining || 0,
+        toEditRemaining: insertProject.toEditRemaining || insertProject.selectedCount,
         rolloverCount: insertProject.rolloverCount || 0,
         lastRolloverDate: insertProject.lastRolloverDate || null,
         originalProjectId: insertProject.originalProjectId || null,
@@ -424,19 +438,19 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updateProject(id: string, updates: UpdateProject): Promise<Project | undefined> {
-    // Always recalculate extras if packageCount, selectedCount, or extras changed
-    if (updates.packageCount !== undefined || updates.selectedCount !== undefined || updates.extras !== undefined) {
+    // Always recalculate extras if packageCount, toEditRemaining, or extras changed
+    if (updates.packageCount !== undefined || updates.toEditRemaining !== undefined || updates.extras !== undefined) {
       const currentProject = await this.getProject(id);
       if (currentProject) {
         const newPackageCount = updates.packageCount ?? currentProject.packageCount;
-        const newSelectedCount = updates.selectedCount ?? currentProject.selectedCount;
+        const newToEditRemaining = updates.toEditRemaining ?? currentProject.toEditRemaining;
         
-        // If extras is being directly updated, ensure selectedCount matches
-        if (updates.extras !== undefined && updates.selectedCount === undefined) {
-          updates.selectedCount = newPackageCount + updates.extras;
+        // If extras is being directly updated, ensure toEditRemaining matches
+        if (updates.extras !== undefined && updates.toEditRemaining === undefined) {
+          updates.toEditRemaining = newPackageCount + updates.extras;
         } else {
-          // Otherwise calculate extras from counts
-          updates.extras = Math.max(0, (updates.selectedCount ?? newSelectedCount) - newPackageCount);
+          // Otherwise calculate extras from To Edit count
+          updates.extras = Math.max(0, (updates.toEditRemaining ?? newToEditRemaining) - newPackageCount);
         }
       }
     }
