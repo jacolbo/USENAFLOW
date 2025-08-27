@@ -1341,9 +1341,6 @@ export default function Dashboard() {
                             showArchive ? "Archive Projects" : "Current Projects"
                           }
                         </h2>
-                        <span className="text-sm text-gray-500">
-                          {showArchive ? "(2+ weeks old)" : "(Previous, current, next & next-of-next week + unassigned rollover)"}
-                        </span>
                       </div>
                       <div className="flex items-center gap-4">
                         <div className="text-sm text-gray-600">
