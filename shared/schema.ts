@@ -95,6 +95,7 @@ export const complaints = pgTable("complaints", {
   status: text("status").notNull().default("pending"), // "pending", "in_progress", "completed"
   resolvedBy: text("resolved_by"), // Evans or whoever resolves it
   resolvedAt: timestamp("resolved_at"),
+  imageUrls: text("image_urls").array().default(sql`ARRAY[]::text[]`), // photo attachments
   createdAt: timestamp("created_at").notNull().default(sql`now()`),
 });
 

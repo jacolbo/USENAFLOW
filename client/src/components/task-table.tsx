@@ -11,7 +11,7 @@ import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Project } from "@shared/schema";
 import { User, formatRetoucherAbbr, getRetoucherFullName } from "@/lib/types";
-import { Calendar, Star, ChevronDown, ChevronRight, Copy, UserPlus, Search, X } from "lucide-react";
+import { Calendar, Star, ChevronDown, ChevronRight, Copy, UserPlus, Search, X, Camera } from "lucide-react";
 import { useState, useMemo, useCallback, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from 'framer-motion';
 import { LoadingSpinner, FloatingAction, StaggeredList } from './LoadingStates';
@@ -20,6 +20,8 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { AlertTriangle, RefreshCw } from "lucide-react";
+import { ObjectUploader } from './ObjectUploader';
+import type { UploadResult } from '@uppy/core';
 
 
 interface TaskTableProps {
@@ -354,7 +356,7 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
   };
 
   const reportIssueMutation = useMutation({
-    mutationFn: async (data: { projectId: string; issueDescription: string; requestedDueDate: string; reportedBy: string }) => {
+    mutationFn: async (data: { projectId: string; issueDescription: string; requestedDueDate: string; reportedBy: string; imageUrls?: string[] }) => {
       const response = await apiRequest("POST", "/api/complaints", data);
       return response.json();
     },
@@ -449,12 +451,13 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
     });
   };
 
-  const handleReportIssue = (projectId: string, issueDescription: string, requestedDueDate: string) => {
+  const handleReportIssue = (projectId: string, issueDescription: string, requestedDueDate: string, imageUrls: string[] = []) => {
     reportIssueMutation.mutate({
       projectId,
       issueDescription,
       requestedDueDate,
       reportedBy: user.name,
+      imageUrls,
     });
   };
 
@@ -1536,7 +1539,12 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
                                         Request corrections for {project.clientName}'s project. Describe what needs to be fixed.
                                       </DialogDescription>
                                     </DialogHeader>
-                                    <form onSubmit={(e) => handleRequestCorrections(e, project.id)}>
+                                    <form onSubmit={(e) => {
+                                      e.preventDefault();
+                                      const formData = new FormData(e.currentTarget);
+                                      const note = formData.get('note') as string || '';
+                                      handleRequestCorrections(project.id, note);
+                                    }}>
                                       <div className="space-y-4">
                                         <div>
                                           <label htmlFor="corrections-note" className="block text-sm font-medium mb-2">
@@ -2174,7 +2182,7 @@ function RolloverDialog({ project, onRollover, formatClientDisplay }: RolloverDi
 
 interface ReportIssueDialogProps {
   project: any;
-  onReport: (projectId: string, issueDescription: string, requestedDueDate: string) => void;
+  onReport: (projectId: string, issueDescription: string, requestedDueDate: string, imageUrls?: string[]) => void;
   formatClientDisplay: (project: any) => string;
 }
 
@@ -2182,6 +2190,8 @@ function ReportIssueDialog({ project, onReport, formatClientDisplay }: ReportIss
   const [issueDescription, setIssueDescription] = useState("");
   const [requestedDueDate, setRequestedDueDate] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [uploadedImages, setUploadedImages] = useState<string[]>([]);
+  const { toast } = useToast();
   
   const handleSubmit = async () => {
     if (!issueDescription.trim() || !requestedDueDate) {
@@ -2190,11 +2200,54 @@ function ReportIssueDialog({ project, onReport, formatClientDisplay }: ReportIss
     
     setIsSubmitting(true);
     try {
-      await onReport(project.id, issueDescription.trim(), requestedDueDate);
+      await onReport(project.id, issueDescription.trim(), requestedDueDate, uploadedImages);
       setIssueDescription(""); // Reset form
       setRequestedDueDate("");
+      setUploadedImages([]);
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleGetUploadParameters = async () => {
+    const response = await fetch('/api/objects/upload', { method: 'POST' });
+    const data = await response.json();
+    return {
+      method: 'PUT' as const,
+      url: data.uploadURL,
+    };
+  };
+
+  const handleUploadComplete = (result: UploadResult<Record<string, unknown>, Record<string, unknown>>) => {
+    if (result.successful && result.successful.length > 0) {
+      const newImageUrls = result.successful.map(file => file.uploadURL || '').filter(Boolean);
+      const normalizedUrls = newImageUrls.map(url => {
+        // Extract the path from the full URL to create the object path
+        if (url.includes('storage.googleapis.com')) {
+          try {
+            const urlObj = new URL(url);
+            const pathParts = urlObj.pathname.split('/');
+            if (pathParts.length >= 3) {
+              const bucketName = pathParts[1];
+              const objectPath = pathParts.slice(2).join('/');
+              // Check if this is in the private directory
+              if (objectPath.includes('uploads/')) {
+                const entityId = objectPath.split('uploads/')[1];
+                return `/objects/uploads/${entityId}`;
+              }
+            }
+          } catch (e) {
+            console.error('Error parsing upload URL:', e);
+          }
+        }
+        return url; // Fallback to original URL
+      });
+      
+      setUploadedImages(prev => [...prev, ...normalizedUrls]);
+      toast({
+        title: "Photos uploaded",
+        description: `${newImageUrls.length} photo(s) attached to your report.`,
+      });
     }
   };
   
@@ -2229,6 +2282,30 @@ function ReportIssueDialog({ project, onReport, formatClientDisplay }: ReportIss
         />
         <p className="text-sm text-gray-600">
           When do you need this issue resolved?
+        </p>
+      </div>
+      
+      <div className="space-y-2">
+        <Label>Attach Photos (Optional)</Label>
+        <ObjectUploader
+          maxNumberOfFiles={5}
+          maxFileSize={10485760} // 10MB
+          onGetUploadParameters={handleGetUploadParameters}
+          onComplete={handleUploadComplete}
+          buttonClassName="w-full"
+        >
+          <div className="flex items-center gap-2">
+            <Camera className="h-4 w-4" />
+            <span>Upload Photos</span>
+          </div>
+        </ObjectUploader>
+        {uploadedImages.length > 0 && (
+          <div className="text-sm text-green-600">
+            {uploadedImages.length} photo(s) attached
+          </div>
+        )}
+        <p className="text-sm text-gray-600">
+          Upload photos to help explain the issue (max 5 photos, 10MB each)
         </p>
       </div>
       
