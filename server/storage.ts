@@ -37,9 +37,9 @@ export interface IStorage {
   createProjectEvent(event: InsertProjectEvent): Promise<ProjectEvent>;
   
   // Complaints methods for Evans
-  getAllComplaints(): Promise<Complaint[]>;
+  getAllComplaints(): Promise<(Complaint & { projectName: string })[]>;
   getComplaint(id: string): Promise<Complaint | undefined>;
-  getComplaintsByStatus(status: string): Promise<Complaint[]>;
+  getComplaintsByStatus(status: string): Promise<(Complaint & { projectName: string })[]>;
   createComplaint(complaint: InsertComplaint): Promise<Complaint>;
   updateComplaint(id: string, updates: Partial<Complaint>): Promise<Complaint | undefined>;
   deleteComplaint(id: string): Promise<boolean>;
@@ -375,7 +375,7 @@ export class MemStorage implements IStorage {
   }
 
   // Complaints methods for Evans (Not implemented for MemStorage)
-  async getAllComplaints(): Promise<Complaint[]> {
+  async getAllComplaints(): Promise<(Complaint & { projectName: string })[]> {
     return [];
   }
 
@@ -383,7 +383,7 @@ export class MemStorage implements IStorage {
     return undefined;
   }
 
-  async getComplaintsByStatus(status: string): Promise<Complaint[]> {
+  async getComplaintsByStatus(status: string): Promise<(Complaint & { projectName: string })[]> {
     return [];
   }
 
@@ -648,8 +648,24 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Complaints methods for Evans
-  async getAllComplaints(): Promise<Complaint[]> {
-    return await db.select().from(complaints).orderBy(asc(complaints.createdAt));
+  async getAllComplaints(): Promise<(Complaint & { projectName: string })[]> {
+    return await db
+      .select({
+        id: complaints.id,
+        projectId: complaints.projectId,
+        reportedBy: complaints.reportedBy,
+        issueDescription: complaints.issueDescription,
+        requestedDueDate: complaints.requestedDueDate,
+        status: complaints.status,
+        resolvedBy: complaints.resolvedBy,
+        resolvedAt: complaints.resolvedAt,
+        imageUrls: complaints.imageUrls,
+        createdAt: complaints.createdAt,
+        projectName: projects.clientName,
+      })
+      .from(complaints)
+      .leftJoin(projects, eq(complaints.projectId, projects.id))
+      .orderBy(asc(complaints.createdAt));
   }
 
   async getComplaint(id: string): Promise<Complaint | undefined> {
@@ -657,8 +673,25 @@ export class DatabaseStorage implements IStorage {
     return complaint || undefined;
   }
 
-  async getComplaintsByStatus(status: string): Promise<Complaint[]> {
-    return await db.select().from(complaints).where(eq(complaints.status, status)).orderBy(asc(complaints.createdAt));
+  async getComplaintsByStatus(status: string): Promise<(Complaint & { projectName: string })[]> {
+    return await db
+      .select({
+        id: complaints.id,
+        projectId: complaints.projectId,
+        reportedBy: complaints.reportedBy,
+        issueDescription: complaints.issueDescription,
+        requestedDueDate: complaints.requestedDueDate,
+        status: complaints.status,
+        resolvedBy: complaints.resolvedBy,
+        resolvedAt: complaints.resolvedAt,
+        imageUrls: complaints.imageUrls,
+        createdAt: complaints.createdAt,
+        projectName: projects.clientName,
+      })
+      .from(complaints)
+      .leftJoin(projects, eq(complaints.projectId, projects.id))
+      .where(eq(complaints.status, status))
+      .orderBy(asc(complaints.createdAt));
   }
 
   async createComplaint(insertComplaint: InsertComplaint): Promise<Complaint> {

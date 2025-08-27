@@ -17,7 +17,7 @@ interface User {
 }
 
 interface ComplaintsCalendarProps {
-  complaints: Complaint[];
+  complaints: (Complaint & { projectName: string })[];
   user: User;
   onUpdateComplaint?: (complaintId: string, status: 'open' | 'in_progress' | 'resolved') => void;
 }
@@ -54,18 +54,19 @@ export function ComplaintsCalendar({ complaints, user, onUpdateComplaint }: Comp
     }));
   };
 
-  const filterComplaintsBySearch = (complaints: Complaint[], weekKey: string) => {
+  const filterComplaintsBySearch = (complaints: (Complaint & { projectName: string })[], weekKey: string) => {
     const searchTerm = searchTerms[weekKey]?.toLowerCase() || '';
     if (!searchTerm) return complaints;
     
     return complaints.filter(complaint => 
       complaint.issueDescription?.toLowerCase().includes(searchTerm) ||
-      complaint.reportedBy?.toLowerCase().includes(searchTerm)
+      complaint.reportedBy?.toLowerCase().includes(searchTerm) ||
+      complaint.projectName?.toLowerCase().includes(searchTerm)
     );
   };
 
   // Group complaints by weeks based on due date
-  const visibleGroups: { key: number; weekStart: Date; complaints: Complaint[] }[] = [];
+  const visibleGroups: { key: number; weekStart: Date; complaints: (Complaint & { projectName: string })[] }[] = [];
   
   complaints.forEach(complaint => {
     const weekStart = getWeekStart(new Date(complaint.requestedDueDate));
@@ -190,7 +191,7 @@ export function ComplaintsCalendar({ complaints, user, onUpdateComplaint }: Comp
                           <div className="relative">
                             <Search className="absolute left-2 top-2.5 h-4 w-4 text-gray-500" />
                             <Input
-                              placeholder="Search complaints by client, issue, or submitter..."
+                              placeholder="Search by project name, issue, or submitter..."
                               value={searchTerms[weekKey] || ''}
                               onChange={(e) => setSearchTerms(prev => ({
                                 ...prev,
@@ -246,7 +247,7 @@ export function ComplaintsCalendar({ complaints, user, onUpdateComplaint }: Comp
                                           <motion.div className="flex items-center gap-1 w-full">
                                             {getComplaintStatusIcon(complaint.status)}
                                             <span className="truncate flex-1">
-                                              Issue #{complaint.id.slice(-6)}
+                                              {complaint.projectName} - #{complaint.id.slice(-6)}
                                             </span>
                                           </motion.div>
                                         </Badge>
@@ -284,7 +285,7 @@ export function ComplaintsCalendar({ complaints, user, onUpdateComplaint }: Comp
                                       {getComplaintStatusIcon(complaint.status)}
                                       {complaint.status.toUpperCase()}
                                     </Badge>
-                                    <span className="font-medium">Issue #{complaint.id.slice(-6)}</span>
+                                    <span className="font-medium">{complaint.projectName} - #{complaint.id.slice(-6)}</span>
                                   </div>
                                   <span className="text-xs text-gray-500">
                                     Due: {format(new Date(complaint.requestedDueDate), 'MMM d, yyyy')}
@@ -296,7 +297,7 @@ export function ComplaintsCalendar({ complaints, user, onUpdateComplaint }: Comp
                                 </div>
                                 
                                 <div className="flex items-center justify-between text-xs text-gray-500">
-                                  <span>Reported by: {complaint.reportedBy}</span>
+                                  <span>Project: {complaint.projectName} | Reported by: {complaint.reportedBy}</span>
                                   <span>Created: {format(new Date(complaint.createdAt), 'MMM d, h:mm a')}</span>
                                 </div>
 
