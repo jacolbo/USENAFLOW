@@ -12,6 +12,7 @@ import { TeamAnalytics } from "@/components/team-analytics";
 import { DailyQuote } from "@/components/daily-quote";
 import { NotificationCenter } from "@/components/notification-center";
 import { TradeOfferModal } from "@/components/TradeOfferModal";
+import { ComplaintsCalendar } from "@/components/complaints-calendar";
 
 import { WRUButton } from "@/components/WRUButton";
 import { useSSE } from "@/hooks/use-sse";
@@ -623,6 +624,12 @@ export default function Dashboard() {
     enabled: !!user,
   });
 
+  // Query complaints for Evans
+  const { data: complaints = [] } = useQuery<any[]>({
+    queryKey: ["/api/complaints"],
+    enabled: !!user && user.role === "Evans",
+  });
+
   // Filter projects based on user role for shadow project visibility
   const visibleProjects = useMemo(() => {
     // For Sales users, only show original projects (not shadows)
@@ -1228,9 +1235,34 @@ export default function Dashboard() {
             </div>
           )}
 
-          {/* Evans Complaints Dashboard */}
+          {/* Evans Complaints Calendar */}
           {user.role === "Evans" && showComplaints && (
-            <ComplaintsView />
+            <ComplaintsCalendar 
+              complaints={complaints} 
+              user={{
+                id: user.id || user.name || 'evans',
+                name: user.name,
+                role: user.role,
+                value: user.value,
+                abbr: user.abbr
+              }} 
+              onUpdateComplaint={async (complaintId, status) => {
+                try {
+                  await apiRequest("PATCH", `/api/complaints/${complaintId}`, { status });
+                  queryClient.invalidateQueries({ queryKey: ["/api/complaints"] });
+                  toast({
+                    title: "Complaint updated",
+                    description: `Status changed to ${status}`,
+                  });
+                } catch (error) {
+                  toast({
+                    title: "Error",
+                    description: "Failed to update complaint status",
+                    variant: "destructive",
+                  });
+                }
+              }}
+            />
           )}
           
           {/* Sales Dashboard - Payment & Delivery Management */}
