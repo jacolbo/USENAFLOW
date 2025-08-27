@@ -1093,6 +1093,14 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
                           </motion.span>
                           <span>/</span>
                           <motion.span 
+                            className="text-orange-600 font-semibold"
+                            animate={{ scale: assignedPhotos > 0 ? [1, 1.1, 1] : 1 }}
+                            transition={{ duration: 0.5, ease: "easeInOut", delay: 0.05 }}
+                          >
+                            {assignedPhotos}
+                          </motion.span>
+                          <span>/</span>
+                          <motion.span 
                             className="text-blue-800 font-semibold"
                             animate={{ scale: totalPhotos > 0 ? [1, 1.05, 1] : 1 }}
                             transition={{ duration: 0.5, ease: "easeInOut", delay: 0.1 }}
