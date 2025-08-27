@@ -411,7 +411,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         selectedCount: project.selectedCount,
         extraPhotoPrice: project.extraPhotoPrice || undefined,
         dueDate: tomorrow,
-        status: ProjectStatus.ASSIGNED, // Shadow project should be assigned status
         assignedTo: project.assignedTo, // Keep assigned to same user
         toEditRemaining: newRemaining,
         rolloverCount: (project.rolloverCount || 0) + 1,
@@ -561,6 +560,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       if (photosCompleted < 0) {
         return res.status(400).json({ error: "Photos completed cannot be negative" });
+      }
+
+      // Get the project to validate against toEditRemaining
+      const project = await storage.getProject(id);
+      if (!project) {
+        return res.status(404).json({ error: "Project not found" });
+      }
+
+      const maxPhotos = project.toEditRemaining || project.selectedCount || 0;
+      if (photosCompleted > maxPhotos) {
+        return res.status(400).json({ error: `Cannot complete more photos than available (${maxPhotos})` });
       }
       
       const updatedProject = await storage.updateProject(id, {
