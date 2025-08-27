@@ -1340,8 +1340,29 @@ export default function Dashboard() {
           )}
           
           {/* Show the task table for the visible projects - only for non-Sales roles and not in commission view */}
-          {user.role !== "Sales" && !showCommissions && !showExtraPhotosSales && !showComplaints && (
+          {user.role !== "Sales" && !showCommissions && !showExtraPhotosSales && (user.role !== "Evans" || showComplaints) && (
             <TaskTable projects={projects} user={user} allUsers={users} />
+          )}
+
+          {/* Evans sees regular projects calendar when Complaints button is clicked */}
+          {user.role === "Evans" && showComplaints && (
+            <>
+              <div className="bg-white rounded-lg shadow-sm p-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Archive className="h-5 w-5 text-gray-600" />
+                    <h2 className="text-lg font-semibold">Projects Calendar</h2>
+                    <span className="text-sm text-gray-500">(Weekly view showing project assignments)</span>
+                  </div>
+                  <div className="flex items-center gap-4">
+                    <div className="text-sm text-gray-600">
+                      {projects.length} project{projects.length !== 1 ? 's' : ''} total
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <TaskTable projects={projects} user={user} allUsers={users} />
+            </>
           )}
 
           {/* Team Progress Analytics - only in current view and not in commission view */}
