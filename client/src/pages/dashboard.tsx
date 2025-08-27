@@ -1329,8 +1329,8 @@ export default function Dashboard() {
                     </div>
                   </div>
 
-                  {/* Show project creation form for non-Sales roles that can add projects - only in current view */}
-                  {!showArchive && user.role !== "Retoucher" && user.role !== "Sales" && (
+                  {/* Show project creation form for non-Sales roles that can add projects - only in current view - hide from Evans */}
+                  {!showArchive && user.role !== "Retoucher" && user.role !== "Sales" && user.role !== "Evans" && (
                     <AddProjectForm onAddProject={() => {}} user={user} />
                   )}
                 </>
