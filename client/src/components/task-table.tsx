@@ -1350,8 +1350,6 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
                       ) : (
                         <>
                           <TableHead>Client</TableHead>
-                          <TableHead>Pkg</TableHead>
-                          <TableHead>Sel</TableHead>
                           <TableHead>To Edit</TableHead>
                           <TableHead>Extra</TableHead>
                           <TableHead>Due</TableHead>
@@ -1422,20 +1420,6 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
                           <>
                             {/* Standard order for other roles */}
                             <TableCell className="font-medium">{formatClientDisplay(project)}</TableCell>
-                            <TableCell>
-                              {['Admin', 'Sales', 'DataWrangler', 'LeadRetoucher'].includes(user.role) ? (
-                                <input
-                                  type="number"
-                                  value={localInputValues[project.id]?.packageCount ?? project.packageCount}
-                                  onChange={(e) => handleChangePackageCount(project.id, parseInt(e.target.value) || 0)}
-                                  className="border rounded px-2 py-1 w-16 text-center bg-white dark:bg-gray-800"
-                                  min="0"
-                                  placeholder="0"
-                                />
-                              ) : (
-                                project.packageCount
-                              )}
-                            </TableCell>
                           </>
                         )}
                         {/* Continue Sales role cells */}
@@ -1565,20 +1549,6 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
                         ) : (
                           <>
                             {/* Standard cells for other roles */}
-                            <TableCell>
-                              {['Admin', 'Sales', 'DataWrangler', 'LeadRetoucher'].includes(user.role) ? (
-                                <input
-                                  type="number"
-                                  value={localInputValues[project.id]?.selectedCount ?? project.selectedCount}
-                                  onChange={(e) => handleChangeSelectedCount(project.id, parseInt(e.target.value) || 0)}
-                                  className="border rounded px-2 py-1 w-16 text-center bg-white dark:bg-gray-800"
-                                  min="0"
-                                  placeholder="0"
-                                />
-                              ) : (
-                                project.selectedCount
-                              )}
-                            </TableCell>
                             {/* To Edit column for non-Sales */}
                             <TableCell>
                               <span className="text-sm font-medium text-purple-600">
