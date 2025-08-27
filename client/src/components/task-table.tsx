@@ -1351,7 +1351,6 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
                         <>
                           <TableHead>Client</TableHead>
                           <TableHead>To Edit</TableHead>
-                          <TableHead>Extra</TableHead>
                           <TableHead>Due</TableHead>
                           <TableHead>Retoucher</TableHead>
                           <TableHead>Status</TableHead>
@@ -1554,20 +1553,6 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
                               <span className="text-sm font-medium text-purple-600">
                                 {project.toEditRemaining || project.selectedCount}
                               </span>
-                            </TableCell>
-                            <TableCell>
-                              {['Admin', 'Sales', 'DataWrangler', 'LeadRetoucher'].includes(user.role) ? (
-                                <input
-                                  type="number"
-                                  value={localInputValues[project.id]?.extras ?? project.extras}
-                                  onChange={(e) => handleChangeExtras(project.id, parseInt(e.target.value) || 0)}
-                                  className="border rounded px-2 py-1 w-16 text-center bg-white dark:bg-gray-800"
-                                  min="0"
-                                  placeholder="0"
-                                />
-                              ) : (
-                                project.extras
-                              )}
                             </TableCell>
                             <TableCell>
                               {(user.role === 'Retoucher' || ['Retoucher1', 'Retoucher2', 'Retoucher3'].includes(user.role)) ? (
