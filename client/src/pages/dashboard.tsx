@@ -1235,6 +1235,35 @@ export default function Dashboard() {
             </div>
           )}
 
+          {/* Evans Complaints Calendar */}
+          {user.role === "Evans" && showComplaints && (
+            <ComplaintsCalendar 
+              complaints={complaints} 
+              user={{
+                id: user.id || user.name || 'evans',
+                name: user.name,
+                role: user.role,
+                value: user.value,
+                abbr: user.abbr
+              }} 
+              onUpdateComplaint={async (complaintId, status) => {
+                try {
+                  await apiRequest("PATCH", `/api/complaints/${complaintId}`, { status });
+                  queryClient.invalidateQueries({ queryKey: ["/api/complaints"] });
+                  toast({
+                    title: "Complaint updated",
+                    description: `Status changed to ${status}`,
+                  });
+                } catch (error) {
+                  toast({
+                    title: "Error",
+                    description: "Failed to update complaint status",
+                    variant: "destructive",
+                  });
+                }
+              }}
+            />
+          )}
           
           {/* Sales Dashboard - Payment & Delivery Management */}
           {user.role === "Sales" ? (
@@ -1329,8 +1358,8 @@ export default function Dashboard() {
                     </div>
                   </div>
 
-                  {/* Show project creation form for non-Sales roles that can add projects - only in current view - hide from Evans */}
-                  {!showArchive && user.role !== "Retoucher" && user.role !== "Sales" && user.role !== "Evans" && (
+                  {/* Show project creation form for non-Sales roles that can add projects - only in current view */}
+                  {!showArchive && user.role !== "Retoucher" && user.role !== "Sales" && (
                     <AddProjectForm onAddProject={() => {}} user={user} />
                   )}
                 </>
@@ -1342,27 +1371,6 @@ export default function Dashboard() {
           {/* Show the task table for the visible projects - only for non-Sales roles and not in commission view */}
           {user.role !== "Sales" && !showCommissions && !showExtraPhotosSales && !showComplaints && (
             <TaskTable projects={projects} user={user} allUsers={users} />
-          )}
-
-          {/* Evans sees regular projects calendar for visibility into who is working on what */}
-          {user.role === "Evans" && !showCommissions && !showExtraPhotosSales && (
-            <>
-              <div className="bg-white rounded-lg shadow-sm p-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Archive className="h-5 w-5 text-gray-600" />
-                    <h2 className="text-lg font-semibold">Projects Overview</h2>
-                    <span className="text-sm text-gray-500">(View who is working on what projects and when)</span>
-                  </div>
-                  <div className="flex items-center gap-4">
-                    <div className="text-sm text-gray-600">
-                      {projects.length} project{projects.length !== 1 ? 's' : ''} total
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <TaskTable projects={projects} user={user} allUsers={users} />
-            </>
           )}
 
           {/* Team Progress Analytics - only in current view and not in commission view */}

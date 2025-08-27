@@ -265,6 +265,73 @@ export function ComplaintsCalendar({ complaints, user, onUpdateComplaint }: Comp
                           </div>
                         </div>
 
+                        {/* Complaints list below calendar */}
+                        {filteredComplaints.length > 0 && (
+                          <div className="space-y-3">
+                            <h4 className="font-medium text-sm text-gray-700 dark:text-gray-300 border-b pb-2">
+                              Complaint Details
+                            </h4>
+                            {filteredComplaints.map((complaint) => (
+                              <motion.div
+                                key={complaint.id}
+                                initial={{ opacity: 0, x: -10 }}
+                                animate={{ opacity: 1, x: 0 }}
+                                className="p-3 border rounded-lg bg-white dark:bg-gray-800 space-y-2"
+                              >
+                                <div className="flex items-center justify-between">
+                                  <div className="flex items-center gap-2">
+                                    <Badge className={getComplaintStatusColor(complaint.status)}>
+                                      {getComplaintStatusIcon(complaint.status)}
+                                      {complaint.status.toUpperCase()}
+                                    </Badge>
+                                    <span className="font-medium">Issue #{complaint.id.slice(-6)}</span>
+                                  </div>
+                                  <span className="text-xs text-gray-500">
+                                    Due: {format(new Date(complaint.requestedDueDate), 'MMM d, yyyy')}
+                                  </span>
+                                </div>
+                                
+                                <div className="text-sm text-gray-600 dark:text-gray-400">
+                                  <strong>Issue:</strong> {complaint.issueDescription}
+                                </div>
+                                
+                                <div className="flex items-center justify-between text-xs text-gray-500">
+                                  <span>Reported by: {complaint.reportedBy}</span>
+                                  <span>Created: {format(new Date(complaint.createdAt), 'MMM d, h:mm a')}</span>
+                                </div>
+
+                                {complaint.imageUrls && complaint.imageUrls.length > 0 && (
+                                  <div className="text-xs text-blue-600">
+                                    📎 {complaint.imageUrls.length} photo(s) attached
+                                  </div>
+                                )}
+
+                                <div className="flex gap-2">
+                                  {complaint.status !== 'in_progress' && (
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={() => onUpdateComplaint?.(complaint.id, 'in_progress')}
+                                      data-testid={`btn-progress-${complaint.id}`}
+                                    >
+                                      Mark In Progress
+                                    </Button>
+                                  )}
+                                  {complaint.status !== 'resolved' && (
+                                    <Button
+                                      size="sm"
+                                      variant="default"
+                                      onClick={() => onUpdateComplaint?.(complaint.id, 'resolved')}
+                                      data-testid={`btn-resolve-${complaint.id}`}
+                                    >
+                                      Mark Resolved
+                                    </Button>
+                                  )}
+                                </div>
+                              </motion.div>
+                            ))}
+                          </div>
+                        )}
                       </CardContent>
                     </motion.div>
                   )}
