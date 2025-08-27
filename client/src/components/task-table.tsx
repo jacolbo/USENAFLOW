@@ -429,14 +429,6 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
     });
   };
 
-  const updatePhotosCompleted = (projectId: string, photosCompleted: number) => {
-    updateProjectMutation.mutate({
-      id: projectId,
-      endpoint: "photos-completed",
-      data: { photosCompleted },
-    });
-  };
-
   const changeDueDateMutation = useMutation({
     mutationFn: async ({ id, dueDate }: { id: string; dueDate: string }) => {
       const response = await apiRequest("PATCH", `/api/projects/${id}`, { dueDate });
@@ -1575,10 +1567,10 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
                                 {project.toEditRemaining || project.selectedCount}
                               </span>
                             </TableCell>
-                            {/* Done photos column for non-Sales */}
+                            {/* Done photos column for non-Sales (read-only) */}
                             <TableCell>
                               {project.status === "Rolled Over" ? (
-                                // Show historical completion data for rolled over projects (read-only)
+                                // Show historical completion data for rolled over projects
                                 <div className="flex flex-col gap-1">
                                   <div className="flex items-center justify-center">
                                     <span 
@@ -1594,79 +1586,15 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
                                   </div>
                                 </div>
                               ) : (
-                                // Interactive completion tracking for active projects
-                                <div className="flex flex-col gap-1">
-                                  <div className="flex items-center gap-1">
-                                    <button
-                                      onClick={() => updatePhotosCompleted(project.id, Math.max(0, (project.photosCompleted || 0) - 1))}
-                                      className="text-red-500 hover:text-red-700 hover:bg-red-50 text-xs px-2 py-1 rounded transition-colors"
-                                      disabled={!project.photosCompleted}
-                                      data-testid={`button-decrease-completed-${project.id}`}
-                                    >
-                                      −
-                                    </button>
-                                    <div className="flex flex-col items-center">
-                                      <span 
-                                        className="text-sm font-medium text-green-600 min-w-[30px] text-center cursor-pointer hover:bg-green-50 px-2 py-1 rounded transition-colors"
-                                        onClick={() => {
-                                          const maxPhotos = project.toEditRemaining || project.selectedCount || 0;
-                                          const currentCompleted = project.photosCompleted || 0;
-                                          if (currentCompleted < maxPhotos) {
-                                            updatePhotosCompleted(project.id, currentCompleted + 1);
-                                          }
-                                        }}
-                                        data-testid={`text-completed-count-${project.id}`}
-                                        title={`${project.photosCompleted || 0} of ${project.toEditRemaining || project.selectedCount || 0} photos completed`}
-                                      >
-                                        {project.photosCompleted || 0}
-                                      </span>
-                                      <div className="w-full bg-gray-200 h-1 rounded-full mt-1">
-                                        <div 
-                                          className="bg-green-500 h-1 rounded-full transition-all duration-300"
-                                          style={{
-                                            width: `${Math.min(100, ((project.photosCompleted || 0) / (project.toEditRemaining || project.selectedCount || 1)) * 100)}%`
-                                          }}
-                                        />
-                                      </div>
-                                    </div>
-                                    <button
-                                      onClick={() => {
-                                        const maxPhotos = project.toEditRemaining || project.selectedCount || 0;
-                                        const currentCompleted = project.photosCompleted || 0;
-                                        if (currentCompleted < maxPhotos) {
-                                          updatePhotosCompleted(project.id, currentCompleted + 1);
-                                        }
-                                      }}
-                                      className="text-green-500 hover:text-green-700 hover:bg-green-50 text-xs px-2 py-1 rounded transition-colors"
-                                      disabled={(project.photosCompleted || 0) >= (project.toEditRemaining || project.selectedCount || 0)}
-                                      data-testid={`button-increase-completed-${project.id}`}
-                                    >
-                                      +
-                                    </button>
-                                  </div>
-                                  {/* Quick completion buttons */}
-                                  <div className="flex gap-1">
-                                    <button
-                                      onClick={() => {
-                                        const maxPhotos = project.toEditRemaining || project.selectedCount || 0;
-                                        updatePhotosCompleted(project.id, Math.floor(maxPhotos / 2));
-                                      }}
-                                      className="text-xs bg-blue-100 hover:bg-blue-200 text-blue-700 px-1 py-0.5 rounded transition-colors"
-                                      title="Mark 50% complete"
-                                    >
-                                      50%
-                                    </button>
-                                    <button
-                                      onClick={() => {
-                                        const maxPhotos = project.toEditRemaining || project.selectedCount || 0;
-                                        updatePhotosCompleted(project.id, maxPhotos);
-                                      }}
-                                      className="text-xs bg-green-100 hover:bg-green-200 text-green-700 px-1 py-0.5 rounded transition-colors"
-                                      title="Mark all complete"
-                                    >
-                                      All
-                                    </button>
-                                  </div>
+                                // Read-only completion display for active projects
+                                <div className="flex items-center justify-center">
+                                  <span 
+                                    className="text-sm font-medium text-green-600 min-w-[30px] text-center px-2 py-1 bg-green-50 rounded border border-green-200"
+                                    data-testid={`text-completed-count-${project.id}`}
+                                    title={`${project.photosCompleted || 0} of ${project.toEditRemaining || project.selectedCount || 0} photos completed`}
+                                  >
+                                    {project.photosCompleted || 0}
+                                  </span>
                                 </div>
                               )}
                             </TableCell>
