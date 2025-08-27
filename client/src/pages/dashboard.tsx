@@ -1340,19 +1340,19 @@ export default function Dashboard() {
           )}
           
           {/* Show the task table for the visible projects - only for non-Sales roles and not in commission view */}
-          {user.role !== "Sales" && !showCommissions && !showExtraPhotosSales && (user.role !== "Evans" || showComplaints) && (
+          {user.role !== "Sales" && !showCommissions && !showExtraPhotosSales && !showComplaints && (
             <TaskTable projects={projects} user={user} allUsers={users} />
           )}
 
-          {/* Evans sees regular projects calendar when Complaints button is clicked */}
-          {user.role === "Evans" && showComplaints && (
+          {/* Evans sees regular projects calendar for visibility into who is working on what */}
+          {user.role === "Evans" && !showCommissions && !showExtraPhotosSales && (
             <>
               <div className="bg-white rounded-lg shadow-sm p-4">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <Archive className="h-5 w-5 text-gray-600" />
-                    <h2 className="text-lg font-semibold">Projects Calendar</h2>
-                    <span className="text-sm text-gray-500">(Weekly view showing project assignments)</span>
+                    <h2 className="text-lg font-semibold">Projects Overview</h2>
+                    <span className="text-sm text-gray-500">(View who is working on what projects and when)</span>
                   </div>
                   <div className="flex items-center gap-4">
                     <div className="text-sm text-gray-600">
