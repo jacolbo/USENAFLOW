@@ -275,13 +275,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // If this is a shadow project, also mark the original as done
       if (project.isRolloverShadow && project.originalProjectId) {
+        const originalProject = await storage.getProject(project.originalProjectId);
         await storage.updateProject(project.originalProjectId, {
           status: ProjectStatus.DONE,
+          photosCompleted: originalProject?.toEditRemaining || originalProject?.selectedCount || 0, // Mark all photos as completed
         });
       }
       
       const updatedProject = await storage.updateProject(id, {
         status: ProjectStatus.DONE,
+        photosCompleted: project.toEditRemaining || project.selectedCount || 0, // Mark all photos as completed
       });
       
       if (!updatedProject) {
