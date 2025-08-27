@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { motion, AnimatePresence } from "framer-motion";
 import { apiRequest } from "@/lib/queryClient";
+import { motion, AnimatePresence } from "framer-motion";
 import { useToast } from "@/hooks/use-toast";
 import { LoginForm } from "@/components/login-form";
 import { RegisterForm } from "@/components/register-form";
@@ -17,7 +17,7 @@ import { WRUButton } from "@/components/WRUButton";
 import { useSSE } from "@/hooks/use-sse";
 import { User } from "@/lib/types";
 import { Project } from "@shared/schema";
-import { User as UserIcon, LogOut, Settings, Archive, ArrowRightLeft, DollarSign } from "lucide-react";
+import { User as UserIcon, LogOut, Settings, Archive, ArrowRightLeft, DollarSign, AlertTriangle } from "lucide-react";
 import logoImage from "@assets/USENA-FLOW_1754522507856.png";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -278,12 +278,304 @@ function CommissionView({ user }: { user: User }) {
   );
 }
 
+// Complaints View Component for Evans
+function ComplaintsView() {
+  const { data: complaints = [], isLoading, error } = useQuery<any[]>({
+    queryKey: ["/api/complaints"],
+  });
+
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+
+  const updateComplaintMutation = useMutation({
+    mutationFn: async ({ id, status }: { id: string; status: string }) => {
+      const response = await apiRequest("PATCH", `/api/complaints/${id}`, { 
+        status,
+        resolvedBy: status === "completed" ? "Evans" : null,
+        resolvedAt: status === "completed" ? new Date() : null
+      });
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/complaints"] });
+      toast({
+        title: "Complaint Updated",
+        description: "The complaint status has been updated successfully.",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Update Failed",
+        description: error.message || "Failed to update complaint. Please try again.",
+        variant: "destructive",
+      });
+    }
+  });
+
+  const deleteComplaintMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const response = await apiRequest("DELETE", `/api/complaints/${id}`);
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/complaints"] });
+      toast({
+        title: "Complaint Deleted",
+        description: "The complaint has been removed successfully.",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Delete Failed",
+        description: error.message || "Failed to delete complaint. Please try again.",
+        variant: "destructive",
+      });
+    }
+  });
+
+  if (isLoading) {
+    return (
+      <div className="bg-white rounded-lg shadow-sm p-8">
+        <div className="text-center">
+          <div className="text-lg font-medium text-gray-900 mb-2">Loading complaints...</div>
+          <div className="text-gray-500">Please wait while we fetch the latest issues</div>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="bg-white rounded-lg shadow-sm p-8">
+        <div className="text-center">
+          <div className="text-lg font-medium text-red-600 mb-2">Error loading complaints</div>
+          <div className="text-gray-500">Unable to fetch complaints at this time</div>
+        </div>
+      </div>
+    );
+  }
+
+  const pendingComplaints = complaints.filter((c) => c.status === "pending");
+  const inProgressComplaints = complaints.filter((c) => c.status === "in_progress");
+  const completedComplaints = complaints.filter((c) => c.status === "completed");
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="bg-white rounded-lg shadow-sm p-6">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <AlertTriangle className="h-6 w-6 text-yellow-600" />
+            <h2 className="text-xl font-semibold text-gray-900">Complaints Dashboard</h2>
+            <span className="text-sm text-gray-500">Issues reported by retouchers</span>
+          </div>
+          <div className="text-sm text-gray-600">
+            {complaints?.length || 0} total complaint{(complaints?.length || 0) !== 1 ? 's' : ''}
+          </div>
+        </div>
+      </div>
+
+      {/* Pending Issues */}
+      <div className="bg-white rounded-lg shadow-sm">
+        <div className="px-6 py-4 border-b border-gray-200">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-3 h-3 rounded-full bg-red-500"></div>
+              <h3 className="text-lg font-semibold text-gray-900">Pending Issues</h3>
+              <span className="text-sm text-gray-500">New complaints requiring attention</span>
+            </div>
+            <div className="text-sm text-gray-600">
+              {pendingComplaints.length} issue{pendingComplaints.length !== 1 ? 's' : ''}
+            </div>
+          </div>
+        </div>
+        <div className="px-6 py-4">
+          {pendingComplaints.length === 0 ? (
+            <div className="text-center py-8 text-gray-500">
+              No pending complaints - great job team! 🎉
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {pendingComplaints.map((complaint: any) => (
+                <ComplaintCard 
+                  key={complaint.id} 
+                  complaint={complaint} 
+                  onUpdateStatus={(status) => updateComplaintMutation.mutate({ id: complaint.id, status })}
+                  onDelete={() => deleteComplaintMutation.mutate(complaint.id)}
+                  isPending={updateComplaintMutation.isPending || deleteComplaintMutation.isPending}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* In Progress Issues */}
+      <div className="bg-white rounded-lg shadow-sm">
+        <div className="px-6 py-4 border-b border-gray-200">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-3 h-3 rounded-full bg-yellow-500"></div>
+              <h3 className="text-lg font-semibold text-gray-900">In Progress</h3>
+              <span className="text-sm text-gray-500">Currently being worked on</span>
+            </div>
+            <div className="text-sm text-gray-600">
+              {inProgressComplaints.length} issue{inProgressComplaints.length !== 1 ? 's' : ''}
+            </div>
+          </div>
+        </div>
+        <div className="px-6 py-4">
+          {inProgressComplaints.length === 0 ? (
+            <div className="text-center py-8 text-gray-500">
+              No issues currently in progress
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {inProgressComplaints.map((complaint: any) => (
+                <ComplaintCard 
+                  key={complaint.id} 
+                  complaint={complaint} 
+                  onUpdateStatus={(status) => updateComplaintMutation.mutate({ id: complaint.id, status })}
+                  onDelete={() => deleteComplaintMutation.mutate(complaint.id)}
+                  isPending={updateComplaintMutation.isPending || deleteComplaintMutation.isPending}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Completed Issues */}
+      <div className="bg-white rounded-lg shadow-sm">
+        <div className="px-6 py-4 border-b border-gray-200">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-3 h-3 rounded-full bg-green-500"></div>
+              <h3 className="text-lg font-semibold text-gray-900">Completed</h3>
+              <span className="text-sm text-gray-500">Resolved issues</span>
+            </div>
+            <div className="text-sm text-gray-600">
+              {completedComplaints.length} issue{completedComplaints.length !== 1 ? 's' : ''} resolved
+            </div>
+          </div>
+        </div>
+        <div className="px-6 py-4">
+          {completedComplaints.length === 0 ? (
+            <div className="text-center py-8 text-gray-500">
+              No completed complaints
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {completedComplaints.slice(0, 5).map((complaint: any) => (
+                <ComplaintCard 
+                  key={complaint.id} 
+                  complaint={complaint} 
+                  onUpdateStatus={(status) => updateComplaintMutation.mutate({ id: complaint.id, status })}
+                  onDelete={() => deleteComplaintMutation.mutate(complaint.id)}
+                  isPending={updateComplaintMutation.isPending || deleteComplaintMutation.isPending}
+                  isCompleted={true}
+                />
+              ))}
+              {completedComplaints.length > 5 && (
+                <div className="text-center text-sm text-gray-500 pt-2">
+                  Showing 5 most recent. {completedComplaints.length - 5} more completed issues.
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Individual Complaint Card Component
+function ComplaintCard({ complaint, onUpdateStatus, onDelete, isPending, isCompleted = false }: {
+  complaint: any;
+  onUpdateStatus: (status: string) => void;
+  onDelete: () => void;
+  isPending: boolean;
+  isCompleted?: boolean;
+}) {
+  const formatDate = (date: string) => {
+    return new Date(date).toLocaleDateString() + ' ' + new Date(date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  };
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case "pending": return "bg-red-100 text-red-800";
+      case "in_progress": return "bg-yellow-100 text-yellow-800";
+      case "completed": return "bg-green-100 text-green-800";
+      default: return "bg-gray-100 text-gray-800";
+    }
+  };
+
+  return (
+    <div className="border border-gray-200 rounded-lg p-4 hover:shadow-sm transition-shadow">
+      <div className="flex justify-between items-start mb-3">
+        <div className="flex-1">
+          <div className="flex items-center gap-2 mb-2">
+            <span className="text-sm font-medium text-gray-900">Project ID:</span>
+            <span className="text-sm text-gray-600">{complaint.projectId?.slice(0, 8)}...</span>
+            <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(complaint.status)}`}>
+              {complaint.status.replace('_', ' ')}
+            </span>
+          </div>
+          <p className="text-sm text-gray-800 mb-2">{complaint.issueDescription}</p>
+          <div className="flex items-center gap-4 text-xs text-gray-500">
+            <span>Reported by: {complaint.reportedBy}</span>
+            <span>Created: {formatDate(complaint.createdAt)}</span>
+            <span>Due: {formatDate(complaint.requestedDueDate)}</span>
+            {complaint.resolvedAt && <span>Resolved: {formatDate(complaint.resolvedAt)}</span>}
+          </div>
+        </div>
+        <div className="flex gap-2 ml-4">
+          {!isCompleted && (
+            <>
+              {complaint.status === "pending" && (
+                <Button
+                  size="sm"
+                  onClick={() => onUpdateStatus("in_progress")}
+                  disabled={isPending}
+                  className="bg-yellow-600 hover:bg-yellow-700 text-white"
+                >
+                  Start Work
+                </Button>
+              )}
+              {complaint.status === "in_progress" && (
+                <Button
+                  size="sm"
+                  onClick={() => onUpdateStatus("completed")}
+                  disabled={isPending}
+                  className="bg-green-600 hover:bg-green-700 text-white"
+                >
+                  Mark Complete
+                </Button>
+              )}
+            </>
+          )}
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={onDelete}
+            disabled={isPending}
+            className="text-red-600 hover:text-red-700 border-red-300 hover:border-red-400"
+          >
+            Delete
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function Dashboard() {
   const [user, setUser] = useState<User | null>(null);
   const [currentView, setCurrentView] = useState<'login' | 'register'>('login');
   const [showArchive, setShowArchive] = useState(false);
   const [showCommissions, setShowCommissions] = useState(false);
   const [showExtraPhotosSales, setShowExtraPhotosSales] = useState(false);
+  const [showComplaints, setShowComplaints] = useState(false);
   const [showTradeModal, setShowTradeModal] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -304,11 +596,13 @@ export default function Dashboard() {
     { id: "2", name: "Dr Asa", role: "Retoucher", value: "Retoucher2", abbr: "ASA" },
     { id: "3", name: "Lucky", role: "Retoucher", value: "Retoucher3", abbr: "LM" },
     { id: "4", name: "Anesu's Pops", role: "Admin", value: "Admin", abbr: "AP" },
+    { id: "5", name: "Evans", role: "Evans", value: "Evans", abbr: "EV" },
     // Default system users without IDs (cannot be edited/deleted)
     { name: "Admin", role: "Admin", value: "Admin" },
     { name: "Sales", role: "Sales", value: "Sales" },
     { name: "Workflow Manager", role: "LeadRetoucher", value: "LeadRetoucher" },
     { name: "Data Wrangler", role: "DataWrangler", value: "DataWrangler" },
+    { name: "Evans", role: "Evans", value: "Evans" },
   ]);
 
   // User credentials for login/register system
@@ -321,6 +615,7 @@ export default function Dashboard() {
     { id: "asa", username: "asa", password: "asa123", role: "Retoucher", name: "Dr Asa", abbreviation: "ASA" },
     // Single working account for Lucky with all his projects
     { id: "lucky", username: "lucky", password: "lucky123", role: "Retoucher", name: "Lucky", abbreviation: "LM" },
+    { id: "evans", username: "evans", password: "evans123", role: "Evans", name: "Evans", abbreviation: "EV" },
   ]);
 
   const { data: allProjects = [], isLoading } = useQuery<Project[]>({
@@ -758,6 +1053,7 @@ export default function Dashboard() {
                           setShowCommissions(!showCommissions);
                           setShowArchive(false);
                           setShowExtraPhotosSales(false);
+                          setShowComplaints(false);
                         }}
                         className="flex items-center gap-2 bg-green-50 hover:bg-green-100 border-green-200 text-green-700"
                       >
@@ -775,6 +1071,7 @@ export default function Dashboard() {
                           setShowExtraPhotosSales(!showExtraPhotosSales);
                           setShowArchive(false);
                           setShowCommissions(false);
+                          setShowComplaints(false);
                         }}
                         className="flex items-center gap-2 bg-purple-50 hover:bg-purple-100 border-purple-200 text-purple-700"
                       >
@@ -837,6 +1134,24 @@ export default function Dashboard() {
                           />
                         </DialogContent>
                       </Dialog>
+                    )}
+
+                    {/* Complaints Button - Only for Evans */}
+                    {user.role === "Evans" && (
+                      <Button 
+                        variant={showComplaints ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => {
+                          setShowComplaints(!showComplaints);
+                          setShowArchive(false);
+                          setShowCommissions(false);
+                          setShowExtraPhotosSales(false);
+                        }}
+                        className="flex items-center gap-2 bg-yellow-50 hover:bg-yellow-100 border-yellow-300 text-yellow-700"
+                      >
+                        <AlertTriangle className="h-4 w-4" />
+                        Complaints
+                      </Button>
                     )}
 
                     <Button 
@@ -912,13 +1227,18 @@ export default function Dashboard() {
               </div>
             </div>
           )}
+
+          {/* Evans Complaints Dashboard */}
+          {user.role === "Evans" && showComplaints && (
+            <ComplaintsView />
+          )}
           
           {/* Sales Dashboard - Payment & Delivery Management */}
           {user.role === "Sales" ? (
             <>
               {/* Extra Photos Sales View for Sales */}
               {showExtraPhotosSales ? (
-                <ExtraPhotosSalesView projects={allProjects.data || []} />
+                <ExtraPhotosSalesView projects={allProjects || []} />
               ) : (
             <div className="space-y-6">
               {/* Pending Payments Section */}
@@ -1017,12 +1337,12 @@ export default function Dashboard() {
           )}
           
           {/* Show the task table for the visible projects - only for non-Sales roles and not in commission view */}
-          {user.role !== "Sales" && !showCommissions && !showExtraPhotosSales && (
+          {user.role !== "Sales" && !showCommissions && !showExtraPhotosSales && !showComplaints && (
             <TaskTable projects={projects} user={user} allUsers={users} />
           )}
 
           {/* Team Progress Analytics - only in current view and not in commission view */}
-          {!showArchive && !showCommissions && !showExtraPhotosSales && (
+          {!showArchive && !showCommissions && !showExtraPhotosSales && !showComplaints && (
             <TeamAnalytics user={user} />
           )}
 

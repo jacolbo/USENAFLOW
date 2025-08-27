@@ -353,6 +353,26 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
     rollbackMutation.mutate(projectId);
   };
 
+  const reportIssueMutation = useMutation({
+    mutationFn: async (data: { projectId: string; issueDescription: string; requestedDueDate: string; reportedBy: string }) => {
+      const response = await apiRequest("POST", "/api/complaints", data);
+      return response.json();
+    },
+    onSuccess: () => {
+      toast({
+        title: "Issue Reported",
+        description: "Your issue has been reported to Evans for resolution.",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Report Failed",
+        description: error.message || "Failed to report the issue. Please try again.",
+        variant: "destructive",
+      });
+    }
+  });
+
   const handleRequestRevision = (projectId: string) => {
     updateProjectMutation.mutate({
       id: projectId,
@@ -426,6 +446,15 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
       id: projectId,
       endpoint: "rating",
       data: { rating },
+    });
+  };
+
+  const handleReportIssue = (projectId: string, issueDescription: string, requestedDueDate: string) => {
+    reportIssueMutation.mutate({
+      projectId,
+      issueDescription,
+      requestedDueDate,
+      reportedBy: user.name,
     });
   };
 
@@ -1725,6 +1754,31 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
                                       />
                                     </DialogContent>
                                   </Dialog>
+                                  <Dialog>
+                                    <DialogTrigger asChild>
+                                      <Button 
+                                        size="sm" 
+                                        variant="outline"
+                                        className="text-red-600 hover:text-red-700 border-red-300 hover:border-red-400"
+                                        data-testid={`button-report-${project.id}`}
+                                      >
+                                        Report Issue
+                                      </Button>
+                                    </DialogTrigger>
+                                    <DialogContent>
+                                      <DialogHeader>
+                                        <DialogTitle>Report Issue</DialogTitle>
+                                        <DialogDescription>
+                                          Report an issue with {formatClientDisplay(project)} to Evans for resolution.
+                                        </DialogDescription>
+                                      </DialogHeader>
+                                      <ReportIssueDialog 
+                                        project={project} 
+                                        onReport={handleReportIssue}
+                                        formatClientDisplay={formatClientDisplay}
+                                      />
+                                    </DialogContent>
+                                  </Dialog>
                                 </>
                               )}
 
@@ -2110,6 +2164,105 @@ function RolloverDialog({ project, onRollover, formatClientDisplay }: RolloverDi
               </>
             ) : (
               'Rollover'
+            )}
+          </Button>
+        </DialogClose>
+      </div>
+    </div>
+  );
+}
+
+interface ReportIssueDialogProps {
+  project: any;
+  onReport: (projectId: string, issueDescription: string, requestedDueDate: string) => void;
+  formatClientDisplay: (project: any) => string;
+}
+
+function ReportIssueDialog({ project, onReport, formatClientDisplay }: ReportIssueDialogProps) {
+  const [issueDescription, setIssueDescription] = useState("");
+  const [requestedDueDate, setRequestedDueDate] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  
+  const handleSubmit = async () => {
+    if (!issueDescription.trim() || !requestedDueDate) {
+      return; // Validation handled by form state
+    }
+    
+    setIsSubmitting(true);
+    try {
+      await onReport(project.id, issueDescription.trim(), requestedDueDate);
+      setIssueDescription(""); // Reset form
+      setRequestedDueDate("");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+  
+  // Get tomorrow's date as minimum date
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const minDate = tomorrow.toISOString().split('T')[0];
+  
+  return (
+    <div className="space-y-4">
+      <div className="space-y-2">
+        <Label htmlFor="issue-description">Issue Description</Label>
+        <textarea
+          id="issue-description"
+          value={issueDescription}
+          onChange={(e) => setIssueDescription(e.target.value)}
+          placeholder="Describe the issue you're experiencing..."
+          className="w-full min-h-[100px] p-2 border border-gray-300 rounded-md resize-vertical"
+          rows={4}
+        />
+      </div>
+      
+      <div className="space-y-2">
+        <Label htmlFor="requested-due-date">Requested Resolution Date</Label>
+        <Input
+          id="requested-due-date"
+          type="date"
+          min={minDate}
+          value={requestedDueDate}
+          onChange={(e) => setRequestedDueDate(e.target.value)}
+          className="w-full"
+        />
+        <p className="text-sm text-gray-600">
+          When do you need this issue resolved?
+        </p>
+      </div>
+      
+      <div className="bg-gray-50 p-3 rounded-md">
+        <p className="text-sm">
+          <strong>Project:</strong> {formatClientDisplay(project)}
+        </p>
+        <p className="text-sm">
+          <strong>Status:</strong> {project.status}
+        </p>
+        <p className="text-sm">
+          <strong>Assigned to:</strong> {project.assignedTo || "Not assigned"}
+        </p>
+      </div>
+      
+      <div className="flex justify-end gap-2">
+        <DialogClose asChild>
+          <Button variant="outline" disabled={isSubmitting}>
+            Cancel
+          </Button>
+        </DialogClose>
+        <DialogClose asChild>
+          <Button 
+            onClick={handleSubmit}
+            disabled={isSubmitting || !issueDescription.trim() || !requestedDueDate}
+            className="bg-red-600 hover:bg-red-700 text-white"
+          >
+            {isSubmitting ? (
+              <>
+                <LoadingSpinner size={14} className="mr-2" />
+                Reporting...
+              </>
+            ) : (
+              'Report Issue'
             )}
           </Button>
         </DialogClose>

@@ -85,6 +85,19 @@ export const projectEvents = pgTable("project_events", {
   createdAt: timestamp("created_at").notNull().default(sql`now()`),
 });
 
+// Complaints system for Evans to manage retoucher reports
+export const complaints = pgTable("complaints", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  projectId: varchar("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
+  reportedBy: text("reported_by").notNull(), // retoucher who reported the issue
+  issueDescription: text("issue_description").notNull(),
+  requestedDueDate: timestamp("requested_due_date").notNull(),
+  status: text("status").notNull().default("pending"), // "pending", "in_progress", "completed"
+  resolvedBy: text("resolved_by"), // Evans or whoever resolves it
+  resolvedAt: timestamp("resolved_at"),
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+});
+
 export const insertUserSchema = createInsertSchema(users).pick({
   username: true,
   password: true,
@@ -159,8 +172,20 @@ export const insertProjectEventSchema = createInsertSchema(projectEvents).omit({
   createdAt: true,
 });
 
+export const insertComplaintSchema = createInsertSchema(complaints).omit({
+  id: true,
+  createdAt: true,
+  status: true,
+  resolvedBy: true,
+  resolvedAt: true,
+}).extend({
+  requestedDueDate: z.string().transform((str) => new Date(str)),
+});
+
 export type ProjectEvent = typeof projectEvents.$inferSelect;
 export type InsertProjectEvent = z.infer<typeof insertProjectEventSchema>;
+export type Complaint = typeof complaints.$inferSelect;
+export type InsertComplaint = z.infer<typeof insertComplaintSchema>;
 
 export const UserRoles = {
   ADMIN: "Admin",

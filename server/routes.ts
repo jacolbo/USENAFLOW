@@ -1073,5 +1073,56 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Complaints API endpoints for Evans
+  app.get("/api/complaints", async (req, res) => {
+    try {
+      const { status } = req.query;
+      const complaints = status ? 
+        await storage.getComplaintsByStatus(status as string) : 
+        await storage.getAllComplaints();
+      res.json(complaints);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch complaints" });
+    }
+  });
+
+  app.post("/api/complaints", async (req, res) => {
+    try {
+      const { insertComplaintSchema } = await import("@shared/schema");
+      const validatedData = insertComplaintSchema.parse(req.body);
+      const complaint = await storage.createComplaint(validatedData);
+      res.status(201).json(complaint);
+    } catch (error) {
+      res.status(400).json({ error: "Failed to create complaint" });
+    }
+  });
+
+  app.patch("/api/complaints/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const updates = req.body;
+      const complaint = await storage.updateComplaint(id, updates);
+      if (!complaint) {
+        return res.status(404).json({ error: "Complaint not found" });
+      }
+      res.json(complaint);
+    } catch (error) {
+      res.status(400).json({ error: "Failed to update complaint" });
+    }
+  });
+
+  app.delete("/api/complaints/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const success = await storage.deleteComplaint(id);
+      if (!success) {
+        return res.status(404).json({ error: "Complaint not found" });
+      }
+      res.json({ success: true });
+    } catch (error) {
+      res.status(400).json({ error: "Failed to delete complaint" });
+    }
+  });
+
   return httpServer;
 }

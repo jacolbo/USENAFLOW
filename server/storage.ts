@@ -1,4 +1,4 @@
-import { type User, type InsertUser, type Project, type InsertProject, type UpdateProject, type ProjectNote, type InsertProjectNote, type UpdateProjectNote, type TradeOffer, type InsertTradeOffer, type UpdateTradeOffer, type WranglerCommission, type InsertWranglerCommission, type ProjectEvent, type InsertProjectEvent, ProjectStatus, TradeOfferStatus, users, projects, projectNotes, tradeOffers, wranglerCommissions, projectEvents } from "@shared/schema";
+import { type User, type InsertUser, type Project, type InsertProject, type UpdateProject, type ProjectNote, type InsertProjectNote, type UpdateProjectNote, type TradeOffer, type InsertTradeOffer, type UpdateTradeOffer, type WranglerCommission, type InsertWranglerCommission, type ProjectEvent, type InsertProjectEvent, type Complaint, type InsertComplaint, ProjectStatus, TradeOfferStatus, users, projects, projectNotes, tradeOffers, wranglerCommissions, projectEvents, complaints } from "@shared/schema";
 import { db } from "./db";
 import { eq, sql, asc } from "drizzle-orm";
 import { randomUUID } from "crypto";
@@ -35,6 +35,14 @@ export interface IStorage {
   // Project event methods for rollover tracking
   getProjectEvents(projectId: string): Promise<ProjectEvent[]>;
   createProjectEvent(event: InsertProjectEvent): Promise<ProjectEvent>;
+  
+  // Complaints methods for Evans
+  getAllComplaints(): Promise<Complaint[]>;
+  getComplaint(id: string): Promise<Complaint | undefined>;
+  getComplaintsByStatus(status: string): Promise<Complaint[]>;
+  createComplaint(complaint: InsertComplaint): Promise<Complaint>;
+  updateComplaint(id: string, updates: Partial<Complaint>): Promise<Complaint | undefined>;
+  deleteComplaint(id: string): Promise<boolean>;
 }
 
 export class MemStorage implements IStorage {
@@ -365,6 +373,31 @@ export class MemStorage implements IStorage {
     // Not implemented for MemStorage
     throw new Error("Not implemented in MemStorage");
   }
+
+  // Complaints methods for Evans (Not implemented for MemStorage)
+  async getAllComplaints(): Promise<Complaint[]> {
+    return [];
+  }
+
+  async getComplaint(id: string): Promise<Complaint | undefined> {
+    return undefined;
+  }
+
+  async getComplaintsByStatus(status: string): Promise<Complaint[]> {
+    return [];
+  }
+
+  async createComplaint(complaint: InsertComplaint): Promise<Complaint> {
+    throw new Error("Not implemented in MemStorage");
+  }
+
+  async updateComplaint(id: string, updates: Partial<Complaint>): Promise<Complaint | undefined> {
+    return undefined;
+  }
+
+  async deleteComplaint(id: string): Promise<boolean> {
+    return false;
+  }
 }
 
 // Database Storage Implementation
@@ -612,6 +645,42 @@ export class DatabaseStorage implements IStorage {
       .values(event)
       .returning();
     return projectEvent;
+  }
+
+  // Complaints methods for Evans
+  async getAllComplaints(): Promise<Complaint[]> {
+    return await db.select().from(complaints).orderBy(asc(complaints.createdAt));
+  }
+
+  async getComplaint(id: string): Promise<Complaint | undefined> {
+    const [complaint] = await db.select().from(complaints).where(eq(complaints.id, id));
+    return complaint || undefined;
+  }
+
+  async getComplaintsByStatus(status: string): Promise<Complaint[]> {
+    return await db.select().from(complaints).where(eq(complaints.status, status)).orderBy(asc(complaints.createdAt));
+  }
+
+  async createComplaint(insertComplaint: InsertComplaint): Promise<Complaint> {
+    const [complaint] = await db
+      .insert(complaints)
+      .values(insertComplaint)
+      .returning();
+    return complaint;
+  }
+
+  async updateComplaint(id: string, updates: Partial<Complaint>): Promise<Complaint | undefined> {
+    const [complaint] = await db
+      .update(complaints)
+      .set(updates)
+      .where(eq(complaints.id, id))
+      .returning();
+    return complaint || undefined;
+  }
+
+  async deleteComplaint(id: string): Promise<boolean> {
+    const result = await db.delete(complaints).where(eq(complaints.id, id));
+    return result.rowCount ? result.rowCount > 0 : false;
   }
 }
 
