@@ -273,15 +273,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "Project not found" });
       }
       
-      // If this is a shadow project, also mark the original as done (but don't update its completion count)
+      // If this is a shadow project, also mark the original for review (but don't update its completion count)
       if (project.isRolloverShadow && project.originalProjectId) {
         await storage.updateProject(project.originalProjectId, {
-          status: ProjectStatus.DONE,
+          status: ProjectStatus.REVIEW,
         });
       }
       
       const updatedProject = await storage.updateProject(id, {
-        status: ProjectStatus.DONE,
+        status: ProjectStatus.REVIEW, // Send to Review for sales approval, not directly to Done
         photosCompleted: project.toEditRemaining || project.selectedCount || 0, // Mark all photos as completed
       });
       
@@ -296,7 +296,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         eventDate: new Date(),
         photosCompleted: project.toEditRemaining || project.selectedCount,
         photosRemaining: 0,
-        details: project.isRolloverShadow ? "Shadow project marked as complete" : "Project marked as complete",
+        details: project.isRolloverShadow ? "Shadow project sent to review" : "Project sent to review",
         createdBy: "system"
       });
       
