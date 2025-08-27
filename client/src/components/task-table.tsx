@@ -48,7 +48,7 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
   
   // Helper function to get complaint status for a project
   const getProjectComplaintStatus = (projectId: string) => {
-    if (!complaints || complaints.length === 0) return 'none';
+    if (!complaints || !Array.isArray(complaints) || complaints.length === 0) return 'none';
     
     const projectComplaints = complaints.filter((complaint: any) => complaint.projectId === projectId);
     if (projectComplaints.length === 0) return 'none';
