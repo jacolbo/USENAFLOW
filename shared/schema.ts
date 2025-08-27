@@ -26,6 +26,7 @@ export const projects = pgTable("projects", {
   createdAt: timestamp("created_at").notNull().default(sql`now()`),
   // Rollover tracking fields
   toEditRemaining: integer("to_edit_remaining").notNull().default(0),
+  photosCompleted: integer("photos_completed").notNull().default(0),
   rolloverCount: integer("rollover_count").notNull().default(0),
   lastRolloverDate: timestamp("last_rollover_date"),
   // Shadow project fields

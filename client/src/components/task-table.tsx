@@ -429,6 +429,14 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
     });
   };
 
+  const updatePhotosCompleted = (projectId: string, photosCompleted: number) => {
+    updateProjectMutation.mutate({
+      id: projectId,
+      endpoint: "photos-completed",
+      data: { photosCompleted },
+    });
+  };
+
   const changeDueDateMutation = useMutation({
     mutationFn: async ({ id, dueDate }: { id: string; dueDate: string }) => {
       const response = await apiRequest("PATCH", `/api/projects/${id}`, { dueDate });
@@ -948,10 +956,11 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
                   {(() => {
                     const totalProjects = group.projects.length;
                     const assignedProjects = group.projects.filter(p => p.assignedTo && p.assignedTo !== "__UNASSIGN__").length;
-                    const totalPhotos = group.projects.reduce((sum, p) => sum + (p.selectedCount || 0), 0);
+                    const totalPhotos = group.projects.reduce((sum, p) => sum + (p.toEditRemaining || p.selectedCount || 0), 0);
+                    const completedPhotos = group.projects.reduce((sum, p) => sum + (p.photosCompleted || 0), 0);
                     const assignedPhotos = group.projects
                       .filter(p => p.assignedTo && p.assignedTo !== "__UNASSIGN__")
-                      .reduce((sum, p) => sum + (p.selectedCount || 0), 0);
+                      .reduce((sum, p) => sum + (p.toEditRemaining || p.selectedCount || 0), 0);
                     
                     return (
                       <div className="flex items-center gap-4">
@@ -1001,11 +1010,11 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
                             📸
                           </motion.span>
                           <motion.span 
-                            className="text-blue-600 font-semibold"
-                            animate={{ scale: assignedPhotos > 0 ? [1, 1.1, 1] : 1 }}
+                            className="text-green-600 font-semibold"
+                            animate={{ scale: completedPhotos > 0 ? [1, 1.1, 1] : 1 }}
                             transition={{ duration: 0.5, ease: "easeInOut" }}
                           >
-                            {assignedPhotos}
+                            {completedPhotos}
                           </motion.span>
                           <span>/</span>
                           <motion.span 
@@ -1351,6 +1360,7 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
                         <>
                           <TableHead>Client</TableHead>
                           <TableHead>To Edit</TableHead>
+                          <TableHead>Done</TableHead>
                           <TableHead>Due</TableHead>
                           <TableHead>Retoucher</TableHead>
                           <TableHead>Status</TableHead>
@@ -1553,6 +1563,33 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
                               <span className="text-sm font-medium text-purple-600">
                                 {project.toEditRemaining || project.selectedCount}
                               </span>
+                            </TableCell>
+                            {/* Done photos column for non-Sales */}
+                            <TableCell>
+                              <div className="flex items-center gap-1">
+                                <button
+                                  onClick={() => updatePhotosCompleted(project.id, Math.max(0, (project.photosCompleted || 0) - 1))}
+                                  className="text-red-500 hover:text-red-700 text-xs px-1"
+                                  disabled={!project.photosCompleted}
+                                  data-testid={`button-decrease-completed-${project.id}`}
+                                >
+                                  -
+                                </button>
+                                <span 
+                                  className="text-sm font-medium text-green-600 min-w-[20px] text-center cursor-pointer"
+                                  onClick={() => updatePhotosCompleted(project.id, (project.photosCompleted || 0) + 1)}
+                                  data-testid={`text-completed-count-${project.id}`}
+                                >
+                                  {project.photosCompleted || 0}
+                                </span>
+                                <button
+                                  onClick={() => updatePhotosCompleted(project.id, (project.photosCompleted || 0) + 1)}
+                                  className="text-green-500 hover:text-green-700 text-xs px-1"
+                                  data-testid={`button-increase-completed-${project.id}`}
+                                >
+                                  +
+                                </button>
+                              </div>
                             </TableCell>
                             <TableCell>
                               {(user.role === 'Retoucher' || ['Retoucher1', 'Retoucher2', 'Retoucher3'].includes(user.role)) ? (

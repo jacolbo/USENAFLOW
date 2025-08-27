@@ -553,6 +553,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Update photos completed count (retoucher action)
+  app.patch("/api/projects/:id/photos-completed", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { photosCompleted } = req.body;
+      
+      if (photosCompleted < 0) {
+        return res.status(400).json({ error: "Photos completed cannot be negative" });
+      }
+      
+      const updatedProject = await storage.updateProject(id, {
+        photosCompleted: parseInt(photosCompleted, 10),
+      });
+      
+      if (!updatedProject) {
+        return res.status(404).json({ error: "Project not found" });
+      }
+      
+      res.json(updatedProject);
+    } catch (error) {
+      res.status(400).json({ error: "Failed to update photos completed" });
+    }
+  });
+
   // Duplicate project (admin/sales/data wrangler action)
   app.post("/api/projects/:id/duplicate", async (req, res) => {
     try {

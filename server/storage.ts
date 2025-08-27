@@ -179,6 +179,7 @@ export class MemStorage implements IStorage {
       createdAt: new Date(),
       // Shadow project fields
       toEditRemaining: insertProject.toEditRemaining || insertProject.selectedCount,
+      photosCompleted: insertProject.photosCompleted || 0,
       rolloverCount: insertProject.rolloverCount || 0,
       lastRolloverDate: insertProject.lastRolloverDate || null,
       originalProjectId: insertProject.originalProjectId || null,
@@ -427,6 +428,7 @@ export class DatabaseStorage implements IStorage {
         extraPhotoPrice: insertProject.extraPhotoPrice || null,
         // Shadow project fields - explicitly include them
         toEditRemaining: insertProject.toEditRemaining || insertProject.selectedCount,
+        photosCompleted: insertProject.photosCompleted || 0,
         rolloverCount: insertProject.rolloverCount || 0,
         lastRolloverDate: insertProject.lastRolloverDate || null,
         originalProjectId: insertProject.originalProjectId || null,
