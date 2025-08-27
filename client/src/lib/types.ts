@@ -14,6 +14,7 @@ export const ROLE_MAPPINGS = {
   Retoucher1: { role: "Retoucher", name: "Retoucher 1", value: "Retoucher1" },
   Retoucher2: { role: "Retoucher", name: "Retoucher 2", value: "Retoucher2" },
   Retoucher3: { role: "Retoucher", name: "Retoucher 3", value: "Retoucher3" },
+  Evans: { role: "Evans", name: "Evans", value: "Evans" },
 };
 
 // Helper function to format retoucher abbreviations for calendar display

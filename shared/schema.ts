@@ -169,6 +169,7 @@ export const UserRoles = {
   RETOUCHER_1: "Retoucher1",
   RETOUCHER_2: "Retoucher2",
   RETOUCHER_3: "Retoucher3",
+  EVANS: "Evans",
 } as const;
 
 export const ProjectStatus = {
