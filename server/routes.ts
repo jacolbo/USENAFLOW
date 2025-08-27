@@ -393,11 +393,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const tomorrow = new Date();
       tomorrow.setDate(tomorrow.getDate() + 1);
       
-      // Update original project to "Rolled Over" status
+      // Update original project to "Rolled Over" status and record completed photos
       const updatedOriginal = await storage.updateProject(id, {
         status: ProjectStatus.ROLLED_OVER,
         rolloverCount: (project.rolloverCount || 0) + 1,
         lastRolloverDate: new Date(),
+        photosCompleted: photosCompleted, // Record how many photos were completed on this project
       });
       
       if (!updatedOriginal) {
