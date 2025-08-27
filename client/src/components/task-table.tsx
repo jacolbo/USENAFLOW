@@ -35,9 +35,58 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
   const queryClient = useQueryClient();
   const { toast } = useToast();
   
+  // Fetch complaints for all projects to show report button status
+  const { data: complaints = [] } = useQuery({
+    queryKey: ['/api/complaints'],
+    enabled: hasRetouchingAbilities(user.role),
+  });
+  
   // Helper function to check if user has retouching abilities
   const hasRetouchingAbilities = (userRole: string) => {
     return ['Admin', 'LeadRetoucher', 'Retoucher'].includes(userRole);
+  };
+  
+  // Helper function to get complaint status for a project
+  const getProjectComplaintStatus = (projectId: string) => {
+    if (!complaints || complaints.length === 0) return 'none';
+    
+    const projectComplaints = complaints.filter((complaint: any) => complaint.projectId === projectId);
+    if (projectComplaints.length === 0) return 'none';
+    
+    // Check if there are any resolved complaints
+    const hasResolved = projectComplaints.some((complaint: any) => complaint.status === 'resolved');
+    if (hasResolved) return 'resolved';
+    
+    // Check if there are any pending/in-progress complaints
+    const hasPending = projectComplaints.some((complaint: any) => 
+      complaint.status === 'pending' || complaint.status === 'in_progress'
+    );
+    if (hasPending) return 'reported';
+    
+    return 'none';
+  };
+  
+  // Helper function to get report button styling based on complaint status
+  const getReportButtonStyling = (projectId: string) => {
+    const status = getProjectComplaintStatus(projectId);
+    
+    switch (status) {
+      case 'resolved':
+        return {
+          className: "text-green-600 hover:text-green-700 border-green-300 hover:border-green-400 bg-green-50 hover:bg-green-100",
+          text: "Issue Resolved"
+        };
+      case 'reported':
+        return {
+          className: "text-orange-600 hover:text-orange-700 border-orange-300 hover:border-orange-400 bg-orange-50 hover:bg-orange-100",
+          text: "Issue Reported"
+        };
+      default:
+        return {
+          className: "text-gray-600 hover:text-gray-700 border-gray-300 hover:border-gray-400 bg-gray-50 hover:bg-gray-100",
+          text: "Report Issue"
+        };
+    }
   };
   
   // State for corrections modal
@@ -361,6 +410,8 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
       return response.json();
     },
     onSuccess: () => {
+      // Invalidate complaints query to update button status
+      queryClient.invalidateQueries({ queryKey: ['/api/complaints'] });
       toast({
         title: "Issue Reported",
         description: "Your issue has been reported to Evans for resolution.",
@@ -1764,14 +1815,19 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
                                   </Dialog>
                                   <Dialog>
                                     <DialogTrigger asChild>
-                                      <Button 
-                                        size="sm" 
-                                        variant="outline"
-                                        className="text-red-600 hover:text-red-700 border-red-300 hover:border-red-400"
-                                        data-testid={`button-report-${project.id}`}
-                                      >
-                                        Report Issue
-                                      </Button>
+                                      {(() => {
+                                        const buttonStyle = getReportButtonStyling(project.id);
+                                        return (
+                                          <Button 
+                                            size="sm" 
+                                            variant="outline"
+                                            className={buttonStyle.className}
+                                            data-testid={`button-report-${project.id}`}
+                                          >
+                                            {buttonStyle.text}
+                                          </Button>
+                                        );
+                                      })()}
                                     </DialogTrigger>
                                     <DialogContent>
                                       <DialogHeader>
