@@ -1344,25 +1344,20 @@ export default function Dashboard() {
             <TaskTable projects={projects} user={user} allUsers={users} />
           )}
 
-          {/* Evans sees regular projects calendar for visibility into who is working on what */}
-          {user.role === "Evans" && !showCommissions && !showExtraPhotosSales && (
-            <>
-              <div className="bg-white rounded-lg shadow-sm p-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Archive className="h-5 w-5 text-gray-600" />
-                    <h2 className="text-lg font-semibold">Projects Overview</h2>
-                    <span className="text-sm text-gray-500">(View who is working on what projects and when)</span>
-                  </div>
-                  <div className="flex items-center gap-4">
-                    <div className="text-sm text-gray-600">
-                      {projects.length} project{projects.length !== 1 ? 's' : ''} total
-                    </div>
-                  </div>
-                </div>
+          {/* Evans Complaints Management */}
+          {user.role === "Evans" && showComplaints && (
+            <ComplaintsView />
+          )}
+
+          {/* Evans default view when no specific tab is selected */}
+          {user.role === "Evans" && !showComplaints && (
+            <div className="bg-white rounded-lg shadow-sm p-8">
+              <div className="text-center">
+                <AlertTriangle className="h-12 w-12 text-yellow-500 mx-auto mb-4" />
+                <h2 className="text-xl font-semibold mb-2">Complaints Management Dashboard</h2>
+                <p className="text-gray-600 mb-4">Click the "Complaints" button above to view and manage retoucher issues.</p>
               </div>
-              <TaskTable projects={projects} user={user} allUsers={users} />
-            </>
+            </div>
           )}
 
           {/* Team Progress Analytics - only in current view and not in commission view */}
