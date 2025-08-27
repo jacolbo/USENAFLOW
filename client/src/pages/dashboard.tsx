@@ -1235,8 +1235,8 @@ export default function Dashboard() {
             </div>
           )}
 
-          {/* Evans Complaints Calendar */}
-          {user.role === "Evans" && showComplaints && (
+          {/* Evans Complaints Calendar - Only content for Evans */}
+          {user.role === "Evans" ? (
             <ComplaintsCalendar 
               complaints={complaints} 
               user={{
@@ -1263,10 +1263,7 @@ export default function Dashboard() {
                 }
               }}
             />
-          )}
-          
-          {/* Sales Dashboard - Payment & Delivery Management */}
-          {user.role === "Sales" ? (
+          ) : user.role === "Sales" ? (
             <>
               {/* Extra Photos Sales View for Sales */}
               {showExtraPhotosSales ? (
@@ -1366,14 +1363,15 @@ export default function Dashboard() {
           )}
           
           {/* Show the task table for the visible projects - only for non-Sales roles and not in commission view */}
-          {user.role !== "Sales" && !showCommissions && !showExtraPhotosSales && !showComplaints && (
+          {user.role !== "Sales" && user.role !== "Evans" && !showCommissions && !showExtraPhotosSales && !showComplaints && (
             <TaskTable projects={projects} user={user} allUsers={users} />
           )}
 
           {/* Team Progress Analytics - only in current view and not in commission view */}
-          {!showArchive && !showCommissions && !showExtraPhotosSales && !showComplaints && (
+          {!showArchive && !showCommissions && !showExtraPhotosSales && !showComplaints && user.role !== "Evans" && (
             <TeamAnalytics user={user} />
           )}
+
 
 
         </div>
