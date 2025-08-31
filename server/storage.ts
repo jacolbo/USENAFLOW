@@ -76,6 +76,13 @@ export class MemStorage implements IStorage {
         rating: null,
         deliveredAt: null,
         createdAt: new Date(),
+        toEditRemaining: 12,
+        photosCompleted: 0,
+        rolloverCount: 0,
+        lastRolloverDate: null,
+        originalProjectId: null,
+        isRolloverShadow: false,
+        originalDueDate: null,
       },
       {
         id: "2",
@@ -91,6 +98,13 @@ export class MemStorage implements IStorage {
         rating: null,
         deliveredAt: null,
         createdAt: new Date(),
+        toEditRemaining: 5,
+        photosCompleted: 0,
+        rolloverCount: 0,
+        lastRolloverDate: null,
+        originalProjectId: null,
+        isRolloverShadow: false,
+        originalDueDate: null,
       },
       {
         id: "3",
@@ -106,6 +120,13 @@ export class MemStorage implements IStorage {
         rating: null,
         deliveredAt: null,
         createdAt: new Date(),
+        toEditRemaining: 8,
+        photosCompleted: 0,
+        rolloverCount: 0,
+        lastRolloverDate: null,
+        originalProjectId: null,
+        isRolloverShadow: false,
+        originalDueDate: null,
       },
       {
         id: "4",
@@ -121,6 +142,13 @@ export class MemStorage implements IStorage {
         rating: 5,
         deliveredAt: new Date(2025, 7, 3), // Aug 3, 2025
         createdAt: new Date(),
+        toEditRemaining: 10,
+        photosCompleted: 10,
+        rolloverCount: 0,
+        lastRolloverDate: null,
+        originalProjectId: null,
+        isRolloverShadow: false,
+        originalDueDate: null,
       },
       {
         id: "5",
@@ -136,6 +164,13 @@ export class MemStorage implements IStorage {
         rating: null,
         deliveredAt: null,
         createdAt: new Date(),
+        toEditRemaining: 4,
+        photosCompleted: 0,
+        rolloverCount: 0,
+        lastRolloverDate: null,
+        originalProjectId: null,
+        isRolloverShadow: false,
+        originalDueDate: null,
       },
     ];
 
@@ -181,18 +216,19 @@ export class MemStorage implements IStorage {
       extras,
       status,
       invoicePaid,
-      assignedTo: insertProject.assignedTo || null,
+      assignedTo: insertProject.assignedTo ?? null,
       rating: null,
       deliveredAt: null,
       createdAt: new Date(),
+      extraPhotoPrice: insertProject.extraPhotoPrice ?? null,
       // Shadow project fields
-      toEditRemaining: insertProject.toEditRemaining || insertProject.selectedCount,
-      photosCompleted: insertProject.photosCompleted || 0,
-      rolloverCount: insertProject.rolloverCount || 0,
-      lastRolloverDate: insertProject.lastRolloverDate || null,
-      originalProjectId: insertProject.originalProjectId || null,
-      isRolloverShadow: insertProject.isRolloverShadow || false,
-      originalDueDate: insertProject.originalDueDate || null,
+      toEditRemaining: insertProject.toEditRemaining ?? insertProject.selectedCount,
+      photosCompleted: insertProject.photosCompleted ?? 0,
+      rolloverCount: insertProject.rolloverCount ?? 0,
+      lastRolloverDate: insertProject.lastRolloverDate ?? null,
+      originalProjectId: insertProject.originalProjectId ?? null,
+      isRolloverShadow: insertProject.isRolloverShadow ?? false,
+      originalDueDate: insertProject.originalDueDate ?? null,
     };
     
     this.projects.set(id, project);
@@ -290,6 +326,9 @@ export class MemStorage implements IStorage {
       completedAt: null,
       acceptedBy: null,
       acceptedProjectId: null,
+      message: insertOffer.message ?? null,
+      targetUser: insertOffer.targetUser ?? null,
+      requestedProjectId: insertOffer.requestedProjectId ?? null,
     };
     this.tradeOffers.set(id, offer);
     return offer;
@@ -458,7 +497,7 @@ export class DatabaseStorage implements IStorage {
         invoicePaid,
         assignedTo: insertProject.assignedTo || null,
         rating: null,
-        extraPhotoPrice: insertProject.extraPhotoPrice || null,
+        extraPhotoPrice: insertProject.extraPhotoPrice ?? null,
         // Shadow project fields - explicitly include them
         toEditRemaining: insertProject.toEditRemaining || insertProject.selectedCount,
         photosCompleted: insertProject.photosCompleted || 0,
@@ -661,7 +700,7 @@ export class DatabaseStorage implements IStorage {
         resolvedAt: complaints.resolvedAt,
         imageUrls: complaints.imageUrls,
         createdAt: complaints.createdAt,
-        projectName: projects.clientName,
+        projectName: sql<string>`COALESCE(${projects.clientName}, 'Unknown Project')`,
       })
       .from(complaints)
       .leftJoin(projects, eq(complaints.projectId, projects.id))
@@ -686,7 +725,7 @@ export class DatabaseStorage implements IStorage {
         resolvedAt: complaints.resolvedAt,
         imageUrls: complaints.imageUrls,
         createdAt: complaints.createdAt,
-        projectName: projects.clientName,
+        projectName: sql<string>`COALESCE(${projects.clientName}, 'Unknown Project')`,
       })
       .from(complaints)
       .leftJoin(projects, eq(complaints.projectId, projects.id))
