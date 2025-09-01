@@ -888,13 +888,13 @@ export default function Dashboard() {
   // Manual rollover mutation
   const manualRolloverMutation = useMutation({
     mutationFn: async () => {
-      const response = await apiRequest("POST", "/api/rollover-next-week");
+      const response = await apiRequest("POST", "/api/rollover");
       return response.json();
     },
     onSuccess: () => {
       toast({
         title: "Rollover Complete",
-        description: "Unassigned projects have been moved to next week.",
+        description: "Unassigned projects from past weeks have been moved to this week.",
       });
       queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
     },
@@ -932,7 +932,7 @@ export default function Dashboard() {
   });
 
   const handleManualRollover = () => {
-    if (window.confirm("Are you sure you want to move all unassigned projects from this Sunday to next Sunday?")) {
+    if (window.confirm("Are you sure you want to move all unassigned projects from past weeks to this week?")) {
       manualRolloverMutation.mutate();
     }
   };
