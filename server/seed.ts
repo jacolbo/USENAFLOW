@@ -2,6 +2,12 @@ import { db } from "./db";
 import { projects, ProjectStatus } from "@shared/schema";
 
 async function seed() {
+  // Only seed in development environment
+  if (process.env.NODE_ENV !== 'development') {
+    console.log("Not in development environment, skipping seed.");
+    return;
+  }
+
   console.log("Seeding database with sample data...");
 
   // Check if projects already exist
