@@ -887,8 +887,10 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
   if (user.role === "Retoucher") {
     visibleProjects = projects.filter(p => 
       p.assignedTo && 
-      p.assignedTo.toLowerCase() === user.name.toLowerCase() && 
-      p.status !== "Delivered"
+      p.assignedTo.toLowerCase() === user.name.toLowerCase() &&
+      // Hide rollover shadow projects that are marked as Done (completed)
+      !(p.isRolloverShadow && p.status === "Done")
+      // Show all other assigned projects including delivered ones
     );
   }
   
