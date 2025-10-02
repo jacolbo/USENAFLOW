@@ -1,0 +1,34 @@
+Role: You are a senior full-stack engineer working on Usena Flow (Postgres + Node/TypeScript + Fastify). Implement secure, revocable, expiring custom links for client galleries/albums (“client’s folder”). Keep it additive and production-safe.
+Tech constraints
+DB: PostgreSQL via pg
+API: Fastify + TypeScript
+Auth: short-lived JWT for public viewing; optional PIN (bcrypt)
+IDs: uuid (db-generated), URL tokens: nanoid
+Storage: Google Cloud Storage (GCS) — just stub signed URL issuing (no real image code now)
+Env: DATABASE_URL, JWT_SECRET, PUBLIC_BASE_URL (e.g. https://galleries.jepsonmyl.es)
+Acceptance criteria
+Create SQL migration(s) for:
+galleries.slug (unique, if missing)
+share_links with: id, gallery_id, album_id?, slug, token, pin_hash?, expires_at?, allow_download, show_watermark, one_time, max_uses?, use_count, is_revoked, created_by?, created_at, updated_at
+share_link_access log: share_link_id, at, ip, user_agent
+proper indexes (unique (slug, token), foreign keys, album/gallery idx)
+API routes (Fastify):
+POST /galleries/:id/share-links → create link (validate slug uniqueness, generate token, hash PIN, return full URL PUBLIC_BASE_URL/v/:slug?k=:token)
+GET /galleries/:id/share-links → list links (admin)
+PATCH /share-links/:id → revoke/update (isRevoked, expiresAt, allowDownload, showWatermark, maxUses)
+POST /public/resolve → body { slug, token, pin? } → validates, enforces expiry/usage/one-time, logs access, returns short-lived JWT (15m) with claims {sub, galleryId, albumId, dl, wm, exp}
+GET /public/galleries/:slug → SSR shell (JSON ok for now) that requires a valid JWT in Authorization: Bearer and returns scoped meta + stubbed signed preview URLs (respect wm flag). (We don’t build the full gallery UI here—just the contract.)
+Security:
+Never expose originals; previews are assumed watermarked when wm=true (we just return placeholder links).
+Revocation and expiry must block resolution immediately.
+PIN compare via bcrypt; rate-limit resolve (add a simple in-memory token bucket).
+Tests (Jest + Supertest):
+Create link (gallery-scope, album-scope)
+Resolve success (with/without PIN)
+Max uses / one-time enforcement
+Expiry / revoked cases
+JWT grants correct claims
+DevX:
+npm scripts: migrate:share, dev, test
+Clear README section: env vars, curl examples to prove flow
+File plan (generate)
