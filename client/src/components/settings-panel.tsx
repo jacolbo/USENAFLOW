@@ -21,7 +21,8 @@ interface UserCredentials {
   role: string;
   abbreviation: string;
 }
-import { UserPlus, Users, Trash2, Edit, Eye, EyeOff, Key, UserCog } from "lucide-react";
+import { UserPlus, Users, Trash2, Edit, Eye, EyeOff, Key, UserCog, Calendar } from "lucide-react";
+import { CalendarSyncPanel } from "./calendar-sync-panel";
 import { useToast } from "@/hooks/use-toast";
 
 const addUserSchema = z.object({
@@ -214,18 +215,22 @@ export function SettingsPanel({
       </div>
 
       <Tabs defaultValue="team" className="w-full">
-        <TabsList className="grid w-full grid-cols-3">
+        <TabsList className="grid w-full grid-cols-4">
           <TabsTrigger value="team" className="flex items-center gap-2">
             <Users className="h-4 w-4" />
-            Team Management
+            Team
           </TabsTrigger>
           <TabsTrigger value="passwords" className="flex items-center gap-2">
             <Key className="h-4 w-4" />
-            Password Management
+            Passwords
           </TabsTrigger>
           <TabsTrigger value="add-user" className="flex items-center gap-2">
             <UserPlus className="h-4 w-4" />
-            Add New User
+            Add User
+          </TabsTrigger>
+          <TabsTrigger value="calendar" className="flex items-center gap-2">
+            <Calendar className="h-4 w-4" />
+            Calendar Sync
           </TabsTrigger>
         </TabsList>
 
@@ -471,6 +476,10 @@ export function SettingsPanel({
               </form>
             </CardContent>
           </Card>
+        </TabsContent>
+
+        <TabsContent value="calendar" className="space-y-4">
+          <CalendarSyncPanel />
         </TabsContent>
       </Tabs>
 
