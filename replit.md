@@ -48,6 +48,16 @@ Preferred communication style: Simple, everyday language.
 - **Assignment Ratio Display**: Week headers show assigned vs total project counts (e.g., "5/48 projects") with green for assigned and red for total.
 - **Color-Coded Calendar**: Projects display with color rules - EC (black), ASA (purple), LM (blue), AP (pink) override rollover colors; rollover projects show green (rolled over once) or red (rolled over twice+); new projects show green.
 
+### ShootTracker Integration (Google Calendar Sync)
+- **Google Calendar Sync**: Import photoshoot bookings from Google Calendar using Replit connector.
+- **Calendar Selection**: Choose which calendars to sync from in Settings > Calendar Sync tab.
+- **Turnaround Days**: Configure business days from shoot date to delivery due date (default: 5 days).
+- **Exclusion Keywords**: Skip events containing specific keywords (e.g., "FULL DAY", "BLOCK", "HOLD").
+- **Cancellation Keywords**: Mark events as cancelled based on keywords (e.g., "CANCEL", "DID NOT COME").
+- **Link Sent Tracking**: Mark when gallery links have been sent to clients with "Mark Link Sent" button.
+- **Project Fields**: Each project tracks shootDate, calendarEventId, isLinkSent, and linkSentAt.
+- **API Endpoints**: Calendar settings, calendar list, events fetch, and batch import endpoints.
+
 ## External Dependencies
 
 - **@tanstack/react-query**: Server state management.
@@ -67,3 +77,4 @@ Preferred communication style: Simple, everyday language.
 - **date-fns**: Date utility.
 - **clsx**: Conditional className utility.
 - **zod**: Schema validation.
+- **googleapis**: Google Calendar API integration.

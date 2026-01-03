@@ -404,6 +404,32 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
     rollbackMutation.mutate(projectId);
   };
 
+  // Handle Link Sent - mark gallery link as sent to client
+  const linkSentMutation = useMutation({
+    mutationFn: async (projectId: string) => {
+      const response = await apiRequest("PATCH", `/api/projects/${projectId}/link-sent`, {});
+      return response.json();
+    },
+    onSuccess: () => {
+      toast({
+        title: "Link Sent",
+        description: "Gallery link has been marked as sent to the client.",
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to mark link as sent",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleMarkLinkSent = (projectId: string) => {
+    linkSentMutation.mutate(projectId);
+  };
+
   const reportIssueMutation = useMutation({
     mutationFn: async (data: { projectId: string; issueDescription: string; requestedDueDate: string; reportedBy: string; imageUrls?: string[] }) => {
       const response = await apiRequest("POST", "/api/complaints", data);
@@ -1880,6 +1906,28 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
                                 >
                                   Deliver
                                 </Button>
+                              )}
+                              
+                              {/* Link Sent button for Delivered projects - Admin, Sales, or Data Wrangler */}
+                              {(['Admin', 'Sales', 'DataWrangler'].includes(user.role)) && 
+                               project.status === 'Delivered' && !project.isLinkSent && (
+                                <Button 
+                                  size="sm" 
+                                  variant="outline"
+                                  onClick={() => handleMarkLinkSent(project.id)}
+                                  disabled={linkSentMutation.isPending}
+                                  data-testid={`button-link-sent-${project.id}`}
+                                  className="text-purple-600 hover:text-purple-700 border-purple-300 hover:border-purple-400"
+                                >
+                                  Mark Link Sent
+                                </Button>
+                              )}
+                              
+                              {/* Show Link Sent badge if already sent */}
+                              {project.isLinkSent && (
+                                <Badge variant="secondary" className="bg-purple-100 text-purple-800">
+                                  Link Sent
+                                </Badge>
                               )}
                               
                               {/* Duplicate button for Admin, Sales, Data Wrangler, and Lead Retoucher (Manager) */}
