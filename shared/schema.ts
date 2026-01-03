@@ -33,6 +33,11 @@ export const projects = pgTable("projects", {
   originalProjectId: varchar("original_project_id"), // null for original projects, points to original for shadows
   isRolloverShadow: boolean("is_rollover_shadow").notNull().default(false),
   originalDueDate: timestamp("original_due_date"), // stores original due date for shadows
+  // ShootTracker integration fields
+  shootDate: timestamp("shoot_date"), // Original date of the photoshoot
+  calendarEventId: text("calendar_event_id"), // Google Calendar event ID for syncing
+  isLinkSent: boolean("is_link_sent").notNull().default(false), // Whether gallery link was sent to client
+  linkSentAt: timestamp("link_sent_at"), // When the link was sent
 });
 
 export const projectNotes = pgTable("project_notes", {
@@ -83,6 +88,19 @@ export const projectEvents = pgTable("project_events", {
   details: text("details"), // additional info like "rolled over to next day"
   createdBy: text("created_by").notNull(),
   createdAt: timestamp("created_at").notNull().default(sql`now()`),
+});
+
+// Calendar sync settings for ShootTracker integration
+export const calendarSettings = pgTable("calendar_settings", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  turnaroundDays: integer("turnaround_days").notNull().default(5), // Days from shoot to delivery due date
+  selectedCalendarIds: text("selected_calendar_ids").default(""), // Comma-separated list of Google Calendar IDs
+  exclusionKeywords: text("exclusion_keywords").notNull().default("FULL DAY,BLOCK,HOLD,OUT OF OFFICE"), // Events to skip
+  cancelKeywords: text("cancel_keywords").notNull().default("CANCEL,CANCELLED,DID NOT COME,NO SHOW,NOT COMING"), // Events marked as cancelled
+  defaultPackageCount: integer("default_package_count").notNull().default(5), // Default package count for imported projects
+  autoImport: boolean("auto_import").notNull().default(false), // Whether to auto-import new calendar events
+  lastSyncAt: timestamp("last_sync_at"),
+  updatedAt: timestamp("updated_at").notNull().default(sql`now()`),
 });
 
 // Complaints system for Evans to manage retoucher reports
@@ -153,6 +171,17 @@ export const insertWranglerCommissionSchema = createInsertSchema(wranglerCommiss
   createdAt: true,
 });
 
+export const insertCalendarSettingsSchema = createInsertSchema(calendarSettings).omit({
+  id: true,
+  updatedAt: true,
+  lastSyncAt: true,
+});
+
+export const updateCalendarSettingsSchema = createInsertSchema(calendarSettings).partial().omit({
+  id: true,
+  updatedAt: true,
+});
+
 // Type definitions
 export type User = typeof users.$inferSelect;
 export type InsertUser = z.infer<typeof insertUserSchema>;
@@ -167,6 +196,9 @@ export type InsertTradeOffer = z.infer<typeof insertTradeOfferSchema>;
 export type UpdateTradeOffer = z.infer<typeof updateTradeOfferSchema>;
 export type WranglerCommission = typeof wranglerCommissions.$inferSelect;
 export type InsertWranglerCommission = z.infer<typeof insertWranglerCommissionSchema>;
+export type CalendarSettings = typeof calendarSettings.$inferSelect;
+export type InsertCalendarSettings = z.infer<typeof insertCalendarSettingsSchema>;
+export type UpdateCalendarSettings = z.infer<typeof updateCalendarSettingsSchema>;
 
 export const insertProjectEventSchema = createInsertSchema(projectEvents).omit({
   id: true,
