@@ -1155,6 +1155,141 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Calendar sync API endpoints for ShootTracker integration
+  app.get("/api/calendar/settings", async (req, res) => {
+    try {
+      const settings = await storage.getCalendarSettings();
+      res.json(settings || {
+        turnaroundDays: 5,
+        selectedCalendarIds: "",
+        exclusionKeywords: "FULL DAY,BLOCK,HOLD,OUT OF OFFICE",
+        cancelKeywords: "CANCEL,CANCELLED,DID NOT COME,NO SHOW,NOT COMING",
+        defaultPackageCount: 5,
+        autoImport: false,
+      });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch calendar settings" });
+    }
+  });
+
+  app.patch("/api/calendar/settings", async (req, res) => {
+    try {
+      const { updateCalendarSettingsSchema } = await import("@shared/schema");
+      const validatedData = updateCalendarSettingsSchema.parse(req.body);
+      const settings = await storage.updateCalendarSettings(validatedData);
+      res.json(settings);
+    } catch (error) {
+      console.error("Update calendar settings error:", error);
+      res.status(400).json({ error: "Failed to update calendar settings" });
+    }
+  });
+
+  app.get("/api/calendar/calendars", async (req, res) => {
+    try {
+      const { listCalendars } = await import("./google-calendar");
+      const calendars = await listCalendars();
+      res.json(calendars);
+    } catch (error: any) {
+      console.error("List calendars error:", error);
+      res.status(500).json({ error: error.message || "Failed to list calendars" });
+    }
+  });
+
+  app.post("/api/calendar/events", async (req, res) => {
+    try {
+      const { calendarIds, startDate, endDate } = req.body;
+      if (!calendarIds || !Array.isArray(calendarIds) || !startDate || !endDate) {
+        return res.status(400).json({ error: "calendarIds, startDate, and endDate are required" });
+      }
+
+      const { getEventsFromMultipleCalendars, filterEvents } = await import("./google-calendar");
+      const settings = await storage.getCalendarSettings();
+      
+      const exclusionKeywords = (settings?.exclusionKeywords || "FULL DAY,BLOCK,HOLD,OUT OF OFFICE").split(",");
+      const cancelKeywords = (settings?.cancelKeywords || "CANCEL,CANCELLED,DID NOT COME,NO SHOW,NOT COMING").split(",");
+
+      const allEvents = await getEventsFromMultipleCalendars(calendarIds, startDate, endDate);
+      const { validEvents, cancelledEvents } = filterEvents(allEvents, exclusionKeywords, cancelKeywords);
+
+      res.json({ validEvents, cancelledEvents, totalEvents: allEvents.length });
+    } catch (error: any) {
+      console.error("Get calendar events error:", error);
+      res.status(500).json({ error: error.message || "Failed to get calendar events" });
+    }
+  });
+
+  app.post("/api/calendar/import", async (req, res) => {
+    try {
+      const { events } = req.body;
+      if (!events || !Array.isArray(events)) {
+        return res.status(400).json({ error: "events array is required" });
+      }
+
+      const { calculateDueDate } = await import("./google-calendar");
+      const settings = await storage.getCalendarSettings();
+      const turnaroundDays = settings?.turnaroundDays || 5;
+      const defaultPackageCount = settings?.defaultPackageCount || 5;
+
+      const importedProjects = [];
+      const skippedEvents = [];
+
+      for (const event of events) {
+        // Check if project already exists for this calendar event
+        const existingProject = await storage.getProjectByCalendarEventId(event.id);
+        if (existingProject) {
+          skippedEvents.push({ ...event, reason: "Already imported" });
+          continue;
+        }
+
+        // Create project from calendar event
+        const shootDate = new Date(event.startTime);
+        const dueDate = calculateDueDate(shootDate, turnaroundDays);
+
+        const project = await storage.createProject({
+          clientName: event.title,
+          packageCount: defaultPackageCount,
+          selectedCount: defaultPackageCount,
+          dueDate: dueDate.toISOString(),
+          shootDate: shootDate.toISOString() as any,
+          calendarEventId: event.id,
+        });
+
+        importedProjects.push(project);
+        
+        // Broadcast project creation
+        broadcastProjectUpdate(project);
+      }
+
+      res.json({ 
+        imported: importedProjects.length, 
+        skipped: skippedEvents.length,
+        projects: importedProjects,
+        skippedEvents
+      });
+    } catch (error: any) {
+      console.error("Import calendar events error:", error);
+      res.status(500).json({ error: error.message || "Failed to import calendar events" });
+    }
+  });
+
+  // Mark gallery link as sent for a project
+  app.patch("/api/projects/:id/link-sent", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const project = await storage.updateProject(id, {
+        isLinkSent: true,
+        linkSentAt: new Date().toISOString() as any,
+      });
+      if (!project) {
+        return res.status(404).json({ error: "Project not found" });
+      }
+      broadcastProjectUpdate(project);
+      res.json(project);
+    } catch (error) {
+      res.status(400).json({ error: "Failed to mark link as sent" });
+    }
+  });
+
   // Object storage endpoints for photo uploads
   app.get("/objects/:objectPath(*)", async (req, res) => {
     const objectStorageService = new ObjectStorageService();
