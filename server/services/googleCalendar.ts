@@ -1,0 +1,129 @@
+import { google } from 'googleapis';
+
+let connectionSettings: any;
+
+async function getAccessToken() {
+  if (connectionSettings && connectionSettings.settings.expires_at && new Date(connectionSettings.settings.expires_at).getTime() > Date.now()) {
+    return connectionSettings.settings.access_token;
+  }
+  
+  const hostname = process.env.REPLIT_CONNECTORS_HOSTNAME;
+  const xReplitToken = process.env.REPL_IDENTITY 
+    ? 'repl ' + process.env.REPL_IDENTITY 
+    : process.env.WEB_REPL_RENEWAL 
+    ? 'depl ' + process.env.WEB_REPL_RENEWAL 
+    : null;
+
+  if (!xReplitToken) {
+    throw new Error('X_REPLIT_TOKEN not found for repl/depl');
+  }
+
+  connectionSettings = await fetch(
+    'https://' + hostname + '/api/v2/connection?include_secrets=true&connector_names=google-calendar',
+    {
+      headers: {
+        'Accept': 'application/json',
+        'X_REPLIT_TOKEN': xReplitToken
+      }
+    }
+  ).then(res => res.json()).then(data => data.items?.[0]);
+
+  const accessToken = connectionSettings?.settings?.access_token || connectionSettings?.settings?.oauth?.credentials?.access_token;
+
+  if (!connectionSettings || !accessToken) {
+    throw new Error('Google Calendar not connected');
+  }
+  return accessToken;
+}
+
+export async function getGoogleCalendarClient() {
+  const accessToken = await getAccessToken();
+
+  const oauth2Client = new google.auth.OAuth2();
+  oauth2Client.setCredentials({
+    access_token: accessToken
+  });
+
+  return google.calendar({ version: 'v3', auth: oauth2Client });
+}
+
+export interface CalendarEvent {
+  id: string;
+  summary: string;
+  description?: string;
+  start: Date;
+  end: Date;
+  location?: string;
+}
+
+export async function fetchCalendarEvents(
+  calendarId: string = 'primary',
+  timeMin?: Date,
+  timeMax?: Date
+): Promise<CalendarEvent[]> {
+  try {
+    const calendar = await getGoogleCalendarClient();
+    
+    const now = new Date();
+    const defaultTimeMin = timeMin || now;
+    const defaultTimeMax = timeMax || new Date(now.getTime() + 90 * 24 * 60 * 60 * 1000); // 90 days ahead
+    
+    const response = await calendar.events.list({
+      calendarId,
+      timeMin: defaultTimeMin.toISOString(),
+      timeMax: defaultTimeMax.toISOString(),
+      singleEvents: true,
+      orderBy: 'startTime',
+      maxResults: 250,
+    });
+
+    const events = response.data.items || [];
+    
+    return events.map(event => ({
+      id: event.id || '',
+      summary: event.summary || '',
+      description: event.description || undefined,
+      start: new Date(event.start?.dateTime || event.start?.date || ''),
+      end: new Date(event.end?.dateTime || event.end?.date || ''),
+      location: event.location || undefined,
+    }));
+  } catch (error) {
+    console.error('Error fetching calendar events:', error);
+    throw error;
+  }
+}
+
+export function parseClientNameFromEvent(event: CalendarEvent): string | null {
+  const summary = event.summary;
+  if (!summary) return null;
+  
+  // Common patterns for photography shoots:
+  // "John Smith - Wedding Shoot"
+  // "Smith Family Portrait"
+  // "Shoot: Jane Doe"
+  // "Client: ABC Company"
+  
+  // Try to extract client name from summary
+  const patterns = [
+    /^(.+?)\s*[-–—]\s*(shoot|session|portrait|wedding|event)/i,
+    /^(shoot|session|client|booking)[:]\s*(.+)/i,
+    /^(.+?)\s+(shoot|session|portrait|wedding|event)/i,
+  ];
+  
+  for (const pattern of patterns) {
+    const match = summary.match(pattern);
+    if (match) {
+      // Return the client name part (group 1 or 2 depending on pattern)
+      return (match[1] || match[2] || '').trim();
+    }
+  }
+  
+  // If no pattern matches, return the whole summary as potential client name
+  return summary.trim();
+}
+
+export function calculateDeliveryDueDate(shootDate: Date, turnaroundDays: number = 14): Date {
+  const deliveryDate = new Date(shootDate);
+  deliveryDate.setDate(deliveryDate.getDate() + turnaroundDays);
+  return deliveryDate;
+}

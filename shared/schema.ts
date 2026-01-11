@@ -33,6 +33,15 @@ export const projects = pgTable("projects", {
   originalProjectId: varchar("original_project_id"), // null for original projects, points to original for shadows
   isRolloverShadow: boolean("is_rollover_shadow").notNull().default(false),
   originalDueDate: timestamp("original_due_date"), // stores original due date for shadows
+  // ShootTracker Engine fields
+  shootDate: timestamp("shoot_date"), // When the photo shoot happens
+  deliveryDueDate: timestamp("delivery_due_date"), // When final delivery is due to client
+  riskLevel: text("risk_level").default("low"), // low, medium, high, critical
+  calendarEventId: text("calendar_event_id"), // Link to synced calendar event
+  lastSyncedAt: timestamp("last_synced_at"), // When last synced from calendar
+  // Client share link fields (existing)
+  isLinkSent: boolean("is_link_sent").notNull().default(false),
+  linkSentAt: timestamp("link_sent_at"),
 });
 
 export const projectNotes = pgTable("project_notes", {
@@ -120,6 +129,8 @@ export const updateProjectSchema = createInsertSchema(projects).partial().omit({
   createdAt: true,
 }).extend({
   dueDate: z.string().transform((str) => new Date(str)).optional(),
+  shootDate: z.string().transform((str) => new Date(str)).optional(),
+  deliveryDueDate: z.string().transform((str) => new Date(str)).optional(),
 });
 
 export const insertProjectNoteSchema = createInsertSchema(projectNotes).omit({
@@ -236,3 +247,13 @@ export const TradeOfferStatus = {
   CANCELLED: "cancelled",
   COMPLETED: "completed",
 } as const;
+
+// ShootTracker risk levels
+export const RiskLevel = {
+  LOW: "low",
+  MEDIUM: "medium",
+  HIGH: "high",
+  CRITICAL: "critical",
+} as const;
+
+export type RiskLevelType = typeof RiskLevel[keyof typeof RiskLevel];

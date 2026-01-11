@@ -1178,5 +1178,88 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json({ uploadURL });
   });
 
+  // ============================================
+  // ShootTracker Engine Routes
+  // ============================================
+  
+  // Sync calendar events to projects (Admin only)
+  app.post("/api/admin/sync-calendar", async (req, res) => {
+    try {
+      const { syncCalendarToProjects } = await import("./services/calendarSync");
+      const { calendarId = 'primary', turnaroundDays = 14 } = req.body;
+      
+      const result = await syncCalendarToProjects(calendarId, turnaroundDays);
+      
+      // Broadcast update to all clients
+      broadcastSSE({ type: 'calendar_sync_complete', payload: result });
+      
+      res.json({ 
+        success: true, 
+        message: `Calendar sync complete: ${result.created} created, ${result.updated} updated`,
+        result 
+      });
+    } catch (error: any) {
+      console.error("Calendar sync error:", error);
+      res.status(500).json({ 
+        success: false, 
+        error: error.message || "Calendar sync failed" 
+      });
+    }
+  });
+  
+  // Get at-risk projects
+  app.get("/api/projects/at-risk", async (req, res) => {
+    try {
+      const { getAtRiskProjects, getRiskDetails } = await import("./services/riskCalculator");
+      const { RiskLevel } = await import("@shared/schema");
+      
+      const minLevel = (req.query.minLevel as string) || RiskLevel.MEDIUM;
+      const projects = await storage.getAllProjects();
+      const atRiskProjects = getAtRiskProjects(projects, minLevel as any);
+      
+      // Add risk details to each project
+      const projectsWithDetails = atRiskProjects.map(project => ({
+        ...project,
+        riskDetails: getRiskDetails(project),
+      }));
+      
+      res.json(projectsWithDetails);
+    } catch (error: any) {
+      console.error("Error fetching at-risk projects:", error);
+      res.status(500).json({ error: "Failed to fetch at-risk projects" });
+    }
+  });
+  
+  // Get upcoming shoots
+  app.get("/api/shoots/upcoming", async (req, res) => {
+    try {
+      const { getUpcomingShoots } = await import("./services/calendarSync");
+      const daysAhead = parseInt(req.query.days as string) || 14;
+      
+      const upcomingShoots = await getUpcomingShoots(daysAhead);
+      res.json(upcomingShoots);
+    } catch (error: any) {
+      console.error("Error fetching upcoming shoots:", error);
+      res.status(500).json({ error: "Failed to fetch upcoming shoots" });
+    }
+  });
+  
+  // Update risk levels for all projects (Admin only)
+  app.post("/api/admin/update-risk-levels", async (req, res) => {
+    try {
+      const { updateAllRiskLevels } = await import("./services/calendarSync");
+      const updated = await updateAllRiskLevels();
+      
+      res.json({ 
+        success: true, 
+        message: `Updated risk levels for ${updated} projects`,
+        updated 
+      });
+    } catch (error: any) {
+      console.error("Error updating risk levels:", error);
+      res.status(500).json({ error: "Failed to update risk levels" });
+    }
+  });
+
   return httpServer;
 }

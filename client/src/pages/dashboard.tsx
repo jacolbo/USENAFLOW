@@ -9,6 +9,7 @@ import { SettingsPanel } from "@/components/settings-panel";
 import { AddProjectForm } from "@/components/add-project-form";
 import { TaskTable } from "@/components/task-table";
 import { TeamAnalytics } from "@/components/team-analytics";
+import { ShootTrackerWidget } from "@/components/shoot-tracker-widget";
 import { DailyQuote } from "@/components/daily-quote";
 import { NotificationCenter } from "@/components/notification-center";
 import { TradeOfferModal } from "@/components/TradeOfferModal";
@@ -1365,6 +1366,14 @@ export default function Dashboard() {
           {/* Show the task table for the visible projects - only for non-Sales roles and not in commission view */}
           {user.role !== "Sales" && user.role !== "Evans" && !showCommissions && !showExtraPhotosSales && !showComplaints && (
             <TaskTable projects={projects} user={user} allUsers={users} />
+          )}
+
+          {/* ShootTracker Widget - for Admin, Sales, LeadRetoucher, DataWrangler */}
+          {!showArchive && !showCommissions && !showExtraPhotosSales && !showComplaints && 
+           ['Admin', 'Sales', 'LeadRetoucher', 'DataWrangler'].includes(user.role) && (
+            <div className="mb-6">
+              <ShootTrackerWidget />
+            </div>
           )}
 
           {/* Team Progress Analytics - only in current view and not in commission view */}
