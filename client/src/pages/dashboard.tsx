@@ -19,7 +19,8 @@ import { WRUButton } from "@/components/WRUButton";
 import { useSSE } from "@/hooks/use-sse";
 import { User } from "@/lib/types";
 import { Project } from "@shared/schema";
-import { User as UserIcon, LogOut, Settings, Archive, ArrowRightLeft, DollarSign, AlertTriangle } from "lucide-react";
+import { User as UserIcon, LogOut, Settings, Archive, ArrowRightLeft, DollarSign, AlertTriangle, Calendar } from "lucide-react";
+import { Link } from "wouter";
 import logoImage from "@assets/USENA-FLOW_1754522507856.png";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -1086,6 +1087,20 @@ export default function Dashboard() {
                         <DollarSign className="h-4 w-4" />
                         Extra Photos Sales
                       </Button>
+                    )}
+
+                    {/* ShootTracker Settings Button - Admin, LeadRetoucher, DataWrangler only */}
+                    {['Admin', 'LeadRetoucher', 'DataWrangler'].includes(user.role) && (
+                      <Link href="/shoottracker">
+                        <Button 
+                          variant="outline"
+                          size="sm"
+                          className="flex items-center gap-2 bg-teal-50 hover:bg-teal-100 border-teal-200 text-teal-700"
+                        >
+                          <Calendar className="h-4 w-4" />
+                          ShootTracker
+                        </Button>
+                      </Link>
                     )}
 
                     {/* Manual Rollover Buttons for Admin */}
