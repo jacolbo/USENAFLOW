@@ -1,4 +1,4 @@
-import { type User, type InsertUser, type Project, type InsertProject, type UpdateProject, type ProjectNote, type InsertProjectNote, type UpdateProjectNote, type TradeOffer, type InsertTradeOffer, type UpdateTradeOffer, type WranglerCommission, type InsertWranglerCommission, type ProjectEvent, type InsertProjectEvent, type Complaint, type InsertComplaint, ProjectStatus, TradeOfferStatus, users, projects, projectNotes, tradeOffers, wranglerCommissions, projectEvents, complaints } from "@shared/schema";
+import { type User, type InsertUser, type Project, type InsertProject, type UpdateProject, type ProjectNote, type InsertProjectNote, type UpdateProjectNote, type TradeOffer, type InsertTradeOffer, type UpdateTradeOffer, type WranglerCommission, type InsertWranglerCommission, type ProjectEvent, type InsertProjectEvent, type Complaint, type InsertComplaint, type ShoottrackerMeta, type InsertShoottrackerMeta, type UpdateShoottrackerMeta, ProjectStatus, TradeOfferStatus, users, projects, projectNotes, tradeOffers, wranglerCommissions, projectEvents, complaints, shoottrackerMeta } from "@shared/schema";
 import { db } from "./db";
 import { eq, sql, asc } from "drizzle-orm";
 import { randomUUID } from "crypto";
@@ -43,6 +43,12 @@ export interface IStorage {
   createComplaint(complaint: InsertComplaint): Promise<Complaint>;
   updateComplaint(id: string, updates: Partial<Complaint>): Promise<Complaint | undefined>;
   deleteComplaint(id: string): Promise<boolean>;
+  
+  // ShootTracker meta methods
+  getShoottrackerMeta(projectId: string): Promise<ShoottrackerMeta | undefined>;
+  createShoottrackerMeta(meta: InsertShoottrackerMeta): Promise<ShoottrackerMeta>;
+  updateShoottrackerMeta(projectId: string, updates: UpdateShoottrackerMeta): Promise<ShoottrackerMeta | undefined>;
+  deleteShoottrackerMeta(projectId: string): Promise<boolean>;
 }
 
 export class MemStorage implements IStorage {
@@ -486,6 +492,23 @@ export class MemStorage implements IStorage {
   async deleteComplaint(id: string): Promise<boolean> {
     return false;
   }
+  
+  // ShootTracker meta methods (Not implemented for MemStorage)
+  async getShoottrackerMeta(projectId: string): Promise<ShoottrackerMeta | undefined> {
+    return undefined;
+  }
+
+  async createShoottrackerMeta(meta: InsertShoottrackerMeta): Promise<ShoottrackerMeta> {
+    throw new Error("Not implemented in MemStorage");
+  }
+
+  async updateShoottrackerMeta(projectId: string, updates: UpdateShoottrackerMeta): Promise<ShoottrackerMeta | undefined> {
+    return undefined;
+  }
+
+  async deleteShoottrackerMeta(projectId: string): Promise<boolean> {
+    return false;
+  }
 }
 
 // Database Storage Implementation
@@ -801,6 +824,34 @@ export class DatabaseStorage implements IStorage {
 
   async deleteComplaint(id: string): Promise<boolean> {
     const result = await db.delete(complaints).where(eq(complaints.id, id));
+    return result.rowCount ? result.rowCount > 0 : false;
+  }
+
+  // ShootTracker meta methods
+  async getShoottrackerMeta(projectId: string): Promise<ShoottrackerMeta | undefined> {
+    const [meta] = await db.select().from(shoottrackerMeta).where(eq(shoottrackerMeta.projectId, projectId));
+    return meta || undefined;
+  }
+
+  async createShoottrackerMeta(insertMeta: InsertShoottrackerMeta): Promise<ShoottrackerMeta> {
+    const [meta] = await db
+      .insert(shoottrackerMeta)
+      .values(insertMeta)
+      .returning();
+    return meta;
+  }
+
+  async updateShoottrackerMeta(projectId: string, updates: UpdateShoottrackerMeta): Promise<ShoottrackerMeta | undefined> {
+    const [meta] = await db
+      .update(shoottrackerMeta)
+      .set(updates)
+      .where(eq(shoottrackerMeta.projectId, projectId))
+      .returning();
+    return meta || undefined;
+  }
+
+  async deleteShoottrackerMeta(projectId: string): Promise<boolean> {
+    const result = await db.delete(shoottrackerMeta).where(eq(shoottrackerMeta.projectId, projectId));
     return result.rowCount ? result.rowCount > 0 : false;
   }
 }
