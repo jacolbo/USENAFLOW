@@ -1,4 +1,4 @@
-import { type User, type InsertUser, type Project, type InsertProject, type UpdateProject, type ProjectNote, type InsertProjectNote, type UpdateProjectNote, type TradeOffer, type InsertTradeOffer, type UpdateTradeOffer, type WranglerCommission, type InsertWranglerCommission, type ProjectEvent, type InsertProjectEvent, type Complaint, type InsertComplaint, type CalendarSettings, type UpdateCalendarSettings, ProjectStatus, TradeOfferStatus, users, projects, projectNotes, tradeOffers, wranglerCommissions, projectEvents, complaints, calendarSettings } from "@shared/schema";
+import { type User, type InsertUser, type Project, type InsertProject, type UpdateProject, type ProjectNote, type InsertProjectNote, type UpdateProjectNote, type TradeOffer, type InsertTradeOffer, type UpdateTradeOffer, type WranglerCommission, type InsertWranglerCommission, type ProjectEvent, type InsertProjectEvent, type Complaint, type InsertComplaint, ProjectStatus, TradeOfferStatus, users, projects, projectNotes, tradeOffers, wranglerCommissions, projectEvents, complaints } from "@shared/schema";
 import { db } from "./db";
 import { eq, sql, asc } from "drizzle-orm";
 import { randomUUID } from "crypto";
@@ -43,11 +43,6 @@ export interface IStorage {
   createComplaint(complaint: InsertComplaint): Promise<Complaint>;
   updateComplaint(id: string, updates: Partial<Complaint>): Promise<Complaint | undefined>;
   deleteComplaint(id: string): Promise<boolean>;
-  
-  // Calendar settings methods for ShootTracker integration
-  getCalendarSettings(): Promise<CalendarSettings | undefined>;
-  updateCalendarSettings(updates: UpdateCalendarSettings): Promise<CalendarSettings>;
-  getProjectByCalendarEventId(calendarEventId: string): Promise<Project | undefined>;
 }
 
 export class MemStorage implements IStorage {
@@ -88,10 +83,6 @@ export class MemStorage implements IStorage {
         originalProjectId: null,
         isRolloverShadow: false,
         originalDueDate: null,
-        shootDate: null,
-        calendarEventId: null,
-        isLinkSent: false,
-        linkSentAt: null,
       },
       {
         id: "2",
@@ -114,10 +105,6 @@ export class MemStorage implements IStorage {
         originalProjectId: null,
         isRolloverShadow: false,
         originalDueDate: null,
-        shootDate: null,
-        calendarEventId: null,
-        isLinkSent: false,
-        linkSentAt: null,
       },
       {
         id: "3",
@@ -140,10 +127,6 @@ export class MemStorage implements IStorage {
         originalProjectId: null,
         isRolloverShadow: false,
         originalDueDate: null,
-        shootDate: null,
-        calendarEventId: null,
-        isLinkSent: false,
-        linkSentAt: null,
       },
       {
         id: "4",
@@ -166,10 +149,6 @@ export class MemStorage implements IStorage {
         originalProjectId: null,
         isRolloverShadow: false,
         originalDueDate: null,
-        shootDate: null,
-        calendarEventId: null,
-        isLinkSent: true,
-        linkSentAt: new Date(2025, 7, 3),
       },
       {
         id: "5",
@@ -192,10 +171,6 @@ export class MemStorage implements IStorage {
         originalProjectId: null,
         isRolloverShadow: false,
         originalDueDate: null,
-        shootDate: null,
-        calendarEventId: null,
-        isLinkSent: false,
-        linkSentAt: null,
       },
     ];
 
@@ -254,11 +229,6 @@ export class MemStorage implements IStorage {
       originalProjectId: insertProject.originalProjectId ?? null,
       isRolloverShadow: insertProject.isRolloverShadow ?? false,
       originalDueDate: insertProject.originalDueDate ?? null,
-      // ShootTracker fields
-      shootDate: (insertProject as any).shootDate ?? null,
-      calendarEventId: (insertProject as any).calendarEventId ?? null,
-      isLinkSent: (insertProject as any).isLinkSent ?? false,
-      linkSentAt: (insertProject as any).linkSentAt ?? null,
     };
     
     this.projects.set(id, project);
@@ -466,19 +436,6 @@ export class MemStorage implements IStorage {
 
   async deleteComplaint(id: string): Promise<boolean> {
     return false;
-  }
-
-  // Calendar settings methods (Not implemented for MemStorage)
-  async getCalendarSettings(): Promise<CalendarSettings | undefined> {
-    return undefined;
-  }
-
-  async updateCalendarSettings(updates: UpdateCalendarSettings): Promise<CalendarSettings> {
-    throw new Error("Not implemented in MemStorage");
-  }
-
-  async getProjectByCalendarEventId(calendarEventId: string): Promise<Project | undefined> {
-    return Array.from(this.projects.values()).find(p => p.calendarEventId === calendarEventId);
   }
 }
 
@@ -796,46 +753,6 @@ export class DatabaseStorage implements IStorage {
   async deleteComplaint(id: string): Promise<boolean> {
     const result = await db.delete(complaints).where(eq(complaints.id, id));
     return result.rowCount ? result.rowCount > 0 : false;
-  }
-
-  // Calendar settings methods for ShootTracker integration
-  async getCalendarSettings(): Promise<CalendarSettings | undefined> {
-    const [settings] = await db.select().from(calendarSettings).limit(1);
-    return settings || undefined;
-  }
-
-  async updateCalendarSettings(updates: UpdateCalendarSettings): Promise<CalendarSettings> {
-    const existing = await this.getCalendarSettings();
-    
-    if (existing) {
-      const [updated] = await db
-        .update(calendarSettings)
-        .set({ ...updates, updatedAt: new Date() })
-        .where(eq(calendarSettings.id, existing.id))
-        .returning();
-      return updated;
-    } else {
-      const [created] = await db
-        .insert(calendarSettings)
-        .values({
-          turnaroundDays: updates.turnaroundDays ?? 5,
-          selectedCalendarIds: updates.selectedCalendarIds ?? "",
-          exclusionKeywords: updates.exclusionKeywords ?? "FULL DAY,BLOCK,HOLD,OUT OF OFFICE",
-          cancelKeywords: updates.cancelKeywords ?? "CANCEL,CANCELLED,DID NOT COME,NO SHOW,NOT COMING",
-          defaultPackageCount: updates.defaultPackageCount ?? 5,
-          autoImport: updates.autoImport ?? false,
-        })
-        .returning();
-      return created;
-    }
-  }
-
-  async getProjectByCalendarEventId(calendarEventId: string): Promise<Project | undefined> {
-    const [project] = await db
-      .select()
-      .from(projects)
-      .where(eq(projects.calendarEventId, calendarEventId));
-    return project || undefined;
   }
 }
 
