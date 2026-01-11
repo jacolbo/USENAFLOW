@@ -1,4 +1,4 @@
-import { Project, RiskLevel, RiskLevelType } from '@shared/schema';
+import { Project, RiskLevel, RiskLevelType, ProjectStatus } from '@shared/schema';
 
 interface RiskFactors {
   daysUntilDelivery: number;
@@ -8,70 +8,67 @@ interface RiskFactors {
   workloadRatio: number; // photos per day needed
 }
 
-export function calculateRiskLevel(project: Project): RiskLevelType {
+export function calculateRiskLevel(project: Partial<Project> & { deliveryDueDate?: Date | null }): RiskLevelType {
   const factors = getRiskFactors(project);
   
-  // Critical: Overdue or due today with work remaining
-  if (factors.daysUntilDelivery <= 0 && factors.photosRemaining > 0) {
-    return RiskLevel.CRITICAL;
+  // OVERDUE: Past due date with work remaining
+  if (factors.daysUntilDelivery < 0 && factors.photosRemaining > 0) {
+    return RiskLevel.OVERDUE;
   }
   
-  // Critical: Rolled over 3+ times
+  // OVERDUE: Rolled over 3+ times
   if (factors.rolloverCount >= 3) {
-    return RiskLevel.CRITICAL;
+    return RiskLevel.OVERDUE;
   }
   
-  // High: Due within 2 days with significant work remaining
-  if (factors.daysUntilDelivery <= 2 && factors.photosRemaining > 10) {
-    return RiskLevel.HIGH;
+  // AT_RISK: Due within 3 days with work remaining
+  if (factors.daysUntilDelivery <= 3 && factors.photosRemaining > 0) {
+    return RiskLevel.AT_RISK;
   }
   
-  // High: Rolled over 2 times
+  // AT_RISK: Rolled over 2+ times
   if (factors.rolloverCount >= 2) {
-    return RiskLevel.HIGH;
+    return RiskLevel.AT_RISK;
   }
   
-  // High: Unassigned and due within 3 days
-  if (factors.isUnassigned && factors.daysUntilDelivery <= 3) {
-    return RiskLevel.HIGH;
+  // AT_RISK: Unassigned and due within 5 days
+  if (factors.isUnassigned && factors.daysUntilDelivery <= 5 && factors.daysUntilDelivery >= 0) {
+    return RiskLevel.AT_RISK;
   }
   
-  // High: Workload ratio too high (more than 50 photos/day needed)
+  // AT_RISK: Workload ratio too high (more than 50 photos/day needed)
   if (factors.workloadRatio > 50 && factors.daysUntilDelivery > 0) {
-    return RiskLevel.HIGH;
+    return RiskLevel.AT_RISK;
   }
   
-  // Medium: Due within 5 days with work remaining
-  if (factors.daysUntilDelivery <= 5 && factors.photosRemaining > 0) {
-    return RiskLevel.MEDIUM;
-  }
-  
-  // Medium: Rolled over once
+  // AT_RISK: Rolled over once
   if (factors.rolloverCount >= 1) {
-    return RiskLevel.MEDIUM;
+    return RiskLevel.AT_RISK;
   }
   
-  // Medium: Unassigned and due within 7 days
-  if (factors.isUnassigned && factors.daysUntilDelivery <= 7) {
-    return RiskLevel.MEDIUM;
-  }
-  
-  // Medium: Workload ratio is concerning (25-50 photos/day)
-  if (factors.workloadRatio > 25 && factors.workloadRatio <= 50) {
-    return RiskLevel.MEDIUM;
-  }
-  
-  // Low: Everything else
-  return RiskLevel.LOW;
+  // SAFE: Everything else
+  return RiskLevel.SAFE;
 }
 
-function getRiskFactors(project: Project): RiskFactors {
+function getRiskFactors(project: Partial<Project> & { deliveryDueDate?: Date | null }): RiskFactors {
   const now = new Date();
   const dueDate = project.deliveryDueDate || project.dueDate;
+  
+  if (!dueDate) {
+    return {
+      daysUntilDelivery: 30, // Default to safe if no due date
+      rolloverCount: 0,
+      isUnassigned: true,
+      photosRemaining: 0,
+      workloadRatio: 0,
+    };
+  }
+  
   const diffTime = new Date(dueDate).getTime() - now.getTime();
   const daysUntilDelivery = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
   
-  const photosRemaining = project.toEditRemaining || (project.selectedCount - project.photosCompleted);
+  const photosRemaining = project.toEditRemaining || 
+    ((project.selectedCount || 0) - (project.photosCompleted || 0));
   const workloadRatio = daysUntilDelivery > 0 
     ? photosRemaining / daysUntilDelivery 
     : photosRemaining;
@@ -96,35 +93,25 @@ export function getRiskDetails(project: Project): {
   let message = '';
   
   switch (level) {
-    case RiskLevel.CRITICAL:
-      if (factors.daysUntilDelivery <= 0) {
-        message = `OVERDUE! ${factors.photosRemaining} photos remaining`;
+    case RiskLevel.OVERDUE:
+      if (factors.daysUntilDelivery < 0) {
+        message = `OVERDUE by ${Math.abs(factors.daysUntilDelivery)} days! ${factors.photosRemaining} photos remaining`;
       } else if (factors.rolloverCount >= 3) {
-        message = `Rolled over ${factors.rolloverCount} times - needs immediate attention`;
+        message = `Rolled over ${factors.rolloverCount} times - critical attention needed`;
       }
       break;
       
-    case RiskLevel.HIGH:
+    case RiskLevel.AT_RISK:
       if (factors.isUnassigned) {
         message = `Unassigned with ${factors.daysUntilDelivery} days until due`;
-      } else if (factors.rolloverCount >= 2) {
-        message = `Rolled over ${factors.rolloverCount} times`;
+      } else if (factors.rolloverCount >= 1) {
+        message = `Rolled over ${factors.rolloverCount} time(s) - monitor closely`;
       } else {
         message = `${factors.daysUntilDelivery} days left, ${factors.photosRemaining} photos remaining`;
       }
       break;
       
-    case RiskLevel.MEDIUM:
-      if (factors.isUnassigned) {
-        message = `Needs assignment - due in ${factors.daysUntilDelivery} days`;
-      } else if (factors.rolloverCount >= 1) {
-        message = `Previously rolled over - monitor closely`;
-      } else {
-        message = `${factors.daysUntilDelivery} days left for ${factors.photosRemaining} photos`;
-      }
-      break;
-      
-    case RiskLevel.LOW:
+    case RiskLevel.SAFE:
       message = 'On track';
       break;
   }
@@ -132,18 +119,21 @@ export function getRiskDetails(project: Project): {
   return { level, factors, message };
 }
 
-export function getAtRiskProjects(projects: Project[], minLevel: RiskLevelType = RiskLevel.MEDIUM): Project[] {
+export function getAtRiskProjects(projects: Project[], minLevel: RiskLevelType = RiskLevel.AT_RISK): Project[] {
   const riskPriority: Record<RiskLevelType, number> = {
-    [RiskLevel.CRITICAL]: 4,
-    [RiskLevel.HIGH]: 3,
-    [RiskLevel.MEDIUM]: 2,
-    [RiskLevel.LOW]: 1,
+    [RiskLevel.OVERDUE]: 3,
+    [RiskLevel.AT_RISK]: 2,
+    [RiskLevel.SAFE]: 1,
   };
   
   const minPriority = riskPriority[minLevel];
   
   return projects
     .filter(project => {
+      // Skip delivered/done projects
+      if (project.status === ProjectStatus.DELIVERED || project.status === ProjectStatus.DONE) {
+        return false;
+      }
       const level = calculateRiskLevel(project);
       return riskPriority[level] >= minPriority;
     })

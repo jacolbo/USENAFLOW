@@ -129,6 +129,7 @@ export async function syncCalendarToProjects(
               riskLevel,
               calendarEventId: event.id,
               lastSyncedAt: new Date(),
+              createdFrom: "CALENDAR",
             });
             
             result.created++;

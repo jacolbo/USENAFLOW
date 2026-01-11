@@ -1,7 +1,7 @@
 import { Badge } from "@/components/ui/badge";
-import { AlertTriangle, AlertCircle, Clock, CheckCircle } from "lucide-react";
+import { AlertTriangle, AlertCircle, CheckCircle } from "lucide-react";
 
-type RiskLevel = "low" | "medium" | "high" | "critical";
+type RiskLevel = "SAFE" | "AT_RISK" | "OVERDUE";
 
 interface RiskBadgeProps {
   level: RiskLevel | string | null | undefined;
@@ -15,23 +15,18 @@ const riskConfig: Record<RiskLevel, {
   className: string;
   Icon: typeof AlertTriangle;
 }> = {
-  low: {
-    label: "Low Risk",
+  SAFE: {
+    label: "Safe",
     className: "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400 border-green-200 dark:border-green-800",
     Icon: CheckCircle,
   },
-  medium: {
-    label: "Medium Risk",
+  AT_RISK: {
+    label: "At Risk",
     className: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400 border-yellow-200 dark:border-yellow-800",
-    Icon: Clock,
-  },
-  high: {
-    label: "High Risk",
-    className: "bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400 border-orange-200 dark:border-orange-800",
     Icon: AlertTriangle,
   },
-  critical: {
-    label: "Critical",
+  OVERDUE: {
+    label: "Overdue",
     className: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400 border-red-200 dark:border-red-800",
     Icon: AlertCircle,
   },
@@ -43,8 +38,9 @@ export function RiskBadge({
   showLabel = true,
   size = "md" 
 }: RiskBadgeProps) {
-  const safeLevel = (level?.toLowerCase() || "low") as RiskLevel;
-  const config = riskConfig[safeLevel] || riskConfig.low;
+  const normalizedLevel = level?.toUpperCase() as RiskLevel;
+  const safeLevel = riskConfig[normalizedLevel] ? normalizedLevel : "SAFE";
+  const config = riskConfig[safeLevel];
   const { label, className, Icon } = config;
   
   const sizeClasses = {
@@ -71,13 +67,13 @@ export function RiskBadge({
 }
 
 export function RiskDot({ level }: { level: RiskLevel | string | null | undefined }) {
-  const safeLevel = (level?.toLowerCase() || "low") as RiskLevel;
+  const normalizedLevel = level?.toUpperCase() as RiskLevel;
+  const safeLevel = riskConfig[normalizedLevel] ? normalizedLevel : "SAFE";
   
   const dotColors: Record<RiskLevel, string> = {
-    low: "bg-green-500",
-    medium: "bg-yellow-500",
-    high: "bg-orange-500",
-    critical: "bg-red-500",
+    SAFE: "bg-green-500",
+    AT_RISK: "bg-yellow-500",
+    OVERDUE: "bg-red-500",
   };
   
   return (

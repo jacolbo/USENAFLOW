@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, integer, timestamp, boolean } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, integer, timestamp, boolean, jsonb } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 import { randomUUID } from "crypto";
@@ -36,12 +36,26 @@ export const projects = pgTable("projects", {
   // ShootTracker Engine fields
   shootDate: timestamp("shoot_date"), // When the photo shoot happens
   deliveryDueDate: timestamp("delivery_due_date"), // When final delivery is due to client
-  riskLevel: text("risk_level").default("low"), // low, medium, high, critical
-  calendarEventId: text("calendar_event_id"), // Link to synced calendar event
+  riskLevel: text("risk_level").notNull().default("SAFE"), // SAFE, AT_RISK, OVERDUE
+  calendarEventId: text("calendar_event_id").unique(), // Link to synced calendar event (unique)
   lastSyncedAt: timestamp("last_synced_at"), // When last synced from calendar
+  createdFrom: text("created_from").notNull().default("MANUAL"), // MANUAL or CALENDAR
   // Client share link fields (existing)
   isLinkSent: boolean("is_link_sent").notNull().default(false),
   linkSentAt: timestamp("link_sent_at"),
+});
+
+// ShootTracker metadata table (1:1 with projects)
+export const shoottrackerMeta = pgTable("shoottracker_meta", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  projectId: varchar("project_id").notNull().unique().references(() => projects.id, { onDelete: "cascade" }),
+  linkSent: boolean("link_sent").notNull().default(false),
+  delivered: boolean("delivered").notNull().default(false),
+  turnaroundDays: integer("turnaround_days").notNull().default(5),
+  workingDays: jsonb("working_days").notNull().default(sql`'["Mon","Tue","Wed","Thu","Fri"]'::jsonb`), // Days of week
+  holidays: jsonb("holidays").notNull().default(sql`'[]'::jsonb`), // Array of holiday dates
+  lastCalendarSync: timestamp("last_calendar_sync"),
+  rawEventPayload: jsonb("raw_event_payload"), // Raw calendar event data
 });
 
 export const projectNotes = pgTable("project_notes", {
@@ -250,10 +264,31 @@ export const TradeOfferStatus = {
 
 // ShootTracker risk levels
 export const RiskLevel = {
-  LOW: "low",
-  MEDIUM: "medium",
-  HIGH: "high",
-  CRITICAL: "critical",
+  SAFE: "SAFE",
+  AT_RISK: "AT_RISK",
+  OVERDUE: "OVERDUE",
 } as const;
 
 export type RiskLevelType = typeof RiskLevel[keyof typeof RiskLevel];
+
+// ShootTracker creation source
+export const CreatedFrom = {
+  MANUAL: "MANUAL",
+  CALENDAR: "CALENDAR",
+} as const;
+
+export type CreatedFromType = typeof CreatedFrom[keyof typeof CreatedFrom];
+
+// ShootTracker meta schemas
+export const insertShoottrackerMetaSchema = createInsertSchema(shoottrackerMeta).omit({
+  id: true,
+});
+
+export const updateShoottrackerMetaSchema = createInsertSchema(shoottrackerMeta).partial().omit({
+  id: true,
+  projectId: true,
+});
+
+export type ShoottrackerMeta = typeof shoottrackerMeta.$inferSelect;
+export type InsertShoottrackerMeta = z.infer<typeof insertShoottrackerMetaSchema>;
+export type UpdateShoottrackerMeta = z.infer<typeof updateShoottrackerMetaSchema>;
