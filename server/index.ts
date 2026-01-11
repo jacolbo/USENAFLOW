@@ -3,6 +3,7 @@ import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { seed } from "./seed";
 import { startRolloverScheduler } from "./rolloverScheduler";
+import { startAutoSync } from "./autoSyncScheduler";
 
 const app = express();
 app.use(express.json());
@@ -73,5 +74,10 @@ app.use((req, res, next) => {
     log(`serving on port ${port}`);
     // Automatic rollover scheduler disabled - using manual controls only
     // startRolloverScheduler();
+    
+    // Start ShootTracker auto-sync scheduler only in production with env var enabled
+    if (process.env.NODE_ENV === 'production' && process.env.SHOOTTRACKER_AUTOSYNC === 'true') {
+      startAutoSync();
+    }
   });
 })();

@@ -108,6 +108,13 @@ export const projectEvents = pgTable("project_events", {
   createdAt: timestamp("created_at").notNull().default(sql`now()`),
 });
 
+// App settings for ShootTracker and other configurations
+export const appSettings = pgTable("app_settings", {
+  key: text("key").primaryKey(),
+  value: jsonb("value").notNull(),
+  updatedAt: timestamp("updated_at").notNull().default(sql`now()`),
+});
+
 // Complaints system for Evans to manage retoucher reports
 export const complaints = pgTable("complaints", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -292,3 +299,29 @@ export const updateShoottrackerMetaSchema = createInsertSchema(shoottrackerMeta)
 export type ShoottrackerMeta = typeof shoottrackerMeta.$inferSelect;
 export type InsertShoottrackerMeta = z.infer<typeof insertShoottrackerMetaSchema>;
 export type UpdateShoottrackerMeta = z.infer<typeof updateShoottrackerMetaSchema>;
+
+// App settings types
+export type AppSetting = typeof appSettings.$inferSelect;
+
+// ShootTracker settings schema
+export const shoottrackerSettingsSchema = z.object({
+  turnaround_days: z.number().int().min(1).max(30).default(5),
+  working_days: z.array(z.enum(["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"])).default(["MON", "TUE", "WED", "THU", "FRI"]),
+  holidays: z.array(z.string().regex(/^\d{4}-\d{2}-\d{2}$/)).default([]),
+  exclude_keywords: z.array(z.string()).default(["FULL DAY", "BLOCK", "HOLD", "CANCEL", "NO SHOW"]),
+  selected_calendar_ids: z.array(z.string()).default([]),
+  timezone: z.string().default("Africa/Johannesburg"),
+  daily_capacity_projects: z.number().int().min(1).max(50).default(3),
+});
+
+export type ShoottrackerSettings = z.infer<typeof shoottrackerSettingsSchema>;
+
+export const DEFAULT_SHOOTTRACKER_SETTINGS: ShoottrackerSettings = {
+  turnaround_days: 5,
+  working_days: ["MON", "TUE", "WED", "THU", "FRI"],
+  holidays: [],
+  exclude_keywords: ["FULL DAY", "BLOCK", "HOLD", "CANCEL", "NO SHOW"],
+  selected_calendar_ids: [],
+  timezone: "Africa/Johannesburg",
+  daily_capacity_projects: 3,
+};

@@ -1,4 +1,4 @@
-import { type User, type InsertUser, type Project, type InsertProject, type UpdateProject, type ProjectNote, type InsertProjectNote, type UpdateProjectNote, type TradeOffer, type InsertTradeOffer, type UpdateTradeOffer, type WranglerCommission, type InsertWranglerCommission, type ProjectEvent, type InsertProjectEvent, type Complaint, type InsertComplaint, type ShoottrackerMeta, type InsertShoottrackerMeta, type UpdateShoottrackerMeta, ProjectStatus, TradeOfferStatus, users, projects, projectNotes, tradeOffers, wranglerCommissions, projectEvents, complaints, shoottrackerMeta } from "@shared/schema";
+import { type User, type InsertUser, type Project, type InsertProject, type UpdateProject, type ProjectNote, type InsertProjectNote, type UpdateProjectNote, type TradeOffer, type InsertTradeOffer, type UpdateTradeOffer, type WranglerCommission, type InsertWranglerCommission, type ProjectEvent, type InsertProjectEvent, type Complaint, type InsertComplaint, type ShoottrackerMeta, type InsertShoottrackerMeta, type UpdateShoottrackerMeta, type AppSetting, ProjectStatus, TradeOfferStatus, users, projects, projectNotes, tradeOffers, wranglerCommissions, projectEvents, complaints, shoottrackerMeta, appSettings } from "@shared/schema";
 import { db } from "./db";
 import { eq, sql, asc } from "drizzle-orm";
 import { randomUUID } from "crypto";
@@ -49,6 +49,14 @@ export interface IStorage {
   createShoottrackerMeta(meta: InsertShoottrackerMeta): Promise<ShoottrackerMeta>;
   updateShoottrackerMeta(projectId: string, updates: UpdateShoottrackerMeta): Promise<ShoottrackerMeta | undefined>;
   deleteShoottrackerMeta(projectId: string): Promise<boolean>;
+  
+  // App settings methods
+  getAppSetting(key: string): Promise<AppSetting | undefined>;
+  setAppSetting(key: string, value: any): Promise<AppSetting>;
+  deleteAppSetting(key: string): Promise<boolean>;
+  
+  // Get project by calendar event ID
+  getProjectByCalendarEventId(calendarEventId: string): Promise<Project | undefined>;
 }
 
 export class MemStorage implements IStorage {
@@ -509,6 +517,29 @@ export class MemStorage implements IStorage {
   async deleteShoottrackerMeta(projectId: string): Promise<boolean> {
     return false;
   }
+  
+  // App settings methods (Not implemented for MemStorage)
+  async getAppSetting(key: string): Promise<AppSetting | undefined> {
+    return undefined;
+  }
+
+  async setAppSetting(key: string, value: any): Promise<AppSetting> {
+    throw new Error("Not implemented in MemStorage");
+  }
+
+  async deleteAppSetting(key: string): Promise<boolean> {
+    return false;
+  }
+
+  async getProjectByCalendarEventId(calendarEventId: string): Promise<Project | undefined> {
+    const projectsArray = Array.from(this.projects.values());
+    for (const project of projectsArray) {
+      if (project.calendarEventId === calendarEventId) {
+        return project;
+      }
+    }
+    return undefined;
+  }
 }
 
 // Database Storage Implementation
@@ -853,6 +884,41 @@ export class DatabaseStorage implements IStorage {
   async deleteShoottrackerMeta(projectId: string): Promise<boolean> {
     const result = await db.delete(shoottrackerMeta).where(eq(shoottrackerMeta.projectId, projectId));
     return result.rowCount ? result.rowCount > 0 : false;
+  }
+
+  // App settings methods
+  async getAppSetting(key: string): Promise<AppSetting | undefined> {
+    const [setting] = await db.select().from(appSettings).where(eq(appSettings.key, key));
+    return setting || undefined;
+  }
+
+  async setAppSetting(key: string, value: any): Promise<AppSetting> {
+    const existing = await this.getAppSetting(key);
+    
+    if (existing) {
+      const [updated] = await db
+        .update(appSettings)
+        .set({ value, updatedAt: new Date() })
+        .where(eq(appSettings.key, key))
+        .returning();
+      return updated;
+    } else {
+      const [created] = await db
+        .insert(appSettings)
+        .values({ key, value, updatedAt: new Date() })
+        .returning();
+      return created;
+    }
+  }
+
+  async deleteAppSetting(key: string): Promise<boolean> {
+    const result = await db.delete(appSettings).where(eq(appSettings.key, key));
+    return result.rowCount ? result.rowCount > 0 : false;
+  }
+
+  async getProjectByCalendarEventId(calendarEventId: string): Promise<Project | undefined> {
+    const [project] = await db.select().from(projects).where(eq(projects.calendarEventId, calendarEventId));
+    return project || undefined;
   }
 }
 

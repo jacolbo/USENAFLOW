@@ -19,8 +19,9 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogClose } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { AlertTriangle, RefreshCw } from "lucide-react";
+import { AlertTriangle, RefreshCw, Clock } from "lucide-react";
 import { ObjectUploader } from './ObjectUploader';
+import { RiskBadge, RiskDot } from './risk-badge';
 import type { UploadResult } from '@uppy/core';
 
 
@@ -1579,7 +1580,14 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
                               {allUsers.find(u => u.name === project.assignedTo && u.id)?.name || 
                                getRetoucherFullName(project.assignedTo)}
                             </TableCell>
-                            <TableCell>{getStatusBadge(project.status)}</TableCell>
+                            <TableCell>
+                              <div className="flex flex-col gap-1">
+                                {getStatusBadge(project.status)}
+                                {project.riskLevel && project.riskLevel !== 'SAFE' && (
+                                  <RiskBadge level={project.riskLevel} size="sm" showIcon={true} />
+                                )}
+                              </div>
+                            </TableCell>
                             <TableCell>
                               {project.status === 'Review' ? (
                                 <Dialog>
@@ -1733,7 +1741,14 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
                               {allUsers.find(u => u.name === project.assignedTo && u.id)?.name || 
                                getRetoucherFullName(project.assignedTo)}
                             </TableCell>
-                            <TableCell>{getStatusBadge(project.status)}</TableCell>
+                            <TableCell>
+                              <div className="flex flex-col gap-1">
+                                {getStatusBadge(project.status)}
+                                {project.riskLevel && project.riskLevel !== 'SAFE' && (
+                                  <RiskBadge level={project.riskLevel} size="sm" showIcon={true} />
+                                )}
+                              </div>
+                            </TableCell>
                             <TableCell>
                               <ErrorBoundary fallback={<div className="text-sm text-gray-500">Notes unavailable</div>}>
                                 <ProjectNotes 

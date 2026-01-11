@@ -6,6 +6,7 @@ import { insertProjectSchema, updateProjectSchema, insertProjectNoteSchema, upda
 import { ObjectStorageService, ObjectNotFoundError } from "./objectStorage";
 import type { Notification, WebSocketMessage } from "@shared/schema";
 import { triggerManualRollover, performManualRolloverToNextWeek, performManualRollbackFromNextWeek } from "./rolloverScheduler";
+import { registerShoottrackerRoutes } from "./shoottrackerRoutes";
 
 // Global WebSocket connections store
 const wsConnections = new Map<string, { ws: WebSocket, userId?: string }>();
@@ -1213,7 +1214,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { getAtRiskProjects, getRiskDetails } = await import("./services/riskCalculator");
       const { RiskLevel } = await import("@shared/schema");
       
-      const minLevel = (req.query.minLevel as string) || RiskLevel.MEDIUM;
+      const minLevel = (req.query.minLevel as string) || RiskLevel.AT_RISK;
       const projects = await storage.getAllProjects();
       const atRiskProjects = getAtRiskProjects(projects, minLevel as any);
       
@@ -1260,6 +1261,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ error: "Failed to update risk levels" });
     }
   });
+
+  // Register ShootTracker routes (settings, sync, forecast, toggles)
+  registerShoottrackerRoutes(app);
 
   return httpServer;
 }

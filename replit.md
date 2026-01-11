@@ -48,6 +48,42 @@ Preferred communication style: Simple, everyday language.
 - **Assignment Ratio Display**: Week headers show assigned vs total project counts (e.g., "5/48 projects") with green for assigned and red for total.
 - **Color-Coded Calendar**: Projects display with color rules - EC (black), ASA (purple), LM (blue), AP (pink) override rollover colors; rollover projects show green (rolled over once) or red (rolled over twice+); new projects show green.
 
+### ShootTracker Engine Module
+The ShootTracker Engine integrates Google Calendar to automatically create and manage projects:
+- **Google Calendar Sync**: Fetches events from selected calendars using Replit's Google Calendar connector
+- **Event Filtering**: Excludes non-shoot events based on configurable keywords (FULL DAY, BLOCK, HOLD, CANCEL, NO SHOW)
+- **Event Classification**: Categorizes events as DONE (past) or UPCOMING (future)
+- **Business Day Calculations**: Computes delivery due dates using configurable turnaround days, working days, and holidays
+- **Risk Level System**: Three-level risk assessment (SAFE/AT_RISK/OVERDUE) based on delivery due date proximity
+- **Idempotent Sync**: Calendar events linked to projects via unique calendar_event_id to prevent duplicates
+- **Project Metadata**: shoottracker_meta table stores link_sent, delivered status, and sync metadata
+- **Role-Based Access**: Admin routes protected via `verifyAdminRequest` middleware requiring X-Usena-Role and X-Usena-User-Id headers
+
+**ShootTracker API Endpoints:**
+- `GET /api/admin/shoottracker/settings` - Retrieve settings (Admin/Lead Retoucher, requires auth headers)
+- `PUT /api/admin/shoottracker/settings` - Update settings (Admin/Lead Retoucher, requires auth headers)
+- `POST /api/admin/shoottracker/sync` - Trigger calendar sync (Admin/Lead Retoucher, requires auth headers)
+- `GET /api/shoottracker/forecast?targetDate=YYYY-MM-DD` - Get capacity forecast
+- `PATCH /api/shoottracker/project/:id/link-sent` - Toggle link sent status
+- `PATCH /api/shoottracker/project/:id/delivered` - Toggle delivered status
+- `GET /api/shoottracker/project/:id/meta` - Get project metadata
+
+**Admin Authentication:**
+Frontend must include headers for admin routes:
+- `X-Usena-Role`: User's role (must be Admin or LeadRetoucher)
+- `X-Usena-User-Id`: User's ID
+Use `getAdminHeaders(role, userId)` from `client/src/lib/adminAuth.ts`
+
+**Default Settings:**
+- turnaround_days: 5
+- working_days: MON-FRI
+- timezone: Africa/Johannesburg
+- daily_capacity_projects: 3
+
+**Auto-Sync Scheduler:**
+- Runs every 30 minutes when NODE_ENV=production AND SHOOTTRACKER_AUTOSYNC=true
+- Automatically syncs calendar events and updates risk levels
+
 ## External Dependencies
 
 - **@tanstack/react-query**: Server state management.
