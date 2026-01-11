@@ -1,0 +1,233 @@
+You are working inside an EXISTING production app called USENA FLOW. The app already works. Your job is to ADD the ShootTracker module without breaking anything.
+
+ABSOLUTE RULES (non-negotiable):
+- Do NOT refactor unrelated files.
+- Do NOT change existing authentication/session logic.
+- Do NOT change existing role permissions unless explicitly required below.
+- Do NOT rename existing project statuses or alter the 8-stage lifecycle logic.
+- All new functionality must be additive, backwards-compatible, and behind role checks.
+- If you are unsure, add new files/modules instead of modifying core ones.
+- If any step fails, fix errors immediately before moving on.
+
+GOAL:
+Integrate “ShootTracker Engine” into USENA FLOW:
+- Google Calendar OAuth connection
+- Fetch events from selected calendars
+- Exclude non-shoot events by keywords
+- Classify events DONE/UPCOMING
+- For DONE events, compute delivery_due_date using business-day rules
+- Upsert projects (idempotent) with shoot_date, delivery_due_date, risk_level, calendar_event_id, created_from=CALENDAR
+- Provide sync endpoint + forecasting endpoint
+- Provide minimal UI additions: due date + risk badge + filters + detail toggles for Link Sent and Delivered
+- Add optional automated sync scheduler
+
+DELIVERABLE:
+Implement EVERYTHING below from Step 3 to Step 10 (settings → scheduler), end-to-end, including DB updates already done (assume Step 2 completed). If Step 2 is missing, add required fields/tables first, but do it minimally.
+
+------------------------------------------------------------
+STEP 3 — ShootTracker Settings (DB + API)
+------------------------------------------------------------
+1) Add persistent settings in DB using existing patterns.
+   - Prefer existing settings/config tables. If none exist, create an "app_settings" table (key TEXT PRIMARY KEY, value JSONB, updated_at TIMESTAMP).
+2) Default settings:
+   - turnaround_days: 5
+   - working_days: ["MON","TUE","WED","THU","FRI"]
+   - holidays: [] (list of YYYY-MM-DD)
+   - exclude_keywords: ["FULL DAY","BLOCK","HOLD","CANCEL","NO SHOW"]
+   - selected_calendar_ids: [] (list of Google Calendar IDs)
+   - timezone: "Africa/Johannesburg"
+   - daily_capacity_projects: 3
+3) Add backend routes (Admin + Lead Retoucher ONLY):
+   - GET  /api/shoottracker/settings
+   - PUT  /api/shoottracker/settings  (validate inputs; persist safely)
+4) Ensure all routes use the existing auth middleware and role checks.
+
+------------------------------------------------------------
+STEP 4 — Google OAuth + Calendar API Wiring (backend)
+------------------------------------------------------------
+Implement Google Calendar connectivity for ShootTracker.
+1) Use OAuth 2.0 (Google) with scopes sufficient to read calendar events and list calendars.
+2) Store tokens securely:
+   - Use DB table e.g. "oauth_tokens" or create "shoottracker_tokens" minimally.
+   - Store access_token, refresh_token, expiry, scope, token_type, created_at, updated_at.
+   - If the codebase has encryption utilities, use them. If not, store raw tokens but isolate them to a dedicated table and ensure server-side-only access.
+3) Use Replit Secrets:
+   - GOOGLE_CLIENT_ID
+   - GOOGLE_CLIENT_SECRET
+   - GOOGLE_REDIRECT_URI
+4) Add backend routes (Admin + Lead Retoucher ONLY):
+   - GET /api/shoottracker/auth/url          → returns the Google consent URL
+   - GET /api/shoottracker/auth/callback     → exchanges code for tokens, stores tokens, redirects back to app
+   - GET /api/shoottracker/calendars         → lists calendars user can access
+   - POST /api/shoottracker/calendars/select → saves selected calendar IDs into settings
+5) Do NOT break existing session/login. Use existing session user context.
+
+------------------------------------------------------------
+STEP 5 — Event Fetching + Filtering + Classification (service layer)
+------------------------------------------------------------
+Create a new backend service/module: shoottrackerEngine (new folder/file).
+Requirements:
+1) Fetch events from selected calendars for range:
+   - default: timeMin = now - 90 days
+   - default: timeMax = now + 90 days
+   - allow override via query params for testing
+2) Exclusion:
+   - Exclude events if (title OR description OR location) contains any exclude_keywords (case-insensitive).
+3) Classification:
+   - UPCOMING if event start > now
+   - DONE if event start <= now
+4) Business day due date:
+   - delivery_due_date = shoot_date + turnaround_days business days
+   - Only count configured working_days
+   - Skip weekends unless configured
+   - Skip holidays list
+   - Timezone: Africa/Johannesburg
+5) Implement pure functions (testable):
+   - normalizeEvent(event)
+   - shouldExclude(event, keywords)
+   - classifyEvent(event, now)
+   - addBusinessDays(date, turnaroundDays, workingDays, holidays, timezone)
+6) Add tests:
+   - If repo has test runner, add unit tests.
+   - If not, add a minimal node script (e.g. scripts/testShoottracker.ts) that prints PASS/FAIL and exits nonzero on failure.
+
+------------------------------------------------------------
+STEP 6 — Project Upsert From Calendar (idempotent + safe)
+------------------------------------------------------------
+Implement sync that creates/updates projects without overwriting workflow fields.
+Rules:
+1) For each DONE event:
+   - If no project exists with calendar_event_id:
+     - Create new project with:
+       - client_name derived from event title (trim whitespace, strip emojis if simple)
+       - shoot_date from event start
+       - delivery_due_date from business day calc
+       - risk_level computed (see Step 7)
+       - calendar_event_id set
+       - created_from = "CALENDAR"
+       - status = "Awaiting Payment" by default (do NOT invent payment info)
+     - Create shoottracker_meta row linked 1:1 with:
+       - project_id
+       - link_sent=false
+       - delivered=false
+       - last_calendar_sync=now
+       - raw_event_payload = full event JSON (optional but preferred)
+   - If project exists:
+     - Update ONLY:
+       - shoot_date (if changed)
+       - delivery_due_date (recalc)
+       - risk_level (recalc)
+       - shoottracker_meta.raw_event_payload
+       - shoottracker_meta.last_calendar_sync
+     - NEVER overwrite:
+       - assigned retoucher
+       - notes
+       - internal statuses like Assigned/Review/Corrections/Rolled Over
+       - payment fields
+2) Add sync endpoint (Admin + Lead Retoucher ONLY):
+   - POST /api/shoottracker/sync
+   - Returns counts:
+     { fetched, excluded, done, upcoming, created, updated, errors }
+3) Log a concise sync summary server-side with timestamps.
+4) Handle Google API rate limits gracefully (retry/backoff or skip with error count).
+5) Ensure sync is idempotent: running twice creates no duplicates.
+
+------------------------------------------------------------
+STEP 7 — Risk Engine + Forecast Endpoint
+------------------------------------------------------------
+Risk calculation rules (based on TODAY in Africa/Johannesburg):
+- If today > delivery_due_date AND delivered=false → OVERDUE
+- Else if delivery_due_date is within 2 WORKING DAYS AND delivered=false → AT_RISK
+- Else → SAFE
+
+Capacity forecasting (global, not per retoucher):
+- daily_capacity_projects from settings (default 3)
+- Given a targetDate=YYYY-MM-DD:
+  - projects_due_before_target = count of projects where delivery_due_date <= targetDate and delivered=false
+  - available_capacity_before_target = (number of working days from tomorrow to targetDate inclusive) * daily_capacity_projects
+  - feasible = available_capacity_before_target >= projects_due_before_target
+  - at_risk_projects = list of projects where risk_level != SAFE (include id, client_name, delivery_due_date, risk_level)
+
+Add endpoint (Admin + Sales + Lead + Data Wrangler):
+- GET /api/shoottracker/forecast?targetDate=YYYY-MM-DD
+Return:
+{ targetDate, projects_due_before_target, available_capacity_before_target, feasible, at_risk_projects }
+
+Also ensure risk_level is recalculated during sync and also recalculated whenever Delivered toggle changes (Step 9).
+
+------------------------------------------------------------
+STEP 8 — Frontend UI Integration (minimal changes)
+------------------------------------------------------------
+Add ShootTracker info to existing USENA FLOW UI without redesign.
+Requirements:
+1) Show on each project card/row (where projects are listed):
+   - Shoot Date (if present)
+   - Delivery Due Date (if present)
+   - Risk badge (SAFE / AT_RISK / OVERDUE)
+2) Add quick filters:
+   - Due This Week (delivery_due_date within next 7 days and delivered=false)
+   - Overdue (risk_level=OVERDUE)
+   - At Risk (risk_level=AT_RISK)
+3) Role-based visibility:
+   - Admin, Sales, Lead, Data Wrangler: can see all projects’ due info
+   - Retouchers: only see due info for their assigned projects (keep privacy)
+4) Add a calendar icon/link if calendar_event_id exists:
+   - If you cannot generate a direct Google event URL reliably, show the ID in a tooltip and omit the link (do NOT guess wrong links).
+5) Keep existing retoucher color system and existing status colors untouched.
+
+------------------------------------------------------------
+STEP 9 — Link Sent & Delivered Toggles (backend + UI)
+------------------------------------------------------------
+Add two toggles stored in shoottracker_meta:
+- link_sent (boolean)
+- delivered (boolean)
+
+Backend:
+1) Add endpoints (Admin + Sales + Lead Retoucher):
+   - PATCH /api/shoottracker/project/:id/link-sent   { link_sent: true/false }
+   - PATCH /api/shoottracker/project/:id/delivered   { delivered: true/false }
+2) When delivered becomes true:
+   - Update USENA FLOW project status to "Delivered" (and DO NOT auto-set "Done" unless USENA FLOW already auto-closes delivered projects—follow existing behavior).
+   - Recompute risk_level to SAFE.
+3) When delivered becomes false again (if allowed):
+   - Recompute risk_level normally.
+4) All updates must validate role + project access rules.
+5) Update the project list responses to include shoottracker_meta fields and due/risk fields.
+
+Frontend:
+1) Add toggles inside project detail drawer/modal (NOT cluttering the list row).
+2) Toggling should update immediately with optimistic UI if the app uses it; otherwise refresh project data.
+3) If user lacks permission, hide toggles.
+
+------------------------------------------------------------
+STEP 10 — Automated Sync Scheduler (safe)
+------------------------------------------------------------
+Implement automatic syncing option without crashing server.
+Preferred:
+- Use a proper scheduler/cron if repo already uses one.
+Fallback:
+- Server-side interval timer only when:
+  - SHOOTTRACKER_AUTOSYNC=true
+  - NODE_ENV=production
+  - OAuth tokens exist
+Interval: every 30 minutes.
+
+Rules:
+- Do not run autosync if tokens missing or calendars not selected.
+- Log start/end + counts.
+- Respect rate limiting.
+- Must not crash the process; errors should be caught and logged.
+
+------------------------------------------------------------
+FINAL CHECKLIST (must complete)
+------------------------------------------------------------
+- All new DB changes applied and app boots cleanly.
+- All new endpoints are protected by auth + role checks.
+- Manual project creation still works exactly as before.
+- Sync is idempotent and does not duplicate projects.
+- UI shows due dates + risk badge + filters.
+- Link Sent / Delivered toggles work and update DB.
+- Forecast endpoint works with capacity math.
+- Autosync works behind flags and does not spam.
+
+Now implement everything above in the codebase. Make the smallest safe edits. If you run into errors, fix them and continue. Output only code changes and brief commit-style notes of what you changed per step.
