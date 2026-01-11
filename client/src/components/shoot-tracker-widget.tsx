@@ -1,13 +1,15 @@
 import { useQuery, useMutation } from "@tanstack/react-query";
+import { useLocation } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { RiskBadge, RiskDot } from "./risk-badge";
-import { Calendar, RefreshCw, Camera, AlertTriangle, ChevronRight } from "lucide-react";
+import { Calendar, RefreshCw, Camera, AlertTriangle, ChevronRight, Settings } from "lucide-react";
 import { format, formatDistanceToNow, isToday, isTomorrow } from "date-fns";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { UserRoles } from "@shared/schema";
 
 interface UpcomingShoot {
   id: string;
@@ -37,8 +39,15 @@ interface AtRiskProject {
   };
 }
 
+const SETTINGS_ACCESS_ROLES = [UserRoles.ADMIN, UserRoles.DATA_WRANGLER, UserRoles.LEAD_RETOUCHER];
+
 export function ShootTrackerWidget() {
   const { toast } = useToast();
+  const [, setLocation] = useLocation();
+  
+  const storedUser = localStorage.getItem("usenaUser");
+  const user = storedUser ? JSON.parse(storedUser) : null;
+  const canAccessSettings = SETTINGS_ACCESS_ROLES.includes(user?.role as any);
   
   const { data: upcomingShoots, isLoading: shootsLoading } = useQuery<UpcomingShoot[]>({
     queryKey: ["/api/shoots/upcoming"],
@@ -89,16 +98,29 @@ export function ShootTrackerWidget() {
               <Camera className="h-5 w-5 text-blue-500" />
               Upcoming Shoots
             </CardTitle>
-            <Button 
-              variant="outline" 
-              size="sm"
-              onClick={() => syncMutation.mutate()}
-              disabled={syncMutation.isPending}
-              className="h-8"
-            >
-              <RefreshCw className={`h-4 w-4 mr-1 ${syncMutation.isPending ? 'animate-spin' : ''}`} />
-              Sync
-            </Button>
+            <div className="flex gap-2">
+              {canAccessSettings && (
+                <Button 
+                  variant="ghost" 
+                  size="sm"
+                  onClick={() => setLocation("/shoottracker")}
+                  className="h-8"
+                  title="ShootTracker Settings"
+                >
+                  <Settings className="h-4 w-4" />
+                </Button>
+              )}
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={() => syncMutation.mutate()}
+                disabled={syncMutation.isPending}
+                className="h-8"
+              >
+                <RefreshCw className={`h-4 w-4 mr-1 ${syncMutation.isPending ? 'animate-spin' : ''}`} />
+                Sync
+              </Button>
+            </div>
           </div>
         </CardHeader>
         <CardContent className="pt-0">
