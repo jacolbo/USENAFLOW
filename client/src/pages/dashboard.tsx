@@ -20,7 +20,7 @@ import { useSSE } from "@/hooks/use-sse";
 import { User } from "@/lib/types";
 import { Project } from "@shared/schema";
 import { User as UserIcon, LogOut, Settings, Archive, ArrowRightLeft, DollarSign, AlertTriangle, Calendar } from "lucide-react";
-import { Link } from "wouter";
+import { useLocation } from "wouter";
 import logoImage from "@assets/USENA-FLOW_1754522507856.png";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -573,6 +573,7 @@ function ComplaintCard({ complaint, onUpdateStatus, onDelete, isPending, isCompl
 }
 
 export default function Dashboard() {
+  const [, setLocation] = useLocation();
   const [user, setUser] = useState<User | null>(null);
   const [currentView, setCurrentView] = useState<'login' | 'register'>('login');
   const [showArchive, setShowArchive] = useState(false);
@@ -1091,16 +1092,15 @@ export default function Dashboard() {
 
                     {/* ShootTracker Settings Button - Admin, LeadRetoucher, DataWrangler only */}
                     {['Admin', 'LeadRetoucher', 'DataWrangler'].includes(user.role) && (
-                      <Link href="/shoottracker">
-                        <Button 
-                          variant="outline"
-                          size="sm"
-                          className="flex items-center gap-2 bg-teal-50 hover:bg-teal-100 border-teal-200 text-teal-700"
-                        >
-                          <Calendar className="h-4 w-4" />
-                          ShootTracker
-                        </Button>
-                      </Link>
+                      <Button 
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setLocation('/shoottracker')}
+                        className="flex items-center gap-2 bg-teal-50 hover:bg-teal-100 border-teal-200 text-teal-700"
+                      >
+                        <Calendar className="h-4 w-4" />
+                        ShootTracker
+                      </Button>
                     )}
 
                     {/* Manual Rollover Buttons for Admin */}
