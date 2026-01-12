@@ -311,6 +311,7 @@ export const shoottrackerSettingsSchema = z.object({
   selected_calendar_ids: z.array(z.string()).default([]),
   timezone: z.string().default("Africa/Johannesburg"),
   daily_capacity_projects: z.number().int().min(1).max(50).default(3),
+  ics_calendar_url: z.string().optional().default(""),
 });
 
 export type ShoottrackerSettings = z.infer<typeof shoottrackerSettingsSchema>;
@@ -323,4 +324,5 @@ export const DEFAULT_SHOOTTRACKER_SETTINGS: ShoottrackerSettings = {
   selected_calendar_ids: [],
   timezone: "Africa/Johannesburg",
   daily_capacity_projects: 3,
+  ics_calendar_url: "",
 };

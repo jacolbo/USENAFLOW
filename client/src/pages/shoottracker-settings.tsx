@@ -102,6 +102,7 @@ export default function ShootTrackerSettings() {
       selected_calendar_ids: [],
       timezone: "Africa/Johannesburg",
       daily_capacity_projects: 3,
+      ics_calendar_url: "",
     },
   });
 
@@ -147,11 +148,11 @@ export default function ShootTrackerSettings() {
       if (!response.ok) throw new Error("Failed to sync calendar");
       return response.json();
     },
-    onSuccess: (data) => {
-      setSyncStats(data.stats);
+    onSuccess: (data: SyncStats) => {
+      setSyncStats(data);
       toast({ 
         title: "Sync Complete", 
-        description: `Created ${data.stats.created} projects, updated ${data.stats.updated}` 
+        description: `Created ${data.created} projects, updated ${data.updated}` 
       });
       queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
     },
@@ -243,58 +244,81 @@ export default function ShootTrackerSettings() {
           </div>
         </div>
 
-        <div className="grid gap-6">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <RefreshCw className="h-5 w-5" />
-                Calendar Sync
-              </CardTitle>
-              <CardDescription>
-                Sync your Google Calendar events to automatically create projects
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <Button 
-                onClick={() => syncMutation.mutate()} 
-                disabled={syncMutation.isPending}
-                className="w-full sm:w-auto"
-              >
-                {syncMutation.isPending ? (
-                  <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Syncing...</>
-                ) : (
-                  <><RefreshCw className="h-4 w-4 mr-2" /> Sync Now</>
-                )}
-              </Button>
-
-              {syncStats && (
-                <div className="mt-4 p-4 bg-muted rounded-lg">
-                  <h4 className="font-medium mb-2">Last Sync Results</h4>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-sm">
-                    <div className="flex items-center gap-2">
-                      <CheckCircle className="h-4 w-4 text-green-500" />
-                      <span>Fetched: {syncStats.fetched}</span>
-                    </div>
-                    <div>Excluded: {syncStats.excluded}</div>
-                    <div>Upcoming: {syncStats.upcoming}</div>
-                    <div>Done: {syncStats.done}</div>
-                    <div className="text-green-600">Created: {syncStats.created}</div>
-                    <div className="text-blue-600">Updated: {syncStats.updated}</div>
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+            <div className="grid gap-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <RefreshCw className="h-5 w-5" />
+                    Calendar Sync
+                  </CardTitle>
+                  <CardDescription>
+                    Sync your calendar events to automatically create projects
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <FormField
+                    control={form.control}
+                    name="ics_calendar_url"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Shared Calendar Link (ICS URL)</FormLabel>
+                        <FormControl>
+                          <Input 
+                            placeholder="https://calendar.google.com/calendar/ical/..."
+                            {...field}
+                            value={field.value || ""}
+                          />
+                        </FormControl>
+                        <FormDescription>
+                          Paste your shared calendar link here. In Google Calendar: Calendar Settings → "Secret address in iCal format"
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  
+                  <div className="flex gap-2">
+                    <Button 
+                      type="button"
+                      onClick={() => syncMutation.mutate()} 
+                      disabled={syncMutation.isPending}
+                    >
+                      {syncMutation.isPending ? (
+                        <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Syncing...</>
+                      ) : (
+                        <><RefreshCw className="h-4 w-4 mr-2" /> Sync Now</>
+                      )}
+                    </Button>
                   </div>
-                  {syncStats.errors.length > 0 && (
-                    <div className="mt-2 text-destructive text-sm">
-                      {syncStats.errors.map((err, i) => (
-                        <div key={i}>{err}</div>
-                      ))}
+
+                  {syncStats && (
+                    <div className="mt-4 p-4 bg-muted rounded-lg">
+                      <h4 className="font-medium mb-2">Last Sync Results</h4>
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-sm">
+                        <div className="flex items-center gap-2">
+                          <CheckCircle className="h-4 w-4 text-green-500" />
+                          <span>Fetched: {syncStats.fetched}</span>
+                        </div>
+                        <div>Excluded: {syncStats.excluded}</div>
+                        <div>Upcoming: {syncStats.upcoming}</div>
+                        <div>Done: {syncStats.done}</div>
+                        <div className="text-green-600">Created: {syncStats.created}</div>
+                        <div className="text-blue-600">Updated: {syncStats.updated}</div>
+                      </div>
+                      {syncStats.errors.length > 0 && (
+                        <div className="mt-2 text-destructive text-sm">
+                          {syncStats.errors.map((err, i) => (
+                            <div key={i}>{err}</div>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   )}
-                </div>
-              )}
-            </CardContent>
-          </Card>
+                </CardContent>
+              </Card>
 
-          <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
@@ -490,9 +514,9 @@ export default function ShootTrackerSettings() {
                   )}
                 </Button>
               </div>
-            </form>
-          </Form>
-        </div>
+            </div>
+          </form>
+        </Form>
       </div>
     </div>
   );

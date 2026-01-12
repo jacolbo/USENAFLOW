@@ -11,6 +11,7 @@ import {
 import { verifyAdminRequest } from "./middleware/adminAuth";
 import { 
   normalizeEvent, 
+  NormalizedEvent,
   shouldExclude, 
   classifyEvent, 
   addBusinessDays, 
@@ -23,6 +24,7 @@ import {
   SyncStats,
 } from "./services/shoottrackerEngine";
 import { fetchCalendarEvents, CalendarEvent } from "./services/googleCalendar";
+import { fetchICSCalendar, ICSEvent } from "./services/icsCalendar";
 import { calculateRiskLevel } from "./services/riskCalculator";
 
 const SETTINGS_KEY = "shoottracker_settings";
@@ -71,33 +73,69 @@ export function registerShoottrackerRoutes(app: Express): void {
     try {
       const settings = await getSettings();
       const stats = createEmptySyncStats();
-      
       const now = new Date();
       const timeMin = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
       const timeMax = new Date(now.getTime() + 90 * 24 * 60 * 60 * 1000);
       
-      const calendarIds = settings.selected_calendar_ids.length > 0 
-        ? settings.selected_calendar_ids 
-        : ['primary'];
+      let normalizedEvents: NormalizedEvent[] = [];
       
-      let allEvents: CalendarEvent[] = [];
-      
-      for (const calendarId of calendarIds) {
+      // Priority: Use ICS URL if configured, otherwise try Google Calendar
+      if (settings.ics_calendar_url && settings.ics_calendar_url.trim() !== "") {
+        console.log(`📅 ShootTracker: Fetching from ICS URL`);
         try {
-          const events = await fetchCalendarEvents(calendarId, timeMin, timeMax);
-          allEvents = allEvents.concat(events);
+          const icsEvents = await fetchICSCalendar(settings.ics_calendar_url);
+          
+          // Filter events within time range
+          const filteredEvents = icsEvents.filter(event => {
+            return event.start >= timeMin && event.start <= timeMax;
+          });
+          
+          normalizedEvents = filteredEvents.map(event => {
+            const calendarEventLike: CalendarEvent = {
+              id: event.uid || event.id,
+              summary: event.summary,
+              description: event.description,
+              location: event.location,
+              start: event.start.toISOString(),
+              end: event.end.toISOString(),
+            };
+            return normalizeEvent(calendarEventLike);
+          });
+          
+          stats.fetched = normalizedEvents.length;
+          console.log(`📅 ShootTracker: Fetched ${stats.fetched} events from ICS calendar`);
         } catch (error: any) {
-          stats.errors.push(`Failed to fetch calendar ${calendarId}: ${error.message}`);
+          stats.errors.push(`Failed to fetch ICS calendar: ${error.message}`);
         }
+      } else {
+        // Fall back to Google Calendar API if no ICS URL configured
+        const calendarIds = settings.selected_calendar_ids.length > 0 
+          ? settings.selected_calendar_ids 
+          : ['primary'];
+        
+        let allEvents: CalendarEvent[] = [];
+        
+        for (const calendarId of calendarIds) {
+          try {
+            const events = await fetchCalendarEvents(calendarId, timeMin, timeMax);
+            allEvents = allEvents.concat(events);
+          } catch (error: any) {
+            stats.errors.push(`Failed to fetch calendar ${calendarId}: ${error.message}`);
+          }
+        }
+        
+        for (const rawEvent of allEvents) {
+          const event = normalizeEvent(rawEvent);
+          normalizedEvents.push(event);
+        }
+        
+        stats.fetched = normalizedEvents.length;
+        console.log(`📅 ShootTracker: Fetched ${stats.fetched} events from ${calendarIds.length} calendar(s)`);
       }
       
-      stats.fetched = allEvents.length;
-      console.log(`📅 ShootTracker: Fetched ${stats.fetched} events from ${calendarIds.length} calendar(s)`);
-      
-      for (const rawEvent of allEvents) {
+      // Process all normalized events
+      for (const event of normalizedEvents) {
         try {
-          const event = normalizeEvent(rawEvent);
-          
           if (shouldExclude(event, settings.exclude_keywords)) {
             stats.excluded++;
             continue;
@@ -193,7 +231,7 @@ export function registerShoottrackerRoutes(app: Express): void {
             stats.created++;
           }
         } catch (eventError: any) {
-          stats.errors.push(`Event ${rawEvent.id}: ${eventError.message}`);
+          stats.errors.push(`Event ${event.id}: ${eventError.message}`);
         }
       }
       
