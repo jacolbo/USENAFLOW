@@ -1,49 +1,123 @@
-import { google } from 'googleapis';
+import { google, calendar_v3 } from 'googleapis';
+import { db } from '../db';
+import { appSettings } from '@shared/schema';
+import { eq } from 'drizzle-orm';
+import crypto from 'crypto';
 
-let connectionSettings: any;
+const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
+const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
+const REDIRECT_URI = process.env.REPLIT_DEV_DOMAIN 
+  ? `https://${process.env.REPLIT_DEV_DOMAIN}/api/auth/google/callback`
+  : 'http://localhost:5000/api/auth/google/callback';
 
-async function getAccessToken() {
-  if (connectionSettings && connectionSettings.settings.expires_at && new Date(connectionSettings.settings.expires_at).getTime() > Date.now()) {
-    return connectionSettings.settings.access_token;
+const SCOPES = [
+  'https://www.googleapis.com/auth/calendar.readonly',
+  'https://www.googleapis.com/auth/calendar.events.readonly',
+];
+
+let pendingOAuthState: string | null = null;
+const STATE_EXPIRY_MS = 10 * 60 * 1000;
+let stateCreatedAt: number = 0;
+
+function getOAuth2Client() {
+  if (!GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET) {
+    throw new Error('Google OAuth credentials not configured. Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET.');
   }
-  
-  const hostname = process.env.REPLIT_CONNECTORS_HOSTNAME;
-  const xReplitToken = process.env.REPL_IDENTITY 
-    ? 'repl ' + process.env.REPL_IDENTITY 
-    : process.env.WEB_REPL_RENEWAL 
-    ? 'depl ' + process.env.WEB_REPL_RENEWAL 
-    : null;
-
-  if (!xReplitToken) {
-    throw new Error('X_REPLIT_TOKEN not found for repl/depl');
-  }
-
-  connectionSettings = await fetch(
-    'https://' + hostname + '/api/v2/connection?include_secrets=true&connector_names=google-calendar',
-    {
-      headers: {
-        'Accept': 'application/json',
-        'X_REPLIT_TOKEN': xReplitToken
-      }
-    }
-  ).then(res => res.json()).then(data => data.items?.[0]);
-
-  const accessToken = connectionSettings?.settings?.access_token || connectionSettings?.settings?.oauth?.credentials?.access_token;
-
-  if (!connectionSettings || !accessToken) {
-    throw new Error('Google Calendar not connected');
-  }
-  return accessToken;
+  return new google.auth.OAuth2(GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, REDIRECT_URI);
 }
 
-export async function getGoogleCalendarClient() {
-  const accessToken = await getAccessToken();
-
-  const oauth2Client = new google.auth.OAuth2();
-  oauth2Client.setCredentials({
-    access_token: accessToken
+export function getAuthorizationUrl(): string {
+  const oauth2Client = getOAuth2Client();
+  pendingOAuthState = crypto.randomBytes(32).toString('hex');
+  stateCreatedAt = Date.now();
+  
+  return oauth2Client.generateAuthUrl({
+    access_type: 'offline',
+    scope: SCOPES,
+    prompt: 'consent',
+    state: pendingOAuthState,
   });
+}
 
+export function validateOAuthState(state: string): boolean {
+  if (!pendingOAuthState || !state) return false;
+  if (Date.now() - stateCreatedAt > STATE_EXPIRY_MS) {
+    pendingOAuthState = null;
+    return false;
+  }
+  const isValid = state === pendingOAuthState;
+  if (isValid) {
+    pendingOAuthState = null;
+  }
+  return isValid;
+}
+
+export async function handleAuthCallback(code: string): Promise<void> {
+  const oauth2Client = getOAuth2Client();
+  const { tokens } = await oauth2Client.getToken(code);
+  
+  await db.insert(appSettings)
+    .values({
+      key: 'google_oauth_tokens',
+      value: tokens,
+      updatedAt: new Date(),
+    })
+    .onConflictDoUpdate({
+      target: appSettings.key,
+      set: {
+        value: tokens,
+        updatedAt: new Date(),
+      },
+    });
+}
+
+async function getStoredTokens(): Promise<any | null> {
+  const result = await db.select()
+    .from(appSettings)
+    .where(eq(appSettings.key, 'google_oauth_tokens'))
+    .limit(1);
+  
+  return result[0]?.value || null;
+}
+
+export async function isGoogleConnected(): Promise<boolean> {
+  try {
+    const tokens = await getStoredTokens();
+    return !!tokens?.refresh_token;
+  } catch {
+    return false;
+  }
+}
+
+export async function getGoogleCalendarClient(): Promise<calendar_v3.Calendar> {
+  const tokens = await getStoredTokens();
+  
+  if (!tokens) {
+    throw new Error('Google Calendar not connected. Please authorize access first.');
+  }
+  
+  const oauth2Client = getOAuth2Client();
+  oauth2Client.setCredentials(tokens);
+  
+  oauth2Client.on('tokens', async (newTokens) => {
+    const currentTokens = await getStoredTokens();
+    const updatedTokens = { ...currentTokens, ...newTokens };
+    
+    await db.insert(appSettings)
+      .values({
+        key: 'google_oauth_tokens',
+        value: updatedTokens,
+        updatedAt: new Date(),
+      })
+      .onConflictDoUpdate({
+        target: appSettings.key,
+        set: {
+          value: updatedTokens,
+          updatedAt: new Date(),
+        },
+      });
+  });
+  
   return google.calendar({ version: 'v3', auth: oauth2Client });
 }
 
@@ -66,7 +140,7 @@ export async function fetchCalendarEvents(
     
     const now = new Date();
     const defaultTimeMin = timeMin || now;
-    const defaultTimeMax = timeMax || new Date(now.getTime() + 90 * 24 * 60 * 60 * 1000); // 90 days ahead
+    const defaultTimeMax = timeMax || new Date(now.getTime() + 90 * 24 * 60 * 60 * 1000);
     
     const response = await calendar.events.list({
       calendarId,
@@ -93,17 +167,26 @@ export async function fetchCalendarEvents(
   }
 }
 
+export async function listCalendars(): Promise<Array<{ id: string; summary: string; primary: boolean }>> {
+  try {
+    const calendar = await getGoogleCalendarClient();
+    const response = await calendar.calendarList.list();
+    
+    return (response.data.items || []).map(cal => ({
+      id: cal.id || '',
+      summary: cal.summary || '',
+      primary: cal.primary || false,
+    }));
+  } catch (error) {
+    console.error('Error listing calendars:', error);
+    throw error;
+  }
+}
+
 export function parseClientNameFromEvent(event: CalendarEvent): string | null {
   const summary = event.summary;
   if (!summary) return null;
   
-  // Common patterns for photography shoots:
-  // "John Smith - Wedding Shoot"
-  // "Smith Family Portrait"
-  // "Shoot: Jane Doe"
-  // "Client: ABC Company"
-  
-  // Try to extract client name from summary
   const patterns = [
     /^(.+?)\s*[-–—]\s*(shoot|session|portrait|wedding|event)/i,
     /^(shoot|session|client|booking)[:]\s*(.+)/i,
@@ -113,12 +196,10 @@ export function parseClientNameFromEvent(event: CalendarEvent): string | null {
   for (const pattern of patterns) {
     const match = summary.match(pattern);
     if (match) {
-      // Return the client name part (group 1 or 2 depending on pattern)
       return (match[1] || match[2] || '').trim();
     }
   }
   
-  // If no pattern matches, return the whole summary as potential client name
   return summary.trim();
 }
 
