@@ -134,17 +134,6 @@ export default function ShootTrackerSettings() {
     },
   });
 
-  const googleStatusQuery = useQuery<{ connected: boolean; calendars: Array<{ id: string; summary: string; primary: boolean }> }>({
-    queryKey: ["/api/auth/google/status"],
-    queryFn: async () => {
-      const headers = getAdminHeaders(userRole, userId);
-      const response = await fetch("/api/auth/google/status", { headers });
-      if (!response.ok) throw new Error("Failed to check Google status");
-      return response.json();
-    },
-    enabled: hasAccess,
-  });
-
   const syncMutation = useMutation({
     mutationFn: async () => {
       const headers = {
@@ -170,25 +159,6 @@ export default function ShootTrackerSettings() {
       toast({ title: "Sync Failed", description: error.message, variant: "destructive" });
     },
   });
-
-  const connectGoogleCalendar = async () => {
-    try {
-      const headers = getAdminHeaders(userRole, userId);
-      const response = await fetch("/api/auth/google", { headers });
-      const data = await response.json();
-      if (data.authUrl) {
-        window.open(data.authUrl, "_blank", "width=600,height=700");
-        toast({ 
-          title: "Connecting...", 
-          description: "Complete authorization in the popup window, then refresh this page." 
-        });
-      } else if (data.error) {
-        throw new Error(data.error);
-      }
-    } catch (error: any) {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
-    }
-  };
 
   const onSubmit = (data: ShoottrackerSettings) => {
     saveSettingsMutation.mutate(data);
@@ -285,44 +255,9 @@ export default function ShootTrackerSettings() {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="flex items-center gap-4 p-4 bg-muted rounded-lg">
-                {googleStatusQuery.isLoading ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : googleStatusQuery.data?.connected ? (
-                  <>
-                    <div className="flex items-center gap-2 text-green-600">
-                      <CheckCircle className="h-5 w-5" />
-                      <span className="font-medium">Google Calendar Connected</span>
-                    </div>
-                    {googleStatusQuery.data.calendars.length > 0 && (
-                      <span className="text-sm text-muted-foreground">
-                        ({googleStatusQuery.data.calendars.length} calendars available)
-                      </span>
-                    )}
-                    <Button 
-                      variant="outline" 
-                      size="sm"
-                      onClick={() => queryClient.invalidateQueries({ queryKey: ["/api/auth/google/status"] })}
-                    >
-                      Refresh
-                    </Button>
-                  </>
-                ) : (
-                  <>
-                    <div className="flex items-center gap-2 text-amber-600">
-                      <AlertTriangle className="h-5 w-5" />
-                      <span>Google Calendar not connected</span>
-                    </div>
-                    <Button onClick={connectGoogleCalendar} variant="default" size="sm">
-                      Connect Google Calendar
-                    </Button>
-                  </>
-                )}
-              </div>
-
               <Button 
                 onClick={() => syncMutation.mutate()} 
-                disabled={syncMutation.isPending || !googleStatusQuery.data?.connected}
+                disabled={syncMutation.isPending}
                 className="w-full sm:w-auto"
               >
                 {syncMutation.isPending ? (
