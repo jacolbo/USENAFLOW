@@ -45,8 +45,9 @@ export function ShootTrackerWidget() {
   const { toast } = useToast();
   const [, setLocation] = useLocation();
   
-  const storedUser = localStorage.getItem("usenaUser");
-  const user = storedUser ? JSON.parse(storedUser) : null;
+  const storedSession = localStorage.getItem("usenaflow_session");
+  const sessionData = storedSession ? JSON.parse(storedSession) : null;
+  const user = sessionData?.user || null;
   const canAccessSettings = SETTINGS_ACCESS_ROLES.includes(user?.role as any);
   
   const { data: upcomingShoots, isLoading: shootsLoading } = useQuery<UpcomingShoot[]>({

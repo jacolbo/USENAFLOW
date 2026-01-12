@@ -73,8 +73,9 @@ export default function ShootTrackerSettings() {
   const [newKeyword, setNewKeyword] = useState("");
   const [syncStats, setSyncStats] = useState<SyncStats | null>(null);
 
-  const storedUser = localStorage.getItem("usenaUser");
-  const user = storedUser ? JSON.parse(storedUser) : null;
+  const storedSession = localStorage.getItem("usenaflow_session");
+  const sessionData = storedSession ? JSON.parse(storedSession) : null;
+  const user = sessionData?.user || null;
   const userRole = user?.role || "";
   const userId = user?.id || "";
 
