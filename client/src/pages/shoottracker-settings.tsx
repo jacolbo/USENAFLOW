@@ -397,7 +397,7 @@ export default function ShootTrackerSettings() {
     if (newHoliday && /^\d{4}-\d{2}-\d{2}$/.test(newHoliday)) {
       const currentHolidays = form.getValues("holidays");
       if (!currentHolidays.includes(newHoliday)) {
-        form.setValue("holidays", [...currentHolidays, newHoliday]);
+        form.setValue("holidays", [...currentHolidays, newHoliday], { shouldDirty: true });
         setNewHoliday("");
       }
     }
@@ -405,14 +405,14 @@ export default function ShootTrackerSettings() {
 
   const removeHoliday = (holiday: string) => {
     const currentHolidays = form.getValues("holidays");
-    form.setValue("holidays", currentHolidays.filter(h => h !== holiday));
+    form.setValue("holidays", currentHolidays.filter(h => h !== holiday), { shouldDirty: true });
   };
 
   const addKeyword = () => {
     if (newKeyword.trim()) {
       const currentKeywords = form.getValues("exclude_keywords");
       if (!currentKeywords.includes(newKeyword.toUpperCase())) {
-        form.setValue("exclude_keywords", [...currentKeywords, newKeyword.toUpperCase()]);
+        form.setValue("exclude_keywords", [...currentKeywords, newKeyword.toUpperCase()], { shouldDirty: true });
         setNewKeyword("");
       }
     }
@@ -420,7 +420,7 @@ export default function ShootTrackerSettings() {
 
   const removeKeyword = (keyword: string) => {
     const currentKeywords = form.getValues("exclude_keywords");
-    form.setValue("exclude_keywords", currentKeywords.filter(k => k !== keyword));
+    form.setValue("exclude_keywords", currentKeywords.filter(k => k !== keyword), { shouldDirty: true });
   };
 
   const addTurnaroundRule = () => {
@@ -433,7 +433,7 @@ export default function ShootTrackerSettings() {
           keywords,
           turnaround_days: newRuleDays,
         };
-        form.setValue("keyword_turnaround_rules", [...currentRules, newRule]);
+        form.setValue("keyword_turnaround_rules", [...currentRules, newRule], { shouldDirty: true });
         setNewRuleName("");
         setNewRuleKeywords("");
         setNewRuleDays(10);
@@ -443,7 +443,7 @@ export default function ShootTrackerSettings() {
 
   const removeTurnaroundRule = (index: number) => {
     const currentRules = form.getValues("keyword_turnaround_rules") || [];
-    form.setValue("keyword_turnaround_rules", currentRules.filter((_, i) => i !== index));
+    form.setValue("keyword_turnaround_rules", currentRules.filter((_, i) => i !== index), { shouldDirty: true });
   };
 
   if (!hasAccess) {
