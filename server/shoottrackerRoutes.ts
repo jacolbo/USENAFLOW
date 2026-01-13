@@ -83,8 +83,8 @@ export function registerShoottrackerRoutes(app: Express): void {
       const settings = await getSettings();
       const stats = createEmptySyncStats();
       const now = new Date();
-      const timeMin = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
-      const timeMax = new Date(now.getTime() + 90 * 24 * 60 * 60 * 1000);
+      const timeMin = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
+      const timeMax = new Date(now.getTime() + 365 * 24 * 60 * 60 * 1000);
       
       let normalizedEvents: NormalizedEvent[] = [];
       
@@ -124,10 +124,9 @@ export function registerShoottrackerRoutes(app: Express): void {
           
           if (classification === 'UPCOMING') {
             stats.upcoming++;
-            continue;
+          } else {
+            stats.done++;
           }
-          
-          stats.done++;
           
           const existingProject = await storage.getProjectByCalendarEventId(event.id);
           
