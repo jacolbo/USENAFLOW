@@ -322,6 +322,15 @@ export type UpdateShoottrackerMeta = z.infer<typeof updateShoottrackerMetaSchema
 // App settings types
 export type AppSetting = typeof appSettings.$inferSelect;
 
+// Keyword turnaround rule schema
+export const keywordTurnaroundRuleSchema = z.object({
+  name: z.string().min(1),
+  keywords: z.array(z.string()).min(1),
+  turnaround_days: z.number().int().min(1).max(60),
+});
+
+export type KeywordTurnaroundRule = z.infer<typeof keywordTurnaroundRuleSchema>;
+
 // ShootTracker settings schema
 export const shoottrackerSettingsSchema = z.object({
   turnaround_days: z.number().int().min(1).max(30).default(5),
@@ -332,6 +341,7 @@ export const shoottrackerSettingsSchema = z.object({
   timezone: z.string().default("Africa/Johannesburg"),
   daily_capacity_projects: z.number().int().min(1).max(50).default(3),
   ics_calendar_url: z.string().optional().default(""),
+  keyword_turnaround_rules: z.array(keywordTurnaroundRuleSchema).default([]),
 });
 
 export type ShoottrackerSettings = z.infer<typeof shoottrackerSettingsSchema>;
@@ -345,6 +355,7 @@ export const DEFAULT_SHOOTTRACKER_SETTINGS: ShoottrackerSettings = {
   timezone: "Africa/Johannesburg",
   daily_capacity_projects: 3,
   ics_calendar_url: "",
+  keyword_turnaround_rules: [],
 };
 
 // Calendar staging status

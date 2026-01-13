@@ -1,5 +1,33 @@
 import { CalendarEvent } from './googleCalendar';
-import { ShoottrackerSettings, RiskLevel, RiskLevelType } from '@shared/schema';
+import { ShoottrackerSettings, RiskLevel, RiskLevelType, KeywordTurnaroundRule } from '@shared/schema';
+
+export interface TurnaroundResult {
+  turnaroundDays: number;
+  matchedRule: string | null;
+}
+
+export function resolveTurnaroundDays(
+  eventTitle: string,
+  settings: ShoottrackerSettings
+): TurnaroundResult {
+  const titleUpper = eventTitle.toUpperCase();
+  
+  for (const rule of settings.keyword_turnaround_rules || []) {
+    for (const keyword of rule.keywords) {
+      if (titleUpper.includes(keyword.toUpperCase())) {
+        return {
+          turnaroundDays: rule.turnaround_days,
+          matchedRule: rule.name,
+        };
+      }
+    }
+  }
+  
+  return {
+    turnaroundDays: settings.turnaround_days,
+    matchedRule: null,
+  };
+}
 
 export interface NormalizedEvent {
   id: string;

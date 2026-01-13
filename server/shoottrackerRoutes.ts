@@ -24,6 +24,7 @@ import {
   createEmptySyncStats,
   ForecastResult,
   SyncStats,
+  resolveTurnaroundDays,
 } from "./services/shoottrackerEngine";
 import { fetchCalendarEvents, CalendarEvent, listCalendars } from "./services/googleCalendar";
 import { calculateRiskLevel } from "./services/riskCalculator";
@@ -178,9 +179,12 @@ export function registerShoottrackerRoutes(app: Express): void {
       const settings = await getSettings();
       const shootDate = stagedEvent.eventStart;
       
+      const { turnaroundDays, matchedRule } = resolveTurnaroundDays(stagedEvent.title, settings);
+      console.log(`📅 Event "${stagedEvent.title}" → turnaround: ${turnaroundDays} days${matchedRule ? ` (matched: ${matchedRule})` : ' (default)'}`);
+      
       const deliveryDueDate = addBusinessDays(
         shootDate,
-        settings.turnaround_days,
+        turnaroundDays,
         settings.working_days,
         settings.holidays,
         settings.timezone
@@ -222,7 +226,7 @@ export function registerShoottrackerRoutes(app: Express): void {
         projectId: newProject.id,
         linkSent: false,
         delivered: false,
-        turnaroundDays: settings.turnaround_days,
+        turnaroundDays: turnaroundDays,
         workingDays: settings.working_days,
         holidays: settings.holidays,
         lastCalendarSync: new Date(),
