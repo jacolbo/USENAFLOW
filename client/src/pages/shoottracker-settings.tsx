@@ -242,7 +242,7 @@ export default function ShootTrackerSettings() {
   });
 
   const promoteMutation = useMutation({
-    mutationFn: async ({ eventId, targetWeekStart }: { eventId: string; targetWeekStart: Date }) => {
+    mutationFn: async (eventId: string) => {
       const headers = {
         ...getAdminHeaders(userRole, userId),
         "Content-Type": "application/json",
@@ -250,7 +250,7 @@ export default function ShootTrackerSettings() {
       const response = await fetch(`/api/admin/shoottracker/staged/${eventId}/promote`, {
         method: "POST",
         headers,
-        body: JSON.stringify({ targetWeekStart: targetWeekStart.toISOString() }),
+        body: JSON.stringify({}),
       });
       if (!response.ok) throw new Error("Failed to promote event");
       return response.json();
@@ -258,6 +258,7 @@ export default function ShootTrackerSettings() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/shoottracker/staged"] });
       queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
+      toast({ title: "Added to Week", description: "Project placed in appropriate week based on due date" });
     },
     onError: (error: any) => {
       toast({ title: "Error", description: error.message, variant: "destructive" });
@@ -407,13 +408,12 @@ export default function ShootTrackerSettings() {
   };
 
   const promoteSelectedEvents = async () => {
-    const targetWeekStart = getTargetWeekStart();
     let successCount = 0;
     let errorCount = 0;
 
     for (const eventId of Array.from(selectedEvents)) {
       try {
-        await promoteMutation.mutateAsync({ eventId, targetWeekStart });
+        await promoteMutation.mutateAsync(eventId);
         successCount++;
       } catch {
         errorCount++;
@@ -422,8 +422,8 @@ export default function ShootTrackerSettings() {
 
     setSelectedEvents(new Set());
     toast({
-      title: "Events Promoted",
-      description: `${successCount} events added to week of ${format(targetWeekStart, "MMM d, yyyy")}${errorCount > 0 ? `, ${errorCount} failed` : ""}`,
+      title: "Events Added",
+      description: `${successCount} events added to their due weeks${errorCount > 0 ? `, ${errorCount} failed` : ""}`,
     });
   };
 
@@ -689,33 +689,14 @@ export default function ShootTrackerSettings() {
                           <EyeOff className="h-4 w-4 mr-1" />
                           Ignore Selected
                         </Button>
-                        <div className="flex items-center gap-1">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => setTargetWeekOffset(targetWeekOffset - 1)}
-                          >
-                            <ArrowLeft className="h-4 w-4" />
-                          </Button>
-                          <span className="text-sm min-w-[140px] text-center">
-                            {format(getTargetWeekStart(), "MMM d, yyyy")}
-                          </span>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => setTargetWeekOffset(targetWeekOffset + 1)}
-                          >
-                            <ChevronRight className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            size="sm"
-                            onClick={promoteSelectedEvents}
-                            disabled={promoteMutation.isPending}
-                          >
-                            <Plus className="h-4 w-4 mr-1" />
-                            Add to Week
-                          </Button>
-                        </div>
+                        <Button
+                          size="sm"
+                          onClick={promoteSelectedEvents}
+                          disabled={promoteMutation.isPending}
+                        >
+                          <Plus className="h-4 w-4 mr-1" />
+                          Add to Due Weeks
+                        </Button>
                       </div>
                     )}
                   </div>
@@ -838,35 +819,16 @@ export default function ShootTrackerSettings() {
                                     />
                                   </div>
                                   <div className="col-span-2 sm:col-span-1">
-                                    <Label className="text-xs text-muted-foreground">Slot into Week</Label>
+                                    <Label className="text-xs text-muted-foreground">Add to Week</Label>
                                     <div className="flex gap-1 mt-1">
-                                      <Select
-                                        value={String(targetWeekOffset)}
-                                        onValueChange={(val) => setTargetWeekOffset(parseInt(val))}
-                                      >
-                                        <SelectTrigger className="h-8">
-                                          <SelectValue />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                          <SelectItem value="-1">Last Week</SelectItem>
-                                          <SelectItem value="0">This Week</SelectItem>
-                                          <SelectItem value="1">Next Week</SelectItem>
-                                          <SelectItem value="2">+2 Weeks</SelectItem>
-                                          <SelectItem value="3">+3 Weeks</SelectItem>
-                                          <SelectItem value="4">+4 Weeks</SelectItem>
-                                        </SelectContent>
-                                      </Select>
                                       <Button
                                         size="sm"
-                                        className="h-8"
-                                        onClick={() => promoteMutation.mutate({
-                                          eventId: event.id,
-                                          targetWeekStart: getTargetWeekStart()
-                                        })}
+                                        className="h-8 w-full"
+                                        onClick={() => promoteMutation.mutate(event.id)}
                                         disabled={promoteMutation.isPending}
                                       >
                                         <Plus className="h-3 w-3 mr-1" />
-                                        Add
+                                        Add to Due Week
                                       </Button>
                                     </div>
                                   </div>
