@@ -303,8 +303,26 @@ export function registerShoottrackerRoutes(app: Express): void {
       const { packagePhotos, selectedPhotos } = req.body;
       
       const updates: any = {};
-      if (typeof packagePhotos === 'number') updates.packagePhotos = packagePhotos;
-      if (typeof selectedPhotos === 'number') updates.selectedPhotos = selectedPhotos;
+      
+      if (packagePhotos !== undefined) {
+        const parsed = Number(packagePhotos);
+        if (isNaN(parsed) || parsed < 0) {
+          return res.status(400).json({ error: "packagePhotos must be a non-negative number" });
+        }
+        updates.packagePhotos = Math.floor(parsed);
+      }
+      
+      if (selectedPhotos !== undefined) {
+        const parsed = Number(selectedPhotos);
+        if (isNaN(parsed) || parsed < 0) {
+          return res.status(400).json({ error: "selectedPhotos must be a non-negative number" });
+        }
+        updates.selectedPhotos = Math.floor(parsed);
+      }
+      
+      if (Object.keys(updates).length === 0) {
+        return res.status(400).json({ error: "No valid fields to update" });
+      }
       
       const updated = await storage.updateStagedEvent(id, updates);
       

@@ -36,6 +36,45 @@ import {
 } from "@/components/ui/select";
 
 const ALLOWED_ROLES = [UserRoles.ADMIN, UserRoles.DATA_WRANGLER, UserRoles.LEAD_RETOUCHER];
+
+function InlineNumberInput({ 
+  value, 
+  onSave, 
+  min = 0,
+  className = "" 
+}: { 
+  value: number; 
+  onSave: (val: number) => void; 
+  min?: number;
+  className?: string;
+}) {
+  const [localValue, setLocalValue] = useState(String(value));
+  
+  useEffect(() => {
+    setLocalValue(String(value));
+  }, [value]);
+  
+  const handleBlur = () => {
+    const parsed = parseInt(localValue) || 0;
+    const validated = Math.max(min, parsed);
+    if (validated !== value) {
+      onSave(validated);
+    }
+    setLocalValue(String(validated));
+  };
+  
+  return (
+    <Input
+      type="number"
+      min={min}
+      value={localValue}
+      onChange={(e) => setLocalValue(e.target.value)}
+      onBlur={handleBlur}
+      onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()}
+      className={className}
+    />
+  );
+}
 const DAYS_OF_WEEK = [
   { value: "MON", label: "Monday" },
   { value: "TUE", label: "Tuesday" },
@@ -628,26 +667,22 @@ export default function ShootTrackerSettings() {
                                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mt-3 pt-3 border-t">
                                   <div>
                                     <Label className="text-xs text-muted-foreground">Package Photos</Label>
-                                    <Input
-                                      type="number"
-                                      min={0}
+                                    <InlineNumberInput
                                       value={event.packagePhotos || 0}
-                                      onChange={(e) => updatePackageMutation.mutate({
+                                      onSave={(val) => updatePackageMutation.mutate({
                                         eventId: event.id,
-                                        packagePhotos: parseInt(e.target.value) || 0
+                                        packagePhotos: val
                                       })}
                                       className="h-8 mt-1"
                                     />
                                   </div>
                                   <div>
                                     <Label className="text-xs text-muted-foreground">Selected Photos</Label>
-                                    <Input
-                                      type="number"
-                                      min={0}
+                                    <InlineNumberInput
                                       value={event.selectedPhotos || 0}
-                                      onChange={(e) => updatePackageMutation.mutate({
+                                      onSave={(val) => updatePackageMutation.mutate({
                                         eventId: event.id,
-                                        selectedPhotos: parseInt(e.target.value) || 0
+                                        selectedPhotos: val
                                       })}
                                       className="h-8 mt-1"
                                     />
