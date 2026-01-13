@@ -1,5 +1,14 @@
 import { CalendarEvent } from './googleCalendar';
-import { ShoottrackerSettings, RiskLevel, RiskLevelType, KeywordTurnaroundRule } from '@shared/schema';
+import { ShoottrackerSettings, RiskLevel, RiskLevelType, KeywordTurnaroundRule, Holiday } from '@shared/schema';
+
+function isDateInHolidayRange(dateStr: string, holidays: Holiday[]): boolean {
+  for (const holiday of holidays) {
+    if (dateStr >= holiday.start_date && dateStr <= holiday.end_date) {
+      return true;
+    }
+  }
+  return false;
+}
 
 export interface TurnaroundResult {
   turnaroundDays: number;
@@ -87,11 +96,10 @@ export function addBusinessDays(
   startDate: Date,
   turnaroundDays: number,
   workingDays: string[],
-  holidays: string[],
+  holidays: Holiday[],
   timezone: string = 'Africa/Johannesburg'
 ): Date {
   const workingDaySet = new Set(workingDays.map(d => d.toUpperCase()));
-  const holidaySet = new Set(holidays);
   
   let currentDate = new Date(startDate);
   let daysAdded = 0;
@@ -102,7 +110,7 @@ export function addBusinessDays(
     const dayName = DAY_NAMES[currentDate.getDay()];
     const dateStr = formatDateYMD(currentDate);
     
-    if (workingDaySet.has(dayName) && !holidaySet.has(dateStr)) {
+    if (workingDaySet.has(dayName) && !isDateInHolidayRange(dateStr, holidays)) {
       daysAdded++;
     }
   }
@@ -121,10 +129,9 @@ export function countWorkingDaysBetween(
   startDate: Date,
   endDate: Date,
   workingDays: string[],
-  holidays: string[]
+  holidays: Holiday[]
 ): number {
   const workingDaySet = new Set(workingDays.map(d => d.toUpperCase()));
-  const holidaySet = new Set(holidays);
   
   let count = 0;
   const current = new Date(startDate);
@@ -134,7 +141,7 @@ export function countWorkingDaysBetween(
     const dayName = DAY_NAMES[current.getDay()];
     const dateStr = formatDateYMD(current);
     
-    if (workingDaySet.has(dayName) && !holidaySet.has(dateStr)) {
+    if (workingDaySet.has(dayName) && !isDateInHolidayRange(dateStr, holidays)) {
       count++;
     }
     
@@ -148,7 +155,7 @@ export function calculateShootTrackerRiskLevel(
   deliveryDueDate: Date,
   delivered: boolean,
   workingDays: string[],
-  holidays: string[],
+  holidays: Holiday[],
   now: Date = new Date()
 ): RiskLevelType {
   if (delivered) {

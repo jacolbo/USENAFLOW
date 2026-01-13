@@ -334,11 +334,21 @@ export const keywordTurnaroundRuleSchema = z.object({
 
 export type KeywordTurnaroundRule = z.infer<typeof keywordTurnaroundRuleSchema>;
 
+// Holiday schema with date range support
+export const holidaySchema = z.object({
+  name: z.string().min(1),
+  start_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  end_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  is_public: z.boolean().default(false),
+});
+
+export type Holiday = z.infer<typeof holidaySchema>;
+
 // ShootTracker settings schema
 export const shoottrackerSettingsSchema = z.object({
   turnaround_days: z.number().int().min(1).max(30).default(5),
   working_days: z.array(z.enum(["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"])).default(["MON", "TUE", "WED", "THU", "FRI"]),
-  holidays: z.array(z.string().regex(/^\d{4}-\d{2}-\d{2}$/)).default([]),
+  holidays: z.array(holidaySchema).default([]),
   exclude_keywords: z.array(z.string()).default(["FULL DAY", "BLOCK", "HOLD", "CANCEL", "NO SHOW"]),
   selected_calendar_ids: z.array(z.string()).default([]),
   timezone: z.string().default("Africa/Johannesburg"),

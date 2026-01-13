@@ -15,7 +15,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient } from "@/lib/queryClient";
 import { getAdminHeaders } from "@/lib/adminAuth";
-import { UserRoles, shoottrackerSettingsSchema, type ShoottrackerSettings, StagingStatus, type CalendarEventStaging, type KeywordTurnaroundRule } from "@shared/schema";
+import { UserRoles, shoottrackerSettingsSchema, type ShoottrackerSettings, StagingStatus, type CalendarEventStaging, type KeywordTurnaroundRule, type Holiday } from "@shared/schema";
 import { ArrowLeft, Calendar, Settings, RefreshCw, Clock, AlertTriangle, CheckCircle, Loader2, CalendarPlus, Eye, EyeOff, Plus, ChevronRight } from "lucide-react";
 import { format, startOfWeek, addWeeks, subWeeks } from "date-fns";
 import {
@@ -116,7 +116,9 @@ interface CalendarListItem {
 export default function ShootTrackerSettings() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
-  const [newHoliday, setNewHoliday] = useState("");
+  const [newHolidayName, setNewHolidayName] = useState("");
+  const [newHolidayStart, setNewHolidayStart] = useState("");
+  const [newHolidayEnd, setNewHolidayEnd] = useState("");
   const [newKeyword, setNewKeyword] = useState("");
   const [syncStats, setSyncStats] = useState<SyncStats | null>(null);
   const [selectedEvents, setSelectedEvents] = useState<Set<string>>(new Set());
@@ -125,6 +127,7 @@ export default function ShootTrackerSettings() {
   const [newRuleName, setNewRuleName] = useState("");
   const [newRuleKeywords, setNewRuleKeywords] = useState("");
   const [newRuleDays, setNewRuleDays] = useState(10);
+  const [isFetchingPublicHolidays, setIsFetchingPublicHolidays] = useState(false);
 
   const storedSession = localStorage.getItem("usenaflow_session");
   const sessionData = storedSession ? JSON.parse(storedSession) : null;
@@ -352,6 +355,15 @@ export default function ShootTrackerSettings() {
     };
   };
 
+  const isDateInHolidayRange = (dateStr: string, holidays: Holiday[]): boolean => {
+    for (const holiday of holidays) {
+      if (dateStr >= holiday.start_date && dateStr <= holiday.end_date) {
+        return true;
+      }
+    }
+    return false;
+  };
+
   const calculateDeliveryDueDate = (shootDate: Date, eventTitle: string): Date => {
     const settings = settingsQuery.data;
     if (!settings) {
@@ -363,7 +375,7 @@ export default function ShootTrackerSettings() {
     const { turnaroundDays } = resolveTurnaroundDays(eventTitle);
     let daysToAdd = turnaroundDays;
     const workingDays = new Set(settings.working_days.map(d => d.toUpperCase()));
-    const holidays = new Set(settings.holidays);
+    const holidays = settings.holidays || [];
     
     let currentDate = new Date(shootDate);
     let daysAdded = 0;
@@ -374,7 +386,7 @@ export default function ShootTrackerSettings() {
       const dayName = DAY_NAMES[currentDate.getDay()];
       const dateStr = currentDate.toISOString().split('T')[0];
       
-      if (workingDays.has(dayName) && !holidays.has(dateStr)) {
+      if (workingDays.has(dayName) && !isDateInHolidayRange(dateStr, holidays)) {
         daysAdded++;
       }
     }
@@ -450,18 +462,70 @@ export default function ShootTrackerSettings() {
   };
 
   const addHoliday = () => {
-    if (newHoliday && /^\d{4}-\d{2}-\d{2}$/.test(newHoliday)) {
-      const currentHolidays = form.getValues("holidays");
-      if (!currentHolidays.includes(newHoliday)) {
+    if (newHolidayName.trim() && newHolidayStart && newHolidayEnd) {
+      const currentHolidays = form.getValues("holidays") || [];
+      const newHoliday: Holiday = {
+        name: newHolidayName.trim(),
+        start_date: newHolidayStart,
+        end_date: newHolidayEnd,
+        is_public: false,
+      };
+      const exists = currentHolidays.some(h => 
+        h.name === newHoliday.name && h.start_date === newHoliday.start_date
+      );
+      if (!exists) {
         form.setValue("holidays", [...currentHolidays, newHoliday], { shouldDirty: true });
-        setNewHoliday("");
+        setNewHolidayName("");
+        setNewHolidayStart("");
+        setNewHolidayEnd("");
       }
     }
   };
 
-  const removeHoliday = (holiday: string) => {
-    const currentHolidays = form.getValues("holidays");
-    form.setValue("holidays", currentHolidays.filter(h => h !== holiday), { shouldDirty: true });
+  const removeHoliday = (index: number) => {
+    const currentHolidays = form.getValues("holidays") || [];
+    form.setValue("holidays", currentHolidays.filter((_, i) => i !== index), { shouldDirty: true });
+  };
+
+  const fetchSAPublicHolidays = async () => {
+    setIsFetchingPublicHolidays(true);
+    try {
+      const years = [2025, 2026];
+      const allHolidays: Holiday[] = [];
+      
+      for (const year of years) {
+        const response = await fetch(`https://date.nager.at/api/v3/PublicHolidays/${year}/ZA`);
+        if (response.ok) {
+          const data = await response.json();
+          for (const holiday of data) {
+            allHolidays.push({
+              name: holiday.localName || holiday.name,
+              start_date: holiday.date,
+              end_date: holiday.date,
+              is_public: true,
+            });
+          }
+        }
+      }
+      
+      const currentHolidays = form.getValues("holidays") || [];
+      const nonPublicHolidays = currentHolidays.filter(h => !h.is_public);
+      const mergedHolidays = [...nonPublicHolidays, ...allHolidays];
+      form.setValue("holidays", mergedHolidays, { shouldDirty: true });
+      
+      toast({
+        title: "Public Holidays Loaded",
+        description: `Added ${allHolidays.length} SA public holidays for 2025-2026`,
+      });
+    } catch (error) {
+      toast({
+        title: "Failed to fetch holidays",
+        description: "Could not load SA public holidays. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsFetchingPublicHolidays(false);
+    }
   };
 
   const addKeyword = () => {
@@ -1155,28 +1219,68 @@ export default function ShootTrackerSettings() {
 
               <Card>
                 <CardHeader>
-                  <CardTitle>Holidays</CardTitle>
-                  <CardDescription>
-                    Add dates that should not count as working days (format: YYYY-MM-DD)
-                  </CardDescription>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <CardTitle>Holidays</CardTitle>
+                      <CardDescription>
+                        Add dates or date ranges that should not count as working days
+                      </CardDescription>
+                    </div>
+                    <Button 
+                      type="button" 
+                      variant="outline" 
+                      size="sm"
+                      onClick={fetchSAPublicHolidays}
+                      disabled={isFetchingPublicHolidays}
+                    >
+                      {isFetchingPublicHolidays ? (
+                        <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Loading...</>
+                      ) : (
+                        <><RefreshCw className="h-4 w-4 mr-2" /> Fetch SA Public Holidays</>
+                      )}
+                    </Button>
+                  </div>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  <div className="flex gap-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-4 gap-2">
+                    <Input
+                      placeholder="Holiday name"
+                      value={newHolidayName}
+                      onChange={(e) => setNewHolidayName(e.target.value)}
+                    />
                     <Input
                       type="date"
-                      value={newHoliday}
-                      onChange={(e) => setNewHoliday(e.target.value)}
-                      className="flex-1"
+                      value={newHolidayStart}
+                      onChange={(e) => {
+                        setNewHolidayStart(e.target.value);
+                        if (!newHolidayEnd) setNewHolidayEnd(e.target.value);
+                      }}
+                    />
+                    <Input
+                      type="date"
+                      value={newHolidayEnd}
+                      onChange={(e) => setNewHolidayEnd(e.target.value)}
                     />
                     <Button type="button" onClick={addHoliday} variant="outline">
                       Add
                     </Button>
                   </div>
-                  <div className="flex flex-wrap gap-2">
-                    {form.watch("holidays").map((holiday) => (
-                      <Badge key={holiday} variant="secondary" className="cursor-pointer" onClick={() => removeHoliday(holiday)}>
-                        {holiday} ×
-                      </Badge>
+                  <div className="space-y-2 max-h-64 overflow-y-auto">
+                    {(form.watch("holidays") || []).map((holiday, index) => (
+                      <div key={`${holiday.name}-${holiday.start_date}-${index}`} className={`flex items-center justify-between p-2 rounded border ${holiday.is_public ? 'bg-blue-50 border-blue-200 dark:bg-blue-950/20' : 'bg-muted/50'}`}>
+                        <div className="flex items-center gap-2">
+                          {holiday.is_public && <Badge variant="outline" className="text-xs">Public</Badge>}
+                          <span className="font-medium">{holiday.name}</span>
+                          <span className="text-sm text-muted-foreground">
+                            {holiday.start_date === holiday.end_date 
+                              ? holiday.start_date 
+                              : `${holiday.start_date} → ${holiday.end_date}`}
+                          </span>
+                        </div>
+                        <Button type="button" variant="ghost" size="sm" onClick={() => removeHoliday(index)}>
+                          ×
+                        </Button>
+                      </div>
                     ))}
                   </div>
                 </CardContent>
