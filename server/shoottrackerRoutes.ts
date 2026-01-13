@@ -36,10 +36,18 @@ const VIEW_ROLES = [UserRoles.ADMIN, UserRoles.LEAD_RETOUCHER, UserRoles.DATA_WR
 
 async function getSettings(): Promise<ShoottrackerSettings> {
   const setting = await storage.getAppSetting(SETTINGS_KEY);
-  if (setting) {
+  if (setting && typeof setting.value === 'object') {
     try {
-      return shoottrackerSettingsSchema.parse(setting.value);
-    } catch {
+      // Merge stored settings with defaults to handle missing fields
+      const merged = {
+        ...DEFAULT_SHOOTTRACKER_SETTINGS,
+        ...setting.value,
+        // Ensure arrays are properly merged (don't use defaults if stored has values)
+        keyword_turnaround_rules: (setting.value as any).keyword_turnaround_rules || DEFAULT_SHOOTTRACKER_SETTINGS.keyword_turnaround_rules,
+      };
+      return shoottrackerSettingsSchema.parse(merged);
+    } catch (error) {
+      console.error("Error parsing settings, using defaults:", error);
       return DEFAULT_SHOOTTRACKER_SETTINGS;
     }
   }
@@ -210,8 +218,8 @@ export function registerShoottrackerRoutes(app: Express): void {
       
       const newProject = await storage.createProject({
         clientName,
-        packageCount: 0,
-        selectedCount: 0,
+        packageCount: stagedEvent.packagePhotos || 0,
+        selectedCount: stagedEvent.selectedPhotos || 0,
         dueDate: weekStart,
         assignedTo: null,
         shootDate,
@@ -285,6 +293,29 @@ export function registerShoottrackerRoutes(app: Express): void {
     } catch (error: any) {
       console.error("Error restoring staged event:", error);
       res.status(500).json({ error: "Failed to restore event" });
+    }
+  });
+
+  // Update package info for staged event
+  app.patch("/api/admin/shoottracker/staged/:id/package", verifyAdminRequest, async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+      const { packagePhotos, selectedPhotos } = req.body;
+      
+      const updates: any = {};
+      if (typeof packagePhotos === 'number') updates.packagePhotos = packagePhotos;
+      if (typeof selectedPhotos === 'number') updates.selectedPhotos = selectedPhotos;
+      
+      const updated = await storage.updateStagedEvent(id, updates);
+      
+      if (!updated) {
+        return res.status(404).json({ error: "Staged event not found" });
+      }
+      
+      res.json({ success: true, event: updated });
+    } catch (error: any) {
+      console.error("Error updating package info:", error);
+      res.status(500).json({ error: "Failed to update package info" });
     }
   });
 

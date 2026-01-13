@@ -263,10 +263,58 @@ export default function ShootTrackerSettings() {
     },
   });
 
+  const updatePackageMutation = useMutation({
+    mutationFn: async ({ eventId, packagePhotos, selectedPhotos }: { eventId: string; packagePhotos?: number; selectedPhotos?: number }) => {
+      const headers = {
+        ...getAdminHeaders(userRole, userId),
+        "Content-Type": "application/json",
+      };
+      const response = await fetch(`/api/admin/shoottracker/staged/${eventId}/package`, {
+        method: "PATCH",
+        headers,
+        body: JSON.stringify({ packagePhotos, selectedPhotos }),
+      });
+      if (!response.ok) throw new Error("Failed to update package info");
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/shoottracker/staged"] });
+    },
+  });
+
   const getTargetWeekStart = () => {
     const now = new Date();
     const weekStart = startOfWeek(now, { weekStartsOn: 0 });
     return addWeeks(weekStart, targetWeekOffset);
+  };
+
+  const calculateDeliveryDueDate = (shootDate: Date): Date => {
+    const settings = settingsQuery.data;
+    if (!settings) {
+      const dueDate = new Date(shootDate);
+      dueDate.setDate(dueDate.getDate() + 5);
+      return dueDate;
+    }
+    
+    let daysToAdd = settings.turnaround_days;
+    const workingDays = new Set(settings.working_days.map(d => d.toUpperCase()));
+    const holidays = new Set(settings.holidays);
+    
+    let currentDate = new Date(shootDate);
+    let daysAdded = 0;
+    const DAY_NAMES = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
+    
+    while (daysAdded < daysToAdd) {
+      currentDate.setDate(currentDate.getDate() + 1);
+      const dayName = DAY_NAMES[currentDate.getDay()];
+      const dateStr = currentDate.toISOString().split('T')[0];
+      
+      if (workingDays.has(dayName) && !holidays.has(dateStr)) {
+        daysAdded++;
+      }
+    }
+    
+    return currentDate;
   };
 
   const toggleEventSelection = (eventId: string) => {
@@ -511,59 +559,139 @@ export default function ShootTrackerSettings() {
                     </Button>
                   </div>
                 ) : stagedEventsQuery.data && stagedEventsQuery.data.length > 0 ? (
-                  <div className="space-y-2">
-                    {stagedEventsQuery.data.map((event) => (
-                      <div
-                        key={event.id}
-                        className={`p-3 border rounded-lg flex items-center gap-3 transition-colors ${
-                          event.status === StagingStatus.PROMOTED ? "bg-green-50 border-green-200 dark:bg-green-950/20" :
-                          event.status === StagingStatus.IGNORED ? "bg-muted/50 opacity-60" :
-                          selectedEvents.has(event.id) ? "bg-primary/5 border-primary" : ""
-                        }`}
-                      >
-                        {event.status === StagingStatus.PENDING && (
-                          <Checkbox
-                            checked={selectedEvents.has(event.id)}
-                            onCheckedChange={() => toggleEventSelection(event.id)}
-                          />
-                        )}
-                        <div className="flex-1 min-w-0">
-                          <div className="font-medium truncate">{event.title}</div>
-                          <div className="text-sm text-muted-foreground">
-                            {format(new Date(event.eventStart), "MMM d, yyyy 'at' h:mm a")}
-                            {event.location && ` • ${event.location}`}
+                  <div className="space-y-3">
+                    {stagedEventsQuery.data.map((event) => {
+                      const deliveryDue = calculateDeliveryDueDate(new Date(event.eventStart));
+                      return (
+                        <div
+                          key={event.id}
+                          className={`p-4 border rounded-lg transition-colors ${
+                            event.status === StagingStatus.PROMOTED ? "bg-green-50 border-green-200 dark:bg-green-950/20" :
+                            event.status === StagingStatus.IGNORED ? "bg-muted/50 opacity-60" :
+                            selectedEvents.has(event.id) ? "bg-primary/5 border-primary" : ""
+                          }`}
+                        >
+                          <div className="flex items-start gap-3">
+                            {event.status === StagingStatus.PENDING && (
+                              <Checkbox
+                                checked={selectedEvents.has(event.id)}
+                                onCheckedChange={() => toggleEventSelection(event.id)}
+                                className="mt-1"
+                              />
+                            )}
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center justify-between mb-2">
+                                <div className="font-medium truncate">{event.title}</div>
+                                <div className="flex items-center gap-2">
+                                  {event.status === StagingStatus.PROMOTED && (
+                                    <Badge variant="default" className="bg-green-600">Added</Badge>
+                                  )}
+                                  {event.status === StagingStatus.IGNORED && (
+                                    <>
+                                      <Badge variant="secondary">Ignored</Badge>
+                                      <Button
+                                        size="sm"
+                                        variant="ghost"
+                                        onClick={() => restoreMutation.mutate(event.id)}
+                                        disabled={restoreMutation.isPending}
+                                      >
+                                        Restore
+                                      </Button>
+                                    </>
+                                  )}
+                                  {event.status === StagingStatus.PENDING && (
+                                    <Button
+                                      size="sm"
+                                      variant="ghost"
+                                      onClick={() => ignoreMutation.mutate(event.id)}
+                                      disabled={ignoreMutation.isPending}
+                                    >
+                                      <EyeOff className="h-4 w-4" />
+                                    </Button>
+                                  )}
+                                </div>
+                              </div>
+                              
+                              <div className="text-sm text-muted-foreground mb-3">
+                                <span className="font-medium">Shoot:</span> {format(new Date(event.eventStart), "MMM d, yyyy 'at' h:mm a")}
+                                {event.location && ` • ${event.location}`}
+                              </div>
+                              
+                              <div className="text-sm mb-3">
+                                <span className="font-medium text-primary">Due:</span>{" "}
+                                <span className="text-orange-600 dark:text-orange-400 font-medium">
+                                  {format(deliveryDue, "MMM d, yyyy")}
+                                </span>
+                              </div>
+                              
+                              {event.status === StagingStatus.PENDING && (
+                                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mt-3 pt-3 border-t">
+                                  <div>
+                                    <Label className="text-xs text-muted-foreground">Package Photos</Label>
+                                    <Input
+                                      type="number"
+                                      min={0}
+                                      value={event.packagePhotos || 0}
+                                      onChange={(e) => updatePackageMutation.mutate({
+                                        eventId: event.id,
+                                        packagePhotos: parseInt(e.target.value) || 0
+                                      })}
+                                      className="h-8 mt-1"
+                                    />
+                                  </div>
+                                  <div>
+                                    <Label className="text-xs text-muted-foreground">Selected Photos</Label>
+                                    <Input
+                                      type="number"
+                                      min={0}
+                                      value={event.selectedPhotos || 0}
+                                      onChange={(e) => updatePackageMutation.mutate({
+                                        eventId: event.id,
+                                        selectedPhotos: parseInt(e.target.value) || 0
+                                      })}
+                                      className="h-8 mt-1"
+                                    />
+                                  </div>
+                                  <div className="col-span-2 sm:col-span-1">
+                                    <Label className="text-xs text-muted-foreground">Slot into Week</Label>
+                                    <div className="flex gap-1 mt-1">
+                                      <Select
+                                        value={String(targetWeekOffset)}
+                                        onValueChange={(val) => setTargetWeekOffset(parseInt(val))}
+                                      >
+                                        <SelectTrigger className="h-8">
+                                          <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                          <SelectItem value="-1">Last Week</SelectItem>
+                                          <SelectItem value="0">This Week</SelectItem>
+                                          <SelectItem value="1">Next Week</SelectItem>
+                                          <SelectItem value="2">+2 Weeks</SelectItem>
+                                          <SelectItem value="3">+3 Weeks</SelectItem>
+                                          <SelectItem value="4">+4 Weeks</SelectItem>
+                                        </SelectContent>
+                                      </Select>
+                                      <Button
+                                        size="sm"
+                                        className="h-8"
+                                        onClick={() => promoteMutation.mutate({
+                                          eventId: event.id,
+                                          targetWeekStart: getTargetWeekStart()
+                                        })}
+                                        disabled={promoteMutation.isPending}
+                                      >
+                                        <Plus className="h-3 w-3 mr-1" />
+                                        Add
+                                      </Button>
+                                    </div>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
                           </div>
                         </div>
-                        <div className="flex items-center gap-2">
-                          {event.status === StagingStatus.PROMOTED && (
-                            <Badge variant="default" className="bg-green-600">Added</Badge>
-                          )}
-                          {event.status === StagingStatus.IGNORED && (
-                            <>
-                              <Badge variant="secondary">Ignored</Badge>
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                onClick={() => restoreMutation.mutate(event.id)}
-                                disabled={restoreMutation.isPending}
-                              >
-                                Restore
-                              </Button>
-                            </>
-                          )}
-                          {event.status === StagingStatus.PENDING && (
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              onClick={() => ignoreMutation.mutate(event.id)}
-                              disabled={ignoreMutation.isPending}
-                            >
-                              <EyeOff className="h-4 w-4" />
-                            </Button>
-                          )}
-                        </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 ) : (
                   <div className="text-center py-8 text-muted-foreground">

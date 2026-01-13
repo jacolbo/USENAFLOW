@@ -132,6 +132,9 @@ export const calendarEventsStaging = pgTable("calendar_events_staging", {
   promotedAt: timestamp("promoted_at"),
   promotedBy: text("promoted_by"),
   createdAt: timestamp("created_at").notNull().default(sql`now()`),
+  // Package info editable from ShootTracker
+  packagePhotos: integer("package_photos").notNull().default(0),
+  selectedPhotos: integer("selected_photos").notNull().default(0),
 });
 
 // Complaints system for Evans to manage retoucher reports
