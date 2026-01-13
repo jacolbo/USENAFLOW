@@ -688,19 +688,6 @@ export default function Dashboard() {
         const projectDate = new Date(project.dueDate || project.createdAt);
         return projectDate >= previousWeekStart && projectDate <= nextOfNextWeekEnd;
       });
-
-      // Handle unassigned project rollover for current view
-      const unassignedFromPastWeeks = visibleProjects.filter(project => {
-        const projectDate = new Date(project.dueDate || project.createdAt);
-        return projectDate < previousWeekStart && (!project.assignedTo || project.assignedTo === "__UNASSIGN__");
-      });
-
-      // Merge and sort: unassigned projects first (by creation date), then regular projects
-      const sortedUnassigned = unassignedFromPastWeeks.sort((a, b) => 
-        new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
-      );
-      
-      filteredProjects = [...sortedUnassigned, ...filteredProjects];
     }
 
     return filteredProjects;
@@ -726,18 +713,13 @@ export default function Dashboard() {
     nextWeekEnd.setDate(nextWeekStart.getDate() + 6);
     nextWeekEnd.setHours(23, 59, 59, 999);
     
-    // Include projects in 3-week window plus unassigned rollover
+    // Include projects in 3-week window
     const inCurrentRange = visibleProjects.filter(project => {
       const projectDate = new Date(project.dueDate || project.createdAt);
       return projectDate >= previousWeekStart && projectDate <= nextWeekEnd;
     }).length;
 
-    const unassignedRollover = visibleProjects.filter(project => {
-      const projectDate = new Date(project.dueDate || project.createdAt);
-      return projectDate < previousWeekStart && (!project.assignedTo || project.assignedTo === "__UNASSIGN__");
-    }).length;
-
-    return inCurrentRange + unassignedRollover;
+    return inCurrentRange;
   };
   
   const getArchiveProjectCount = () => {
