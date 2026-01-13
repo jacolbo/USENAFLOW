@@ -78,23 +78,36 @@ export async function fetchCalendarEvents(
     console.log(`📅 Fetching events from calendar: ${calendarId}`);
     console.log(`   Time range: ${defaultTimeMin.toISOString()} to ${defaultTimeMax.toISOString()}`);
     
-    const response = await calendar.events.list({
-      calendarId,
-      timeMin: defaultTimeMin.toISOString(),
-      timeMax: defaultTimeMax.toISOString(),
-      singleEvents: true,
-      orderBy: 'startTime',
-      maxResults: 250,
-    });
-
-    const events = response.data.items || [];
-    console.log(`   Found ${events.length} events in ${calendarId}`);
+    const allEvents: any[] = [];
+    let pageToken: string | undefined = undefined;
+    let pageCount = 0;
     
-    if (events.length > 0) {
-      console.log(`   Sample events: ${events.slice(0, 3).map(e => e.summary).join(', ')}`);
+    do {
+      pageCount++;
+      const response: any = await calendar.events.list({
+        calendarId,
+        timeMin: defaultTimeMin.toISOString(),
+        timeMax: defaultTimeMax.toISOString(),
+        singleEvents: true,
+        orderBy: 'startTime',
+        maxResults: 2500,
+        pageToken: pageToken,
+      });
+
+      const events = response.data.items || [];
+      allEvents.push(...events);
+      pageToken = response.data.nextPageToken || undefined;
+      
+      console.log(`   Page ${pageCount}: fetched ${events.length} events (total: ${allEvents.length})`);
+    } while (pageToken);
+    
+    console.log(`   Total: ${allEvents.length} events from ${calendarId}`);
+    
+    if (allEvents.length > 0) {
+      console.log(`   Sample events: ${allEvents.slice(0, 3).map(e => e.summary).join(', ')}`);
     }
     
-    return events.map(event => ({
+    return allEvents.map(event => ({
       id: event.id || '',
       summary: event.summary || '',
       description: event.description || undefined,
