@@ -57,7 +57,15 @@ export function normalizeEvent(event: CalendarEvent): NormalizedEvent {
   };
 }
 
+// Cutoff date: ignore all shoots before October 1, 2025
+const SYNC_CUTOFF_DATE = new Date('2025-10-01T00:00:00');
+
 export function shouldExclude(event: NormalizedEvent, keywords: string[]): boolean {
+  // Exclude events before October 1, 2025
+  if (event.start < SYNC_CUTOFF_DATE) {
+    return true;
+  }
+  
   const searchText = `${event.title} ${event.description} ${event.location}`.toLowerCase();
   
   for (const keyword of keywords) {
