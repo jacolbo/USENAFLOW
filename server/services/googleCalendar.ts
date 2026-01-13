@@ -3,36 +3,58 @@ import { google } from 'googleapis';
 let connectionSettings: any;
 
 async function getAccessToken() {
-  if (connectionSettings && connectionSettings.settings.expires_at && new Date(connectionSettings.settings.expires_at).getTime() > Date.now()) {
+  if (connectionSettings && connectionSettings.settings?.expires_at && new Date(connectionSettings.settings.expires_at).getTime() > Date.now()) {
+    console.log('📅 Using cached access token');
     return connectionSettings.settings.access_token;
   }
   
   const hostname = process.env.REPLIT_CONNECTORS_HOSTNAME;
-  const xReplitToken = process.env.REPL_IDENTITY 
+  const token = process.env.REPL_IDENTITY 
     ? 'repl ' + process.env.REPL_IDENTITY 
     : process.env.WEB_REPL_RENEWAL 
     ? 'depl ' + process.env.WEB_REPL_RENEWAL 
     : null;
 
-  if (!xReplitToken) {
-    throw new Error('X_REPLIT_TOKEN not found for repl/depl');
+  if (!token) {
+    throw new Error('Replit token not found - ensure REPL_IDENTITY is set');
   }
 
-  connectionSettings = await fetch(
+  console.log('📅 Fetching fresh access token from Replit connector...');
+  
+  const response = await fetch(
     'https://' + hostname + '/api/v2/connection?include_secrets=true&connector_names=google-calendar',
     {
       headers: {
         'Accept': 'application/json',
-        'X_REPLIT_TOKEN': xReplitToken
+        'X-Replit-Token': token
       }
     }
-  ).then(res => res.json()).then(data => data.items?.[0]);
-
-  const accessToken = connectionSettings?.settings?.access_token || connectionSettings?.settings?.oauth?.credentials?.access_token;
-
-  if (!connectionSettings || !accessToken) {
-    throw new Error('Google Calendar not connected');
+  );
+  
+  const data = await response.json();
+  console.log('📅 Connector response keys:', Object.keys(data));
+  
+  // Try different response structures
+  connectionSettings = data.connections?.[0] || data.items?.[0] || data[0];
+  
+  if (!connectionSettings) {
+    console.error('📅 No connection found in response:', JSON.stringify(data).slice(0, 500));
+    throw new Error('Google Calendar not connected - no connection found');
   }
+  
+  console.log('📅 Connection settings keys:', Object.keys(connectionSettings));
+  console.log('📅 Settings keys:', connectionSettings.settings ? Object.keys(connectionSettings.settings) : 'no settings');
+
+  const accessToken = connectionSettings.settings?.access_token || 
+                      connectionSettings.settings?.oauth?.credentials?.access_token ||
+                      connectionSettings.access_token;
+
+  if (!accessToken) {
+    console.error('📅 No access token found in settings');
+    throw new Error('Google Calendar not connected - no access token');
+  }
+  
+  console.log('📅 Access token retrieved successfully');
   return accessToken;
 }
 
