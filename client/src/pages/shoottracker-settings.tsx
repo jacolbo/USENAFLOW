@@ -66,6 +66,14 @@ interface SyncStats {
   errors: string[];
 }
 
+interface CalendarListItem {
+  id: string;
+  summary: string;
+  description?: string;
+  primary?: boolean;
+  backgroundColor?: string;
+}
+
 export default function ShootTrackerSettings() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
@@ -92,6 +100,17 @@ export default function ShootTrackerSettings() {
     enabled: hasAccess,
   });
 
+  const calendarsQuery = useQuery<CalendarListItem[]>({
+    queryKey: ["/api/admin/shoottracker/calendars"],
+    queryFn: async () => {
+      const headers = getAdminHeaders(userRole, userId);
+      const response = await fetch("/api/admin/shoottracker/calendars", { headers });
+      if (!response.ok) throw new Error("Failed to fetch calendars");
+      return response.json();
+    },
+    enabled: hasAccess,
+  });
+
   const form = useForm<ShoottrackerSettings>({
     resolver: zodResolver(shoottrackerSettingsSchema),
     defaultValues: {
@@ -102,7 +121,6 @@ export default function ShootTrackerSettings() {
       selected_calendar_ids: [],
       timezone: "Africa/Johannesburg",
       daily_capacity_projects: 3,
-      ics_calendar_url: "",
     },
   });
 
@@ -260,19 +278,56 @@ export default function ShootTrackerSettings() {
                 <CardContent className="space-y-4">
                   <FormField
                     control={form.control}
-                    name="ics_calendar_url"
+                    name="selected_calendar_ids"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Shared Calendar Link (ICS URL)</FormLabel>
-                        <FormControl>
-                          <Input 
-                            placeholder="https://calendar.google.com/calendar/ical/..."
-                            {...field}
-                            value={field.value || ""}
-                          />
-                        </FormControl>
+                        <FormLabel>Select Calendars to Sync</FormLabel>
+                        {calendarsQuery.isLoading ? (
+                          <div className="flex items-center gap-2 text-muted-foreground">
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                            Loading calendars...
+                          </div>
+                        ) : calendarsQuery.error ? (
+                          <div className="text-destructive text-sm">
+                            Failed to load calendars. Make sure Google Calendar is connected.
+                          </div>
+                        ) : calendarsQuery.data && calendarsQuery.data.length > 0 ? (
+                          <div className="space-y-2 max-h-64 overflow-y-auto border rounded-md p-3">
+                            {calendarsQuery.data.map((cal) => (
+                              <div key={cal.id} className="flex items-center space-x-2">
+                                <Checkbox
+                                  id={`cal-${cal.id}`}
+                                  checked={field.value.includes(cal.id)}
+                                  onCheckedChange={(checked) => {
+                                    if (checked) {
+                                      field.onChange([...field.value, cal.id]);
+                                    } else {
+                                      field.onChange(field.value.filter((id) => id !== cal.id));
+                                    }
+                                  }}
+                                />
+                                <Label htmlFor={`cal-${cal.id}`} className="flex-1 cursor-pointer flex items-center gap-2">
+                                  {cal.backgroundColor && (
+                                    <span 
+                                      className="w-3 h-3 rounded-full" 
+                                      style={{ backgroundColor: cal.backgroundColor }}
+                                    />
+                                  )}
+                                  <span>{cal.summary}</span>
+                                  {cal.primary && (
+                                    <Badge variant="secondary" className="text-xs">Primary</Badge>
+                                  )}
+                                </Label>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="text-muted-foreground text-sm">
+                            No calendars found. Check your Google Calendar connection.
+                          </div>
+                        )}
                         <FormDescription>
-                          Paste your shared calendar link here. In Google Calendar: Calendar Settings → "Secret address in iCal format"
+                          Select one or more calendars to sync events from
                         </FormDescription>
                         <FormMessage />
                       </FormItem>
@@ -291,7 +346,25 @@ export default function ShootTrackerSettings() {
                         <><RefreshCw className="h-4 w-4 mr-2" /> Sync Now</>
                       )}
                     </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => calendarsQuery.refetch()}
+                      disabled={calendarsQuery.isFetching}
+                    >
+                      {calendarsQuery.isFetching ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        "Refresh Calendars"
+                      )}
+                    </Button>
                   </div>
+                  
+                  {!form.watch("selected_calendar_ids").length && (
+                    <p className="text-sm text-amber-600">
+                      No calendars selected. Sync will use your primary calendar by default.
+                    </p>
+                  )}
 
                   {syncStats && (
                     <div className="mt-4 p-4 bg-muted rounded-lg">

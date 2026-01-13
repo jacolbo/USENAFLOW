@@ -23,8 +23,7 @@ import {
   ForecastResult,
   SyncStats,
 } from "./services/shoottrackerEngine";
-import { fetchCalendarEvents, CalendarEvent } from "./services/googleCalendar";
-import { fetchICSCalendar, ICSEvent } from "./services/icsCalendar";
+import { fetchCalendarEvents, CalendarEvent, listCalendars } from "./services/googleCalendar";
 import { calculateRiskLevel } from "./services/riskCalculator";
 
 const SETTINGS_KEY = "shoottracker_settings";
@@ -68,6 +67,16 @@ export function registerShoottrackerRoutes(app: Express): void {
     }
   });
 
+  app.get("/api/admin/shoottracker/calendars", verifyAdminRequest, async (req: Request, res: Response) => {
+    try {
+      const calendars = await listCalendars();
+      res.json(calendars);
+    } catch (error: any) {
+      console.error("Error listing calendars:", error);
+      res.status(500).json({ error: error.message || "Failed to list calendars" });
+    }
+  });
+
   // Sync route (Admin/Lead Retoucher only - enforced via verifyAdminRequest middleware)
   app.post("/api/admin/shoottracker/sync", verifyAdminRequest, async (req: Request, res: Response) => {
     try {
@@ -79,59 +88,29 @@ export function registerShoottrackerRoutes(app: Express): void {
       
       let normalizedEvents: NormalizedEvent[] = [];
       
-      // Priority: Use ICS URL if configured, otherwise try Google Calendar
-      if (settings.ics_calendar_url && settings.ics_calendar_url.trim() !== "") {
-        console.log(`📅 ShootTracker: Fetching from ICS URL`);
+      // Use selected Google Calendars
+      const calendarIds = settings.selected_calendar_ids.length > 0 
+        ? settings.selected_calendar_ids 
+        : ['primary'];
+      
+      let allEvents: CalendarEvent[] = [];
+      
+      for (const calendarId of calendarIds) {
         try {
-          const icsEvents = await fetchICSCalendar(settings.ics_calendar_url);
-          
-          // Filter events within time range
-          const filteredEvents = icsEvents.filter(event => {
-            return event.start >= timeMin && event.start <= timeMax;
-          });
-          
-          normalizedEvents = filteredEvents.map(event => {
-            const calendarEventLike: CalendarEvent = {
-              id: event.uid || event.id,
-              summary: event.summary,
-              description: event.description,
-              location: event.location,
-              start: event.start,
-              end: event.end,
-            };
-            return normalizeEvent(calendarEventLike);
-          });
-          
-          stats.fetched = normalizedEvents.length;
-          console.log(`📅 ShootTracker: Fetched ${stats.fetched} events from ICS calendar`);
+          const events = await fetchCalendarEvents(calendarId, timeMin, timeMax);
+          allEvents = allEvents.concat(events);
         } catch (error: any) {
-          stats.errors.push(`Failed to fetch ICS calendar: ${error.message}`);
+          stats.errors.push(`Failed to fetch calendar ${calendarId}: ${error.message}`);
         }
-      } else {
-        // Fall back to Google Calendar API if no ICS URL configured
-        const calendarIds = settings.selected_calendar_ids.length > 0 
-          ? settings.selected_calendar_ids 
-          : ['primary'];
-        
-        let allEvents: CalendarEvent[] = [];
-        
-        for (const calendarId of calendarIds) {
-          try {
-            const events = await fetchCalendarEvents(calendarId, timeMin, timeMax);
-            allEvents = allEvents.concat(events);
-          } catch (error: any) {
-            stats.errors.push(`Failed to fetch calendar ${calendarId}: ${error.message}`);
-          }
-        }
-        
-        for (const rawEvent of allEvents) {
-          const event = normalizeEvent(rawEvent);
-          normalizedEvents.push(event);
-        }
-        
-        stats.fetched = normalizedEvents.length;
-        console.log(`📅 ShootTracker: Fetched ${stats.fetched} events from ${calendarIds.length} calendar(s)`);
       }
+      
+      for (const rawEvent of allEvents) {
+        const event = normalizeEvent(rawEvent);
+        normalizedEvents.push(event);
+      }
+      
+      stats.fetched = normalizedEvents.length;
+      console.log(`📅 ShootTracker: Fetched ${stats.fetched} events from ${calendarIds.length} calendar(s)`);
       
       // Process all normalized events
       for (const event of normalizedEvents) {

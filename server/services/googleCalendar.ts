@@ -127,3 +127,31 @@ export function calculateDeliveryDueDate(shootDate: Date, turnaroundDays: number
   deliveryDate.setDate(deliveryDate.getDate() + turnaroundDays);
   return deliveryDate;
 }
+
+export interface CalendarListItem {
+  id: string;
+  summary: string;
+  description?: string;
+  primary?: boolean;
+  backgroundColor?: string;
+}
+
+export async function listCalendars(): Promise<CalendarListItem[]> {
+  try {
+    const calendar = await getGoogleCalendarClient();
+    const response = await calendar.calendarList.list();
+    
+    const calendars = response.data.items || [];
+    
+    return calendars.map(cal => ({
+      id: cal.id || '',
+      summary: cal.summary || 'Untitled Calendar',
+      description: cal.description || undefined,
+      primary: cal.primary || false,
+      backgroundColor: cal.backgroundColor || undefined,
+    }));
+  } catch (error) {
+    console.error('Error listing calendars:', error);
+    throw error;
+  }
+}
