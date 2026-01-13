@@ -415,6 +415,36 @@ export default function ShootTrackerSettings() {
     });
   };
 
+  const ignoreSelectedEvents = async () => {
+    let successCount = 0;
+    let errorCount = 0;
+
+    for (const eventId of Array.from(selectedEvents)) {
+      try {
+        await ignoreMutation.mutateAsync(eventId);
+        successCount++;
+      } catch {
+        errorCount++;
+      }
+    }
+
+    setSelectedEvents(new Set());
+    toast({
+      title: "Events Ignored",
+      description: `${successCount} events ignored${errorCount > 0 ? `, ${errorCount} failed` : ""}`,
+    });
+  };
+
+  const selectAllPendingEvents = () => {
+    const pendingEvents = stagedEventsQuery.data?.filter(e => e.status === StagingStatus.PENDING) || [];
+    const allIds = new Set(pendingEvents.map(e => e.id));
+    setSelectedEvents(allIds);
+  };
+
+  const clearSelection = () => {
+    setSelectedEvents(new Set());
+  };
+
   const onSubmit = (data: ShoottrackerSettings) => {
     saveSettingsMutation.mutate(data);
   };
@@ -570,36 +600,60 @@ export default function ShootTrackerSettings() {
                 </div>
               </CardHeader>
               <CardContent>
-                {selectedEvents.size > 0 && (
-                  <div className="mb-4 p-3 bg-muted rounded-lg flex items-center justify-between">
-                    <span className="text-sm font-medium">{selectedEvents.size} event(s) selected</span>
-                    <div className="flex items-center gap-2">
+                {stagedEventsQuery.data && stagedEventsQuery.data.filter(e => e.status === StagingStatus.PENDING).length > 0 && (
+                  <div className="mb-4 p-3 bg-muted rounded-lg flex items-center justify-between flex-wrap gap-2">
+                    <div className="flex items-center gap-3">
                       <Button
                         size="sm"
-                        variant="outline"
-                        onClick={() => setTargetWeekOffset(targetWeekOffset - 1)}
+                        variant="ghost"
+                        onClick={selectedEvents.size > 0 ? clearSelection : selectAllPendingEvents}
                       >
-                        <ArrowLeft className="h-4 w-4" />
+                        {selectedEvents.size > 0 ? "Clear Selection" : "Select All"}
                       </Button>
-                      <span className="text-sm min-w-[140px] text-center">
-                        {format(getTargetWeekStart(), "MMM d, yyyy")}
-                      </span>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => setTargetWeekOffset(targetWeekOffset + 1)}
-                      >
-                        <ChevronRight className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        size="sm"
-                        onClick={promoteSelectedEvents}
-                        disabled={promoteMutation.isPending}
-                      >
-                        <Plus className="h-4 w-4 mr-1" />
-                        Add to Week
-                      </Button>
+                      {selectedEvents.size > 0 && (
+                        <span className="text-sm font-medium">{selectedEvents.size} event(s) selected</span>
+                      )}
                     </div>
+                    {selectedEvents.size > 0 && (
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <Button
+                          size="sm"
+                          variant="destructive"
+                          onClick={ignoreSelectedEvents}
+                          disabled={ignoreMutation.isPending}
+                        >
+                          <EyeOff className="h-4 w-4 mr-1" />
+                          Ignore Selected
+                        </Button>
+                        <div className="flex items-center gap-1">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => setTargetWeekOffset(targetWeekOffset - 1)}
+                          >
+                            <ArrowLeft className="h-4 w-4" />
+                          </Button>
+                          <span className="text-sm min-w-[140px] text-center">
+                            {format(getTargetWeekStart(), "MMM d, yyyy")}
+                          </span>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => setTargetWeekOffset(targetWeekOffset + 1)}
+                          >
+                            <ChevronRight className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            onClick={promoteSelectedEvents}
+                            disabled={promoteMutation.isPending}
+                          >
+                            <Plus className="h-4 w-4 mr-1" />
+                            Add to Week
+                          </Button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
 
