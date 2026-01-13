@@ -92,6 +92,8 @@ export function registerShoottrackerRoutes(app: Express): void {
         ? settings.selected_calendar_ids 
         : ['primary'];
       
+      console.log(`🔄 Syncing ${calendarIds.length} calendar(s): ${calendarIds.join(', ')}`);
+      
       for (const calendarId of calendarIds) {
         try {
           const events = await fetchCalendarEvents(calendarId, timeMin, timeMax);
@@ -224,7 +226,7 @@ export function registerShoottrackerRoutes(app: Express): void {
         workingDays: settings.working_days,
         holidays: settings.holidays,
         lastCalendarSync: new Date(),
-        rawPayload: stagedEvent.rawPayload,
+        rawEventPayload: stagedEvent.rawPayload as any,
       });
       
       await storage.updateStagedEvent(id, {

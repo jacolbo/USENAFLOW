@@ -68,6 +68,9 @@ export async function fetchCalendarEvents(
     const defaultTimeMin = timeMin || now;
     const defaultTimeMax = timeMax || new Date(now.getTime() + 90 * 24 * 60 * 60 * 1000); // 90 days ahead
     
+    console.log(`📅 Fetching events from calendar: ${calendarId}`);
+    console.log(`   Time range: ${defaultTimeMin.toISOString()} to ${defaultTimeMax.toISOString()}`);
+    
     const response = await calendar.events.list({
       calendarId,
       timeMin: defaultTimeMin.toISOString(),
@@ -78,6 +81,11 @@ export async function fetchCalendarEvents(
     });
 
     const events = response.data.items || [];
+    console.log(`   Found ${events.length} events in ${calendarId}`);
+    
+    if (events.length > 0) {
+      console.log(`   Sample events: ${events.slice(0, 3).map(e => e.summary).join(', ')}`);
+    }
     
     return events.map(event => ({
       id: event.id || '',
@@ -87,8 +95,11 @@ export async function fetchCalendarEvents(
       end: new Date(event.end?.dateTime || event.end?.date || ''),
       location: event.location || undefined,
     }));
-  } catch (error) {
-    console.error('Error fetching calendar events:', error);
+  } catch (error: any) {
+    console.error(`❌ Error fetching calendar ${calendarId}:`, error.message);
+    if (error.response?.data) {
+      console.error('   API Error:', JSON.stringify(error.response.data));
+    }
     throw error;
   }
 }
@@ -142,6 +153,11 @@ export async function listCalendars(): Promise<CalendarListItem[]> {
     const response = await calendar.calendarList.list();
     
     const calendars = response.data.items || [];
+    
+    console.log(`📋 Found ${calendars.length} calendars:`);
+    calendars.forEach(cal => {
+      console.log(`   - ${cal.summary} (${cal.id})${cal.primary ? ' [PRIMARY]' : ''} accessRole: ${cal.accessRole}`);
+    });
     
     return calendars.map(cal => ({
       id: cal.id || '',
