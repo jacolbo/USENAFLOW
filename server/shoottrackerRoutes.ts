@@ -119,6 +119,9 @@ export function registerShoottrackerRoutes(app: Express): void {
             const existing = await storage.getStagedEventByCalendarEventId(event.id);
             
             if (existing) {
+              if (existing.status === StagingStatus.IGNORED || existing.status === StagingStatus.PROMOTED) {
+                continue;
+              }
               await storage.updateStagedEvent(existing.id, {
                 title: event.title,
                 description: event.description,
