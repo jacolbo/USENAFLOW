@@ -198,20 +198,28 @@ export function registerShoottrackerRoutes(app: Express): void {
         settings.timezone
       );
       
-      const weekStart = targetWeekStart ? new Date(targetWeekStart) : (() => {
-        const sunday = new Date(shootDate);
+      const now = new Date();
+      now.setHours(0, 0, 0, 0);
+      
+      const getWeekStartSunday = (date: Date) => {
+        const sunday = new Date(date);
         sunday.setDate(sunday.getDate() - sunday.getDay());
         sunday.setHours(0, 0, 0, 0);
         return sunday;
-      })();
+      };
       
-      const now = new Date();
+      const dueWeekStart = getWeekStartSunday(deliveryDueDate);
+      const thisWeekStart = getWeekStartSunday(now);
+      
+      const weekStart = deliveryDueDate < now ? thisWeekStart : dueWeekStart;
+      console.log(`📅 Project week: ${deliveryDueDate < now ? 'OVERDUE → This Week' : 'Due Week'} (${weekStart.toISOString().split('T')[0]})`);
+      
       const riskLevel = calculateShootTrackerRiskLevel(
         deliveryDueDate,
         false,
         settings.working_days,
         settings.holidays,
-        now
+        new Date()
       );
       
       const clientName = parseClientNameFromTitle(stagedEvent.title);
