@@ -15,7 +15,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient } from "@/lib/queryClient";
 import { getAdminHeaders } from "@/lib/adminAuth";
-import { UserRoles, shoottrackerSettingsSchema, type ShoottrackerSettings, StagingStatus, type CalendarEventStaging } from "@shared/schema";
+import { UserRoles, shoottrackerSettingsSchema, type ShoottrackerSettings, StagingStatus, type CalendarEventStaging, type KeywordTurnaroundRule } from "@shared/schema";
 import { ArrowLeft, Calendar, Settings, RefreshCw, Clock, AlertTriangle, CheckCircle, Loader2, CalendarPlus, Eye, EyeOff, Plus, ChevronRight } from "lucide-react";
 import { format, startOfWeek, addWeeks, subWeeks } from "date-fns";
 import {
@@ -83,6 +83,9 @@ export default function ShootTrackerSettings() {
   const [selectedEvents, setSelectedEvents] = useState<Set<string>>(new Set());
   const [showIgnored, setShowIgnored] = useState(false);
   const [targetWeekOffset, setTargetWeekOffset] = useState(0);
+  const [newRuleName, setNewRuleName] = useState("");
+  const [newRuleKeywords, setNewRuleKeywords] = useState("");
+  const [newRuleDays, setNewRuleDays] = useState(10);
 
   const storedSession = localStorage.getItem("usenaflow_session");
   const sessionData = storedSession ? JSON.parse(storedSession) : null;
@@ -124,6 +127,7 @@ export default function ShootTrackerSettings() {
       selected_calendar_ids: [],
       timezone: "Africa/Johannesburg",
       daily_capacity_projects: 3,
+      keyword_turnaround_rules: [],
     },
   });
 
@@ -330,6 +334,29 @@ export default function ShootTrackerSettings() {
   const removeKeyword = (keyword: string) => {
     const currentKeywords = form.getValues("exclude_keywords");
     form.setValue("exclude_keywords", currentKeywords.filter(k => k !== keyword));
+  };
+
+  const addTurnaroundRule = () => {
+    if (newRuleName.trim() && newRuleKeywords.trim() && newRuleDays > 0) {
+      const keywords = newRuleKeywords.split(",").map(k => k.trim().toUpperCase()).filter(k => k);
+      if (keywords.length > 0) {
+        const currentRules = form.getValues("keyword_turnaround_rules") || [];
+        const newRule: KeywordTurnaroundRule = {
+          name: newRuleName.trim(),
+          keywords,
+          turnaround_days: newRuleDays,
+        };
+        form.setValue("keyword_turnaround_rules", [...currentRules, newRule]);
+        setNewRuleName("");
+        setNewRuleKeywords("");
+        setNewRuleDays(10);
+      }
+    }
+  };
+
+  const removeTurnaroundRule = (index: number) => {
+    const currentRules = form.getValues("keyword_turnaround_rules") || [];
+    form.setValue("keyword_turnaround_rules", currentRules.filter((_, i) => i !== index));
   };
 
   if (!hasAccess) {
@@ -756,6 +783,81 @@ export default function ShootTrackerSettings() {
                       </FormItem>
                     )}
                   />
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Clock className="h-5 w-5" />
+                    Turnaround Time Rules
+                  </CardTitle>
+                  <CardDescription>
+                    Set different turnaround times based on keywords in shoot titles (e.g., maternity shoots take longer)
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="grid sm:grid-cols-3 gap-2">
+                    <Input
+                      value={newRuleName}
+                      onChange={(e) => setNewRuleName(e.target.value)}
+                      placeholder="Rule name (e.g. Maternity)"
+                    />
+                    <Input
+                      value={newRuleKeywords}
+                      onChange={(e) => setNewRuleKeywords(e.target.value)}
+                      placeholder="Keywords (comma-separated)"
+                    />
+                    <div className="flex gap-2">
+                      <Input
+                        type="number"
+                        min={1}
+                        max={60}
+                        value={newRuleDays}
+                        onChange={(e) => setNewRuleDays(parseInt(e.target.value) || 10)}
+                        className="w-20"
+                      />
+                      <span className="text-sm text-muted-foreground self-center">days</span>
+                      <Button type="button" onClick={addTurnaroundRule} variant="outline" size="sm">
+                        <Plus className="h-4 w-4 mr-1" />
+                        Add
+                      </Button>
+                    </div>
+                  </div>
+                  
+                  {(form.watch("keyword_turnaround_rules") || []).length > 0 ? (
+                    <div className="space-y-2">
+                      {(form.watch("keyword_turnaround_rules") || []).map((rule, index) => (
+                        <div key={index} className="flex items-center justify-between p-3 border rounded-lg bg-muted/30">
+                          <div className="flex-1">
+                            <div className="font-medium">{rule.name}</div>
+                            <div className="text-sm text-muted-foreground">
+                              Keywords: {rule.keywords.join(", ")}
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-3">
+                            <Badge variant="secondary">{rule.turnaround_days} days</Badge>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => removeTurnaroundRule(index)}
+                            >
+                              ×
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">
+                      No custom rules. All shoots will use the default turnaround time above.
+                    </p>
+                  )}
+                  
+                  <p className="text-xs text-muted-foreground">
+                    Rules are checked in order. The first matching keyword determines the turnaround time.
+                  </p>
                 </CardContent>
               </Card>
 
