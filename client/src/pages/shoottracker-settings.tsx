@@ -327,7 +327,32 @@ export default function ShootTrackerSettings() {
     return addWeeks(weekStart, targetWeekOffset);
   };
 
-  const calculateDeliveryDueDate = (shootDate: Date): Date => {
+  const resolveTurnaroundDays = (eventTitle: string): { turnaroundDays: number; matchedRule: string | null } => {
+    const settings = settingsQuery.data;
+    if (!settings) {
+      return { turnaroundDays: 5, matchedRule: null };
+    }
+    
+    const titleUpper = eventTitle.toUpperCase();
+    
+    for (const rule of settings.keyword_turnaround_rules || []) {
+      for (const keyword of rule.keywords) {
+        if (titleUpper.includes(keyword.toUpperCase())) {
+          return {
+            turnaroundDays: rule.turnaround_days,
+            matchedRule: rule.name,
+          };
+        }
+      }
+    }
+    
+    return {
+      turnaroundDays: settings.turnaround_days,
+      matchedRule: null,
+    };
+  };
+
+  const calculateDeliveryDueDate = (shootDate: Date, eventTitle: string): Date => {
     const settings = settingsQuery.data;
     if (!settings) {
       const dueDate = new Date(shootDate);
@@ -335,7 +360,8 @@ export default function ShootTrackerSettings() {
       return dueDate;
     }
     
-    let daysToAdd = settings.turnaround_days;
+    const { turnaroundDays } = resolveTurnaroundDays(eventTitle);
+    let daysToAdd = turnaroundDays;
     const workingDays = new Set(settings.working_days.map(d => d.toUpperCase()));
     const holidays = new Set(settings.holidays);
     
@@ -600,7 +626,8 @@ export default function ShootTrackerSettings() {
                 ) : stagedEventsQuery.data && stagedEventsQuery.data.length > 0 ? (
                   <div className="space-y-3">
                     {stagedEventsQuery.data.map((event) => {
-                      const deliveryDue = calculateDeliveryDueDate(new Date(event.eventStart));
+                      const deliveryDue = calculateDeliveryDueDate(new Date(event.eventStart), event.title);
+                      const { matchedRule } = resolveTurnaroundDays(event.title);
                       return (
                         <div
                           key={event.id}
@@ -661,6 +688,11 @@ export default function ShootTrackerSettings() {
                                 <span className="text-orange-600 dark:text-orange-400 font-medium">
                                   {format(deliveryDue, "MMM d, yyyy")}
                                 </span>
+                                {matchedRule && (
+                                  <Badge variant="outline" className="ml-2 text-xs">
+                                    {matchedRule}
+                                  </Badge>
+                                )}
                               </div>
                               
                               {event.status === StagingStatus.PENDING && (
