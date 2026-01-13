@@ -7,6 +7,8 @@ import {
   RiskLevel,
   ProjectStatus,
   UserRoles,
+  StagingStatus,
+  type CalendarEventStaging,
 } from "@shared/schema";
 import { verifyAdminRequest } from "./middleware/adminAuth";
 import { 
@@ -77,148 +79,206 @@ export function registerShoottrackerRoutes(app: Express): void {
     }
   });
 
-  // Sync route (Admin/Lead Retoucher only - enforced via verifyAdminRequest middleware)
+  // Sync route - stores events in staging table for user to review
   app.post("/api/admin/shoottracker/sync", verifyAdminRequest, async (req: Request, res: Response) => {
     try {
       const settings = await getSettings();
-      const stats = createEmptySyncStats();
+      const stats = { fetched: 0, staged: 0, updated: 0, excluded: 0, errors: [] as string[] };
       const now = new Date();
       const timeMin = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
       const timeMax = new Date(now.getTime() + 365 * 24 * 60 * 60 * 1000);
       
-      let normalizedEvents: NormalizedEvent[] = [];
-      
-      // Use selected Google Calendars
       const calendarIds = settings.selected_calendar_ids.length > 0 
         ? settings.selected_calendar_ids 
         : ['primary'];
       
-      let allEvents: CalendarEvent[] = [];
-      
       for (const calendarId of calendarIds) {
         try {
           const events = await fetchCalendarEvents(calendarId, timeMin, timeMax);
-          allEvents = allEvents.concat(events);
-        } catch (error: any) {
-          stats.errors.push(`Failed to fetch calendar ${calendarId}: ${error.message}`);
-        }
-      }
-      
-      for (const rawEvent of allEvents) {
-        const event = normalizeEvent(rawEvent);
-        normalizedEvents.push(event);
-      }
-      
-      stats.fetched = normalizedEvents.length;
-      console.log(`📅 ShootTracker: Fetched ${stats.fetched} events from ${calendarIds.length} calendar(s)`);
-      
-      // Process all normalized events
-      for (const event of normalizedEvents) {
-        try {
-          if (shouldExclude(event, settings.exclude_keywords)) {
-            stats.excluded++;
-            continue;
-          }
+          stats.fetched += events.length;
           
-          const classification = classifyEvent(event, now);
-          
-          if (classification === 'UPCOMING') {
-            stats.upcoming++;
-          } else {
-            stats.done++;
-          }
-          
-          const existingProject = await storage.getProjectByCalendarEventId(event.id);
-          
-          const shootDate = event.start;
-          const deliveryDueDate = addBusinessDays(
-            shootDate,
-            settings.turnaround_days,
-            settings.working_days,
-            settings.holidays,
-            settings.timezone
-          );
-          
-          if (existingProject) {
-            const meta = await storage.getShoottrackerMeta(existingProject.id);
-            const delivered = meta?.delivered || false;
+          for (const rawEvent of events) {
+            const event = normalizeEvent(rawEvent);
             
-            const riskLevel = calculateShootTrackerRiskLevel(
-              deliveryDueDate,
-              delivered,
-              settings.working_days,
-              settings.holidays,
-              now
-            );
-            
-            await storage.updateProject(existingProject.id, {
-              shootDate,
-              deliveryDueDate,
-              riskLevel,
-              lastSyncedAt: new Date(),
-            });
-            
-            if (meta) {
-              await storage.updateShoottrackerMeta(existingProject.id, {
-                lastCalendarSync: new Date(),
-                rawEventPayload: event.rawPayload,
-              });
+            if (shouldExclude(event, settings.exclude_keywords)) {
+              stats.excluded++;
+              continue;
             }
             
-            stats.updated++;
-          } else {
-            const clientName = parseClientNameFromTitle(event.title);
+            const existing = await storage.getStagedEventByCalendarEventId(event.id);
             
-            const sundayOfWeek = new Date(shootDate);
-            sundayOfWeek.setDate(sundayOfWeek.getDate() - sundayOfWeek.getDay());
-            sundayOfWeek.setHours(0, 0, 0, 0);
-            
-            const riskLevel = calculateShootTrackerRiskLevel(
-              deliveryDueDate,
-              false,
-              settings.working_days,
-              settings.holidays,
-              now
-            );
-            
-            const newProject = await storage.createProject({
-              clientName,
-              packageCount: 0,
-              selectedCount: 0,
-              dueDate: sundayOfWeek,
-              assignedTo: null,
-              shootDate,
-              deliveryDueDate,
-              riskLevel,
-              calendarEventId: event.id,
-              lastSyncedAt: new Date(),
-              createdFrom: "CALENDAR",
-            });
-            
-            await storage.createShoottrackerMeta({
-              projectId: newProject.id,
-              linkSent: false,
-              delivered: false,
-              turnaroundDays: settings.turnaround_days,
-              workingDays: settings.working_days,
-              holidays: settings.holidays,
-              lastCalendarSync: new Date(),
-              rawEventPayload: event.rawPayload,
-            });
-            
-            stats.created++;
+            if (existing) {
+              await storage.updateStagedEvent(existing.id, {
+                title: event.title,
+                description: event.description,
+                location: event.location,
+                eventStart: event.start,
+                eventEnd: event.end,
+                rawPayload: event.rawPayload,
+              });
+              stats.updated++;
+            } else {
+              await storage.createStagedEvent({
+                calendarEventId: event.id,
+                calendarId,
+                title: event.title,
+                description: event.description,
+                location: event.location,
+                eventStart: event.start,
+                eventEnd: event.end,
+                status: StagingStatus.PENDING,
+                rawPayload: event.rawPayload,
+              });
+              stats.staged++;
+            }
           }
-        } catch (eventError: any) {
-          stats.errors.push(`Event ${event.id}: ${eventError.message}`);
+        } catch (error: any) {
+          stats.errors.push(`Calendar ${calendarId}: ${error.message}`);
         }
       }
       
-      console.log(`✅ ShootTracker sync complete: ${stats.created} created, ${stats.updated} updated, ${stats.excluded} excluded`);
-      
+      console.log(`📅 ShootTracker: Synced ${stats.fetched} events (${stats.staged} new, ${stats.updated} updated, ${stats.excluded} excluded)`);
       res.json(stats);
     } catch (error: any) {
       console.error("❌ ShootTracker sync error:", error);
       res.status(500).json({ error: error.message || "Sync failed" });
+    }
+  });
+
+  // Get staged events (pending calendar events)
+  app.get("/api/admin/shoottracker/staged", verifyAdminRequest, async (req: Request, res: Response) => {
+    try {
+      const { status } = req.query;
+      const events = await storage.getStagedEvents(status as string | undefined);
+      res.json(events);
+    } catch (error: any) {
+      console.error("Error fetching staged events:", error);
+      res.status(500).json({ error: "Failed to fetch staged events" });
+    }
+  });
+
+  // Promote staged event to project
+  app.post("/api/admin/shoottracker/staged/:id/promote", verifyAdminRequest, async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+      const { targetWeekStart } = req.body;
+      const userId = req.headers["x-usena-user-id"] as string;
+      
+      const stagedEvent = await storage.getStagedEvents().then(events => events.find(e => e.id === id));
+      if (!stagedEvent) {
+        return res.status(404).json({ error: "Staged event not found" });
+      }
+      
+      if (stagedEvent.status === StagingStatus.PROMOTED) {
+        return res.status(400).json({ error: "Event already promoted" });
+      }
+      
+      const settings = await getSettings();
+      const shootDate = stagedEvent.eventStart;
+      
+      const deliveryDueDate = addBusinessDays(
+        shootDate,
+        settings.turnaround_days,
+        settings.working_days,
+        settings.holidays,
+        settings.timezone
+      );
+      
+      const weekStart = targetWeekStart ? new Date(targetWeekStart) : (() => {
+        const sunday = new Date(shootDate);
+        sunday.setDate(sunday.getDate() - sunday.getDay());
+        sunday.setHours(0, 0, 0, 0);
+        return sunday;
+      })();
+      
+      const now = new Date();
+      const riskLevel = calculateShootTrackerRiskLevel(
+        deliveryDueDate,
+        false,
+        settings.working_days,
+        settings.holidays,
+        now
+      );
+      
+      const clientName = parseClientNameFromTitle(stagedEvent.title);
+      
+      const newProject = await storage.createProject({
+        clientName,
+        packageCount: 0,
+        selectedCount: 0,
+        dueDate: weekStart,
+        assignedTo: null,
+        shootDate,
+        deliveryDueDate,
+        riskLevel,
+        calendarEventId: stagedEvent.calendarEventId,
+        lastSyncedAt: new Date(),
+        createdFrom: "CALENDAR",
+      });
+      
+      await storage.createShoottrackerMeta({
+        projectId: newProject.id,
+        linkSent: false,
+        delivered: false,
+        turnaroundDays: settings.turnaround_days,
+        workingDays: settings.working_days,
+        holidays: settings.holidays,
+        lastCalendarSync: new Date(),
+        rawPayload: stagedEvent.rawPayload,
+      });
+      
+      await storage.updateStagedEvent(id, {
+        status: StagingStatus.PROMOTED,
+        promotedProjectId: newProject.id,
+        targetWeekStart: weekStart,
+        promotedAt: new Date(),
+        promotedBy: userId,
+      });
+      
+      res.json({ success: true, project: newProject });
+    } catch (error: any) {
+      console.error("Error promoting staged event:", error);
+      res.status(500).json({ error: error.message || "Failed to promote event" });
+    }
+  });
+
+  // Ignore staged event
+  app.post("/api/admin/shoottracker/staged/:id/ignore", verifyAdminRequest, async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+      
+      const updated = await storage.updateStagedEvent(id, {
+        status: StagingStatus.IGNORED,
+      });
+      
+      if (!updated) {
+        return res.status(404).json({ error: "Staged event not found" });
+      }
+      
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error("Error ignoring staged event:", error);
+      res.status(500).json({ error: "Failed to ignore event" });
+    }
+  });
+
+  // Restore ignored event to pending
+  app.post("/api/admin/shoottracker/staged/:id/restore", verifyAdminRequest, async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+      
+      const updated = await storage.updateStagedEvent(id, {
+        status: StagingStatus.PENDING,
+      });
+      
+      if (!updated) {
+        return res.status(404).json({ error: "Staged event not found" });
+      }
+      
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error("Error restoring staged event:", error);
+      res.status(500).json({ error: "Failed to restore event" });
     }
   });
 

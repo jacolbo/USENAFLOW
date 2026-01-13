@@ -62,6 +62,12 @@ export function useSSE(user?: { id: string; username: string } | null) {
             queryClient.invalidateQueries({ queryKey: ['/api/admin/trade-offers'] });
             break;
 
+          case 'calendar_sync_complete':
+            console.log('Calendar sync completed via SSE');
+            queryClient.invalidateQueries({ queryKey: ['/api/admin/shoottracker/staged'] });
+            queryClient.invalidateQueries({ queryKey: ['/api/projects'] });
+            break;
+
           case 'connected':
             console.log('SSE connection confirmed');
             break;

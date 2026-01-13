@@ -114,6 +114,26 @@ export const appSettings = pgTable("app_settings", {
   updatedAt: timestamp("updated_at").notNull().default(sql`now()`),
 });
 
+// Calendar events staging table for ShootTracker
+export const calendarEventsStaging = pgTable("calendar_events_staging", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  calendarEventId: text("calendar_event_id").notNull().unique(),
+  calendarId: text("calendar_id").notNull(),
+  title: text("title").notNull(),
+  description: text("description"),
+  location: text("location"),
+  eventStart: timestamp("event_start").notNull(),
+  eventEnd: timestamp("event_end").notNull(),
+  status: text("status").notNull().default("pending"),
+  promotedProjectId: varchar("promoted_project_id").references(() => projects.id, { onDelete: "set null" }),
+  targetWeekStart: timestamp("target_week_start"),
+  rawPayload: jsonb("raw_payload"),
+  syncedAt: timestamp("synced_at").notNull().default(sql`now()`),
+  promotedAt: timestamp("promoted_at"),
+  promotedBy: text("promoted_by"),
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+});
+
 // Complaints system for Evans to manage retoucher reports
 export const complaints = pgTable("complaints", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -326,3 +346,29 @@ export const DEFAULT_SHOOTTRACKER_SETTINGS: ShoottrackerSettings = {
   daily_capacity_projects: 3,
   ics_calendar_url: "",
 };
+
+// Calendar staging status
+export const StagingStatus = {
+  PENDING: "pending",
+  PROMOTED: "promoted",
+  IGNORED: "ignored",
+} as const;
+
+export type StagingStatusType = typeof StagingStatus[keyof typeof StagingStatus];
+
+// Calendar events staging schemas
+export const insertCalendarEventStagingSchema = createInsertSchema(calendarEventsStaging).omit({
+  id: true,
+  createdAt: true,
+  syncedAt: true,
+});
+
+export const updateCalendarEventStagingSchema = createInsertSchema(calendarEventsStaging).partial().omit({
+  id: true,
+  createdAt: true,
+  calendarEventId: true,
+});
+
+export type CalendarEventStaging = typeof calendarEventsStaging.$inferSelect;
+export type InsertCalendarEventStaging = z.infer<typeof insertCalendarEventStagingSchema>;
+export type UpdateCalendarEventStaging = z.infer<typeof updateCalendarEventStagingSchema>;

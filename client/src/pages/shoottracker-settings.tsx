@@ -11,11 +11,13 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient } from "@/lib/queryClient";
 import { getAdminHeaders } from "@/lib/adminAuth";
-import { UserRoles, shoottrackerSettingsSchema, type ShoottrackerSettings } from "@shared/schema";
-import { ArrowLeft, Calendar, Settings, RefreshCw, Clock, AlertTriangle, CheckCircle, Loader2 } from "lucide-react";
+import { UserRoles, shoottrackerSettingsSchema, type ShoottrackerSettings, StagingStatus, type CalendarEventStaging } from "@shared/schema";
+import { ArrowLeft, Calendar, Settings, RefreshCw, Clock, AlertTriangle, CheckCircle, Loader2, CalendarPlus, Eye, EyeOff, Plus, ChevronRight } from "lucide-react";
+import { format, startOfWeek, addWeeks, subWeeks } from "date-fns";
 import {
   Form,
   FormControl,
@@ -58,11 +60,9 @@ const TIMEZONES = [
 
 interface SyncStats {
   fetched: number;
-  excluded: number;
-  upcoming: number;
-  done: number;
-  created: number;
+  staged: number;
   updated: number;
+  excluded: number;
   errors: string[];
 }
 
@@ -80,6 +80,9 @@ export default function ShootTrackerSettings() {
   const [newHoliday, setNewHoliday] = useState("");
   const [newKeyword, setNewKeyword] = useState("");
   const [syncStats, setSyncStats] = useState<SyncStats | null>(null);
+  const [selectedEvents, setSelectedEvents] = useState<Set<string>>(new Set());
+  const [showIgnored, setShowIgnored] = useState(false);
+  const [targetWeekOffset, setTargetWeekOffset] = useState(0);
 
   const storedSession = localStorage.getItem("usenaflow_session");
   const sessionData = storedSession ? JSON.parse(storedSession) : null;
@@ -170,14 +173,130 @@ export default function ShootTrackerSettings() {
       setSyncStats(data);
       toast({ 
         title: "Sync Complete", 
-        description: `Created ${data.created} projects, updated ${data.updated}` 
+        description: `${data.staged} new events staged, ${data.updated} updated` 
       });
-      queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/shoottracker/staged"] });
     },
     onError: (error: any) => {
       toast({ title: "Sync Failed", description: error.message, variant: "destructive" });
     },
   });
+
+  const stagedEventsQuery = useQuery<CalendarEventStaging[]>({
+    queryKey: ["/api/admin/shoottracker/staged", showIgnored ? "all" : "pending"],
+    queryFn: async () => {
+      const headers = getAdminHeaders(userRole, userId);
+      const status = showIgnored ? undefined : StagingStatus.PENDING;
+      const url = status ? `/api/admin/shoottracker/staged?status=${status}` : "/api/admin/shoottracker/staged";
+      const response = await fetch(url, { headers });
+      if (!response.ok) throw new Error("Failed to fetch staged events");
+      return response.json();
+    },
+    enabled: hasAccess,
+  });
+
+  const promoteMutation = useMutation({
+    mutationFn: async ({ eventId, targetWeekStart }: { eventId: string; targetWeekStart: Date }) => {
+      const headers = {
+        ...getAdminHeaders(userRole, userId),
+        "Content-Type": "application/json",
+      };
+      const response = await fetch(`/api/admin/shoottracker/staged/${eventId}/promote`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ targetWeekStart: targetWeekStart.toISOString() }),
+      });
+      if (!response.ok) throw new Error("Failed to promote event");
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/shoottracker/staged"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
+    },
+    onError: (error: any) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const ignoreMutation = useMutation({
+    mutationFn: async (eventId: string) => {
+      const headers = getAdminHeaders(userRole, userId);
+      const response = await fetch(`/api/admin/shoottracker/staged/${eventId}/ignore`, {
+        method: "POST",
+        headers,
+      });
+      if (!response.ok) throw new Error("Failed to ignore event");
+      return { eventId };
+    },
+    onSuccess: (data) => {
+      setSelectedEvents(prev => {
+        const next = new Set(prev);
+        next.delete(data.eventId);
+        return next;
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/shoottracker/staged"] });
+    },
+    onError: (error: any) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const restoreMutation = useMutation({
+    mutationFn: async (eventId: string) => {
+      const headers = getAdminHeaders(userRole, userId);
+      const response = await fetch(`/api/admin/shoottracker/staged/${eventId}/restore`, {
+        method: "POST",
+        headers,
+      });
+      if (!response.ok) throw new Error("Failed to restore event");
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/shoottracker/staged"] });
+    },
+    onError: (error: any) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const getTargetWeekStart = () => {
+    const now = new Date();
+    const weekStart = startOfWeek(now, { weekStartsOn: 0 });
+    return addWeeks(weekStart, targetWeekOffset);
+  };
+
+  const toggleEventSelection = (eventId: string) => {
+    setSelectedEvents(prev => {
+      const next = new Set(prev);
+      if (next.has(eventId)) {
+        next.delete(eventId);
+      } else {
+        next.add(eventId);
+      }
+      return next;
+    });
+  };
+
+  const promoteSelectedEvents = async () => {
+    const targetWeekStart = getTargetWeekStart();
+    let successCount = 0;
+    let errorCount = 0;
+
+    for (const eventId of Array.from(selectedEvents)) {
+      try {
+        await promoteMutation.mutateAsync({ eventId, targetWeekStart });
+        successCount++;
+      } catch {
+        errorCount++;
+      }
+    }
+
+    setSelectedEvents(new Set());
+    toast({
+      title: "Events Promoted",
+      description: `${successCount} events added to week of ${format(targetWeekStart, "MMM d, yyyy")}${errorCount > 0 ? `, ${errorCount} failed` : ""}`,
+    });
+  };
 
   const onSubmit = (data: ShoottrackerSettings) => {
     saveSettingsMutation.mutate(data);
@@ -262,19 +381,188 @@ export default function ShootTrackerSettings() {
           </div>
         </div>
 
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-            <div className="grid gap-6">
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <RefreshCw className="h-5 w-5" />
-                    Calendar Sync
-                  </CardTitle>
-                  <CardDescription>
-                    Sync your calendar events to automatically create projects
-                  </CardDescription>
-                </CardHeader>
+        <Tabs defaultValue="projects" className="space-y-6">
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="projects" className="flex items-center gap-2">
+              <CalendarPlus className="h-4 w-4" />
+              Calendar Projects
+            </TabsTrigger>
+            <TabsTrigger value="settings" className="flex items-center gap-2">
+              <Settings className="h-4 w-4" />
+              Settings
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="projects" className="space-y-4">
+            <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle className="flex items-center gap-2">
+                      <CalendarPlus className="h-5 w-5" />
+                      Calendar Events
+                    </CardTitle>
+                    <CardDescription>
+                      Review synced calendar events and add them to your project schedule
+                    </CardDescription>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={() => setShowIgnored(!showIgnored)}
+                    >
+                      {showIgnored ? <Eye className="h-4 w-4 mr-1" /> : <EyeOff className="h-4 w-4 mr-1" />}
+                      {showIgnored ? "Hide Ignored" : "Show Ignored"}
+                    </Button>
+                    <Button 
+                      size="sm"
+                      onClick={() => syncMutation.mutate()} 
+                      disabled={syncMutation.isPending}
+                    >
+                      {syncMutation.isPending ? (
+                        <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Syncing...</>
+                      ) : (
+                        <><RefreshCw className="h-4 w-4 mr-2" /> Sync Now</>
+                      )}
+                    </Button>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {selectedEvents.size > 0 && (
+                  <div className="mb-4 p-3 bg-muted rounded-lg flex items-center justify-between">
+                    <span className="text-sm font-medium">{selectedEvents.size} event(s) selected</span>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setTargetWeekOffset(targetWeekOffset - 1)}
+                      >
+                        <ArrowLeft className="h-4 w-4" />
+                      </Button>
+                      <span className="text-sm min-w-[140px] text-center">
+                        {format(getTargetWeekStart(), "MMM d, yyyy")}
+                      </span>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setTargetWeekOffset(targetWeekOffset + 1)}
+                      >
+                        <ChevronRight className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        size="sm"
+                        onClick={promoteSelectedEvents}
+                        disabled={promoteMutation.isPending}
+                      >
+                        <Plus className="h-4 w-4 mr-1" />
+                        Add to Week
+                      </Button>
+                    </div>
+                  </div>
+                )}
+
+                {stagedEventsQuery.isLoading ? (
+                  <div className="flex items-center justify-center py-8">
+                    <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                  </div>
+                ) : stagedEventsQuery.isError ? (
+                  <div className="text-center py-8">
+                    <AlertTriangle className="h-12 w-12 mx-auto mb-3 text-destructive opacity-50" />
+                    <p className="text-destructive">Failed to load calendar events</p>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      Check your calendar connection and try syncing again
+                    </p>
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      className="mt-3"
+                      onClick={() => stagedEventsQuery.refetch()}
+                    >
+                      Try Again
+                    </Button>
+                  </div>
+                ) : stagedEventsQuery.data && stagedEventsQuery.data.length > 0 ? (
+                  <div className="space-y-2">
+                    {stagedEventsQuery.data.map((event) => (
+                      <div
+                        key={event.id}
+                        className={`p-3 border rounded-lg flex items-center gap-3 transition-colors ${
+                          event.status === StagingStatus.PROMOTED ? "bg-green-50 border-green-200 dark:bg-green-950/20" :
+                          event.status === StagingStatus.IGNORED ? "bg-muted/50 opacity-60" :
+                          selectedEvents.has(event.id) ? "bg-primary/5 border-primary" : ""
+                        }`}
+                      >
+                        {event.status === StagingStatus.PENDING && (
+                          <Checkbox
+                            checked={selectedEvents.has(event.id)}
+                            onCheckedChange={() => toggleEventSelection(event.id)}
+                          />
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <div className="font-medium truncate">{event.title}</div>
+                          <div className="text-sm text-muted-foreground">
+                            {format(new Date(event.eventStart), "MMM d, yyyy 'at' h:mm a")}
+                            {event.location && ` • ${event.location}`}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {event.status === StagingStatus.PROMOTED && (
+                            <Badge variant="default" className="bg-green-600">Added</Badge>
+                          )}
+                          {event.status === StagingStatus.IGNORED && (
+                            <>
+                              <Badge variant="secondary">Ignored</Badge>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => restoreMutation.mutate(event.id)}
+                                disabled={restoreMutation.isPending}
+                              >
+                                Restore
+                              </Button>
+                            </>
+                          )}
+                          {event.status === StagingStatus.PENDING && (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => ignoreMutation.mutate(event.id)}
+                              disabled={ignoreMutation.isPending}
+                            >
+                              <EyeOff className="h-4 w-4" />
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <Calendar className="h-12 w-12 mx-auto mb-3 opacity-20" />
+                    <p>No calendar events found</p>
+                    <p className="text-sm mt-1">Click "Sync Now" to fetch events from your calendar</p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="settings">
+            <Form {...form}>
+              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+                <div className="grid gap-6">
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <RefreshCw className="h-5 w-5" />
+                        Calendar Sync
+                      </CardTitle>
+                      <CardDescription>
+                        Sync your calendar events to automatically create projects
+                      </CardDescription>
+                    </CardHeader>
                 <CardContent className="space-y-4">
                   <FormField
                     control={form.control}
@@ -375,9 +663,7 @@ export default function ShootTrackerSettings() {
                           <span>Fetched: {syncStats.fetched}</span>
                         </div>
                         <div>Excluded: {syncStats.excluded}</div>
-                        <div>Upcoming: {syncStats.upcoming}</div>
-                        <div>Done: {syncStats.done}</div>
-                        <div className="text-green-600">Created: {syncStats.created}</div>
+                        <div className="text-green-600">Staged: {syncStats.staged}</div>
                         <div className="text-blue-600">Updated: {syncStats.updated}</div>
                       </div>
                       {syncStats.errors.length > 0 && (
@@ -590,6 +876,8 @@ export default function ShootTrackerSettings() {
             </div>
           </form>
         </Form>
+          </TabsContent>
+        </Tabs>
       </div>
     </div>
   );

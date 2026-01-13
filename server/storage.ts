@@ -1,4 +1,4 @@
-import { type User, type InsertUser, type Project, type InsertProject, type UpdateProject, type ProjectNote, type InsertProjectNote, type UpdateProjectNote, type TradeOffer, type InsertTradeOffer, type UpdateTradeOffer, type WranglerCommission, type InsertWranglerCommission, type ProjectEvent, type InsertProjectEvent, type Complaint, type InsertComplaint, type ShoottrackerMeta, type InsertShoottrackerMeta, type UpdateShoottrackerMeta, type AppSetting, ProjectStatus, TradeOfferStatus, users, projects, projectNotes, tradeOffers, wranglerCommissions, projectEvents, complaints, shoottrackerMeta, appSettings } from "@shared/schema";
+import { type User, type InsertUser, type Project, type InsertProject, type UpdateProject, type ProjectNote, type InsertProjectNote, type UpdateProjectNote, type TradeOffer, type InsertTradeOffer, type UpdateTradeOffer, type WranglerCommission, type InsertWranglerCommission, type ProjectEvent, type InsertProjectEvent, type Complaint, type InsertComplaint, type ShoottrackerMeta, type InsertShoottrackerMeta, type UpdateShoottrackerMeta, type AppSetting, type CalendarEventStaging, type InsertCalendarEventStaging, type UpdateCalendarEventStaging, ProjectStatus, TradeOfferStatus, StagingStatus, users, projects, projectNotes, tradeOffers, wranglerCommissions, projectEvents, complaints, shoottrackerMeta, appSettings, calendarEventsStaging } from "@shared/schema";
 import { db } from "./db";
 import { eq, sql, asc } from "drizzle-orm";
 import { randomUUID } from "crypto";
@@ -57,6 +57,14 @@ export interface IStorage {
   
   // Get project by calendar event ID
   getProjectByCalendarEventId(calendarEventId: string): Promise<Project | undefined>;
+  
+  // Calendar events staging methods
+  getStagedEvents(status?: string): Promise<CalendarEventStaging[]>;
+  getStagedEventByCalendarEventId(calendarEventId: string): Promise<CalendarEventStaging | undefined>;
+  createStagedEvent(event: InsertCalendarEventStaging): Promise<CalendarEventStaging>;
+  updateStagedEvent(id: string, updates: UpdateCalendarEventStaging): Promise<CalendarEventStaging | undefined>;
+  upsertStagedEvent(event: InsertCalendarEventStaging): Promise<CalendarEventStaging>;
+  deleteStagedEvent(id: string): Promise<boolean>;
 }
 
 export class MemStorage implements IStorage {
@@ -540,6 +548,31 @@ export class MemStorage implements IStorage {
     }
     return undefined;
   }
+
+  // Calendar events staging methods (Not implemented for MemStorage)
+  async getStagedEvents(status?: string): Promise<CalendarEventStaging[]> {
+    return [];
+  }
+
+  async getStagedEventByCalendarEventId(calendarEventId: string): Promise<CalendarEventStaging | undefined> {
+    return undefined;
+  }
+
+  async createStagedEvent(event: InsertCalendarEventStaging): Promise<CalendarEventStaging> {
+    throw new Error("Not implemented in MemStorage");
+  }
+
+  async updateStagedEvent(id: string, updates: UpdateCalendarEventStaging): Promise<CalendarEventStaging | undefined> {
+    return undefined;
+  }
+
+  async upsertStagedEvent(event: InsertCalendarEventStaging): Promise<CalendarEventStaging> {
+    throw new Error("Not implemented in MemStorage");
+  }
+
+  async deleteStagedEvent(id: string): Promise<boolean> {
+    return false;
+  }
 }
 
 // Database Storage Implementation
@@ -919,6 +952,51 @@ export class DatabaseStorage implements IStorage {
   async getProjectByCalendarEventId(calendarEventId: string): Promise<Project | undefined> {
     const [project] = await db.select().from(projects).where(eq(projects.calendarEventId, calendarEventId));
     return project || undefined;
+  }
+
+  // Calendar events staging methods
+  async getStagedEvents(status?: string): Promise<CalendarEventStaging[]> {
+    if (status) {
+      return db.select().from(calendarEventsStaging).where(eq(calendarEventsStaging.status, status)).orderBy(asc(calendarEventsStaging.eventStart));
+    }
+    return db.select().from(calendarEventsStaging).orderBy(asc(calendarEventsStaging.eventStart));
+  }
+
+  async getStagedEventByCalendarEventId(calendarEventId: string): Promise<CalendarEventStaging | undefined> {
+    const [event] = await db.select().from(calendarEventsStaging).where(eq(calendarEventsStaging.calendarEventId, calendarEventId));
+    return event || undefined;
+  }
+
+  async createStagedEvent(event: InsertCalendarEventStaging): Promise<CalendarEventStaging> {
+    const [created] = await db.insert(calendarEventsStaging).values(event).returning();
+    return created;
+  }
+
+  async updateStagedEvent(id: string, updates: UpdateCalendarEventStaging): Promise<CalendarEventStaging | undefined> {
+    const [updated] = await db.update(calendarEventsStaging).set(updates).where(eq(calendarEventsStaging.id, id)).returning();
+    return updated || undefined;
+  }
+
+  async upsertStagedEvent(event: InsertCalendarEventStaging): Promise<CalendarEventStaging> {
+    const existing = await this.getStagedEventByCalendarEventId(event.calendarEventId);
+    if (existing) {
+      const [updated] = await db.update(calendarEventsStaging).set({
+        title: event.title,
+        description: event.description,
+        location: event.location,
+        eventStart: event.eventStart,
+        eventEnd: event.eventEnd,
+        rawPayload: event.rawPayload,
+        syncedAt: new Date(),
+      }).where(eq(calendarEventsStaging.calendarEventId, event.calendarEventId)).returning();
+      return updated;
+    }
+    return this.createStagedEvent(event);
+  }
+
+  async deleteStagedEvent(id: string): Promise<boolean> {
+    const result = await db.delete(calendarEventsStaging).where(eq(calendarEventsStaging.id, id));
+    return result.rowCount ? result.rowCount > 0 : false;
   }
 }
 
