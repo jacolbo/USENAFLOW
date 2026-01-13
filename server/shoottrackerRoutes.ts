@@ -96,8 +96,8 @@ export function registerShoottrackerRoutes(app: Express): void {
               summary: event.summary,
               description: event.description,
               location: event.location,
-              start: event.start.toISOString(),
-              end: event.end.toISOString(),
+              start: event.start,
+              end: event.end,
             };
             return normalizeEvent(calendarEventLike);
           });
