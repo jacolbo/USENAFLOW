@@ -10,6 +10,15 @@ async function getAccessToken() {
   }
   
   const hostname = process.env.REPLIT_CONNECTORS_HOSTNAME;
+  const isProduction = process.env.REPLIT_DEPLOYMENT === '1';
+  
+  console.log('📅 [DEBUG] Environment check:');
+  console.log(`   - REPLIT_DEPLOYMENT: ${process.env.REPLIT_DEPLOYMENT || 'not set'}`);
+  console.log(`   - Is Production: ${isProduction}`);
+  console.log(`   - REPLIT_CONNECTORS_HOSTNAME: ${hostname || 'not set'}`);
+  console.log(`   - REPL_IDENTITY exists: ${!!process.env.REPL_IDENTITY}`);
+  console.log(`   - WEB_REPL_RENEWAL exists: ${!!process.env.WEB_REPL_RENEWAL}`);
+  
   const xReplitToken = process.env.REPL_IDENTITY 
     ? 'repl ' + process.env.REPL_IDENTITY 
     : process.env.WEB_REPL_RENEWAL 
@@ -17,25 +26,49 @@ async function getAccessToken() {
     : null;
 
   if (!xReplitToken) {
+    console.error('📅 [ERROR] Neither REPL_IDENTITY nor WEB_REPL_RENEWAL found');
     throw new Error('X_REPLIT_TOKEN not found for repl/depl');
   }
 
-  console.log('📅 Fetching fresh access token from Replit connector...');
+  console.log(`📅 Fetching fresh access token from Replit connector (token type: ${xReplitToken.substring(0, 4)}...)...`);
   
-  connectionSettings = await fetch(
-    'https://' + hostname + '/api/v2/connection?include_secrets=true&connector_names=google-calendar',
-    {
-      headers: {
-        'Accept': 'application/json',
-        'X_REPLIT_TOKEN': xReplitToken
-      }
+  const url = 'https://' + hostname + '/api/v2/connection?include_secrets=true&connector_names=google-calendar';
+  console.log(`📅 [DEBUG] Connector API URL: ${url}`);
+  
+  const response = await fetch(url, {
+    headers: {
+      'Accept': 'application/json',
+      'X_REPLIT_TOKEN': xReplitToken
     }
-  ).then(res => res.json()).then(data => data.items?.[0]);
+  });
+  
+  console.log(`📅 [DEBUG] Connector API response status: ${response.status} ${response.statusText}`);
+  
+  const data = await response.json();
+  
+  console.log(`📅 [DEBUG] Connector API response structure:`);
+  console.log(`   - Has items array: ${!!data.items}`);
+  console.log(`   - Items count: ${data.items?.length || 0}`);
+  
+  if (data.items && data.items.length > 0) {
+    console.log(`📅 [DEBUG] First connection:`);
+    console.log(`   - Has settings: ${!!data.items[0]?.settings}`);
+    console.log(`   - Has access_token: ${!!data.items[0]?.settings?.access_token}`);
+    console.log(`   - Has oauth.credentials: ${!!data.items[0]?.settings?.oauth?.credentials}`);
+  } else {
+    console.log(`📅 [DEBUG] Raw response (first 500 chars): ${JSON.stringify(data).substring(0, 500)}`);
+  }
+  
+  connectionSettings = data.items?.[0];
 
   const accessToken = connectionSettings?.settings?.access_token || connectionSettings?.settings?.oauth?.credentials?.access_token;
 
   if (!connectionSettings || !accessToken) {
     console.error('📅 No connection found or no access token');
+    console.error('📅 [DEBUG] This typically means:');
+    console.error('   1. Google Calendar connector is not set up for this environment');
+    console.error('   2. For production: Check Deployment > Advanced settings > Connectors');
+    console.error('   3. The connector authorization may have expired');
     throw new Error('Google Calendar not connected');
   }
   
