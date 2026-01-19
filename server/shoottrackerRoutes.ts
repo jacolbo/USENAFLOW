@@ -28,6 +28,7 @@ import {
 } from "./services/shoottrackerEngine";
 import { fetchCalendarEvents, CalendarEvent, listCalendars } from "./services/googleCalendar";
 import { calculateRiskLevel } from "./services/riskCalculator";
+import { getAutoSyncStatus } from "./autoSyncScheduler";
 
 const SETTINGS_KEY = "shoottracker_settings";
 
@@ -85,6 +86,22 @@ export function registerShoottrackerRoutes(app: Express): void {
     } catch (error: any) {
       console.error("Error listing calendars:", error);
       res.status(500).json({ error: error.message || "Failed to list calendars" });
+    }
+  });
+
+  app.get("/api/admin/shoottracker/autosync-status", verifyAdminRequest, async (req: Request, res: Response) => {
+    try {
+      const settings = await getSettings();
+      const status = getAutoSyncStatus();
+      res.json({
+        enabled: settings.auto_sync_enabled,
+        intervalMinutes: settings.auto_sync_interval_minutes,
+        lastSyncAt: settings.last_auto_sync_at || null,
+        isCurrentlySyncing: status.isRunning,
+      });
+    } catch (error: any) {
+      console.error("Error fetching auto-sync status:", error);
+      res.status(500).json({ error: "Failed to fetch auto-sync status" });
     }
   });
 

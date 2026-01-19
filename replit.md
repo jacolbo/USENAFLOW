@@ -80,9 +80,13 @@ Use `getAdminHeaders(role, userId)` from `client/src/lib/adminAuth.ts`
 - timezone: Africa/Johannesburg
 - daily_capacity_projects: 3
 
-**Auto-Sync Scheduler:**
-- Runs every 30 minutes when NODE_ENV=production AND SHOOTTRACKER_AUTOSYNC=true
-- Automatically syncs calendar events and updates risk levels
+**Automatic Sync Feature:**
+- Configurable auto-sync with enable/disable toggle in ShootTracker Settings
+- Sync interval options: 5, 10, 15, 30, or 60 minutes
+- Scheduler checks every minute if sync is needed based on settings
+- Last sync timestamp displayed in UI with real-time status
+- Settings stored in database: `auto_sync_enabled`, `auto_sync_interval_minutes`, `last_auto_sync_at`
+- API endpoint: `GET /api/admin/shoottracker/autosync-status` - Get current auto-sync status
 
 ## External Dependencies
 

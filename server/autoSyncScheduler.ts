@@ -1,22 +1,19 @@
 import { storage } from "./storage";
-import { DEFAULT_SHOOTTRACKER_SETTINGS, shoottrackerSettingsSchema } from "@shared/schema";
+import { DEFAULT_SHOOTTRACKER_SETTINGS, shoottrackerSettingsSchema, ShoottrackerSettings, StagingStatus } from "@shared/schema";
 import { 
   normalizeEvent, 
   shouldExclude, 
-  classifyEvent, 
-  addBusinessDays, 
-  parseClientNameFromTitle,
-  calculateShootTrackerRiskLevel,
-  createEmptySyncStats,
 } from "./services/shoottrackerEngine";
 import { fetchCalendarEvents } from "./services/googleCalendar";
 
 const SETTINGS_KEY = "shoottracker_settings";
-const SYNC_INTERVAL_MS = 30 * 60 * 1000;
+const CHECK_INTERVAL_MS = 60 * 1000;
 
-let syncIntervalId: NodeJS.Timeout | null = null;
+let checkIntervalId: NodeJS.Timeout | null = null;
+let lastSyncTime: Date | null = null;
+let isRunning = false;
 
-async function getSettings() {
+async function getSettings(): Promise<ShoottrackerSettings> {
   const setting = await storage.getAppSetting(SETTINGS_KEY);
   if (setting) {
     try {
@@ -28,21 +25,38 @@ async function getSettings() {
   return DEFAULT_SHOOTTRACKER_SETTINGS;
 }
 
+async function saveLastSyncTime(settings: ShoottrackerSettings): Promise<void> {
+  const updatedSettings = {
+    ...settings,
+    last_auto_sync_at: new Date().toISOString(),
+  };
+  await storage.setAppSetting(SETTINGS_KEY, updatedSettings);
+}
+
 async function performAutoSync(): Promise<void> {
+  if (isRunning) {
+    console.log("⏳ [AutoSync] Sync already in progress, skipping");
+    return;
+  }
+  
+  const settings = await getSettings();
+  
+  if (settings.selected_calendar_ids.length === 0) {
+    console.log("⚠️ [AutoSync] No calendars selected, skipping sync");
+    return;
+  }
+  
+  isRunning = true;
   console.log(`🔄 [AutoSync] Starting scheduled sync at ${new Date().toISOString()}`);
   
   try {
-    const settings = await getSettings();
     
-    if (settings.selected_calendar_ids.length === 0) {
-      console.log("⚠️ [AutoSync] No calendars selected, skipping sync");
-      return;
-    }
-    
-    const stats = createEmptySyncStats();
+    const stats = { fetched: 0, staged: 0, updated: 0, excluded: 0, errors: [] as string[] };
     const now = new Date();
-    const timeMin = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
-    const timeMax = new Date(now.getTime() + 90 * 24 * 60 * 60 * 1000);
+    const timeMin = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
+    const timeMax = new Date(now.getTime() + 365 * 24 * 60 * 60 * 1000);
+    
+    console.log(`📅 [AutoSync] Syncing ${settings.selected_calendar_ids.length} calendar(s)`);
     
     for (const calendarId of settings.selected_calendar_ids) {
       try {
@@ -58,94 +72,34 @@ async function performAutoSync(): Promise<void> {
               continue;
             }
             
-            const classification = classifyEvent(event, now);
+            const existing = await storage.getStagedEventByCalendarEventId(event.id);
             
-            if (classification === 'UPCOMING') {
-              stats.upcoming++;
-              continue;
-            }
-            
-            stats.done++;
-            
-            const existingProject = await storage.getProjectByCalendarEventId(event.id);
-            
-            const shootDate = event.start;
-            const deliveryDueDate = addBusinessDays(
-              shootDate,
-              settings.turnaround_days,
-              settings.working_days,
-              settings.holidays,
-              settings.timezone
-            );
-            
-            if (existingProject) {
-              const meta = await storage.getShoottrackerMeta(existingProject.id);
-              const delivered = meta?.delivered || false;
-              
-              const riskLevel = calculateShootTrackerRiskLevel(
-                deliveryDueDate,
-                delivered,
-                settings.working_days,
-                settings.holidays,
-                now
-              );
-              
-              await storage.updateProject(existingProject.id, {
-                shootDate,
-                deliveryDueDate,
-                riskLevel,
-                lastSyncedAt: new Date(),
-              });
-              
-              if (meta) {
-                await storage.updateShoottrackerMeta(existingProject.id, {
-                  lastCalendarSync: new Date(),
-                  rawEventPayload: event.rawPayload,
-                });
+            if (existing) {
+              if (existing.status === StagingStatus.IGNORED || existing.status === StagingStatus.PROMOTED) {
+                continue;
               }
-              
+              await storage.updateStagedEvent(existing.id, {
+                title: event.title,
+                description: event.description,
+                location: event.location,
+                eventStart: event.start,
+                eventEnd: event.end,
+                rawPayload: event.rawPayload,
+              });
               stats.updated++;
             } else {
-              const clientName = parseClientNameFromTitle(event.title);
-              
-              const sundayOfWeek = new Date(shootDate);
-              sundayOfWeek.setDate(sundayOfWeek.getDate() - sundayOfWeek.getDay());
-              sundayOfWeek.setHours(0, 0, 0, 0);
-              
-              const riskLevel = calculateShootTrackerRiskLevel(
-                deliveryDueDate,
-                false,
-                settings.working_days,
-                settings.holidays,
-                now
-              );
-              
-              const newProject = await storage.createProject({
-                clientName,
-                packageCount: 0,
-                selectedCount: 0,
-                dueDate: sundayOfWeek,
-                assignedTo: null,
-                shootDate,
-                deliveryDueDate,
-                riskLevel,
+              await storage.createStagedEvent({
                 calendarEventId: event.id,
-                lastSyncedAt: new Date(),
-                createdFrom: "CALENDAR",
+                calendarId,
+                title: event.title,
+                description: event.description,
+                location: event.location,
+                eventStart: event.start,
+                eventEnd: event.end,
+                status: StagingStatus.PENDING,
+                rawPayload: event.rawPayload,
               });
-              
-              await storage.createShoottrackerMeta({
-                projectId: newProject.id,
-                linkSent: false,
-                delivered: false,
-                turnaroundDays: settings.turnaround_days,
-                workingDays: settings.working_days,
-                holidays: settings.holidays,
-                lastCalendarSync: new Date(),
-                rawEventPayload: event.rawPayload,
-              });
-              
-              stats.created++;
+              stats.staged++;
             }
           } catch (eventError: any) {
             stats.errors.push(`Event: ${eventError.message}`);
@@ -156,55 +110,85 @@ async function performAutoSync(): Promise<void> {
       }
     }
     
-    console.log(`✅ [AutoSync] Complete: ${stats.created} created, ${stats.updated} updated, ${stats.excluded} excluded, ${stats.errors.length} errors`);
+    lastSyncTime = new Date();
+    await saveLastSyncTime(settings);
+    
+    console.log(`✅ [AutoSync] Complete: ${stats.fetched} fetched, ${stats.staged} new, ${stats.updated} updated, ${stats.excluded} excluded`);
     
   } catch (error: any) {
     console.error(`❌ [AutoSync] Failed:`, error.message);
+  } finally {
+    isRunning = false;
+  }
+}
+
+async function checkAndSync(): Promise<void> {
+  try {
+    const settings = await getSettings();
+    
+    if (!settings.auto_sync_enabled) {
+      return;
+    }
+    
+    const intervalMs = settings.auto_sync_interval_minutes * 60 * 1000;
+    const now = new Date();
+    
+    if (settings.last_auto_sync_at) {
+      const lastSync = new Date(settings.last_auto_sync_at);
+      const timeSinceLastSync = now.getTime() - lastSync.getTime();
+      
+      if (timeSinceLastSync < intervalMs) {
+        return;
+      }
+    }
+    
+    await performAutoSync();
+    
+  } catch (error: any) {
+    console.error(`❌ [AutoSync] Check failed:`, error.message);
   }
 }
 
 export function startAutoSync(): void {
-  const autoSyncEnabled = process.env.SHOOTTRACKER_AUTOSYNC === 'true';
-  const isProduction = process.env.NODE_ENV === 'production';
-  
-  if (!autoSyncEnabled) {
-    console.log("ℹ️ [AutoSync] Disabled (set SHOOTTRACKER_AUTOSYNC=true to enable)");
-    return;
-  }
-  
-  if (!isProduction) {
-    console.log("ℹ️ [AutoSync] Disabled in development mode (only runs in production)");
-    return;
-  }
-  
-  if (syncIntervalId) {
+  if (checkIntervalId) {
     console.log("⚠️ [AutoSync] Already running");
     return;
   }
   
-  console.log(`🚀 [AutoSync] Starting with ${SYNC_INTERVAL_MS / 60000} minute interval`);
+  console.log(`🚀 [AutoSync] Starting auto-sync scheduler (checks every ${CHECK_INTERVAL_MS / 1000} seconds)`);
   
-  syncIntervalId = setInterval(async () => {
+  checkIntervalId = setInterval(async () => {
     try {
-      await performAutoSync();
+      await checkAndSync();
     } catch (error) {
       console.error("❌ [AutoSync] Unhandled error:", error);
     }
-  }, SYNC_INTERVAL_MS);
+  }, CHECK_INTERVAL_MS);
   
   setTimeout(async () => {
     try {
-      await performAutoSync();
+      await checkAndSync();
     } catch (error) {
-      console.error("❌ [AutoSync] Initial sync failed:", error);
+      console.error("❌ [AutoSync] Initial check failed:", error);
     }
   }, 5000);
 }
 
 export function stopAutoSync(): void {
-  if (syncIntervalId) {
-    clearInterval(syncIntervalId);
-    syncIntervalId = null;
+  if (checkIntervalId) {
+    clearInterval(checkIntervalId);
+    checkIntervalId = null;
     console.log("🛑 [AutoSync] Stopped");
   }
+}
+
+export function getAutoSyncStatus(): { isRunning: boolean; lastSyncTime: Date | null } {
+  return {
+    isRunning,
+    lastSyncTime,
+  };
+}
+
+export async function triggerManualAutoSync(): Promise<void> {
+  await performAutoSync();
 }

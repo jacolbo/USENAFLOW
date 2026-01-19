@@ -355,6 +355,9 @@ export const shoottrackerSettingsSchema = z.object({
   daily_capacity_projects: z.number().int().min(1).max(50).default(3),
   ics_calendar_url: z.string().optional().default(""),
   keyword_turnaround_rules: z.array(keywordTurnaroundRuleSchema).default([]),
+  auto_sync_enabled: z.boolean().default(false),
+  auto_sync_interval_minutes: z.number().int().min(5).max(60).default(15),
+  last_auto_sync_at: z.string().optional(),
 });
 
 export type ShoottrackerSettings = z.infer<typeof shoottrackerSettingsSchema>;
@@ -369,6 +372,9 @@ export const DEFAULT_SHOOTTRACKER_SETTINGS: ShoottrackerSettings = {
   daily_capacity_projects: 3,
   ics_calendar_url: "",
   keyword_turnaround_rules: [],
+  auto_sync_enabled: false,
+  auto_sync_interval_minutes: 15,
+  last_auto_sync_at: undefined,
 };
 
 // Calendar staging status

@@ -159,6 +159,23 @@ export default function ShootTrackerSettings() {
     enabled: hasAccess,
   });
 
+  const autoSyncStatusQuery = useQuery<{
+    enabled: boolean;
+    intervalMinutes: number;
+    lastSyncAt: string | null;
+    isCurrentlySyncing: boolean;
+  }>({
+    queryKey: ["/api/admin/shoottracker/autosync-status"],
+    queryFn: async () => {
+      const headers = getAdminHeaders(userRole, userId);
+      const response = await fetch("/api/admin/shoottracker/autosync-status", { headers });
+      if (!response.ok) throw new Error("Failed to fetch auto-sync status");
+      return response.json();
+    },
+    enabled: hasAccess,
+    refetchInterval: 30000,
+  });
+
   const form = useForm<ShoottrackerSettings>({
     resolver: zodResolver(shoottrackerSettingsSchema),
     defaultValues: {
@@ -170,6 +187,8 @@ export default function ShootTrackerSettings() {
       timezone: "Africa/Johannesburg",
       daily_capacity_projects: 3,
       keyword_turnaround_rules: [],
+      auto_sync_enabled: false,
+      auto_sync_interval_minutes: 15,
     },
   });
 
@@ -196,6 +215,7 @@ export default function ShootTrackerSettings() {
     onSuccess: () => {
       toast({ title: "Settings saved", description: "ShootTracker settings have been updated." });
       queryClient.invalidateQueries({ queryKey: ["/api/admin/shoottracker/settings"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/shoottracker/autosync-status"] });
     },
     onError: (error: any) => {
       toast({ title: "Error", description: error.message, variant: "destructive" });
@@ -975,6 +995,104 @@ export default function ShootTrackerSettings() {
                           ))}
                         </div>
                       )}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Clock className="h-5 w-5" />
+                    Automatic Sync
+                  </CardTitle>
+                  <CardDescription>
+                    Automatically sync calendar changes without clicking "Sync Now"
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <FormField
+                    control={form.control}
+                    name="auto_sync_enabled"
+                    render={({ field }) => (
+                      <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+                        <div className="space-y-0.5">
+                          <FormLabel className="text-base">Enable Automatic Sync</FormLabel>
+                          <FormDescription>
+                            Automatically check Google Calendar for changes
+                          </FormDescription>
+                        </div>
+                        <FormControl>
+                          <Checkbox
+                            checked={field.value}
+                            onCheckedChange={field.onChange}
+                          />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+
+                  {form.watch("auto_sync_enabled") && (
+                    <FormField
+                      control={form.control}
+                      name="auto_sync_interval_minutes"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Sync Interval</FormLabel>
+                          <Select
+                            value={String(field.value)}
+                            onValueChange={(value) => field.onChange(parseInt(value))}
+                          >
+                            <FormControl>
+                              <SelectTrigger>
+                                <SelectValue placeholder="Select interval" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              <SelectItem value="5">Every 5 minutes</SelectItem>
+                              <SelectItem value="10">Every 10 minutes</SelectItem>
+                              <SelectItem value="15">Every 15 minutes</SelectItem>
+                              <SelectItem value="30">Every 30 minutes</SelectItem>
+                              <SelectItem value="60">Every hour</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <FormDescription>
+                            How often to check Google Calendar for changes
+                          </FormDescription>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  )}
+
+                  {autoSyncStatusQuery.data && (
+                    <div className="rounded-lg border p-4 bg-muted/50">
+                      <h4 className="font-medium mb-2 flex items-center gap-2">
+                        Auto-Sync Status
+                        {autoSyncStatusQuery.data.isCurrentlySyncing && (
+                          <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                        )}
+                      </h4>
+                      <div className="space-y-1 text-sm">
+                        <div className="flex items-center gap-2">
+                          <span className="text-muted-foreground">Status:</span>
+                          <Badge variant={autoSyncStatusQuery.data.enabled ? "default" : "secondary"}>
+                            {autoSyncStatusQuery.data.enabled ? "Active" : "Disabled"}
+                          </Badge>
+                        </div>
+                        {autoSyncStatusQuery.data.enabled && (
+                          <div className="flex items-center gap-2">
+                            <span className="text-muted-foreground">Interval:</span>
+                            <span>Every {autoSyncStatusQuery.data.intervalMinutes} minutes</span>
+                          </div>
+                        )}
+                        {autoSyncStatusQuery.data.lastSyncAt && (
+                          <div className="flex items-center gap-2">
+                            <span className="text-muted-foreground">Last sync:</span>
+                            <span>{format(new Date(autoSyncStatusQuery.data.lastSyncAt), "MMM d, yyyy h:mm a")}</span>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   )}
                 </CardContent>

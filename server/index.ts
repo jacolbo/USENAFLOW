@@ -75,9 +75,7 @@ app.use((req, res, next) => {
     // Automatic rollover scheduler disabled - using manual controls only
     // startRolloverScheduler();
     
-    // Start ShootTracker auto-sync scheduler only in production with env var enabled
-    if (process.env.NODE_ENV === 'production' && process.env.SHOOTTRACKER_AUTOSYNC === 'true') {
-      startAutoSync();
-    }
+    // Start ShootTracker auto-sync scheduler (respects settings toggle for actual syncing)
+    startAutoSync();
   });
 })();
