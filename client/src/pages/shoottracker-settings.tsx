@@ -16,7 +16,7 @@ import { useToast } from "@/hooks/use-toast";
 import { queryClient } from "@/lib/queryClient";
 import { getAdminHeaders } from "@/lib/adminAuth";
 import { UserRoles, shoottrackerSettingsSchema, type ShoottrackerSettings, StagingStatus, type CalendarEventStaging, type KeywordTurnaroundRule, type Holiday } from "@shared/schema";
-import { ArrowLeft, Calendar, Settings, RefreshCw, Clock, AlertTriangle, CheckCircle, Loader2, CalendarPlus, Eye, EyeOff, Plus, ChevronRight } from "lucide-react";
+import { ArrowLeft, Calendar, Settings, RefreshCw, Clock, AlertTriangle, CheckCircle, Loader2, CalendarPlus, Eye, EyeOff, Plus, ChevronRight, Search, X } from "lucide-react";
 import { format, startOfWeek, addWeeks, subWeeks } from "date-fns";
 import {
   Form,
@@ -123,6 +123,7 @@ export default function ShootTrackerSettings() {
   const [syncStats, setSyncStats] = useState<SyncStats | null>(null);
   const [selectedEvents, setSelectedEvents] = useState<Set<string>>(new Set());
   const [showIgnored, setShowIgnored] = useState(false);
+  const [eventSearchQuery, setEventSearchQuery] = useState("");
   const [targetWeekOffset, setTargetWeekOffset] = useState(0);
   const [newRuleName, setNewRuleName] = useState("");
   const [newRuleKeywords, setNewRuleKeywords] = useState("");
@@ -237,6 +238,7 @@ export default function ShootTrackerSettings() {
     },
     onSuccess: (data: SyncStats) => {
       setSyncStats(data);
+      setEventSearchQuery("");
       toast({ 
         title: "Sync Complete", 
         description: `${data.staged} new events staged, ${data.updated} updated` 
@@ -469,7 +471,16 @@ export default function ShootTrackerSettings() {
 
   const selectAllPendingEvents = () => {
     const pendingEvents = stagedEventsQuery.data?.filter(e => e.status === StagingStatus.PENDING) || [];
-    const allIds = new Set(pendingEvents.map(e => e.id));
+    const filteredEvents = pendingEvents.filter((event) => {
+      if (!eventSearchQuery.trim()) return true;
+      const searchLower = eventSearchQuery.toLowerCase();
+      return (
+        event.title.toLowerCase().includes(searchLower) ||
+        (event.location && event.location.toLowerCase().includes(searchLower)) ||
+        (event.description && event.description.toLowerCase().includes(searchLower))
+      );
+    });
+    const allIds = new Set(filteredEvents.map(e => e.id));
     setSelectedEvents(allIds);
   };
 
@@ -684,6 +695,24 @@ export default function ShootTrackerSettings() {
                 </div>
               </CardHeader>
               <CardContent>
+                <div className="mb-4 relative">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Search events by name..."
+                    value={eventSearchQuery}
+                    onChange={(e) => setEventSearchQuery(e.target.value)}
+                    className="pl-9 pr-9"
+                  />
+                  {eventSearchQuery && (
+                    <button
+                      onClick={() => setEventSearchQuery("")}
+                      className="absolute right-3 top-1/2 transform -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  )}
+                </div>
+
                 {stagedEventsQuery.data && stagedEventsQuery.data.filter(e => e.status === StagingStatus.PENDING).length > 0 && (
                   <div className="mb-4 p-3 bg-muted rounded-lg flex items-center justify-between flex-wrap gap-2">
                     <div className="flex items-center gap-3">
@@ -692,10 +721,20 @@ export default function ShootTrackerSettings() {
                         variant="ghost"
                         onClick={selectedEvents.size > 0 ? clearSelection : selectAllPendingEvents}
                       >
-                        {selectedEvents.size > 0 ? "Clear Selection" : "Select All"}
+                        {selectedEvents.size > 0 ? "Clear Selection" : eventSearchQuery.trim() ? "Select Filtered" : "Select All"}
                       </Button>
                       {selectedEvents.size > 0 && (
                         <span className="text-sm font-medium">{selectedEvents.size} event(s) selected</span>
+                      )}
+                      {eventSearchQuery.trim() && (
+                        <span className="text-sm text-muted-foreground">
+                          Showing {stagedEventsQuery.data.filter(e => {
+                            const searchLower = eventSearchQuery.toLowerCase();
+                            return e.title.toLowerCase().includes(searchLower) ||
+                              (e.location && e.location.toLowerCase().includes(searchLower)) ||
+                              (e.description && e.description.toLowerCase().includes(searchLower));
+                          }).length} of {stagedEventsQuery.data.length} events
+                        </span>
                       )}
                     </div>
                     {selectedEvents.size > 0 && (
@@ -744,7 +783,17 @@ export default function ShootTrackerSettings() {
                   </div>
                 ) : stagedEventsQuery.data && stagedEventsQuery.data.length > 0 ? (
                   <div className="space-y-3">
-                    {stagedEventsQuery.data.map((event) => {
+                    {stagedEventsQuery.data
+                      .filter((event) => {
+                        if (!eventSearchQuery.trim()) return true;
+                        const searchLower = eventSearchQuery.toLowerCase();
+                        return (
+                          event.title.toLowerCase().includes(searchLower) ||
+                          (event.location && event.location.toLowerCase().includes(searchLower)) ||
+                          (event.description && event.description.toLowerCase().includes(searchLower))
+                        );
+                      })
+                      .map((event) => {
                       const deliveryDue = calculateDeliveryDueDate(new Date(event.eventStart), event.title);
                       const { matchedRule } = resolveTurnaroundDays(event.title);
                       return (
@@ -859,6 +908,28 @@ export default function ShootTrackerSettings() {
                         </div>
                       );
                     })}
+                    {stagedEventsQuery.data
+                      .filter((event) => {
+                        if (!eventSearchQuery.trim()) return true;
+                        const searchLower = eventSearchQuery.toLowerCase();
+                        return (
+                          event.title.toLowerCase().includes(searchLower) ||
+                          (event.location && event.location.toLowerCase().includes(searchLower)) ||
+                          (event.description && event.description.toLowerCase().includes(searchLower))
+                        );
+                      }).length === 0 && eventSearchQuery.trim() && (
+                      <div className="text-center py-8 text-muted-foreground">
+                        <Search className="h-12 w-12 mx-auto mb-3 opacity-20" />
+                        <p>No events match "{eventSearchQuery}"</p>
+                        <Button 
+                          variant="link" 
+                          onClick={() => setEventSearchQuery("")}
+                          className="mt-2"
+                        >
+                          Clear search
+                        </Button>
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <div className="text-center py-8 text-muted-foreground">
