@@ -124,6 +124,8 @@ export default function ShootTrackerSettings() {
   const [selectedEvents, setSelectedEvents] = useState<Set<string>>(new Set());
   const [showIgnored, setShowIgnored] = useState(false);
   const [eventSearchQuery, setEventSearchQuery] = useState("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
   const [targetWeekOffset, setTargetWeekOffset] = useState(0);
   const [newRuleName, setNewRuleName] = useState("");
   const [newRuleKeywords, setNewRuleKeywords] = useState("");
@@ -239,6 +241,8 @@ export default function ShootTrackerSettings() {
     onSuccess: (data: SyncStats) => {
       setSyncStats(data);
       setEventSearchQuery("");
+      setDateFrom("");
+      setDateTo("");
       toast({ 
         title: "Sync Complete", 
         description: `${data.staged} new events staged, ${data.updated} updated` 
@@ -469,17 +473,30 @@ export default function ShootTrackerSettings() {
     });
   };
 
+  const matchesFilters = (event: CalendarEventStaging) => {
+    if (eventSearchQuery.trim()) {
+      const searchLower = eventSearchQuery.toLowerCase();
+      const matchesText = event.title.toLowerCase().includes(searchLower) ||
+        (event.location && event.location.toLowerCase().includes(searchLower)) ||
+        (event.description && event.description.toLowerCase().includes(searchLower));
+      if (!matchesText) return false;
+    }
+    if (dateFrom) {
+      const eventDate = new Date(event.eventStart).toISOString().split('T')[0];
+      if (eventDate < dateFrom) return false;
+    }
+    if (dateTo) {
+      const eventDate = new Date(event.eventStart).toISOString().split('T')[0];
+      if (eventDate > dateTo) return false;
+    }
+    return true;
+  };
+
+  const hasActiveFilters = eventSearchQuery.trim() || dateFrom || dateTo;
+
   const selectAllPendingEvents = () => {
     const pendingEvents = stagedEventsQuery.data?.filter(e => e.status === StagingStatus.PENDING) || [];
-    const filteredEvents = pendingEvents.filter((event) => {
-      if (!eventSearchQuery.trim()) return true;
-      const searchLower = eventSearchQuery.toLowerCase();
-      return (
-        event.title.toLowerCase().includes(searchLower) ||
-        (event.location && event.location.toLowerCase().includes(searchLower)) ||
-        (event.description && event.description.toLowerCase().includes(searchLower))
-      );
-    });
+    const filteredEvents = pendingEvents.filter(matchesFilters);
     const allIds = new Set(filteredEvents.map(e => e.id));
     setSelectedEvents(allIds);
   };
@@ -695,22 +712,54 @@ export default function ShootTrackerSettings() {
                 </div>
               </CardHeader>
               <CardContent>
-                <div className="mb-4 relative">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    placeholder="Search events by name..."
-                    value={eventSearchQuery}
-                    onChange={(e) => setEventSearchQuery(e.target.value)}
-                    className="pl-9 pr-9"
-                  />
-                  {eventSearchQuery && (
-                    <button
-                      onClick={() => setEventSearchQuery("")}
-                      className="absolute right-3 top-1/2 transform -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                    >
-                      <X className="h-4 w-4" />
-                    </button>
-                  )}
+                <div className="mb-4 flex flex-wrap gap-3 items-end">
+                  <div className="relative flex-1 min-w-[200px]">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      placeholder="Search events by name..."
+                      value={eventSearchQuery}
+                      onChange={(e) => setEventSearchQuery(e.target.value)}
+                      className="pl-9 pr-9"
+                    />
+                    {eventSearchQuery && (
+                      <button
+                        onClick={() => setEventSearchQuery("")}
+                        className="absolute right-3 top-1/2 transform -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    )}
+                  </div>
+                  <div className="flex gap-2 items-center">
+                    <div className="flex flex-col gap-1">
+                      <Label className="text-xs text-muted-foreground">From</Label>
+                      <Input
+                        type="date"
+                        value={dateFrom}
+                        onChange={(e) => setDateFrom(e.target.value)}
+                        className="w-[140px]"
+                      />
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <Label className="text-xs text-muted-foreground">To</Label>
+                      <Input
+                        type="date"
+                        value={dateTo}
+                        onChange={(e) => setDateTo(e.target.value)}
+                        className="w-[140px]"
+                      />
+                    </div>
+                    {(dateFrom || dateTo) && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => { setDateFrom(""); setDateTo(""); }}
+                        className="mt-5"
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    )}
+                  </div>
                 </div>
 
                 {stagedEventsQuery.data && stagedEventsQuery.data.filter(e => e.status === StagingStatus.PENDING).length > 0 && (
@@ -721,19 +770,14 @@ export default function ShootTrackerSettings() {
                         variant="ghost"
                         onClick={selectedEvents.size > 0 ? clearSelection : selectAllPendingEvents}
                       >
-                        {selectedEvents.size > 0 ? "Clear Selection" : eventSearchQuery.trim() ? "Select Filtered" : "Select All"}
+                        {selectedEvents.size > 0 ? "Clear Selection" : hasActiveFilters ? "Select Filtered" : "Select All"}
                       </Button>
                       {selectedEvents.size > 0 && (
                         <span className="text-sm font-medium">{selectedEvents.size} event(s) selected</span>
                       )}
-                      {eventSearchQuery.trim() && (
+                      {hasActiveFilters && (
                         <span className="text-sm text-muted-foreground">
-                          Showing {stagedEventsQuery.data.filter(e => {
-                            const searchLower = eventSearchQuery.toLowerCase();
-                            return e.title.toLowerCase().includes(searchLower) ||
-                              (e.location && e.location.toLowerCase().includes(searchLower)) ||
-                              (e.description && e.description.toLowerCase().includes(searchLower));
-                          }).length} of {stagedEventsQuery.data.length} events
+                          Showing {stagedEventsQuery.data.filter(matchesFilters).length} of {stagedEventsQuery.data.length} events
                         </span>
                       )}
                     </div>
@@ -784,15 +828,7 @@ export default function ShootTrackerSettings() {
                 ) : stagedEventsQuery.data && stagedEventsQuery.data.length > 0 ? (
                   <div className="space-y-3">
                     {stagedEventsQuery.data
-                      .filter((event) => {
-                        if (!eventSearchQuery.trim()) return true;
-                        const searchLower = eventSearchQuery.toLowerCase();
-                        return (
-                          event.title.toLowerCase().includes(searchLower) ||
-                          (event.location && event.location.toLowerCase().includes(searchLower)) ||
-                          (event.description && event.description.toLowerCase().includes(searchLower))
-                        );
-                      })
+                      .filter(matchesFilters)
                       .map((event) => {
                       const deliveryDue = calculateDeliveryDueDate(new Date(event.eventStart), event.title);
                       const { matchedRule } = resolveTurnaroundDays(event.title);
@@ -908,25 +944,16 @@ export default function ShootTrackerSettings() {
                         </div>
                       );
                     })}
-                    {stagedEventsQuery.data
-                      .filter((event) => {
-                        if (!eventSearchQuery.trim()) return true;
-                        const searchLower = eventSearchQuery.toLowerCase();
-                        return (
-                          event.title.toLowerCase().includes(searchLower) ||
-                          (event.location && event.location.toLowerCase().includes(searchLower)) ||
-                          (event.description && event.description.toLowerCase().includes(searchLower))
-                        );
-                      }).length === 0 && eventSearchQuery.trim() && (
+                    {stagedEventsQuery.data.filter(matchesFilters).length === 0 && hasActiveFilters && (
                       <div className="text-center py-8 text-muted-foreground">
                         <Search className="h-12 w-12 mx-auto mb-3 opacity-20" />
-                        <p>No events match "{eventSearchQuery}"</p>
+                        <p>No events match your filters</p>
                         <Button 
                           variant="link" 
-                          onClick={() => setEventSearchQuery("")}
+                          onClick={() => { setEventSearchQuery(""); setDateFrom(""); setDateTo(""); }}
                           className="mt-2"
                         >
-                          Clear search
+                          Clear all filters
                         </Button>
                       </div>
                     )}
