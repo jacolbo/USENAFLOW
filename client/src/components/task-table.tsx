@@ -1454,6 +1454,19 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
                           <TableHead>Status</TableHead>
                           <TableHead>Notes</TableHead>
                         </>
+                      ) : user.role === 'DataWrangler' ? (
+                        <>
+                          <TableHead>Client</TableHead>
+                          <TableHead>Pkg</TableHead>
+                          <TableHead>Sel</TableHead>
+                          <TableHead>To Edit</TableHead>
+                          <TableHead>Done</TableHead>
+                          <TableHead>Due</TableHead>
+                          <TableHead>Retoucher</TableHead>
+                          <TableHead>Status</TableHead>
+                          <TableHead>Notes</TableHead>
+                          <TableHead>Actions</TableHead>
+                        </>
                       ) : (
                         <>
                           <TableHead>Client</TableHead>
@@ -1665,9 +1678,98 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
                               </ErrorBoundary>
                             </TableCell>
                           </>
+                        ) : user.role === 'DataWrangler' ? (
+                          <>
+                            {/* Data Wrangler specific cells with editable Pkg and Sel */}
+                            {/* Client cell already rendered above */}
+                            <TableCell>
+                              <input
+                                type="number"
+                                value={localInputValues[project.id]?.packageCount ?? project.packageCount}
+                                onChange={(e) => handleChangePackageCount(project.id, parseInt(e.target.value) || 0)}
+                                className="border rounded px-2 py-1 w-16 text-center bg-white dark:bg-gray-800"
+                                min="0"
+                                placeholder="0"
+                              />
+                            </TableCell>
+                            <TableCell>
+                              <input
+                                type="number"
+                                value={localInputValues[project.id]?.selectedCount ?? project.selectedCount}
+                                onChange={(e) => handleChangeSelectedCount(project.id, parseInt(e.target.value) || 0)}
+                                className="border rounded px-2 py-1 w-16 text-center bg-white dark:bg-gray-800"
+                                min="0"
+                                placeholder="0"
+                              />
+                            </TableCell>
+                            <TableCell>
+                              <span className="text-sm font-medium text-purple-600">
+                                {project.toEditRemaining || project.selectedCount}
+                              </span>
+                            </TableCell>
+                            {/* Done photos column for DataWrangler (read-only) */}
+                            <TableCell>
+                              {project.status === "Rolled Over" ? (
+                                <div className="flex flex-col gap-1">
+                                  <div className="flex items-center justify-center">
+                                    <span 
+                                      className="text-sm font-medium text-amber-600 min-w-[30px] text-center px-2 py-1 bg-amber-50 rounded border border-amber-200"
+                                      title={`${project.photosCompleted || 0} photos were completed on this project before rollover`}
+                                    >
+                                      {project.photosCompleted || 0}
+                                    </span>
+                                  </div>
+                                  <div className="text-xs text-amber-600 text-center font-medium">
+                                    Historical
+                                  </div>
+                                </div>
+                              ) : (
+                                <div className="flex items-center justify-center">
+                                  <span 
+                                    className="text-sm font-medium text-green-600 min-w-[30px] text-center px-2 py-1 bg-green-50 rounded border border-green-200"
+                                    title={`${project.photosCompleted || 0} of ${project.toEditRemaining || project.selectedCount || 0} photos completed`}
+                                  >
+                                    {project.photosCompleted || 0}
+                                  </span>
+                                </div>
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              <input
+                                type="date"
+                                value={new Date(project.dueDate).toISOString().slice(0, 10)}
+                                onChange={(e) => handleChangeDueDate(project.id, new Date(e.target.value))}
+                                className="border rounded px-2 py-1"
+                                min="2024-01-01"
+                                max="2030-12-31"
+                              />
+                            </TableCell>
+                            <TableCell>
+                              {allUsers.find(u => u.name === project.assignedTo && u.id)?.name || 
+                               getRetoucherFullName(project.assignedTo)}
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex flex-col gap-1">
+                                {getStatusBadge(project.status)}
+                                {project.riskLevel && project.riskLevel !== 'SAFE' && (
+                                  <RiskBadge level={project.riskLevel} size="sm" showIcon={true} />
+                                )}
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <ErrorBoundary fallback={<div className="text-sm text-gray-500">Notes unavailable</div>}>
+                                <ProjectNotes 
+                                  projectId={project.id} 
+                                  userRole={user.role} 
+                                  hasNotes={(allNotesQuery.data?.[project.id] || 0) > 0}
+                                />
+                              </ErrorBoundary>
+                            </TableCell>
+                          </>
                         ) : (
                           <>
                             {/* Standard cells for other roles */}
+                            {/* Client cell already rendered above */}
                             {/* To Edit column for non-Sales */}
                             <TableCell>
                               <span className="text-sm font-medium text-purple-600">
