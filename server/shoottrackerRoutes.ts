@@ -25,10 +25,17 @@ import {
   ForecastResult,
   SyncStats,
   resolveTurnaroundDays,
+  extractClientEmail,
 } from "./services/shoottrackerEngine";
 import { fetchCalendarEvents, CalendarEvent, listCalendars } from "./services/googleCalendar";
 import { calculateRiskLevel } from "./services/riskCalculator";
 import { getAutoSyncStatus } from "./autoSyncScheduler";
+import { 
+  sendDeliveryEstimateEmail, 
+  sendProjectAddedEmail, 
+  sendChatLinkEmail,
+  generateToken,
+} from "./services/emailService";
 
 const SETTINGS_KEY = "shoottracker_settings";
 
@@ -135,6 +142,9 @@ export function registerShoottrackerRoutes(app: Express): void {
             
             const existing = await storage.getStagedEventByCalendarEventId(event.id);
             
+            // Extract client email from description or location
+            const clientEmail = extractClientEmail(event.description, event.location);
+            
             if (existing) {
               if (existing.status === StagingStatus.IGNORED || existing.status === StagingStatus.PROMOTED) {
                 continue;
@@ -146,6 +156,7 @@ export function registerShoottrackerRoutes(app: Express): void {
                 eventStart: event.start,
                 eventEnd: event.end,
                 rawPayload: event.rawPayload,
+                clientEmail,
               });
               stats.updated++;
             } else {
@@ -159,6 +170,7 @@ export function registerShoottrackerRoutes(app: Express): void {
                 eventEnd: event.end,
                 status: StagingStatus.PENDING,
                 rawPayload: event.rawPayload,
+                clientEmail,
               });
               stats.staged++;
             }
@@ -256,6 +268,7 @@ export function registerShoottrackerRoutes(app: Express): void {
         calendarEventId: stagedEvent.calendarEventId,
         lastSyncedAt: new Date(),
         createdFrom: "CALENDAR",
+        clientEmail: stagedEvent.clientEmail || null,
       });
       
       await storage.createShoottrackerMeta({
@@ -558,6 +571,378 @@ export function registerShoottrackerRoutes(app: Express): void {
     } catch (error: any) {
       console.error("Error fetching project meta:", error);
       res.status(500).json({ error: "Failed to fetch project meta" });
+    }
+  });
+
+  // ============ EMAIL NOTIFICATION ROUTES ============
+  
+  // Send delivery estimate email to client
+  app.post("/api/admin/shoottracker/project/:id/send-delivery-estimate", verifyAdminRequest, async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+      const project = await storage.getProject(id);
+      
+      if (!project) {
+        return res.status(404).json({ error: "Project not found" });
+      }
+      
+      if (!project.clientEmail) {
+        return res.status(400).json({ error: "No client email found for this project" });
+      }
+      
+      if (!project.shootDate || !project.deliveryDueDate) {
+        return res.status(400).json({ error: "Project is missing shoot date or delivery due date" });
+      }
+      
+      const result = await sendDeliveryEstimateEmail(
+        project.clientEmail,
+        project.clientName,
+        new Date(project.shootDate),
+        new Date(project.deliveryDueDate),
+        project.id
+      );
+      
+      if (result.success) {
+        res.json({ success: true, messageId: result.messageId });
+      } else {
+        res.status(500).json({ error: result.error || "Failed to send email" });
+      }
+    } catch (error: any) {
+      console.error("Error sending delivery estimate email:", error);
+      res.status(500).json({ error: error.message || "Failed to send email" });
+    }
+  });
+  
+  // Send project added email with package info
+  app.post("/api/admin/shoottracker/project/:id/send-project-added", verifyAdminRequest, async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+      const project = await storage.getProject(id);
+      
+      if (!project) {
+        return res.status(404).json({ error: "Project not found" });
+      }
+      
+      if (!project.clientEmail) {
+        return res.status(400).json({ error: "No client email found for this project" });
+      }
+      
+      // Generate approval token if there are extras
+      const extras = Math.max(0, project.selectedCount - project.packageCount);
+      let approvalToken = project.extrasApprovalToken || '';
+      
+      if (extras > 0 && !approvalToken) {
+        approvalToken = generateToken();
+        await storage.updateProject(id, { extrasApprovalToken: approvalToken });
+      }
+      
+      const result = await sendProjectAddedEmail(
+        project.clientEmail,
+        project.clientName,
+        project.packageCount,
+        project.selectedCount,
+        extras,
+        project.id,
+        approvalToken
+      );
+      
+      if (result.success) {
+        res.json({ success: true, messageId: result.messageId });
+      } else {
+        res.status(500).json({ error: result.error || "Failed to send email" });
+      }
+    } catch (error: any) {
+      console.error("Error sending project added email:", error);
+      res.status(500).json({ error: error.message || "Failed to send email" });
+    }
+  });
+  
+  // Send chat link email to client
+  app.post("/api/admin/shoottracker/project/:id/send-chat-link", verifyAdminRequest, async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+      const project = await storage.getProject(id);
+      
+      if (!project) {
+        return res.status(404).json({ error: "Project not found" });
+      }
+      
+      if (!project.clientEmail) {
+        return res.status(400).json({ error: "No client email found for this project" });
+      }
+      
+      if (!project.assignedTo) {
+        return res.status(400).json({ error: "Project has not been assigned to a retoucher yet" });
+      }
+      
+      // Generate a chat token for this client/project
+      const chatToken = generateToken();
+      
+      // Store the token in client_auth_tokens table (tied to specific project)
+      await storage.createClientAuthToken({
+        email: project.clientEmail,
+        projectId: project.id,
+        token: chatToken,
+        expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days
+      });
+      
+      const result = await sendChatLinkEmail(
+        project.clientEmail,
+        project.clientName,
+        project.assignedTo,
+        project.id,
+        chatToken
+      );
+      
+      if (result.success) {
+        res.json({ success: true, messageId: result.messageId });
+      } else {
+        res.status(500).json({ error: result.error || "Failed to send email" });
+      }
+    } catch (error: any) {
+      console.error("Error sending chat link email:", error);
+      res.status(500).json({ error: error.message || "Failed to send email" });
+    }
+  });
+  
+  // ============ EXTRAS APPROVAL ROUTES ============
+  
+  // Public route - client approves extras via token
+  app.post("/api/approve-extras/:token", async (req: Request, res: Response) => {
+    try {
+      const { token } = req.params;
+      
+      // Find project with this approval token
+      const projects = await storage.getAllProjects();
+      const project = projects.find(p => p.extrasApprovalToken === token);
+      
+      if (!project) {
+        return res.status(404).json({ error: "Invalid or expired approval link" });
+      }
+      
+      if (project.extrasApproved) {
+        return res.status(400).json({ error: "Extras already approved" });
+      }
+      
+      // Approve the extras
+      await storage.updateProject(project.id, {
+        extrasApproved: true,
+        extrasApprovedAt: new Date(),
+      });
+      
+      res.json({ 
+        success: true, 
+        message: "Extras approved successfully",
+        projectName: project.clientName,
+        extras: Math.max(0, project.selectedCount - project.packageCount),
+      });
+    } catch (error: any) {
+      console.error("Error approving extras:", error);
+      res.status(500).json({ error: error.message || "Failed to approve extras" });
+    }
+  });
+  
+  // Get project info for extras approval page (public)
+  app.get("/api/approve-extras/:token", async (req: Request, res: Response) => {
+    try {
+      const { token } = req.params;
+      
+      const projects = await storage.getAllProjects();
+      const project = projects.find(p => p.extrasApprovalToken === token);
+      
+      if (!project) {
+        return res.status(404).json({ error: "Invalid or expired approval link" });
+      }
+      
+      const extras = Math.max(0, project.selectedCount - project.packageCount);
+      
+      res.json({
+        projectName: project.clientName,
+        packageCount: project.packageCount,
+        selectedCount: project.selectedCount,
+        extras,
+        extrasApproved: project.extrasApproved,
+      });
+    } catch (error: any) {
+      console.error("Error fetching extras info:", error);
+      res.status(500).json({ error: error.message || "Failed to fetch extras info" });
+    }
+  });
+  
+  // Update client email on project
+  app.patch("/api/admin/shoottracker/project/:id/client-email", verifyAdminRequest, async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+      const { clientEmail } = req.body;
+      
+      if (!clientEmail || typeof clientEmail !== 'string') {
+        return res.status(400).json({ error: "Valid email is required" });
+      }
+      
+      // Basic email validation
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(clientEmail)) {
+        return res.status(400).json({ error: "Invalid email format" });
+      }
+      
+      const project = await storage.getProject(id);
+      if (!project) {
+        return res.status(404).json({ error: "Project not found" });
+      }
+      
+      await storage.updateProject(id, { clientEmail: clientEmail.toLowerCase() });
+      
+      res.json({ success: true, clientEmail: clientEmail.toLowerCase() });
+    } catch (error: any) {
+      console.error("Error updating client email:", error);
+      res.status(500).json({ error: error.message || "Failed to update client email" });
+    }
+  });
+
+  // ============ CLIENT CHAT ROUTES ============
+  
+  // Verify chat token and get project info (public)
+  app.get("/api/client-chat/verify/:token", async (req: Request, res: Response) => {
+    try {
+      const { token } = req.params;
+      
+      const authToken = await storage.getClientAuthTokenByToken(token);
+      
+      if (!authToken) {
+        return res.json({ valid: false });
+      }
+      
+      if (new Date(authToken.expiresAt) < new Date()) {
+        return res.json({ valid: false, error: "Token expired" });
+      }
+      
+      // Get project by the projectId stored in the token (not by email search)
+      const project = await storage.getProject(authToken.projectId);
+      
+      if (!project) {
+        return res.json({ valid: false, error: "Project not found" });
+      }
+      
+      res.json({
+        valid: true,
+        email: authToken.email,
+        projectId: authToken.projectId,
+        project: {
+          id: project.id,
+          clientName: project.clientName,
+          assignedTo: project.assignedTo || "Unassigned",
+          clientEmail: project.clientEmail,
+        },
+      });
+    } catch (error: any) {
+      console.error("Error verifying chat token:", error);
+      res.status(500).json({ error: "Failed to verify token" });
+    }
+  });
+  
+  // Get chat messages for a project (public, authenticated by token)
+  app.get("/api/client-chat/messages/:token", async (req: Request, res: Response) => {
+    try {
+      const { token } = req.params;
+      
+      const authToken = await storage.getClientAuthTokenByToken(token);
+      
+      if (!authToken || new Date(authToken.expiresAt) < new Date()) {
+        return res.status(401).json({ error: "Invalid or expired token" });
+      }
+      
+      // Use projectId from token directly (no email-based search)
+      const messages = await storage.getMessagesByProject(authToken.projectId);
+      
+      await storage.markMessagesAsRead(authToken.projectId, 'retoucher');
+      
+      res.json(messages);
+    } catch (error: any) {
+      console.error("Error fetching chat messages:", error);
+      res.status(500).json({ error: "Failed to fetch messages" });
+    }
+  });
+  
+  // Send a chat message (public, authenticated by token)
+  app.post("/api/client-chat/:token/send", async (req: Request, res: Response) => {
+    try {
+      const { token } = req.params;
+      const { message, email } = req.body;
+      
+      if (!message || typeof message !== 'string' || !message.trim()) {
+        return res.status(400).json({ error: "Message is required" });
+      }
+      
+      const authToken = await storage.getClientAuthTokenByToken(token);
+      
+      if (!authToken || new Date(authToken.expiresAt) < new Date()) {
+        return res.status(401).json({ error: "Invalid or expired token" });
+      }
+      
+      // Validate email matches the token's email
+      if (email.toLowerCase() !== authToken.email.toLowerCase()) {
+        return res.status(403).json({ error: "Email mismatch" });
+      }
+      
+      // Use projectId from token directly (no email-based search)
+      const newMessage = await storage.createClientMessage({
+        projectId: authToken.projectId,
+        senderType: 'client',
+        senderEmail: authToken.email.toLowerCase(),
+        message: message.trim(),
+        isRead: false,
+      });
+      
+      res.json({ success: true, message: newMessage });
+    } catch (error: any) {
+      console.error("Error sending chat message:", error);
+      res.status(500).json({ error: "Failed to send message" });
+    }
+  });
+  
+  // Retoucher chat routes (admin-protected)
+  app.get("/api/admin/chat/project/:projectId/messages", verifyAdminRequest, async (req: Request, res: Response) => {
+    try {
+      const { projectId } = req.params;
+      
+      const messages = await storage.getMessagesByProject(projectId);
+      
+      await storage.markMessagesAsRead(projectId, 'client');
+      
+      res.json(messages);
+    } catch (error: any) {
+      console.error("Error fetching chat messages:", error);
+      res.status(500).json({ error: "Failed to fetch messages" });
+    }
+  });
+  
+  app.post("/api/admin/chat/project/:projectId/send", verifyAdminRequest, async (req: Request, res: Response) => {
+    try {
+      const { projectId } = req.params;
+      const { message } = req.body;
+      const userId = req.headers["x-usena-user-id"] as string;
+      
+      if (!message || typeof message !== 'string' || !message.trim()) {
+        return res.status(400).json({ error: "Message is required" });
+      }
+      
+      const project = await storage.getProject(projectId);
+      if (!project) {
+        return res.status(404).json({ error: "Project not found" });
+      }
+      
+      const newMessage = await storage.createClientMessage({
+        projectId,
+        senderType: 'retoucher',
+        senderEmail: userId || 'retoucher',
+        message: message.trim(),
+        isRead: false,
+      });
+      
+      res.json({ success: true, message: newMessage });
+    } catch (error: any) {
+      console.error("Error sending chat message:", error);
+      res.status(500).json({ error: "Failed to send message" });
     }
   });
 

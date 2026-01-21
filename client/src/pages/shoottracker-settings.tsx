@@ -16,7 +16,7 @@ import { useToast } from "@/hooks/use-toast";
 import { queryClient } from "@/lib/queryClient";
 import { getAdminHeaders } from "@/lib/adminAuth";
 import { UserRoles, shoottrackerSettingsSchema, type ShoottrackerSettings, StagingStatus, type CalendarEventStaging, type KeywordTurnaroundRule, type Holiday } from "@shared/schema";
-import { ArrowLeft, Calendar, Settings, RefreshCw, Clock, AlertTriangle, CheckCircle, Loader2, CalendarPlus, Eye, EyeOff, Plus, ChevronRight, Search, X } from "lucide-react";
+import { ArrowLeft, Calendar, Settings, RefreshCw, Clock, AlertTriangle, CheckCircle, Loader2, CalendarPlus, Eye, EyeOff, Plus, ChevronRight, Search, X, Mail, MessageCircle, Send } from "lucide-react";
 import { format, startOfWeek, addWeeks, subWeeks } from "date-fns";
 import {
   Form,
@@ -348,6 +348,85 @@ export default function ShootTrackerSettings() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/shoottracker/staged"] });
+    },
+  });
+
+  // Email notification mutations
+  const sendDeliveryEstimateMutation = useMutation({
+    mutationFn: async (projectId: string) => {
+      const headers = {
+        ...getAdminHeaders(userRole, userId),
+        "Content-Type": "application/json",
+      };
+      const response = await fetch(`/api/admin/shoottracker/project/${projectId}/send-delivery-estimate`, {
+        method: "POST",
+        headers,
+      });
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || "Failed to send delivery estimate");
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/shoottracker/staged"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
+      toast({ title: "Email Sent", description: "Delivery estimate email sent successfully" });
+    },
+    onError: (error: any) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const sendProjectAddedMutation = useMutation({
+    mutationFn: async (projectId: string) => {
+      const headers = {
+        ...getAdminHeaders(userRole, userId),
+        "Content-Type": "application/json",
+      };
+      const response = await fetch(`/api/admin/shoottracker/project/${projectId}/send-project-added`, {
+        method: "POST",
+        headers,
+      });
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || "Failed to send project added email");
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/shoottracker/staged"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
+      toast({ title: "Email Sent", description: "Project added email with extras approval link sent" });
+    },
+    onError: (error: any) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const sendChatLinkMutation = useMutation({
+    mutationFn: async (projectId: string) => {
+      const headers = {
+        ...getAdminHeaders(userRole, userId),
+        "Content-Type": "application/json",
+      };
+      const response = await fetch(`/api/admin/shoottracker/project/${projectId}/send-chat-link`, {
+        method: "POST",
+        headers,
+      });
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || "Failed to send chat link email");
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/shoottracker/staged"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
+      toast({ title: "Email Sent", description: "Chat link email sent successfully" });
+    },
+    onError: (error: any) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
     },
   });
 
@@ -854,7 +933,40 @@ export default function ShootTrackerSettings() {
                                 <div className="font-medium truncate">{event.title}</div>
                                 <div className="flex items-center gap-2">
                                   {event.status === StagingStatus.PROMOTED && (
-                                    <Badge variant="default" className="bg-green-600">Added</Badge>
+                                    <>
+                                      <Badge variant="default" className="bg-green-600">Added</Badge>
+                                      {event.clientEmail && event.promotedProjectId && (
+                                        <div className="flex items-center gap-1">
+                                          <Button
+                                            size="sm"
+                                            variant="ghost"
+                                            onClick={() => sendDeliveryEstimateMutation.mutate(event.promotedProjectId!)}
+                                            disabled={sendDeliveryEstimateMutation.isPending}
+                                            title="Send delivery estimate email"
+                                          >
+                                            <Send className="h-4 w-4" />
+                                          </Button>
+                                          <Button
+                                            size="sm"
+                                            variant="ghost"
+                                            onClick={() => sendProjectAddedMutation.mutate(event.promotedProjectId!)}
+                                            disabled={sendProjectAddedMutation.isPending}
+                                            title="Send project added email (with extras approval)"
+                                          >
+                                            <Mail className="h-4 w-4" />
+                                          </Button>
+                                          <Button
+                                            size="sm"
+                                            variant="ghost"
+                                            onClick={() => sendChatLinkMutation.mutate(event.promotedProjectId!)}
+                                            disabled={sendChatLinkMutation.isPending}
+                                            title="Send chat link email"
+                                          >
+                                            <MessageCircle className="h-4 w-4" />
+                                          </Button>
+                                        </div>
+                                      )}
+                                    </>
                                   )}
                                   {event.status === StagingStatus.IGNORED && (
                                     <>

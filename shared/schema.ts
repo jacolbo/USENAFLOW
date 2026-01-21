@@ -42,6 +42,15 @@ export const projects = pgTable("projects", {
   // Client share link fields (existing)
   isLinkSent: boolean("is_link_sent").notNull().default(false),
   linkSentAt: timestamp("link_sent_at"),
+  // Client email for notifications
+  clientEmail: text("client_email"),
+  // Extras approval tracking
+  extrasApproved: boolean("extras_approved").notNull().default(false),
+  extrasApprovedAt: timestamp("extras_approved_at"),
+  extrasApprovalToken: text("extras_approval_token"),
+  // Email notification tracking
+  deliveryEstimateEmailSentAt: timestamp("delivery_estimate_email_sent_at"),
+  projectAddedEmailSentAt: timestamp("project_added_email_sent_at"),
 });
 
 // ShootTracker metadata table (1:1 with projects)
@@ -114,6 +123,40 @@ export const appSettings = pgTable("app_settings", {
   updatedAt: timestamp("updated_at").notNull().default(sql`now()`),
 });
 
+// Client chat messages table
+export const clientMessages = pgTable("client_messages", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  projectId: varchar("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
+  senderType: text("sender_type").notNull(), // 'client' or 'retoucher'
+  senderEmail: text("sender_email").notNull(), // client email or retoucher username
+  message: text("message").notNull(),
+  isRead: boolean("is_read").notNull().default(false),
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+});
+
+// Client authentication tokens for chat access
+export const clientAuthTokens = pgTable("client_auth_tokens", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  email: text("email").notNull(),
+  projectId: varchar("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
+  token: text("token").notNull().unique(),
+  expiresAt: timestamp("expires_at").notNull(),
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+});
+
+// Email logs for tracking sent emails
+export const emailLogs = pgTable("email_logs", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  projectId: varchar("project_id").references(() => projects.id, { onDelete: "set null" }),
+  emailType: text("email_type").notNull(), // 'delivery_estimate', 'project_added', 'extras_approval', 'chat_link'
+  recipientEmail: text("recipient_email").notNull(),
+  subject: text("subject").notNull(),
+  status: text("status").notNull().default("sent"), // 'sent', 'failed', 'bounced'
+  resendMessageId: text("resend_message_id"),
+  errorMessage: text("error_message"),
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+});
+
 // Calendar events staging table for ShootTracker
 export const calendarEventsStaging = pgTable("calendar_events_staging", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -135,6 +178,8 @@ export const calendarEventsStaging = pgTable("calendar_events_staging", {
   // Package info editable from ShootTracker
   packagePhotos: integer("package_photos").notNull().default(0),
   selectedPhotos: integer("selected_photos").notNull().default(0),
+  // Client email extracted from calendar notes
+  clientEmail: text("client_email"),
 });
 
 // Complaints system for Evans to manage retoucher reports
@@ -402,3 +447,40 @@ export const updateCalendarEventStagingSchema = createInsertSchema(calendarEvent
 export type CalendarEventStaging = typeof calendarEventsStaging.$inferSelect;
 export type InsertCalendarEventStaging = z.infer<typeof insertCalendarEventStagingSchema>;
 export type UpdateCalendarEventStaging = z.infer<typeof updateCalendarEventStagingSchema>;
+
+// Client messages schemas
+export const insertClientMessageSchema = createInsertSchema(clientMessages).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type ClientMessage = typeof clientMessages.$inferSelect;
+export type InsertClientMessage = z.infer<typeof insertClientMessageSchema>;
+
+// Client auth tokens schemas
+export const insertClientAuthTokenSchema = createInsertSchema(clientAuthTokens).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type ClientAuthToken = typeof clientAuthTokens.$inferSelect;
+export type InsertClientAuthToken = z.infer<typeof insertClientAuthTokenSchema>;
+
+// Email logs schemas
+export const insertEmailLogSchema = createInsertSchema(emailLogs).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type EmailLog = typeof emailLogs.$inferSelect;
+export type InsertEmailLog = z.infer<typeof insertEmailLogSchema>;
+
+// Email types
+export const EmailType = {
+  DELIVERY_ESTIMATE: "delivery_estimate",
+  PROJECT_ADDED: "project_added",
+  EXTRAS_APPROVAL: "extras_approval",
+  CHAT_LINK: "chat_link",
+} as const;
+
+export type EmailTypeValue = typeof EmailType[keyof typeof EmailType];

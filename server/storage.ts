@@ -1,4 +1,4 @@
-import { type User, type InsertUser, type Project, type InsertProject, type UpdateProject, type ProjectNote, type InsertProjectNote, type UpdateProjectNote, type TradeOffer, type InsertTradeOffer, type UpdateTradeOffer, type WranglerCommission, type InsertWranglerCommission, type ProjectEvent, type InsertProjectEvent, type Complaint, type InsertComplaint, type ShoottrackerMeta, type InsertShoottrackerMeta, type UpdateShoottrackerMeta, type AppSetting, type CalendarEventStaging, type InsertCalendarEventStaging, type UpdateCalendarEventStaging, ProjectStatus, TradeOfferStatus, StagingStatus, users, projects, projectNotes, tradeOffers, wranglerCommissions, projectEvents, complaints, shoottrackerMeta, appSettings, calendarEventsStaging } from "@shared/schema";
+import { type User, type InsertUser, type Project, type InsertProject, type UpdateProject, type ProjectNote, type InsertProjectNote, type UpdateProjectNote, type TradeOffer, type InsertTradeOffer, type UpdateTradeOffer, type WranglerCommission, type InsertWranglerCommission, type ProjectEvent, type InsertProjectEvent, type Complaint, type InsertComplaint, type ShoottrackerMeta, type InsertShoottrackerMeta, type UpdateShoottrackerMeta, type AppSetting, type CalendarEventStaging, type InsertCalendarEventStaging, type UpdateCalendarEventStaging, type ClientAuthToken, type InsertClientAuthToken, type ClientMessage, type InsertClientMessage, ProjectStatus, TradeOfferStatus, StagingStatus, users, projects, projectNotes, tradeOffers, wranglerCommissions, projectEvents, complaints, shoottrackerMeta, appSettings, calendarEventsStaging, clientAuthTokens, clientMessages } from "@shared/schema";
 import { db } from "./db";
 import { eq, sql, asc } from "drizzle-orm";
 import { randomUUID } from "crypto";
@@ -65,6 +65,17 @@ export interface IStorage {
   updateStagedEvent(id: string, updates: UpdateCalendarEventStaging): Promise<CalendarEventStaging | undefined>;
   upsertStagedEvent(event: InsertCalendarEventStaging): Promise<CalendarEventStaging>;
   deleteStagedEvent(id: string): Promise<boolean>;
+  
+  // Client auth token methods
+  createClientAuthToken(token: InsertClientAuthToken): Promise<ClientAuthToken>;
+  getClientAuthTokenByToken(token: string): Promise<ClientAuthToken | undefined>;
+  getClientAuthTokenByEmail(email: string): Promise<ClientAuthToken | undefined>;
+  deleteClientAuthToken(id: string): Promise<boolean>;
+  
+  // Client messages methods
+  getMessagesByProject(projectId: string): Promise<ClientMessage[]>;
+  createClientMessage(message: InsertClientMessage): Promise<ClientMessage>;
+  markMessagesAsRead(projectId: string, senderType: string): Promise<number>;
 }
 
 export class MemStorage implements IStorage {
@@ -113,6 +124,12 @@ export class MemStorage implements IStorage {
         createdFrom: "MANUAL",
         isLinkSent: false,
         linkSentAt: null,
+        clientEmail: null,
+        extrasApproved: false,
+        extrasApprovedAt: null,
+        extrasApprovalToken: null,
+        deliveryEstimateEmailSentAt: null,
+        projectAddedEmailSentAt: null,
       },
       {
         id: "2",
@@ -143,6 +160,12 @@ export class MemStorage implements IStorage {
         createdFrom: "MANUAL",
         isLinkSent: false,
         linkSentAt: null,
+        clientEmail: null,
+        extrasApproved: false,
+        extrasApprovedAt: null,
+        extrasApprovalToken: null,
+        deliveryEstimateEmailSentAt: null,
+        projectAddedEmailSentAt: null,
       },
       {
         id: "3",
@@ -173,6 +196,12 @@ export class MemStorage implements IStorage {
         createdFrom: "MANUAL",
         isLinkSent: false,
         linkSentAt: null,
+        clientEmail: null,
+        extrasApproved: false,
+        extrasApprovedAt: null,
+        extrasApprovalToken: null,
+        deliveryEstimateEmailSentAt: null,
+        projectAddedEmailSentAt: null,
       },
       {
         id: "4",
@@ -203,6 +232,12 @@ export class MemStorage implements IStorage {
         createdFrom: "MANUAL",
         isLinkSent: false,
         linkSentAt: null,
+        clientEmail: null,
+        extrasApproved: false,
+        extrasApprovedAt: null,
+        extrasApprovalToken: null,
+        deliveryEstimateEmailSentAt: null,
+        projectAddedEmailSentAt: null,
       },
       {
         id: "5",
@@ -233,6 +268,12 @@ export class MemStorage implements IStorage {
         createdFrom: "MANUAL",
         isLinkSent: false,
         linkSentAt: null,
+        clientEmail: null,
+        extrasApproved: false,
+        extrasApprovedAt: null,
+        extrasApprovalToken: null,
+        deliveryEstimateEmailSentAt: null,
+        projectAddedEmailSentAt: null,
       },
     ];
 
@@ -300,6 +341,12 @@ export class MemStorage implements IStorage {
       createdFrom: insertProject.createdFrom ?? "MANUAL",
       isLinkSent: insertProject.isLinkSent ?? false,
       linkSentAt: insertProject.linkSentAt ?? null,
+      clientEmail: insertProject.clientEmail ?? null,
+      extrasApproved: insertProject.extrasApproved ?? false,
+      extrasApprovedAt: insertProject.extrasApprovedAt ?? null,
+      extrasApprovalToken: insertProject.extrasApprovalToken ?? null,
+      deliveryEstimateEmailSentAt: insertProject.deliveryEstimateEmailSentAt ?? null,
+      projectAddedEmailSentAt: insertProject.projectAddedEmailSentAt ?? null,
     };
     
     this.projects.set(id, project);
@@ -572,6 +619,36 @@ export class MemStorage implements IStorage {
 
   async deleteStagedEvent(id: string): Promise<boolean> {
     return false;
+  }
+
+  // Client auth token methods (Not implemented for MemStorage)
+  async createClientAuthToken(token: InsertClientAuthToken): Promise<ClientAuthToken> {
+    throw new Error("Not implemented in MemStorage");
+  }
+
+  async getClientAuthTokenByToken(token: string): Promise<ClientAuthToken | undefined> {
+    return undefined;
+  }
+
+  async getClientAuthTokenByEmail(email: string): Promise<ClientAuthToken | undefined> {
+    return undefined;
+  }
+
+  async deleteClientAuthToken(id: string): Promise<boolean> {
+    return false;
+  }
+
+  // Client messages methods (Not implemented for MemStorage)
+  async getMessagesByProject(projectId: string): Promise<ClientMessage[]> {
+    return [];
+  }
+
+  async createClientMessage(message: InsertClientMessage): Promise<ClientMessage> {
+    throw new Error("Not implemented in MemStorage");
+  }
+
+  async markMessagesAsRead(projectId: string, senderType: string): Promise<number> {
+    return 0;
   }
 }
 
@@ -997,6 +1074,44 @@ export class DatabaseStorage implements IStorage {
   async deleteStagedEvent(id: string): Promise<boolean> {
     const result = await db.delete(calendarEventsStaging).where(eq(calendarEventsStaging.id, id));
     return result.rowCount ? result.rowCount > 0 : false;
+  }
+
+  // Client auth token methods
+  async createClientAuthToken(token: InsertClientAuthToken): Promise<ClientAuthToken> {
+    const [created] = await db.insert(clientAuthTokens).values(token).returning();
+    return created;
+  }
+
+  async getClientAuthTokenByToken(token: string): Promise<ClientAuthToken | undefined> {
+    const [found] = await db.select().from(clientAuthTokens).where(eq(clientAuthTokens.token, token));
+    return found || undefined;
+  }
+
+  async getClientAuthTokenByEmail(email: string): Promise<ClientAuthToken | undefined> {
+    const [found] = await db.select().from(clientAuthTokens).where(eq(clientAuthTokens.email, email.toLowerCase()));
+    return found || undefined;
+  }
+
+  async deleteClientAuthToken(id: string): Promise<boolean> {
+    const result = await db.delete(clientAuthTokens).where(eq(clientAuthTokens.id, id));
+    return result.rowCount ? result.rowCount > 0 : false;
+  }
+
+  // Client messages methods
+  async getMessagesByProject(projectId: string): Promise<ClientMessage[]> {
+    return await db.select().from(clientMessages).where(eq(clientMessages.projectId, projectId)).orderBy(asc(clientMessages.createdAt));
+  }
+
+  async createClientMessage(message: InsertClientMessage): Promise<ClientMessage> {
+    const [created] = await db.insert(clientMessages).values(message).returning();
+    return created;
+  }
+
+  async markMessagesAsRead(projectId: string, senderType: string): Promise<number> {
+    const result = await db.update(clientMessages)
+      .set({ isRead: true })
+      .where(sql`${clientMessages.projectId} = ${projectId} AND ${clientMessages.senderType} = ${senderType}`);
+    return result.rowCount || 0;
   }
 }
 

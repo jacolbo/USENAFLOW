@@ -5,6 +5,8 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import Dashboard from "@/pages/dashboard";
 import ShootTrackerSettings from "@/pages/shoottracker-settings";
+import ApproveExtras from "@/pages/approve-extras";
+import ClientChat from "@/pages/client-chat";
 import NotFound from "@/pages/not-found";
 
 function Router() {
@@ -12,6 +14,8 @@ function Router() {
     <Switch>
       <Route path="/" component={Dashboard} />
       <Route path="/shoottracker" component={ShootTrackerSettings} />
+      <Route path="/approve-extras/:token" component={ApproveExtras} />
+      <Route path="/client-chat/:token" component={ClientChat} />
       <Route component={NotFound} />
     </Switch>
   );

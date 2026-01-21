@@ -181,6 +181,23 @@ export function calculateShootTrackerRiskLevel(
   return RiskLevel.SAFE;
 }
 
+// Extract email from calendar event description or location
+export function extractClientEmail(description: string, location: string = ''): string | null {
+  const combined = `${description} ${location}`;
+  if (!combined.trim()) return null;
+  
+  // Common email patterns in calendar notes
+  const emailPattern = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
+  const matches = combined.match(emailPattern);
+  
+  if (matches && matches.length > 0) {
+    // Return the first email found (lowercase)
+    return matches[0].toLowerCase();
+  }
+  
+  return null;
+}
+
 export function parseClientNameFromTitle(title: string): string {
   let cleanName = title.trim();
   
