@@ -88,6 +88,27 @@ Use `getAdminHeaders(role, userId)` from `client/src/lib/adminAuth.ts`
 - Settings stored in database: `auto_sync_enabled`, `auto_sync_interval_minutes`, `last_auto_sync_at`
 - API endpoint: `GET /api/admin/shoottracker/autosync-status` - Get current auto-sync status
 
+### Client-Editor Communication System
+WhatsApp-style messaging interface enabling direct communication between editors and clients:
+- **Editor Chat Dashboard**: `/editor-chat` route with WhatsApp Web-style layout (project list + conversation view)
+- **Role-Based Access**: Admin, Lead Retoucher, Retoucher1-3, and Evans roles can access chat; retouchers only see assigned projects
+- **Message Threading**: Conversations organized by project with unread message counters and real-time search
+- **Email Notifications**: Automatic email sent to clients when editors send messages, including secure chat link
+- **Token Authentication**: Clients access chat via secure tokens (30-day expiry) embedded in email links
+- **Security**: All chat endpoints enforce project-level authorization - clients can only access their own projects
+- **Database**: `client_messages` table stores messages, `client_chat_tokens` manages authentication tokens
+
+**Chat API Endpoints:**
+- `GET /api/admin/chat/projects` - Get all projects with unread counts (role-based filtering)
+- `GET /api/admin/chat/project/:projectId/messages` - Get messages for a project
+- `POST /api/admin/chat/project/:projectId/messages` - Send message as editor (triggers client email)
+- `GET /api/client/chat/project/:projectId/messages` - Get messages (client auth via token)
+- `POST /api/client/chat/project/:projectId/messages` - Send message as client
+
+**Chat Authentication:**
+- Editor auth: `verifyChatRequest` middleware using X-Usena-Role and X-Usena-User-Id headers
+- Client auth: Token-based via `?token=` query parameter, validated against `client_chat_tokens` table
+
 ## External Dependencies
 
 - **@tanstack/react-query**: Server state management.
