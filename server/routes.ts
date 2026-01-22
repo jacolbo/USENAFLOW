@@ -1265,5 +1265,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Register ShootTracker routes (settings, sync, forecast, toggles)
   registerShoottrackerRoutes(app);
 
+  // Dashboard preferences API
+  app.get("/api/dashboard/preferences/:userId", async (req, res) => {
+    try {
+      const { userId } = req.params;
+      const prefs = await storage.getDashboardPreferences(userId);
+      res.json(prefs || null);
+    } catch (error: any) {
+      console.error("Error getting dashboard preferences:", error);
+      res.status(500).json({ error: "Failed to get dashboard preferences" });
+    }
+  });
+
+  app.put("/api/dashboard/preferences/:userId", async (req, res) => {
+    try {
+      const { userId } = req.params;
+      const { widgetOrder, hiddenWidgets, widgetSettings } = req.body;
+      
+      const prefs = await storage.upsertDashboardPreferences(userId, {
+        widgetOrder,
+        hiddenWidgets,
+        widgetSettings,
+      });
+      
+      res.json(prefs);
+    } catch (error: any) {
+      console.error("Error updating dashboard preferences:", error);
+      res.status(500).json({ error: "Failed to update dashboard preferences" });
+    }
+  });
+
   return httpServer;
 }

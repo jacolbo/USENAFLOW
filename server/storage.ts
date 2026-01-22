@@ -664,6 +664,22 @@ export class MemStorage implements IStorage {
   async getProjectsWithUnreadCounts(assignedTo?: string): Promise<Array<{ project: Project; unreadCount: number; lastMessageAt: Date | null }>> {
     return [];
   }
+  
+  async getDashboardPreferences(userId: string): Promise<DashboardPreferences | undefined> {
+    return undefined;
+  }
+  
+  async upsertDashboardPreferences(userId: string, prefs: Partial<InsertDashboardPreferences>): Promise<DashboardPreferences> {
+    return {
+      id: randomUUID(),
+      userId,
+      widgetOrder: prefs.widgetOrder || [],
+      hiddenWidgets: prefs.hiddenWidgets || [],
+      widgetSettings: prefs.widgetSettings || {},
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+  }
 }
 
 // Database Storage Implementation
