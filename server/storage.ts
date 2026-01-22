@@ -1150,10 +1150,10 @@ export class DatabaseStorage implements IStorage {
   }
   
   async getProjectsWithUnreadCounts(assignedTo?: string): Promise<Array<{ project: Project; unreadCount: number; lastMessageAt: Date | null }>> {
-    // Build the query condition
+    // Build the query condition using raw SQL with table alias 'p'
     const assignedCondition = assignedTo 
-      ? sql`${projects.clientEmail} IS NOT NULL AND ${projects.assignedTo} = ${assignedTo}`
-      : sql`${projects.clientEmail} IS NOT NULL`;
+      ? sql`p.client_email IS NOT NULL AND p.assigned_to = ${assignedTo}`
+      : sql`p.client_email IS NOT NULL`;
     
     // Single aggregate query with LEFT JOIN to get all data at once
     const aggregateQuery = await db.execute(sql`
