@@ -783,6 +783,9 @@ export default function Dashboard() {
       timestamp: Date.now()
     };
     localStorage.setItem('usenaflow_session', JSON.stringify(sessionData));
+    // Also store role and user ID separately for editor chat authentication
+    localStorage.setItem('usena_role', user.role);
+    localStorage.setItem('usena_user_id', user.id || user.name || '');
   };
 
   const getStoredSession = () => {
@@ -796,18 +799,31 @@ export default function Dashboard() {
       // Check if session is expired (older than 2 hours)
       if (currentTime - sessionData.timestamp > SESSION_TIMEOUT) {
         localStorage.removeItem('usenaflow_session');
+        localStorage.removeItem('usena_role');
+        localStorage.removeItem('usena_user_id');
         return null;
       }
       
-      return sessionData.user;
+      // Ensure chat auth keys are set (for backward compatibility)
+      const storedUser = sessionData.user;
+      if (storedUser) {
+        localStorage.setItem('usena_role', storedUser.role);
+        localStorage.setItem('usena_user_id', storedUser.id || storedUser.name || '');
+      }
+      
+      return storedUser;
     } catch (error) {
       localStorage.removeItem('usenaflow_session');
+      localStorage.removeItem('usena_role');
+      localStorage.removeItem('usena_user_id');
       return null;
     }
   };
 
   const clearSession = () => {
     localStorage.removeItem('usenaflow_session');
+    localStorage.removeItem('usena_role');
+    localStorage.removeItem('usena_user_id');
   };
 
   const handleLogin = (loggedInUser: User) => {
