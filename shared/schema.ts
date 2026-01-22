@@ -485,3 +485,44 @@ export const EmailType = {
 } as const;
 
 export type EmailTypeValue = typeof EmailType[keyof typeof EmailType];
+
+// Dashboard preferences for customizable widget system
+export const dashboardPreferences = pgTable("dashboard_preferences", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: text("user_id").notNull().unique(), // Maps to user name/role combo
+  widgetOrder: jsonb("widget_order").notNull().default(sql`'[]'::jsonb`), // Array of widget IDs in display order
+  hiddenWidgets: jsonb("hidden_widgets").notNull().default(sql`'[]'::jsonb`), // Array of hidden widget IDs
+  widgetSettings: jsonb("widget_settings").notNull().default(sql`'{}'::jsonb`), // Per-widget settings
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+  updatedAt: timestamp("updated_at").notNull().default(sql`now()`),
+});
+
+// Dashboard preferences schemas
+export const insertDashboardPreferencesSchema = createInsertSchema(dashboardPreferences).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type DashboardPreferences = typeof dashboardPreferences.$inferSelect;
+export type InsertDashboardPreferences = z.infer<typeof insertDashboardPreferencesSchema>;
+
+// Widget configuration types
+export interface WidgetConfig {
+  id: string;
+  name: string;
+  description: string;
+  icon: string;
+  defaultEnabled: boolean;
+  roles: string[]; // Which roles can see this widget
+}
+
+export const AVAILABLE_WIDGETS: WidgetConfig[] = [
+  { id: "daily_quote", name: "Daily Inspiration", description: "Motivational quote of the day", icon: "Quote", defaultEnabled: true, roles: ["Admin", "LeadRetoucher", "Retoucher1", "Retoucher2", "Retoucher3", "DataWrangler", "Sales", "Evans"] },
+  { id: "my_tasks", name: "My Tasks", description: "Projects assigned to you", icon: "User", defaultEnabled: true, roles: ["Retoucher1", "Retoucher2", "Retoucher3"] },
+  { id: "shoottracker", name: "ShootTracker", description: "Upcoming shoots and at-risk projects", icon: "Camera", defaultEnabled: true, roles: ["Admin", "Sales", "LeadRetoucher", "DataWrangler"] },
+  { id: "team_analytics", name: "Team Analytics", description: "Team performance charts", icon: "BarChart3", defaultEnabled: true, roles: ["Admin", "LeadRetoucher", "Retoucher1", "Retoucher2", "Retoucher3", "DataWrangler", "Sales"] },
+  { id: "project_table", name: "Project Table", description: "All projects overview", icon: "Table", defaultEnabled: true, roles: ["Admin", "LeadRetoucher", "Retoucher1", "Retoucher2", "Retoucher3", "DataWrangler"] },
+  { id: "pending_payments", name: "Pending Payments", description: "Projects awaiting payment", icon: "DollarSign", defaultEnabled: true, roles: ["Sales"] },
+  { id: "ready_delivery", name: "Ready for Delivery", description: "Projects ready to deliver", icon: "Package", defaultEnabled: true, roles: ["Sales"] },
+];

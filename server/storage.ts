@@ -1,4 +1,4 @@
-import { type User, type InsertUser, type Project, type InsertProject, type UpdateProject, type ProjectNote, type InsertProjectNote, type UpdateProjectNote, type TradeOffer, type InsertTradeOffer, type UpdateTradeOffer, type WranglerCommission, type InsertWranglerCommission, type ProjectEvent, type InsertProjectEvent, type Complaint, type InsertComplaint, type ShoottrackerMeta, type InsertShoottrackerMeta, type UpdateShoottrackerMeta, type AppSetting, type CalendarEventStaging, type InsertCalendarEventStaging, type UpdateCalendarEventStaging, type ClientAuthToken, type InsertClientAuthToken, type ClientMessage, type InsertClientMessage, ProjectStatus, TradeOfferStatus, StagingStatus, users, projects, projectNotes, tradeOffers, wranglerCommissions, projectEvents, complaints, shoottrackerMeta, appSettings, calendarEventsStaging, clientAuthTokens, clientMessages } from "@shared/schema";
+import { type User, type InsertUser, type Project, type InsertProject, type UpdateProject, type ProjectNote, type InsertProjectNote, type UpdateProjectNote, type TradeOffer, type InsertTradeOffer, type UpdateTradeOffer, type WranglerCommission, type InsertWranglerCommission, type ProjectEvent, type InsertProjectEvent, type Complaint, type InsertComplaint, type ShoottrackerMeta, type InsertShoottrackerMeta, type UpdateShoottrackerMeta, type AppSetting, type CalendarEventStaging, type InsertCalendarEventStaging, type UpdateCalendarEventStaging, type ClientAuthToken, type InsertClientAuthToken, type ClientMessage, type InsertClientMessage, type DashboardPreferences, type InsertDashboardPreferences, ProjectStatus, TradeOfferStatus, StagingStatus, users, projects, projectNotes, tradeOffers, wranglerCommissions, projectEvents, complaints, shoottrackerMeta, appSettings, calendarEventsStaging, clientAuthTokens, clientMessages, dashboardPreferences } from "@shared/schema";
 import { db } from "./db";
 import { eq, sql, asc } from "drizzle-orm";
 import { randomUUID } from "crypto";
@@ -78,6 +78,10 @@ export interface IStorage {
   createClientMessage(message: InsertClientMessage): Promise<ClientMessage>;
   markMessagesAsRead(projectId: string, senderType: string): Promise<number>;
   getProjectsWithUnreadCounts(assignedTo?: string): Promise<Array<{ project: Project; unreadCount: number; lastMessageAt: Date | null }>>;
+  
+  // Dashboard preferences methods
+  getDashboardPreferences(userId: string): Promise<DashboardPreferences | undefined>;
+  upsertDashboardPreferences(userId: string, prefs: Partial<InsertDashboardPreferences>): Promise<DashboardPreferences>;
 }
 
 export class MemStorage implements IStorage {
@@ -1198,6 +1202,37 @@ export class DatabaseStorage implements IStorage {
     }
     
     return result;
+  }
+  
+  // Dashboard preferences methods
+  async getDashboardPreferences(userId: string): Promise<DashboardPreferences | undefined> {
+    const results = await db.select().from(dashboardPreferences).where(eq(dashboardPreferences.userId, userId));
+    return results[0];
+  }
+  
+  async upsertDashboardPreferences(userId: string, prefs: Partial<InsertDashboardPreferences>): Promise<DashboardPreferences> {
+    const existing = await this.getDashboardPreferences(userId);
+    
+    if (existing) {
+      const [updated] = await db.update(dashboardPreferences)
+        .set({
+          ...prefs,
+          updatedAt: new Date(),
+        })
+        .where(eq(dashboardPreferences.userId, userId))
+        .returning();
+      return updated;
+    } else {
+      const [created] = await db.insert(dashboardPreferences)
+        .values({
+          userId,
+          widgetOrder: prefs.widgetOrder || [],
+          hiddenWidgets: prefs.hiddenWidgets || [],
+          widgetSettings: prefs.widgetSettings || {},
+        })
+        .returning();
+      return created;
+    }
   }
 }
 
