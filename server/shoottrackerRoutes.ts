@@ -1,4 +1,5 @@
 import type { Express, Request, Response } from "express";
+import crypto from "crypto";
 import { storage } from "./storage";
 import { 
   DEFAULT_SHOOTTRACKER_SETTINGS, 
@@ -37,6 +38,35 @@ import {
   sendMessageNotificationEmail,
   generateToken,
 } from "./services/emailService";
+
+// Verify Resend webhook signature
+function verifyResendWebhookSignature(payload: string, signature: string, secret: string): boolean {
+  try {
+    // Resend uses svix for webhooks - signature format: v1,signature
+    const signatureParts = signature.split(',');
+    if (signatureParts.length < 2) return false;
+    
+    const timestamp = signatureParts.find(p => p.startsWith('t='))?.substring(2);
+    const sig = signatureParts.find(p => p.startsWith('v1='))?.substring(3);
+    
+    if (!timestamp || !sig) return false;
+    
+    // Create the signed payload
+    const signedPayload = `${timestamp}.${payload}`;
+    
+    // Calculate expected signature
+    const expectedSig = crypto
+      .createHmac('sha256', secret)
+      .update(signedPayload)
+      .digest('hex');
+    
+    // Compare signatures
+    return crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expectedSig));
+  } catch (error) {
+    console.error("[Webhook] Signature verification error:", error);
+    return false;
+  }
+}
 
 const SETTINGS_KEY = "shoottracker_settings";
 
@@ -1045,6 +1075,24 @@ export function registerShoottrackerRoutes(app: Express): void {
   // Clients can reply to notification emails and their message will be stored
   app.post("/api/webhooks/email-reply", async (req: Request, res: Response) => {
     try {
+      // Verify webhook signature if secret is configured
+      const webhookSecret = process.env.RESEND_WEBHOOK_SECRET;
+      const signature = req.headers['svix-signature'] as string;
+      
+      if (webhookSecret && signature) {
+        const payload = JSON.stringify(req.body);
+        const isValid = verifyResendWebhookSignature(payload, signature, webhookSecret);
+        
+        if (!isValid) {
+          console.log("[Email Webhook] Invalid signature - rejecting request");
+          return res.status(401).json({ error: "Invalid webhook signature" });
+        }
+        console.log("[Email Webhook] Signature verified successfully");
+      } else if (webhookSecret && !signature) {
+        console.log("[Email Webhook] Missing signature header - rejecting request");
+        return res.status(401).json({ error: "Missing webhook signature" });
+      }
+      
       console.log("[Email Webhook] Received inbound email:", JSON.stringify(req.body, null, 2));
       
       const { from, to, subject, text, html } = req.body;
