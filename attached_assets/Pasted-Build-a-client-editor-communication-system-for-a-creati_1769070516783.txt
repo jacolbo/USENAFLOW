@@ -1,0 +1,112 @@
+Build a client–editor communication system for a creative studio.
+
+Core requirement:
+When a project is allocated to an editor, the client must automatically receive an email notification with:
+
+An option to reply directly to the email, and
+
+A secure link that opens a web-based chat to communicate with the assigned editor.
+
+All messages — whether sent via email replies or via the web chat link — must appear in one unified conversation thread per project.
+
+Client Side
+
+Client receives an email when a project is allocated
+
+Email includes:
+
+Project name
+
+Assigned editor name
+
+A “Chat with your editor” link
+
+Client can:
+
+Reply directly to the email
+
+Open the chat link (no login required)
+
+Chat link opens a simple WhatsApp-style web chat UI
+
+Messages are saved and tied to a unique project ID
+
+Team / Editor Side
+
+Build a dashboard for editors that looks and behaves like WhatsApp Web
+
+Left panel:
+
+List of active projects/clients
+
+Show unread message counts
+
+Right panel:
+
+Message thread for selected client/project
+
+Ability to reply in real time
+
+Messages sent by editors notify the client via email
+
+Backend Requirements
+
+Use a project-based conversation model
+
+Each project has:
+
+project_id
+
+client_name
+
+client_email
+
+editor_name
+
+Store messages with:
+
+sender (client/editor)
+
+channel (email/web)
+
+message_body
+
+timestamp
+
+Incoming email replies should be parsed and attached to the correct project conversation
+
+Technical Stack (recommended but flexible)
+
+Backend: Node.js + Express
+
+Database: PostgreSQL or SQLite (for MVP)
+
+Email sending & receiving: SendGrid (or similar)
+
+Frontend: HTML, CSS, JavaScript (simple, clean UI)
+
+Real-time updates: WebSockets or polling
+
+UX Expectations
+
+WhatsApp-like chat layout
+
+Clean, minimal, professional
+
+Mobile-friendly for clients
+
+Fast message delivery
+
+Deliverables
+
+Working MVP
+
+Clear file structure
+
+Setup instructions
+
+Environment variable usage for email keys
+
+Seed data for testing projects and clients
+
+Build the system in a way that can later scale to multiple editors and hundreds of projects.
