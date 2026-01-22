@@ -1041,5 +1041,103 @@ export function registerShoottrackerRoutes(app: Express): void {
     }
   });
 
+  // Webhook endpoint for receiving inbound email replies from Resend
+  // Clients can reply to notification emails and their message will be stored
+  app.post("/api/webhooks/email-reply", async (req: Request, res: Response) => {
+    try {
+      console.log("[Email Webhook] Received inbound email:", JSON.stringify(req.body, null, 2));
+      
+      const { from, to, subject, text, html } = req.body;
+      
+      if (!from || !to) {
+        return res.status(400).json({ error: "Missing required fields" });
+      }
+      
+      // Extract project ID from the reply-to address
+      // Format: reply+{projectId}@domain.com
+      let projectId: string | null = null;
+      
+      // 'to' might be a string or array
+      const toAddresses = Array.isArray(to) ? to : [to];
+      for (const addr of toAddresses) {
+        const match = addr.match(/reply\+([^@]+)@/);
+        if (match) {
+          projectId = match[1];
+          break;
+        }
+      }
+      
+      if (!projectId) {
+        console.log("[Email Webhook] Could not extract project ID from:", toAddresses);
+        return res.status(400).json({ error: "Could not identify project from reply address" });
+      }
+      
+      // Get sender email
+      const senderEmail = typeof from === 'string' ? from : (from.email || from.address || String(from));
+      const cleanSenderEmail = senderEmail.match(/[^<]*<([^>]+)>/)?.[1] || senderEmail;
+      
+      // Verify the project exists
+      const project = await storage.getProject(projectId);
+      if (!project) {
+        console.log("[Email Webhook] Project not found:", projectId);
+        return res.status(404).json({ error: "Project not found" });
+      }
+      
+      // Verify sender is the client for this project
+      if (project.clientEmail && cleanSenderEmail.toLowerCase() !== project.clientEmail.toLowerCase()) {
+        console.log("[Email Webhook] Sender email mismatch:", cleanSenderEmail, "vs", project.clientEmail);
+        return res.status(403).json({ error: "Sender not authorized for this project" });
+      }
+      
+      // Extract the message content - prefer plain text, strip quoted content
+      let messageContent = text || '';
+      
+      // Remove quoted previous messages (lines starting with > or preceded by "On ... wrote:")
+      const lines = messageContent.split('\n');
+      const cleanLines: string[] = [];
+      let foundQuoteMarker = false;
+      
+      for (const line of lines) {
+        // Stop at quote markers
+        if (line.match(/^On .* wrote:$/i) || line.match(/^-+ ?Original Message ?-+$/i)) {
+          foundQuoteMarker = true;
+          break;
+        }
+        // Skip quoted lines
+        if (line.startsWith('>')) {
+          continue;
+        }
+        // Skip email signature markers
+        if (line.match(/^-- ?$/)) {
+          break;
+        }
+        cleanLines.push(line);
+      }
+      
+      messageContent = cleanLines.join('\n').trim();
+      
+      if (!messageContent) {
+        console.log("[Email Webhook] No message content after cleaning");
+        return res.status(400).json({ error: "No message content found" });
+      }
+      
+      // Store the message
+      const newMessage = await storage.createClientMessage({
+        projectId,
+        senderType: 'client',
+        senderEmail: cleanSenderEmail.toLowerCase(),
+        message: messageContent,
+        isRead: false,
+      });
+      
+      console.log(`[Email Webhook] Message saved for project ${projectId} from ${cleanSenderEmail}: "${messageContent.substring(0, 50)}..."`);
+      
+      res.json({ success: true, messageId: newMessage.id });
+    } catch (error: any) {
+      console.error("[Email Webhook] Error processing inbound email:", error);
+      res.status(500).json({ error: "Failed to process email reply" });
+    }
+  });
+
   console.log("✅ ShootTracker routes registered");
 }

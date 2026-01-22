@@ -529,9 +529,19 @@ export async function sendMessageNotificationEmail(
         
         ${threadHtml}
         
+        <div style="background: #f0f7ff; border-radius: 8px; padding: 15px 20px; margin: 25px 0;">
+          <p style="color: #333; font-size: 14px; margin: 0 0 10px 0;">
+            <strong>How to reply:</strong>
+          </p>
+          <p style="color: #555; font-size: 14px; line-height: 1.6; margin: 0;">
+            📧 <strong>Reply to this email</strong> - Your message will be delivered directly<br>
+            💬 <strong>Use the button below</strong> - Open the chat for a real-time conversation
+          </p>
+        </div>
+        
         <div style="text-align: center; margin: 30px 0;">
           <a href="${chatUrl}" style="display: inline-block; background: #25d366; color: white; text-decoration: none; padding: 15px 40px; border-radius: 30px; font-weight: bold; font-size: 16px;">
-            💬 Reply Now
+            💬 Open Chat
           </a>
         </div>
         
@@ -548,16 +558,25 @@ export async function sendMessageNotificationEmail(
       </div>
     `;
 
+    // Create a reply-to address that embeds the project ID for routing replies
+    // Format: reply+{projectId}@{domain} (uses plus addressing)
+    const fromDomain = fromEmail.split('@')[1] || 'jepsonmyles.com';
+    const replyToAddress = `reply+${projectId}@${fromDomain}`;
+    
     const response = await client.emails.send({
       from: fromEmail,
       to: clientEmail,
+      replyTo: replyToAddress,
       subject,
       html: htmlContent,
+      headers: {
+        'X-Project-Id': projectId,
+      }
     });
 
     if (response.data?.id) {
       await logEmail(projectId, EmailType.MESSAGE_NOTIFICATION, clientEmail, subject, 'sent', response.data.id);
-      console.log(`[Email] Message notification sent to ${clientEmail} with ${conversationThread.length} messages in thread`);
+      console.log(`[Email] Message notification sent to ${clientEmail} with ${conversationThread.length} messages in thread, reply-to: ${replyToAddress}`);
       return { success: true, messageId: response.data.id };
     }
 
