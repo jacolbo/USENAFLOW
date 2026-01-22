@@ -429,6 +429,100 @@ export async function sendChatLinkEmail(
   }
 }
 
+// Email 4: New Message Notification
+// Sent to client when retoucher sends them a message
+export async function sendMessageNotificationEmail(
+  clientEmail: string,
+  clientName: string,
+  retoucherName: string,
+  projectId: string,
+  messagePreview: string,
+  chatToken: string
+): Promise<EmailResult> {
+  const subject = `New Message from ${retoucherName} - Jepson Myles Studio`;
+  
+  try {
+    const { client, fromEmail } = await getResendClient();
+    
+    const baseUrl = process.env.REPLIT_DEV_DOMAIN 
+      ? `https://${process.env.REPLIT_DEV_DOMAIN}`
+      : process.env.REPL_SLUG 
+        ? `https://${process.env.REPL_SLUG}.${process.env.REPL_OWNER}.repl.co`
+        : 'https://usenaflow.replit.app';
+    
+    const chatUrl = `${baseUrl}/client-chat/${chatToken}`;
+    
+    // Truncate message preview if too long
+    const truncatedMessage = messagePreview.length > 200 
+      ? messagePreview.substring(0, 200) + '...' 
+      : messagePreview;
+    
+    const htmlContent = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+        <div style="text-align: center; margin-bottom: 30px;">
+          <h1 style="color: #1a1a1a; margin: 0;">Jepson Myles Studio</h1>
+          <p style="color: #666; margin: 5px 0 0 0;">New Message</p>
+        </div>
+        
+        <p style="color: #333; font-size: 16px; line-height: 1.6;">
+          Hi ${clientName},
+        </p>
+        
+        <p style="color: #333; font-size: 16px; line-height: 1.6;">
+          <strong>${retoucherName}</strong> has sent you a new message about your project:
+        </p>
+        
+        <div style="background: #f5f5f5; border-left: 4px solid #25d366; padding: 15px 20px; margin: 20px 0; border-radius: 0 8px 8px 0;">
+          <p style="color: #333; font-size: 15px; line-height: 1.6; margin: 0; font-style: italic;">
+            "${truncatedMessage}"
+          </p>
+        </div>
+        
+        <div style="text-align: center; margin: 30px 0;">
+          <a href="${chatUrl}" style="display: inline-block; background: #25d366; color: white; text-decoration: none; padding: 15px 40px; border-radius: 30px; font-weight: bold; font-size: 16px;">
+            💬 Reply Now
+          </a>
+        </div>
+        
+        <p style="color: #666; font-size: 14px; line-height: 1.6;">
+          You can also reply directly to this email and your message will be delivered to your retoucher.
+        </p>
+        
+        <p style="color: #333; font-size: 16px; line-height: 1.6;">
+          Best,<br>
+          <strong>The Jepson Myles Studio Team</strong>
+        </p>
+        
+        <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;">
+        
+        <p style="color: #999; font-size: 12px; text-align: center;">
+          This is an automated message from Jepson Myles Studio.
+        </p>
+      </div>
+    `;
+
+    const response = await client.emails.send({
+      from: fromEmail,
+      to: clientEmail,
+      subject,
+      html: htmlContent,
+    });
+
+    if (response.data?.id) {
+      await logEmail(projectId, EmailType.MESSAGE_NOTIFICATION, clientEmail, subject, 'sent', response.data.id);
+      console.log(`[Email] Message notification sent to ${clientEmail}`);
+      return { success: true, messageId: response.data.id };
+    }
+
+    throw new Error(response.error?.message || 'Unknown error from Resend');
+
+  } catch (error: any) {
+    console.error(`[Email] Failed to send message notification:`, error);
+    await logEmail(projectId, EmailType.MESSAGE_NOTIFICATION, clientEmail, subject, 'failed', undefined, error.message);
+    return { success: false, error: error.message };
+  }
+}
+
 // Generate a secure random token
 export function generateToken(): string {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';

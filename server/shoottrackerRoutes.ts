@@ -10,7 +10,7 @@ import {
   StagingStatus,
   type CalendarEventStaging,
 } from "@shared/schema";
-import { verifyAdminRequest } from "./middleware/adminAuth";
+import { verifyAdminRequest, verifyChatRequest } from "./middleware/adminAuth";
 import { 
   normalizeEvent, 
   NormalizedEvent,
@@ -34,6 +34,7 @@ import {
   sendDeliveryEstimateEmail, 
   sendProjectAddedEmail, 
   sendChatLinkEmail,
+  sendMessageNotificationEmail,
   generateToken,
 } from "./services/emailService";
 
@@ -900,13 +901,45 @@ export function registerShoottrackerRoutes(app: Express): void {
     }
   });
   
-  // Retoucher chat routes (admin-protected)
-  app.get("/api/admin/chat/project/:projectId/messages", verifyAdminRequest, async (req: Request, res: Response) => {
+  // Editor/Retoucher chat routes - allows all editor roles
+  
+  // Get all projects with unread message counts for the editor dashboard
+  // Admins/Lead Retouchers see all projects, regular retouchers only see their assigned projects
+  app.get("/api/admin/chat/projects", verifyChatRequest, async (req: Request, res: Response) => {
+    try {
+      const role = req.headers["x-usena-role"] as string;
+      const userId = req.headers["x-usena-user-id"] as string;
+      
+      // Admins and Lead Retouchers can see all projects, retouchers only their own
+      const isAdmin = [UserRoles.ADMIN, UserRoles.LEAD_RETOUCHER].includes(role as any);
+      const assignedTo = isAdmin ? undefined : userId;
+      
+      const projectsWithCounts = await storage.getProjectsWithUnreadCounts(assignedTo);
+      res.json(projectsWithCounts);
+    } catch (error: any) {
+      console.error("Error fetching projects with unread counts:", error);
+      res.status(500).json({ error: "Failed to fetch projects" });
+    }
+  });
+  
+  app.get("/api/admin/chat/project/:projectId/messages", verifyChatRequest, async (req: Request, res: Response) => {
     try {
       const { projectId } = req.params;
+      const role = req.headers["x-usena-role"] as string;
+      const userId = req.headers["x-usena-user-id"] as string;
+      
+      // Check if user is authorized to view this project's messages
+      const project = await storage.getProject(projectId);
+      if (!project) {
+        return res.status(404).json({ error: "Project not found" });
+      }
+      
+      const isAdmin = [UserRoles.ADMIN, UserRoles.LEAD_RETOUCHER].includes(role as any);
+      if (!isAdmin && project.assignedTo !== userId) {
+        return res.status(403).json({ error: "Not authorized to view this conversation" });
+      }
       
       const messages = await storage.getMessagesByProject(projectId);
-      
       await storage.markMessagesAsRead(projectId, 'client');
       
       res.json(messages);
@@ -916,10 +949,11 @@ export function registerShoottrackerRoutes(app: Express): void {
     }
   });
   
-  app.post("/api/admin/chat/project/:projectId/send", verifyAdminRequest, async (req: Request, res: Response) => {
+  app.post("/api/admin/chat/project/:projectId/send", verifyChatRequest, async (req: Request, res: Response) => {
     try {
       const { projectId } = req.params;
       const { message } = req.body;
+      const role = req.headers["x-usena-role"] as string;
       const userId = req.headers["x-usena-user-id"] as string;
       
       if (!message || typeof message !== 'string' || !message.trim()) {
@@ -931,6 +965,12 @@ export function registerShoottrackerRoutes(app: Express): void {
         return res.status(404).json({ error: "Project not found" });
       }
       
+      // Check if user is authorized to send messages for this project
+      const isAdmin = [UserRoles.ADMIN, UserRoles.LEAD_RETOUCHER].includes(role as any);
+      if (!isAdmin && project.assignedTo !== userId) {
+        return res.status(403).json({ error: "Not authorized to send messages for this project" });
+      }
+      
       const newMessage = await storage.createClientMessage({
         projectId,
         senderType: 'retoucher',
@@ -938,6 +978,41 @@ export function registerShoottrackerRoutes(app: Express): void {
         message: message.trim(),
         isRead: false,
       });
+      
+      // Send email notification to client if they have an email
+      if (project.clientEmail) {
+        try {
+          // Get or create a chat token for this project/client
+          let existingToken = await storage.getClientAuthTokenByProjectId(projectId);
+          
+          if (!existingToken || new Date(existingToken.expiresAt) < new Date()) {
+            // Create a new token
+            const chatToken = generateToken();
+            await storage.createClientAuthToken({
+              email: project.clientEmail,
+              projectId: projectId,
+              token: chatToken,
+              expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+            });
+            existingToken = await storage.getClientAuthTokenByProjectId(projectId);
+          }
+          
+          if (existingToken) {
+            // Send notification email with chat link
+            await sendMessageNotificationEmail(
+              project.clientEmail,
+              project.clientName,
+              project.assignedTo || 'Your Retoucher',
+              projectId,
+              message.trim(),
+              existingToken.token
+            );
+          }
+        } catch (emailError) {
+          console.error("Failed to send email notification to client:", emailError);
+          // Don't fail the request if email fails
+        }
+      }
       
       res.json({ success: true, message: newMessage });
     } catch (error: any) {

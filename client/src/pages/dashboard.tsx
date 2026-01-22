@@ -19,7 +19,7 @@ import { WRUButton } from "@/components/WRUButton";
 import { useSSE } from "@/hooks/use-sse";
 import { User } from "@/lib/types";
 import { Project } from "@shared/schema";
-import { User as UserIcon, LogOut, Settings, Archive, ArrowRightLeft, DollarSign, AlertTriangle, Calendar } from "lucide-react";
+import { User as UserIcon, LogOut, Settings, Archive, ArrowRightLeft, DollarSign, AlertTriangle, Calendar, MessageCircle } from "lucide-react";
 import { useLocation } from "wouter";
 import logoImage from "@assets/USENA-FLOW_1754522507856.png";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -1082,6 +1082,19 @@ export default function Dashboard() {
                       >
                         <Calendar className="h-4 w-4" />
                         ShootTracker
+                      </Button>
+                    )}
+
+                    {/* Client Messages Button - for Admin, LeadRetoucher, and all Retouchers */}
+                    {['Admin', 'LeadRetoucher', 'Retoucher1', 'Retoucher2', 'Retoucher3', 'Evans'].includes(user.role) && (
+                      <Button 
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setLocation('/editor-chat')}
+                        className="flex items-center gap-2 bg-blue-50 hover:bg-blue-100 border-blue-200 text-blue-700"
+                      >
+                        <MessageCircle className="h-4 w-4" />
+                        Client Messages
                       </Button>
                     )}
 

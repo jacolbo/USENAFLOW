@@ -3,6 +3,16 @@ import { UserRoles } from "@shared/schema";
 
 const SHOOTTRACKER_ROLES = [UserRoles.ADMIN, UserRoles.LEAD_RETOUCHER, UserRoles.DATA_WRANGLER];
 
+// All roles that can participate in client chat (editors/retouchers)
+const CHAT_ROLES = [
+  UserRoles.ADMIN, 
+  UserRoles.LEAD_RETOUCHER, 
+  UserRoles.RETOUCHER_1, 
+  UserRoles.RETOUCHER_2, 
+  UserRoles.RETOUCHER_3, 
+  UserRoles.EVANS
+];
+
 export function verifyAdminRequest(req: Request, res: Response, next: NextFunction) {
   const role = req.headers["x-usena-role"] as string;
   const userId = req.headers["x-usena-user-id"] as string;
@@ -13,6 +23,22 @@ export function verifyAdminRequest(req: Request, res: Response, next: NextFuncti
 
   if (!SHOOTTRACKER_ROLES.includes(role as any)) {
     return res.status(403).json({ error: "Forbidden: Admin, Lead Retoucher, or Data Wrangler access required" });
+  }
+
+  next();
+}
+
+// Middleware for chat endpoints - allows all editor roles
+export function verifyChatRequest(req: Request, res: Response, next: NextFunction) {
+  const role = req.headers["x-usena-role"] as string;
+  const userId = req.headers["x-usena-user-id"] as string;
+
+  if (!role || !userId) {
+    return res.status(401).json({ error: "Unauthorized: Missing user identification" });
+  }
+
+  if (!CHAT_ROLES.includes(role as any)) {
+    return res.status(403).json({ error: "Forbidden: Editor access required" });
   }
 
   next();

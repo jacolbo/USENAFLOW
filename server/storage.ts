@@ -70,12 +70,14 @@ export interface IStorage {
   createClientAuthToken(token: InsertClientAuthToken): Promise<ClientAuthToken>;
   getClientAuthTokenByToken(token: string): Promise<ClientAuthToken | undefined>;
   getClientAuthTokenByEmail(email: string): Promise<ClientAuthToken | undefined>;
+  getClientAuthTokenByProjectId(projectId: string): Promise<ClientAuthToken | undefined>;
   deleteClientAuthToken(id: string): Promise<boolean>;
   
   // Client messages methods
   getMessagesByProject(projectId: string): Promise<ClientMessage[]>;
   createClientMessage(message: InsertClientMessage): Promise<ClientMessage>;
   markMessagesAsRead(projectId: string, senderType: string): Promise<number>;
+  getProjectsWithUnreadCounts(assignedTo?: string): Promise<Array<{ project: Project; unreadCount: number; lastMessageAt: Date | null }>>;
 }
 
 export class MemStorage implements IStorage {
@@ -633,6 +635,10 @@ export class MemStorage implements IStorage {
   async getClientAuthTokenByEmail(email: string): Promise<ClientAuthToken | undefined> {
     return undefined;
   }
+  
+  async getClientAuthTokenByProjectId(projectId: string): Promise<ClientAuthToken | undefined> {
+    return undefined;
+  }
 
   async deleteClientAuthToken(id: string): Promise<boolean> {
     return false;
@@ -649,6 +655,10 @@ export class MemStorage implements IStorage {
 
   async markMessagesAsRead(projectId: string, senderType: string): Promise<number> {
     return 0;
+  }
+  
+  async getProjectsWithUnreadCounts(assignedTo?: string): Promise<Array<{ project: Project; unreadCount: number; lastMessageAt: Date | null }>> {
+    return [];
   }
 }
 
@@ -1091,6 +1101,11 @@ export class DatabaseStorage implements IStorage {
     const [found] = await db.select().from(clientAuthTokens).where(eq(clientAuthTokens.email, email.toLowerCase()));
     return found || undefined;
   }
+  
+  async getClientAuthTokenByProjectId(projectId: string): Promise<ClientAuthToken | undefined> {
+    const [found] = await db.select().from(clientAuthTokens).where(eq(clientAuthTokens.projectId, projectId));
+    return found || undefined;
+  }
 
   async deleteClientAuthToken(id: string): Promise<boolean> {
     const result = await db.delete(clientAuthTokens).where(eq(clientAuthTokens.id, id));
@@ -1112,6 +1127,77 @@ export class DatabaseStorage implements IStorage {
       .set({ isRead: true })
       .where(sql`${clientMessages.projectId} = ${projectId} AND ${clientMessages.senderType} = ${senderType}`);
     return result.rowCount || 0;
+  }
+  
+  async getProjectsWithUnreadCounts(assignedTo?: string): Promise<Array<{ project: Project; unreadCount: number; lastMessageAt: Date | null }>> {
+    // Build the query condition
+    const assignedCondition = assignedTo 
+      ? sql`${projects.clientEmail} IS NOT NULL AND ${projects.assignedTo} = ${assignedTo}`
+      : sql`${projects.clientEmail} IS NOT NULL`;
+    
+    // Single aggregate query with LEFT JOIN to get all data at once
+    const aggregateQuery = await db.execute(sql`
+      SELECT 
+        p.*,
+        COALESCE(SUM(CASE WHEN cm.sender_type = 'client' AND cm.is_read = false THEN 1 ELSE 0 END), 0)::int as unread_count,
+        MAX(cm.created_at) as last_message_at
+      FROM projects p
+      LEFT JOIN client_messages cm ON p.id = cm.project_id
+      WHERE ${assignedCondition}
+      GROUP BY p.id
+      ORDER BY last_message_at DESC NULLS LAST, unread_count DESC
+    `);
+    
+    // Map the raw results to the expected format
+    const result: Array<{ project: Project; unreadCount: number; lastMessageAt: Date | null }> = [];
+    
+    for (const row of aggregateQuery.rows as any[]) {
+      // Reconstruct the project object from the row (using SQL column names from schema)
+      const project: Project = {
+        id: row.id,
+        clientName: row.client_name,
+        packageCount: row.package_count,
+        selectedCount: row.selected_count,
+        extras: row.extras,
+        extraPhotoPrice: row.extra_photo_price,
+        dueDate: row.due_date,
+        status: row.status,
+        invoicePaid: row.invoice_paid,
+        assignedTo: row.assigned_to,
+        rating: row.rating,
+        deliveredAt: row.delivered_at,
+        createdAt: row.created_at,
+        toEditRemaining: row.to_edit_remaining,
+        photosCompleted: row.photos_completed,
+        rolloverCount: row.rollover_count,
+        lastRolloverDate: row.last_rollover_date,
+        originalProjectId: row.original_project_id,
+        isRolloverShadow: row.is_rollover_shadow,
+        originalDueDate: row.original_due_date,
+        shootDate: row.shoot_date,
+        deliveryDueDate: row.delivery_due_date,
+        riskLevel: row.risk_level,
+        calendarEventId: row.calendar_event_id,
+        lastSyncedAt: row.last_synced_at,
+        createdFrom: row.created_from,
+        isLinkSent: row.is_link_sent,
+        linkSentAt: row.link_sent_at,
+        clientEmail: row.client_email,
+        extrasApproved: row.extras_approved,
+        extrasApprovedAt: row.extras_approved_at,
+        extrasApprovalToken: row.extras_approval_token,
+        deliveryEstimateEmailSentAt: row.delivery_estimate_email_sent_at,
+        projectAddedEmailSentAt: row.project_added_email_sent_at,
+      };
+      
+      result.push({
+        project,
+        unreadCount: Number(row.unread_count || 0),
+        lastMessageAt: row.last_message_at ? new Date(row.last_message_at) : null,
+      });
+    }
+    
+    return result;
   }
 }
 
