@@ -988,8 +988,14 @@ export function registerShoottrackerRoutes(app: Express): void {
       });
       
       // Send email notification to client if they have an email
+      // Only send if: 1) First message in conversation, OR 2) Last notification was > 1 hour ago
       if (project.clientEmail) {
         try {
+          // Check existing messages to determine if we should send notification
+          const existingMessages = await storage.getMessagesByProject(projectId);
+          const retoucherMessages = existingMessages.filter(m => m.senderType === 'retoucher');
+          const isFirstRetoucherMessage = retoucherMessages.length <= 1; // This message is the first or only one
+          
           // Get or create a chat token for this project/client
           let existingToken = await storage.getClientAuthTokenByProjectId(projectId);
           
@@ -1005,7 +1011,13 @@ export function registerShoottrackerRoutes(app: Express): void {
             existingToken = await storage.getClientAuthTokenByProjectId(projectId);
           }
           
-          if (existingToken) {
+          // Check time since last email notification (use token creation time as proxy)
+          // Only send email if first message or token was created > 1 hour ago
+          const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+          const shouldSendEmail = isFirstRetoucherMessage || 
+            (existingToken && new Date(existingToken.createdAt || 0) < oneHourAgo);
+          
+          if (existingToken && shouldSendEmail) {
             // Send notification email with chat link
             await sendMessageNotificationEmail(
               project.clientEmail,
@@ -1015,6 +1027,9 @@ export function registerShoottrackerRoutes(app: Express): void {
               message.trim(),
               existingToken.token
             );
+            console.log(`[Email] Notification sent - first message: ${isFirstRetoucherMessage}`);
+          } else {
+            console.log(`[Email] Skipped - conversation already active, client can see new messages in chat`);
           }
         } catch (emailError) {
           console.error("Failed to send email notification to client:", emailError);
