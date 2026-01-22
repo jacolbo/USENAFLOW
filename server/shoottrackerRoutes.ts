@@ -1006,14 +1006,26 @@ export function registerShoottrackerRoutes(app: Express): void {
           }
           
           if (existingToken) {
-            // Send notification email with chat link
+            // Fetch all messages to include in the email thread
+            const allMessages = await storage.getMessagesByProject(projectId);
+            
+            // Convert messages to thread format for email
+            const conversationThread = allMessages.map(msg => ({
+              content: msg.message,
+              senderType: (msg.senderType === 'client' ? 'client' : 'editor') as 'editor' | 'client',
+              sentAt: new Date(msg.createdAt),
+              senderName: msg.senderType === 'client' ? project.clientName : project.assignedTo || 'Your Retoucher'
+            }));
+            
+            // Send notification email with full conversation thread
             await sendMessageNotificationEmail(
               project.clientEmail,
               project.clientName,
               project.assignedTo || 'Your Retoucher',
               projectId,
               message.trim(),
-              existingToken.token
+              existingToken.token,
+              conversationThread
             );
           }
         } catch (emailError) {

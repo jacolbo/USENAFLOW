@@ -429,15 +429,24 @@ export async function sendChatLinkEmail(
   }
 }
 
-// Email 4: New Message Notification
-// Sent to client when retoucher sends them a message
+// Message type for conversation thread
+interface ThreadMessage {
+  content: string;
+  senderType: 'editor' | 'client';
+  sentAt: Date;
+  senderName?: string;
+}
+
+// Email 4: New Message Notification with Conversation Thread
+// Sent to client when retoucher sends them a message - includes full conversation history
 export async function sendMessageNotificationEmail(
   clientEmail: string,
   clientName: string,
   retoucherName: string,
   projectId: string,
-  messagePreview: string,
-  chatToken: string
+  newMessage: string,
+  chatToken: string,
+  conversationThread: ThreadMessage[] = []
 ): Promise<EmailResult> {
   const subject = `New Message from ${retoucherName} - Jepson Myles Studio`;
   
@@ -452,10 +461,46 @@ export async function sendMessageNotificationEmail(
     
     const chatUrl = `${baseUrl}/client-chat/${chatToken}`;
     
-    // Truncate message preview if too long
-    const truncatedMessage = messagePreview.length > 200 
-      ? messagePreview.substring(0, 200) + '...' 
-      : messagePreview;
+    // Format date/time for messages
+    const formatMessageTime = (date: Date): string => {
+      return new Date(date).toLocaleString('en-ZA', {
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    };
+    
+    // Build conversation thread HTML (oldest to newest, excluding the newest message which is shown separately)
+    let threadHtml = '';
+    if (conversationThread.length > 1) {
+      // Exclude the last message (it's the new one we're notifying about)
+      const previousMessages = conversationThread.slice(0, -1);
+      
+      if (previousMessages.length > 0) {
+        threadHtml = `
+          <div style="margin: 25px 0; padding: 15px; background: #fafafa; border-radius: 8px;">
+            <p style="color: #666; font-size: 12px; margin: 0 0 15px 0; text-transform: uppercase; letter-spacing: 1px;">Previous Messages</p>
+            ${previousMessages.map(msg => {
+              const isEditor = msg.senderType === 'editor';
+              const senderLabel = isEditor ? (msg.senderName || retoucherName) : clientName;
+              const bgColor = isEditor ? '#e8f5e9' : '#e3f2fd';
+              const borderColor = isEditor ? '#4caf50' : '#2196f3';
+              
+              return `
+                <div style="margin-bottom: 12px; padding: 12px 15px; background: ${bgColor}; border-left: 3px solid ${borderColor}; border-radius: 0 6px 6px 0;">
+                  <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
+                    <span style="font-weight: bold; color: #333; font-size: 13px;">${senderLabel}</span>
+                    <span style="color: #999; font-size: 11px;">${formatMessageTime(msg.sentAt)}</span>
+                  </div>
+                  <p style="color: #333; font-size: 14px; line-height: 1.5; margin: 0;">${msg.content}</p>
+                </div>
+              `;
+            }).join('')}
+          </div>
+        `;
+      }
+    }
     
     const htmlContent = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
@@ -472,21 +517,23 @@ export async function sendMessageNotificationEmail(
           <strong>${retoucherName}</strong> has sent you a new message about your project:
         </p>
         
-        <div style="background: #f5f5f5; border-left: 4px solid #25d366; padding: 15px 20px; margin: 20px 0; border-radius: 0 8px 8px 0;">
-          <p style="color: #333; font-size: 15px; line-height: 1.6; margin: 0; font-style: italic;">
-            "${truncatedMessage}"
+        <div style="background: #e8f5e9; border-left: 4px solid #25d366; padding: 15px 20px; margin: 20px 0; border-radius: 0 8px 8px 0;">
+          <div style="margin-bottom: 8px;">
+            <span style="font-weight: bold; color: #333; font-size: 14px;">${retoucherName}</span>
+            <span style="color: #999; font-size: 12px; margin-left: 10px;">Just now</span>
+          </div>
+          <p style="color: #333; font-size: 15px; line-height: 1.6; margin: 0;">
+            ${newMessage}
           </p>
         </div>
+        
+        ${threadHtml}
         
         <div style="text-align: center; margin: 30px 0;">
           <a href="${chatUrl}" style="display: inline-block; background: #25d366; color: white; text-decoration: none; padding: 15px 40px; border-radius: 30px; font-weight: bold; font-size: 16px;">
             💬 Reply Now
           </a>
         </div>
-        
-        <p style="color: #666; font-size: 14px; line-height: 1.6;">
-          You can also reply directly to this email and your message will be delivered to your retoucher.
-        </p>
         
         <p style="color: #333; font-size: 16px; line-height: 1.6;">
           Best,<br>
@@ -510,7 +557,7 @@ export async function sendMessageNotificationEmail(
 
     if (response.data?.id) {
       await logEmail(projectId, EmailType.MESSAGE_NOTIFICATION, clientEmail, subject, 'sent', response.data.id);
-      console.log(`[Email] Message notification sent to ${clientEmail}`);
+      console.log(`[Email] Message notification sent to ${clientEmail} with ${conversationThread.length} messages in thread`);
       return { success: true, messageId: response.data.id };
     }
 
