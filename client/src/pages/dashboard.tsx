@@ -19,9 +19,10 @@ import { WRUButton } from "@/components/WRUButton";
 import { useSSE } from "@/hooks/use-sse";
 import { User } from "@/lib/types";
 import { Project } from "@shared/schema";
-import { User as UserIcon, LogOut, Settings, Archive, ArrowRightLeft, DollarSign, AlertTriangle, Calendar, MessageCircle } from "lucide-react";
+import { User as UserIcon, LogOut, Settings, Archive, ArrowRightLeft, DollarSign, AlertTriangle, Calendar, MessageCircle, LayoutDashboard } from "lucide-react";
 import { useLocation } from "wouter";
 import logoImage from "@assets/USENA-FLOW_1754522507856.png";
+import { WidgetCustomizer, useWidgetPreferences } from "@/components/widget-customizer";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -583,6 +584,16 @@ export default function Dashboard() {
   const [showTradeModal, setShowTradeModal] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  
+  // Widget customization state - use user.id for stable per-user persistence
+  // user.id is set during login from userCredentials.id (e.g., "earl", "admin", "lucky")
+  const widgetUserId = user?.id || "";
+  const { 
+    widgetOrder, 
+    hiddenWidgets, 
+    isWidgetVisible, 
+    handlePreferencesChange 
+  } = useWidgetPreferences(widgetUserId, user?.role || "");
 
   // Initialize SSE for live sync and notifications
   const {
@@ -1021,6 +1032,13 @@ export default function Dashboard() {
                       isAdmin={user.role === "Admin"} 
                     />
 
+                    {/* Dashboard Customizer */}
+                    <WidgetCustomizer
+                      userId={widgetUserId}
+                      userRole={user.role}
+                      onPreferencesChange={handlePreferencesChange}
+                    />
+
                     {/* Archive Button */}
                     <Button 
                       variant={showArchive ? "default" : "outline"}
@@ -1189,65 +1207,144 @@ export default function Dashboard() {
         </div>
 
         <div className="space-y-8">  
-          {/* Daily Quote */}
-          <DailyQuote userId={user.value} />
-          
-          {/* Admin Personal Dashboard - Show assigned tasks for Anesu's Pops */}
-          {user.role === "Admin" && user.name === "Anesu's Pops" && !showArchive && (
-            <div className="bg-white rounded-lg shadow-sm">
-              <div className="px-6 py-4 border-b border-gray-200">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <UserIcon className="h-5 w-5 text-orange-600" />
-                    <h2 className="text-lg font-semibold text-gray-900">My Tasks</h2>
-                    <span className="text-sm text-gray-500">
-                      Projects assigned to me
-                    </span>
+          {/* Widgets rendered in user's preferred order */}
+          {widgetOrder.map((widgetId) => {
+            // Daily Quote Widget
+            if (widgetId === "daily_quote" && isWidgetVisible("daily_quote")) {
+              return <DailyQuote key={widgetId} userId={user.value} />;
+            }
+            
+            // My Tasks Widget - for Admin and retouchers
+            if (widgetId === "my_tasks" && isWidgetVisible("my_tasks") && !showArchive && 
+                (user.role === "Admin" || ["Retoucher1", "Retoucher2", "Retoucher3"].includes(user.role))) {
+              const myTasks = projects.filter(p => 
+                p.assignedTo && 
+                p.assignedTo.toLowerCase() === user.name.toLowerCase() && 
+                p.status !== "Delivered"
+              );
+              
+              return (
+                <div key={widgetId} className="bg-white rounded-lg shadow-sm">
+                  <div className="px-6 py-4 border-b border-gray-200">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <UserIcon className="h-5 w-5 text-orange-600" />
+                        <h2 className="text-lg font-semibold text-gray-900">My Tasks</h2>
+                        <span className="text-sm text-gray-500">
+                          Projects assigned to me
+                        </span>
+                      </div>
+                      <div className="text-sm text-gray-600">
+                        {myTasks.length} active task{myTasks.length !== 1 ? 's' : ''}
+                      </div>
+                    </div>
                   </div>
-                  <div className="text-sm text-gray-600">
-                    {projects.filter(p => 
-                      p.assignedTo && 
-                      p.assignedTo.toLowerCase() === user.name.toLowerCase() && 
-                      p.status !== "Delivered"
-                    ).length} active task{projects.filter(p => 
-                      p.assignedTo && 
-                      p.assignedTo.toLowerCase() === user.name.toLowerCase() && 
-                      p.status !== "Delivered"
-                    ).length !== 1 ? 's' : ''}
-                  </div>
-                </div>
-              </div>
-              <div className="px-6 py-4">
-                {(() => {
-                  const myTasks = projects.filter(p => 
-                    p.assignedTo && 
-                    p.assignedTo.toLowerCase() === user.name.toLowerCase() && 
-                    p.status !== "Delivered"
-                  );
-                  
-                  if (myTasks.length === 0) {
-                    return (
+                  <div className="px-6 py-4">
+                    {myTasks.length === 0 ? (
                       <div className="text-center py-8 text-gray-500">
                         No tasks currently assigned to you
                       </div>
-                    );
-                  }
-
-                  return (
+                    ) : (
+                      <TaskTable 
+                        projects={myTasks} 
+                        user={user} 
+                        allUsers={users} 
+                        isPersonalView={true}
+                      />
+                    )}
+                  </div>
+                </div>
+              );
+            }
+            
+            // ShootTracker Widget
+            if (widgetId === "shoottracker" && isWidgetVisible("shoottracker") && !showArchive && 
+                !showCommissions && !showExtraPhotosSales && !showComplaints) {
+              return (
+                <div key={widgetId} className="mb-6">
+                  <ShootTrackerWidget />
+                </div>
+              );
+            }
+            
+            // Team Analytics Widget
+            if (widgetId === "team_analytics" && isWidgetVisible("team_analytics") && !showArchive && 
+                !showCommissions && !showExtraPhotosSales && !showComplaints) {
+              return <TeamAnalytics key={widgetId} user={user} />;
+            }
+            
+            // Project Table Widget
+            if (widgetId === "project_table" && isWidgetVisible("project_table") && 
+                user.role !== "Sales" && user.role !== "Evans" && 
+                !showCommissions && !showExtraPhotosSales && !showComplaints) {
+              return <TaskTable key={widgetId} projects={projects} user={user} allUsers={users} />;
+            }
+            
+            // Pending Payments Widget (Sales only)
+            if (widgetId === "pending_payments" && isWidgetVisible("pending_payments") && 
+                user.role === "Sales" && !showExtraPhotosSales) {
+              const pendingPaymentProjects = projects.filter(p => p.status === "Awaiting Payment");
+              return (
+                <div key={widgetId} className="bg-white rounded-lg shadow-sm">
+                  <div className="px-6 py-4 border-b border-gray-200">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="w-3 h-3 rounded-full bg-orange-500"></div>
+                        <h2 className="text-lg font-semibold text-gray-900">Pending Payments</h2>
+                        <span className="text-sm text-gray-500">Awaiting client payment</span>
+                      </div>
+                      <div className="text-sm text-gray-600">
+                        {pendingPaymentProjects.length} project{pendingPaymentProjects.length !== 1 ? 's' : ''}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="px-6 py-4">
                     <TaskTable 
-                      projects={myTasks} 
+                      projects={pendingPaymentProjects} 
                       user={user} 
                       allUsers={users} 
                       isPersonalView={true}
                     />
-                  );
-                })()}
-              </div>
-            </div>
-          )}
+                  </div>
+                </div>
+              );
+            }
+            
+            // Ready for Delivery Widget (Sales only)
+            if (widgetId === "ready_delivery" && isWidgetVisible("ready_delivery") && 
+                user.role === "Sales" && !showExtraPhotosSales) {
+              const reviewProjects = projects.filter(p => p.status === "Review");
+              return (
+                <div key={widgetId} className="bg-white rounded-lg shadow-sm">
+                  <div className="px-6 py-4 border-b border-gray-200">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="w-3 h-3 rounded-full bg-red-500"></div>
+                        <h2 className="text-lg font-semibold text-gray-900">Ready for Delivery</h2>
+                        <span className="text-sm text-gray-500">Completed by retouchers</span>
+                      </div>
+                      <div className="text-sm text-gray-600">
+                        {reviewProjects.length} project{reviewProjects.length !== 1 ? 's' : ''}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="px-6 py-4">
+                    <TaskTable 
+                      projects={reviewProjects} 
+                      user={user} 
+                      allUsers={users} 
+                      isPersonalView={true}
+                    />
+                  </div>
+                </div>
+              );
+            }
+            
+            return null;
+          })}
 
           {/* Evans Complaints Calendar - Only content for Evans */}
-          {user.role === "Evans" ? (
+          {user.role === "Evans" && (
             <ComplaintsCalendar 
               complaints={complaints} 
               user={{
@@ -1274,121 +1371,50 @@ export default function Dashboard() {
                 }
               }}
             />
-          ) : user.role === "Sales" ? (
-            <>
-              {/* Extra Photos Sales View for Sales */}
-              {showExtraPhotosSales ? (
-                <ExtraPhotosSalesView projects={allProjects || []} />
-              ) : (
-            <div className="space-y-6">
-              {/* Pending Payments Section */}
-              <div className="bg-white rounded-lg shadow-sm">
-                <div className="px-6 py-4 border-b border-gray-200">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="w-3 h-3 rounded-full bg-orange-500"></div>
-                      <h2 className="text-lg font-semibold text-gray-900">Pending Payments</h2>
-                      <span className="text-sm text-gray-500">Awaiting client payment</span>
-                    </div>
-                    <div className="text-sm text-gray-600">
-                      {projects.filter(p => p.status === "Awaiting Payment").length} project{projects.filter(p => p.status === "Awaiting Payment").length !== 1 ? 's' : ''}
-                    </div>
-                  </div>
-                </div>
-                <div className="px-6 py-4">
-                  <TaskTable 
-                    projects={projects.filter(p => p.status === "Awaiting Payment")} 
-                    user={user} 
-                    allUsers={users} 
-                    isPersonalView={true}
-                  />
-                </div>
-              </div>
-
-              {/* Ready for Delivery Section */}
-              <div className="bg-white rounded-lg shadow-sm">
-                <div className="px-6 py-4 border-b border-gray-200">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="w-3 h-3 rounded-full bg-red-500"></div>
-                      <h2 className="text-lg font-semibold text-gray-900">Ready for Delivery</h2>
-                      <span className="text-sm text-gray-500">Completed by retouchers</span>
-                    </div>
-                    <div className="text-sm text-gray-600">
-                      {projects.filter(p => p.status === "Review").length} project{projects.filter(p => p.status === "Review").length !== 1 ? 's' : ''}
-                    </div>
-                  </div>
-                </div>
-                <div className="px-6 py-4">
-                  <TaskTable 
-                    projects={projects.filter(p => p.status === "Review")} 
-                    user={user} 
-                    allUsers={users} 
-                    isPersonalView={true}
-                  />
-                </div>
-              </div>
-            </div>
-              )}
-            </>
-          ) : (
-            <>
-              {/* Commission View for DataWrangler */}
-              {showCommissions && user.role === "DataWrangler" ? (
-                <CommissionView user={user} />
-              ) : (
-                <>
-                  {/* Archive Status Header for non-Sales roles */}
-                  <div className="bg-white rounded-lg shadow-sm p-4">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <Archive className="h-5 w-5 text-gray-600" />
-                        <h2 className="text-lg font-semibold">
-                          {user.role === "Admin" && user.name === "Anesu's Pops" && !showArchive ? 
-                            "All Projects" : 
-                            showArchive ? "Archive Projects" : "Current Projects"
-                          }
-                        </h2>
-                      </div>
-                      <div className="flex items-center gap-4">
-                        <div className="text-sm text-gray-600">
-                          {projects.length} project{projects.length !== 1 ? 's' : ''} {showArchive ? 'archived' : 'current'}
-                        </div>
-                        {!showArchive && (
-                          <div className="text-sm font-medium text-blue-600 bg-blue-50 px-3 py-1 rounded-full">
-                            📸 {projects.reduce((total, p) => total + (p.selectedCount || 0), 0)} photos total
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Show project creation form for non-Sales roles that can add projects - only in current view */}
-                  {!showArchive && user.role !== "Retoucher" && user.role !== "Sales" && (
-                    <AddProjectForm onAddProject={() => {}} user={user} />
-                  )}
-                </>
-              )}
-
-            </>
           )}
           
-          {/* Show the task table for the visible projects - only for non-Sales roles and not in commission view */}
-          {user.role !== "Sales" && user.role !== "Evans" && !showCommissions && !showExtraPhotosSales && !showComplaints && (
-            <TaskTable projects={projects} user={user} allUsers={users} />
+          {/* Extra Photos Sales View for Sales */}
+          {user.role === "Sales" && showExtraPhotosSales && (
+            <ExtraPhotosSalesView projects={allProjects || []} />
           )}
-
-          {/* ShootTracker Widget - for Admin, Sales, LeadRetoucher, DataWrangler */}
-          {!showArchive && !showCommissions && !showExtraPhotosSales && !showComplaints && 
-           ['Admin', 'Sales', 'LeadRetoucher', 'DataWrangler'].includes(user.role) && (
-            <div className="mb-6">
-              <ShootTrackerWidget />
-            </div>
+          
+          {/* Commission View for DataWrangler */}
+          {showCommissions && user.role === "DataWrangler" && (
+            <CommissionView user={user} />
           )}
+          
+          {/* Archive Status Header and Add Project Form for non-Sales, non-Evans roles */}
+          {user.role !== "Sales" && user.role !== "Evans" && !showCommissions && (
+            <>
+              <div className="bg-white rounded-lg shadow-sm p-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Archive className="h-5 w-5 text-gray-600" />
+                    <h2 className="text-lg font-semibold">
+                      {user.role === "Admin" && user.name === "Anesu's Pops" && !showArchive ? 
+                        "All Projects" : 
+                        showArchive ? "Archive Projects" : "Current Projects"
+                      }
+                    </h2>
+                  </div>
+                  <div className="flex items-center gap-4">
+                    <div className="text-sm text-gray-600">
+                      {projects.length} project{projects.length !== 1 ? 's' : ''} {showArchive ? 'archived' : 'current'}
+                    </div>
+                    {!showArchive && (
+                      <div className="text-sm font-medium text-blue-600 bg-blue-50 px-3 py-1 rounded-full">
+                        📸 {projects.reduce((total, p) => total + (p.selectedCount || 0), 0)} photos total
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
 
-          {/* Team Progress Analytics - only in current view and not in commission view */}
-          {!showArchive && !showCommissions && !showExtraPhotosSales && !showComplaints && user.role !== "Evans" && (
-            <TeamAnalytics user={user} />
+              {/* Show project creation form for non-Sales roles that can add projects - only in current view */}
+              {!showArchive && user.role !== "Retoucher" && (
+                <AddProjectForm onAddProject={() => {}} user={user} />
+              )}
+            </>
           )}
 
 

@@ -519,7 +519,7 @@ export interface WidgetConfig {
 
 export const AVAILABLE_WIDGETS: WidgetConfig[] = [
   { id: "daily_quote", name: "Daily Inspiration", description: "Motivational quote of the day", icon: "Quote", defaultEnabled: true, roles: ["Admin", "LeadRetoucher", "Retoucher1", "Retoucher2", "Retoucher3", "DataWrangler", "Sales", "Evans"] },
-  { id: "my_tasks", name: "My Tasks", description: "Projects assigned to you", icon: "User", defaultEnabled: true, roles: ["Retoucher1", "Retoucher2", "Retoucher3"] },
+  { id: "my_tasks", name: "My Tasks", description: "Projects assigned to you", icon: "User", defaultEnabled: true, roles: ["Admin", "Retoucher1", "Retoucher2", "Retoucher3"] },
   { id: "shoottracker", name: "ShootTracker", description: "Upcoming shoots and at-risk projects", icon: "Camera", defaultEnabled: true, roles: ["Admin", "Sales", "LeadRetoucher", "DataWrangler"] },
   { id: "team_analytics", name: "Team Analytics", description: "Team performance charts", icon: "BarChart3", defaultEnabled: true, roles: ["Admin", "LeadRetoucher", "Retoucher1", "Retoucher2", "Retoucher3", "DataWrangler", "Sales"] },
   { id: "project_table", name: "Project Table", description: "All projects overview", icon: "Table", defaultEnabled: true, roles: ["Admin", "LeadRetoucher", "Retoucher1", "Retoucher2", "Retoucher3", "DataWrangler"] },

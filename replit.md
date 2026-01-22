@@ -109,6 +109,23 @@ WhatsApp-style messaging interface enabling direct communication between editors
 - Editor auth: `verifyChatRequest` middleware using X-Usena-Role and X-Usena-User-Id headers
 - Client auth: Token-based via `?token=` query parameter, validated against `client_chat_tokens` table
 
+### Customizable Dashboard Widget System
+User-configurable dashboard allowing personalized widget visibility:
+- **Widget Customizer Panel**: Slide-out panel accessible via "Customize Dashboard" button in header
+- **Toggle Visibility**: Each widget can be shown/hidden using toggle switches
+- **Drag-and-Drop Reordering**: Widgets can be reordered via drag-and-drop in the customizer
+- **Role-Based Availability**: Widgets only appear for roles they're configured for
+- **Persistent Preferences**: User preferences stored in `dashboard_preferences` table, keyed by user ID
+- **Available Widgets**: Daily Quote, My Tasks, ShootTracker, Team Analytics, Project Table, Pending Payments, Ready for Delivery
+
+**Widget API Endpoints:**
+- `GET /api/dashboard/preferences/:userId` - Get user's widget preferences
+- `PUT /api/dashboard/preferences/:userId` - Update widget order and visibility
+
+**Widget Configuration:**
+- Defined in `AVAILABLE_WIDGETS` array in `shared/schema.ts`
+- Each widget has: id, name, description, icon, defaultEnabled, and roles array
+
 ## External Dependencies
 
 - **@tanstack/react-query**: Server state management.
