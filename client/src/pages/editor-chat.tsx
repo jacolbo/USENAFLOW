@@ -51,12 +51,16 @@ export default function EditorChat() {
     queryKey: ["/api/admin/chat/projects"],
     queryFn: async () => {
       const headers = getAdminHeaders(userRole, userId);
-      const response = await fetch("/api/admin/chat/projects", { headers });
+      // Add cache-busting timestamp to prevent stale data
+      const response = await fetch(`/api/admin/chat/projects?_t=${Date.now()}`, { 
+        headers,
+        cache: 'no-store'
+      });
       if (!response.ok) throw new Error("Failed to fetch projects");
       return response.json();
     },
     enabled: isAllowed,
-    refetchInterval: 5000,
+    refetchInterval: 3000,
   });
 
   const messagesQuery = useQuery<Message[]>({
@@ -64,12 +68,16 @@ export default function EditorChat() {
     queryFn: async () => {
       if (!selectedProjectId) return [];
       const headers = getAdminHeaders(userRole, userId);
-      const response = await fetch(`/api/admin/chat/project/${selectedProjectId}/messages`, { headers });
+      // Add cache-busting timestamp to prevent stale data
+      const response = await fetch(`/api/admin/chat/project/${selectedProjectId}/messages?_t=${Date.now()}`, { 
+        headers,
+        cache: 'no-store'
+      });
       if (!response.ok) throw new Error("Failed to fetch messages");
       return response.json();
     },
     enabled: isAllowed && !!selectedProjectId,
-    refetchInterval: 3000,
+    refetchInterval: 2000,
   });
 
   const sendMessageMutation = useMutation({

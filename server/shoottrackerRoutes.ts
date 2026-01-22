@@ -915,6 +915,10 @@ export function registerShoottrackerRoutes(app: Express): void {
       const assignedTo = isAdmin ? undefined : userId;
       
       const projectsWithCounts = await storage.getProjectsWithUnreadCounts(assignedTo);
+      // Disable caching to ensure unread counts are always fresh
+      res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
+      res.set('Pragma', 'no-cache');
+      res.set('Expires', '0');
       res.json(projectsWithCounts);
     } catch (error: any) {
       console.error("Error fetching projects with unread counts:", error);
@@ -942,6 +946,10 @@ export function registerShoottrackerRoutes(app: Express): void {
       const messages = await storage.getMessagesByProject(projectId);
       await storage.markMessagesAsRead(projectId, 'client');
       
+      // Disable caching to ensure fresh messages are always returned
+      res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
+      res.set('Pragma', 'no-cache');
+      res.set('Expires', '0');
       res.json(messages);
     } catch (error: any) {
       console.error("Error fetching chat messages:", error);
