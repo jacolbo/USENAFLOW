@@ -598,3 +598,129 @@ export function generateToken(): string {
   }
   return token;
 }
+
+// Email 5: Project Assignment Welcome Email
+// Sent automatically when a project is assigned to a retoucher - includes photos/extras and chat link
+export async function sendAssignmentWelcomeEmail(
+  clientEmail: string,
+  clientName: string,
+  retoucherName: string,
+  photosSelected: number,
+  extras: number,
+  projectId: string,
+  chatToken: string
+): Promise<EmailResult> {
+  const subject = `Your Photo Project is Now in Progress! - ${clientName}`;
+  
+  try {
+    const fromEmail = await getMyEmailAddress();
+    
+    const baseUrl = process.env.REPLIT_DEV_DOMAIN 
+      ? `https://${process.env.REPLIT_DEV_DOMAIN}`
+      : process.env.REPL_SLUG 
+        ? `https://${process.env.REPL_SLUG}.${process.env.REPL_OWNER}.repl.co`
+        : 'https://usenaflow.replit.app';
+    
+    const chatUrl = `${baseUrl}/client-chat/${chatToken}`;
+    
+    const hasExtras = extras > 0;
+    
+    const htmlContent = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+        <div style="text-align: center; margin-bottom: 30px;">
+          <h1 style="color: #1a1a1a; margin: 0;">Jepson Myles Studio</h1>
+          <p style="color: #666; margin: 5px 0 0 0;">Your Project is In Progress</p>
+        </div>
+        
+        <p style="color: #333; font-size: 16px; line-height: 1.6;">
+          Hi ${clientName}!
+        </p>
+        
+        <div style="background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%); border-radius: 12px; padding: 25px; margin: 25px 0;">
+          <p style="color: #2e7d32; font-size: 18px; line-height: 1.6; margin: 0;">
+            👋 I'm <strong>${retoucherName}</strong> and I'll be handling your photo project!
+          </p>
+        </div>
+        
+        <p style="color: #333; font-size: 16px; line-height: 1.6;">
+          Your project has been assigned and I'm excited to start working on your photos. Here are your project details:
+        </p>
+        
+        <div style="background: #f8f8f8; border-radius: 8px; padding: 20px; margin: 25px 0;">
+          <table style="width: 100%; border-collapse: collapse;">
+            <tr>
+              <td style="padding: 10px 0; color: #666; font-size: 15px;">📸 Photos Selected:</td>
+              <td style="padding: 10px 0; color: #333; font-weight: bold; text-align: right; font-size: 18px;">${photosSelected}</td>
+            </tr>
+            ${hasExtras ? `
+            <tr style="border-top: 1px solid #e0e0e0;">
+              <td style="padding: 10px 0; color: #e65100; font-size: 15px;">✨ Extra Photos:</td>
+              <td style="padding: 10px 0; color: #e65100; font-weight: bold; text-align: right; font-size: 18px;">+${extras}</td>
+            </tr>
+            <tr style="border-top: 1px solid #e0e0e0; background: #fff3e0;">
+              <td style="padding: 10px 0; color: #333; font-weight: bold; font-size: 15px;">Total Photos:</td>
+              <td style="padding: 10px 0; color: #333; font-weight: bold; text-align: right; font-size: 18px;">${photosSelected + extras}</td>
+            </tr>
+            ` : ''}
+          </table>
+        </div>
+        
+        <p style="color: #333; font-size: 16px; line-height: 1.6;">
+          If you have any questions, want to provide additional notes, or need to share reference images, you can chat with me directly using the button below:
+        </p>
+        
+        <div style="text-align: center; margin: 30px 0;">
+          <a href="${chatUrl}" style="display: inline-block; background: #25d366; color: white; text-decoration: none; padding: 15px 40px; border-radius: 30px; font-weight: bold; font-size: 16px;">
+            💬 Chat with ${retoucherName}
+          </a>
+        </div>
+        
+        <div style="background: #f0f7ff; border-radius: 8px; padding: 15px 20px; margin: 25px 0;">
+          <p style="color: #555; font-size: 14px; line-height: 1.6; margin: 0;">
+            <strong>💡 Tip:</strong> You can send text messages, images, voice notes, and files through the chat. It's the fastest way to communicate with your retoucher!
+          </p>
+        </div>
+        
+        <p style="color: #333; font-size: 16px; line-height: 1.6;">
+          Looking forward to delivering beautiful photos for you!
+        </p>
+        
+        <p style="color: #333; font-size: 16px; line-height: 1.6;">
+          Best regards,<br>
+          <strong>${retoucherName}</strong><br>
+          <span style="color: #666;">Jepson Myles Studio</span>
+        </p>
+        
+        <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;">
+        
+        <p style="color: #999; font-size: 12px; text-align: center;">
+          This is an automated message from Jepson Myles Studio.
+        </p>
+      </div>
+    `;
+
+    // Send via Gmail API
+    const response = await sendGmailEmail({
+      to: clientEmail,
+      subject,
+      html: htmlContent,
+      headers: {
+        'X-Project-Id': projectId,
+      }
+    });
+
+    if (response.success && response.messageId) {
+      await logEmail(projectId, EmailType.PROJECT_ASSIGNED, clientEmail, subject, 'sent', response.messageId);
+      console.log(`[Gmail] Assignment welcome email sent to ${clientEmail} for retoucher ${retoucherName}`);
+      return { success: true, messageId: response.messageId };
+    }
+
+    throw new Error(response.error || 'Unknown error from Gmail');
+
+  } catch (error: any) {
+    console.error(`[Email] Failed to send assignment welcome email:`, error);
+    const fallbackSubject = `Your Photo Project is Now in Progress! - ${clientName}`;
+    await logEmail(projectId, EmailType.PROJECT_ASSIGNED, clientEmail, fallbackSubject, 'failed', undefined, error.message);
+    return { success: false, error: error.message };
+  }
+}

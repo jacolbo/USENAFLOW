@@ -485,6 +485,7 @@ export const EmailType = {
   EXTRAS_APPROVAL: "extras_approval",
   CHAT_LINK: "chat_link",
   MESSAGE_NOTIFICATION: "message_notification",
+  PROJECT_ASSIGNED: "project_assigned",
 } as const;
 
 export type EmailTypeValue = typeof EmailType[keyof typeof EmailType];

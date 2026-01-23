@@ -8,6 +8,7 @@ import { registerObjectStorageRoutes } from "./replit_integrations/object_storag
 import type { Notification, WebSocketMessage } from "@shared/schema";
 import { triggerManualRollover, performManualRolloverToNextWeek, performManualRollbackFromNextWeek } from "./rolloverScheduler";
 import { registerShoottrackerRoutes } from "./shoottrackerRoutes";
+import { sendAssignmentWelcomeEmail, generateToken } from "./services/emailService";
 
 // Global WebSocket connections store
 const wsConnections = new Map<string, { ws: WebSocket, userId?: string }>();
@@ -214,7 +215,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         status,
       });
 
-      // Send assignment notification
+      // Send assignment notification to retoucher
       if (assignedTo && assignedTo !== "__UNASSIGN__") {
         const notification: Notification = {
           id: `notif_${Date.now()}_${Math.random()}`,
@@ -228,6 +229,56 @@ export async function registerRoutes(app: Express): Promise<Server> {
           read: false
         };
         broadcastNotification(notification, assignedTo);
+        
+        // Send welcome email to client with chat link (if client has email)
+        if (project.clientEmail && updatedProject) {
+          try {
+            // Get the retoucher's name (username is the display name in this system)
+            const retoucherUser = await storage.getUserByUsername(assignedTo);
+            const retoucherDisplayName = retoucherUser?.username || assignedTo;
+            
+            // Check for existing valid token, reuse if available
+            let chatToken: string;
+            const existingToken = await storage.getClientAuthTokenByProjectId(project.id);
+            
+            if (existingToken && new Date(existingToken.expiresAt) > new Date()) {
+              // Reuse existing valid token
+              chatToken = existingToken.token;
+            } else {
+              // Generate new chat token
+              chatToken = generateToken();
+              const expiresAt = new Date();
+              expiresAt.setDate(expiresAt.getDate() + 30); // 30 days expiry
+              
+              // Store the chat token
+              await storage.createClientAuthToken({
+                token: chatToken,
+                projectId: project.id,
+                email: project.clientEmail,
+                expiresAt,
+              });
+            }
+            
+            // Send the assignment welcome email
+            const photosSelected = updatedProject.selectedCount || 0;
+            const extras = updatedProject.extras || 0;
+            
+            await sendAssignmentWelcomeEmail(
+              project.clientEmail,
+              project.clientName,
+              retoucherDisplayName,
+              photosSelected,
+              extras,
+              project.id,
+              chatToken
+            );
+            
+            console.log(`[Email] Sent assignment welcome email to ${project.clientEmail} for project ${project.clientName} (retoucher: ${retoucherDisplayName})`);
+          } catch (emailError) {
+            console.error('[Email] Failed to send assignment welcome email:', emailError);
+            // Don't fail the assignment if email fails
+          }
+        }
       }
 
       if (updatedProject) {
