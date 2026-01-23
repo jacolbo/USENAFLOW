@@ -28,6 +28,7 @@ import {
   resolveTurnaroundDays,
   extractClientEmail,
 } from "./services/shoottrackerEngine";
+import { startReplyMonitor } from "./services/gmailReplyMonitor";
 import { fetchCalendarEvents, CalendarEvent, listCalendars } from "./services/googleCalendar";
 import { calculateRiskLevel } from "./services/riskCalculator";
 import { getAutoSyncStatus } from "./autoSyncScheduler";
@@ -1186,6 +1187,17 @@ export function registerShoottrackerRoutes(app: Express): void {
       res.status(500).json({ error: "Failed to process email reply" });
     }
   });
+
+  // Gmail reply monitor disabled - requires gmail.readonly permission
+  // which is not included in the current Gmail integration scope.
+  // Clients can still reply via the chat link in emails.
+  // To enable: reconnect Gmail with full inbox access permissions
+  // try {
+  //   startReplyMonitor(60); // Check every 60 seconds
+  //   console.log("✅ Gmail reply monitor started");
+  // } catch (error) {
+  //   console.log("⚠️ Gmail reply monitor not started (may not be configured)");
+  // }
 
   console.log("✅ ShootTracker routes registered");
 }
