@@ -163,3 +163,116 @@ export async function getEmailsFrom(senderEmail: string, maxResults: number = 20
 export async function getUnreadEmails(maxResults: number = 20) {
   return getRecentEmails('is:unread', maxResults);
 }
+
+// Get the authenticated user's email address
+export async function getMyEmailAddress(): Promise<string> {
+  try {
+    const gmail = await getGmailClient();
+    const profile = await gmail.users.getProfile({ userId: 'me' });
+    return profile.data.emailAddress || '';
+  } catch (error) {
+    console.error('[Gmail] Error getting email address:', error);
+    throw error;
+  }
+}
+
+// Create a raw email message for Gmail API
+function createRawEmail(options: {
+  to: string;
+  from: string;
+  subject: string;
+  html: string;
+  replyTo?: string;
+  headers?: Record<string, string>;
+}): string {
+  const boundary = `boundary_${Date.now()}`;
+  
+  let emailLines = [
+    `From: ${options.from}`,
+    `To: ${options.to}`,
+    `Subject: ${options.subject}`,
+    `MIME-Version: 1.0`,
+    `Content-Type: multipart/alternative; boundary="${boundary}"`,
+  ];
+  
+  if (options.replyTo) {
+    emailLines.push(`Reply-To: ${options.replyTo}`);
+  }
+  
+  if (options.headers) {
+    for (const [key, value] of Object.entries(options.headers)) {
+      emailLines.push(`${key}: ${value}`);
+    }
+  }
+  
+  emailLines.push('');
+  emailLines.push(`--${boundary}`);
+  emailLines.push('Content-Type: text/html; charset="UTF-8"');
+  emailLines.push('Content-Transfer-Encoding: quoted-printable');
+  emailLines.push('');
+  emailLines.push(options.html);
+  emailLines.push(`--${boundary}--`);
+  
+  const rawEmail = emailLines.join('\r\n');
+  
+  // Base64url encode the email
+  return Buffer.from(rawEmail)
+    .toString('base64')
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/, '');
+}
+
+// Send an email via Gmail API
+export async function sendEmail(options: {
+  to: string;
+  subject: string;
+  html: string;
+  replyTo?: string;
+  headers?: Record<string, string>;
+}): Promise<{ success: boolean; messageId?: string; error?: string }> {
+  try {
+    const gmail = await getGmailClient();
+    const fromEmail = await getMyEmailAddress();
+    
+    const raw = createRawEmail({
+      to: options.to,
+      from: `Jepson Myles Studio <${fromEmail}>`,
+      subject: options.subject,
+      html: options.html,
+      replyTo: options.replyTo,
+      headers: options.headers
+    });
+    
+    const response = await gmail.users.messages.send({
+      userId: 'me',
+      requestBody: {
+        raw
+      }
+    });
+    
+    console.log(`[Gmail] Email sent successfully to ${options.to}, messageId: ${response.data.id}`);
+    return { success: true, messageId: response.data.id || undefined };
+  } catch (error: any) {
+    console.error('[Gmail] Error sending email:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+// Mark an email as read
+export async function markAsRead(messageId: string) {
+  try {
+    const gmail = await getGmailClient();
+    await gmail.users.messages.modify({
+      userId: 'me',
+      id: messageId,
+      requestBody: {
+        removeLabelIds: ['UNREAD']
+      }
+    });
+    console.log(`[Gmail] Marked message ${messageId} as read`);
+  } catch (error) {
+    console.error('[Gmail] Error marking as read:', error);
+    throw error;
+  }
+}

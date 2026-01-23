@@ -1,9 +1,10 @@
-// Email service using Resend integration
+// Email service using Gmail and Resend integration
 import { Resend } from 'resend';
 import { db } from '../db';
 import { emailLogs, projects, EmailType, type EmailTypeValue } from '@shared/schema';
 import { eq } from 'drizzle-orm';
 import { formatDateYMD } from './shoottrackerEngine';
+import { sendEmail as sendGmailEmail, getMyEmailAddress } from './gmailService';
 
 let connectionSettings: any;
 
@@ -439,6 +440,7 @@ interface ThreadMessage {
 
 // Email 4: New Message Notification with Conversation Thread
 // Sent to client when retoucher sends them a message - includes full conversation history
+// Uses Gmail API instead of Resend for sending
 export async function sendMessageNotificationEmail(
   clientEmail: string,
   clientName: string,
@@ -451,7 +453,8 @@ export async function sendMessageNotificationEmail(
   const subject = `New Message from ${retoucherName} - Jepson Myles Studio`;
   
   try {
-    const { client, fromEmail } = await getResendClient();
+    // Get the Gmail sender address
+    const fromEmail = await getMyEmailAddress();
     
     const baseUrl = process.env.REPLIT_DEV_DOMAIN 
       ? `https://${process.env.REPLIT_DEV_DOMAIN}`
@@ -558,15 +561,12 @@ export async function sendMessageNotificationEmail(
       </div>
     `;
 
-    // Create a reply-to address that embeds the project ID for routing replies
-    // Format: reply+{projectId}@{domain} (uses plus addressing)
-    const fromDomain = fromEmail.split('@')[1] || 'jepsonmyles.com';
-    const replyToAddress = `reply+${projectId}@${fromDomain}`;
+    // Reply-to is the Gmail address itself (clients reply directly to Gmail)
+    // We'll monitor the inbox for replies
     
-    const response = await client.emails.send({
-      from: fromEmail,
+    // Send via Gmail API
+    const response = await sendGmailEmail({
       to: clientEmail,
-      replyTo: replyToAddress,
       subject,
       html: htmlContent,
       headers: {
@@ -574,13 +574,13 @@ export async function sendMessageNotificationEmail(
       }
     });
 
-    if (response.data?.id) {
-      await logEmail(projectId, EmailType.MESSAGE_NOTIFICATION, clientEmail, subject, 'sent', response.data.id);
-      console.log(`[Email] Message notification sent to ${clientEmail} with ${conversationThread.length} messages in thread, reply-to: ${replyToAddress}`);
-      return { success: true, messageId: response.data.id };
+    if (response.success && response.messageId) {
+      await logEmail(projectId, EmailType.MESSAGE_NOTIFICATION, clientEmail, subject, 'sent', response.messageId);
+      console.log(`[Gmail] Message notification sent to ${clientEmail} with ${conversationThread.length} messages in thread`);
+      return { success: true, messageId: response.messageId };
     }
 
-    throw new Error(response.error?.message || 'Unknown error from Resend');
+    throw new Error(response.error || 'Unknown error from Gmail');
 
   } catch (error: any) {
     console.error(`[Email] Failed to send message notification:`, error);
