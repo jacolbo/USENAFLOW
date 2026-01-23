@@ -4,7 +4,8 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Send, Loader2, MessageCircle, User, Camera, AlertCircle } from "lucide-react";
+import { useUpload } from "@/hooks/use-upload";
+import { Send, Loader2, MessageCircle, User, Camera, AlertCircle, Paperclip, Mic, FileText, Play, Pause, Download, X, Image, Video } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 
 interface Message {
@@ -15,6 +16,9 @@ interface Message {
   message: string;
   isRead: boolean;
   createdAt: string;
+  attachmentUrl?: string;
+  attachmentType?: 'image' | 'video' | 'audio' | 'file';
+  attachmentName?: string;
 }
 
 interface ProjectInfo {
@@ -24,14 +28,110 @@ interface ProjectInfo {
   clientEmail: string;
 }
 
+function AttachmentPreview({ url, type, name, isClient }: { url: string; type: string; name?: string; isClient: boolean }) {
+  const [isPlaying, setIsPlaying] = useState(false);
+  const audioRef = useRef<HTMLAudioElement>(null);
+
+  const handleAudioToggle = () => {
+    if (audioRef.current) {
+      if (isPlaying) {
+        audioRef.current.pause();
+      } else {
+        audioRef.current.play();
+      }
+      setIsPlaying(!isPlaying);
+    }
+  };
+
+  if (type === "image") {
+    return (
+      <a href={url} target="_blank" rel="noopener noreferrer" className="block mt-2">
+        <img src={url} alt={name || "Image"} className="max-w-full rounded-lg max-h-48 object-cover" />
+      </a>
+    );
+  }
+
+  if (type === "video") {
+    return (
+      <video controls className="max-w-full rounded-lg mt-2 max-h-48">
+        <source src={url} />
+        Your browser does not support video playback.
+      </video>
+    );
+  }
+
+  if (type === "audio") {
+    return (
+      <div className={`flex items-center gap-2 mt-2 rounded-full px-3 py-2 ${isClient ? 'bg-green-700' : 'bg-gray-100'}`}>
+        <audio ref={audioRef} src={url} onEnded={() => setIsPlaying(false)} className="hidden" />
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8 rounded-full"
+          onClick={handleAudioToggle}
+        >
+          {isPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+        </Button>
+        <span className="text-sm">{name || "Voice note"}</span>
+      </div>
+    );
+  }
+
+  return (
+    <a
+      href={url}
+      target="_blank"
+      rel="noopener noreferrer"
+      className={`flex items-center gap-2 mt-2 rounded-lg px-3 py-2 transition-colors ${
+        isClient ? 'bg-green-700 hover:bg-green-800' : 'bg-gray-100 hover:bg-gray-200'
+      }`}
+    >
+      <FileText className="h-4 w-4" />
+      <span className="text-sm truncate">{name || "File"}</span>
+      <Download className="h-4 w-4 ml-auto" />
+    </a>
+  );
+}
+
 export default function ClientChat() {
   const { token } = useParams();
   const [message, setMessage] = useState("");
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [email, setEmail] = useState("");
   const [authError, setAuthError] = useState("");
+  const [isRecording, setIsRecording] = useState(false);
+  const [pendingAttachment, setPendingAttachment] = useState<{
+    url: string;
+    type: "image" | "video" | "audio" | "file";
+    name: string;
+  } | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
   const queryClient = useQueryClient();
+
+  const { uploadFile, isUploading, progress } = useUpload({
+    onSuccess: (response) => {
+      const fileName = response.metadata.name;
+      const contentType = response.metadata.contentType;
+      let attachmentType: "image" | "video" | "audio" | "file" = "file";
+      
+      if (contentType.startsWith("image/")) attachmentType = "image";
+      else if (contentType.startsWith("video/")) attachmentType = "video";
+      else if (contentType.startsWith("audio/")) attachmentType = "audio";
+
+      setPendingAttachment({
+        url: response.objectPath,
+        type: attachmentType,
+        name: fileName,
+      });
+    },
+    onError: (error) => {
+      console.error("Upload failed:", error);
+    },
+  });
 
   const { data: authData, isLoading: authLoading } = useQuery<{
     valid: boolean;
@@ -50,11 +150,27 @@ export default function ClientChat() {
   });
 
   const sendMessageMutation = useMutation({
-    mutationFn: async (messageText: string) => {
+    mutationFn: async ({ 
+      messageText,
+      attachmentUrl,
+      attachmentType,
+      attachmentName,
+    }: { 
+      messageText: string;
+      attachmentUrl?: string;
+      attachmentType?: string;
+      attachmentName?: string;
+    }) => {
       const response = await fetch(`/api/client-chat/${token}/send`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: messageText, email }),
+        body: JSON.stringify({ 
+          message: messageText, 
+          email,
+          attachmentUrl,
+          attachmentType,
+          attachmentName,
+        }),
       });
       if (!response.ok) {
         const error = await response.json();
@@ -64,6 +180,7 @@ export default function ClientChat() {
     },
     onSuccess: () => {
       setMessage("");
+      setPendingAttachment(null);
       queryClient.invalidateQueries({ queryKey: ['/api/client-chat/messages', token] });
     },
   });
@@ -87,8 +204,58 @@ export default function ClientChat() {
 
   const handleSendMessage = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!message.trim()) return;
-    sendMessageMutation.mutate(message);
+    if ((!message.trim() && !pendingAttachment)) return;
+    
+    sendMessageMutation.mutate({ 
+      messageText: message.trim() || (pendingAttachment ? `Sent ${pendingAttachment.type}` : ""),
+      attachmentUrl: pendingAttachment?.url,
+      attachmentType: pendingAttachment?.type,
+      attachmentName: pendingAttachment?.name,
+    });
+  };
+
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      await uploadFile(file);
+    }
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  };
+
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mediaRecorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = mediaRecorder;
+      audioChunksRef.current = [];
+
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
+        }
+      };
+
+      mediaRecorder.onstop = async () => {
+        const audioBlob = new Blob(audioChunksRef.current, { type: "audio/webm" });
+        const audioFile = new File([audioBlob], `voice-note-${Date.now()}.webm`, { type: "audio/webm" });
+        stream.getTracks().forEach(track => track.stop());
+        await uploadFile(audioFile);
+      };
+
+      mediaRecorder.start();
+      setIsRecording(true);
+    } catch (error) {
+      console.error("Microphone access denied");
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.stop();
+      setIsRecording(false);
+    }
   };
 
   useEffect(() => {
@@ -206,7 +373,15 @@ export default function ClientChat() {
                       : 'bg-white text-gray-800 rounded-bl-md shadow'
                   }`}
                 >
-                  <p className="text-sm">{msg.message}</p>
+                  {msg.message && <p className="text-sm">{msg.message}</p>}
+                  {msg.attachmentUrl && msg.attachmentType && (
+                    <AttachmentPreview 
+                      url={msg.attachmentUrl} 
+                      type={msg.attachmentType} 
+                      name={msg.attachmentName}
+                      isClient={msg.senderType === 'client'}
+                    />
+                  )}
                   <p className={`text-xs mt-1 ${
                     msg.senderType === 'client' ? 'text-green-100' : 'text-gray-400'
                   }`}>
@@ -228,27 +403,91 @@ export default function ClientChat() {
       </main>
 
       <footer className="bg-white border-t p-4">
-        <form onSubmit={handleSendMessage} className="max-w-2xl mx-auto flex gap-2">
-          <Input
-            type="text"
-            placeholder="Type a message..."
-            value={message}
-            onChange={(e) => setMessage(e.target.value)}
-            className="flex-1"
-            disabled={sendMessageMutation.isPending}
-          />
-          <Button 
-            type="submit" 
-            className="bg-green-600 hover:bg-green-700"
-            disabled={sendMessageMutation.isPending || !message.trim()}
-          >
-            {sendMessageMutation.isPending ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Send className="h-4 w-4" />
-            )}
-          </Button>
-        </form>
+        <div className="max-w-2xl mx-auto">
+          {pendingAttachment && (
+            <div className="mb-3 p-2 bg-gray-100 rounded-lg flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                {pendingAttachment.type === "image" && <Image className="h-4 w-4" />}
+                {pendingAttachment.type === "video" && <Video className="h-4 w-4" />}
+                {pendingAttachment.type === "audio" && <Mic className="h-4 w-4" />}
+                {pendingAttachment.type === "file" && <FileText className="h-4 w-4" />}
+                <span className="text-sm truncate max-w-[200px]">{pendingAttachment.name}</span>
+              </div>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6"
+                onClick={() => setPendingAttachment(null)}
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+          )}
+
+          {isUploading && (
+            <div className="mb-3">
+              <div className="h-1 bg-gray-200 rounded-full overflow-hidden">
+                <div 
+                  className="h-full bg-green-600 transition-all duration-300"
+                  style={{ width: `${progress}%` }}
+                />
+              </div>
+              <p className="text-xs text-gray-500 mt-1">Uploading... {progress}%</p>
+            </div>
+          )}
+
+          <form onSubmit={handleSendMessage} className="flex gap-2">
+            <input
+              type="file"
+              ref={fileInputRef}
+              onChange={handleFileSelect}
+              className="hidden"
+              accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.txt"
+            />
+            
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={isUploading || sendMessageMutation.isPending}
+            >
+              <Paperclip className="h-5 w-5" />
+            </Button>
+
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              onClick={isRecording ? stopRecording : startRecording}
+              disabled={isUploading || sendMessageMutation.isPending}
+              className={isRecording ? "text-red-500 animate-pulse" : ""}
+            >
+              <Mic className="h-5 w-5" />
+            </Button>
+
+            <Input
+              type="text"
+              placeholder={isRecording ? "Recording..." : "Type a message..."}
+              value={message}
+              onChange={(e) => setMessage(e.target.value)}
+              className="flex-1"
+              disabled={sendMessageMutation.isPending || isRecording}
+            />
+            
+            <Button 
+              type="submit" 
+              className="bg-green-600 hover:bg-green-700"
+              disabled={sendMessageMutation.isPending || isRecording || (!message.trim() && !pendingAttachment)}
+            >
+              {sendMessageMutation.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Send className="h-4 w-4" />
+              )}
+            </Button>
+          </form>
+        </div>
       </footer>
     </div>
   );

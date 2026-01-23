@@ -7,10 +7,11 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from "@/hooks/use-toast";
+import { useUpload } from "@/hooks/use-upload";
 import { queryClient } from "@/lib/queryClient";
 import { getAdminHeaders } from "@/lib/adminAuth";
 import { UserRoles, type Project } from "@shared/schema";
-import { ArrowLeft, Send, MessageCircle, User, Clock, Loader2, Search, X } from "lucide-react";
+import { ArrowLeft, Send, MessageCircle, User, Clock, Loader2, Search, X, Paperclip, Mic, Video, Image, FileText, Play, Pause, Download } from "lucide-react";
 import { format, formatDistanceToNow } from "date-fns";
 
 interface Message {
@@ -22,6 +23,9 @@ interface Message {
   channel?: string;
   isRead: boolean;
   createdAt: string;
+  attachmentUrl?: string;
+  attachmentType?: "image" | "video" | "audio" | "file";
+  attachmentName?: string;
 }
 
 interface ProjectWithUnread {
@@ -32,13 +36,86 @@ interface ProjectWithUnread {
 
 const ALLOWED_ROLES = [UserRoles.ADMIN, UserRoles.LEAD_RETOUCHER, UserRoles.RETOUCHER_1, UserRoles.RETOUCHER_2, UserRoles.RETOUCHER_3, UserRoles.EVANS];
 
+function AttachmentPreview({ url, type, name }: { url: string; type: string; name?: string }) {
+  const [isPlaying, setIsPlaying] = useState(false);
+  const audioRef = useRef<HTMLAudioElement>(null);
+
+  const handleAudioToggle = () => {
+    if (audioRef.current) {
+      if (isPlaying) {
+        audioRef.current.pause();
+      } else {
+        audioRef.current.play();
+      }
+      setIsPlaying(!isPlaying);
+    }
+  };
+
+  if (type === "image") {
+    return (
+      <a href={url} target="_blank" rel="noopener noreferrer" className="block mt-2">
+        <img src={url} alt={name || "Image"} className="max-w-full rounded-lg max-h-48 object-cover" />
+      </a>
+    );
+  }
+
+  if (type === "video") {
+    return (
+      <video controls className="max-w-full rounded-lg mt-2 max-h-48">
+        <source src={url} />
+        Your browser does not support video playback.
+      </video>
+    );
+  }
+
+  if (type === "audio") {
+    return (
+      <div className="flex items-center gap-2 mt-2 bg-background/50 rounded-full px-3 py-2">
+        <audio ref={audioRef} src={url} onEnded={() => setIsPlaying(false)} className="hidden" />
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8 rounded-full"
+          onClick={handleAudioToggle}
+        >
+          {isPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+        </Button>
+        <span className="text-sm">{name || "Voice note"}</span>
+      </div>
+    );
+  }
+
+  return (
+    <a
+      href={url}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="flex items-center gap-2 mt-2 bg-background/50 rounded-lg px-3 py-2 hover:bg-background/70 transition-colors"
+    >
+      <FileText className="h-4 w-4" />
+      <span className="text-sm truncate">{name || "File"}</span>
+      <Download className="h-4 w-4 ml-auto" />
+    </a>
+  );
+}
+
 export default function EditorChat() {
   const [, navigate] = useLocation();
   const { toast } = useToast();
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [messageText, setMessageText] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
+  const [isRecording, setIsRecording] = useState(false);
+  const [pendingAttachment, setPendingAttachment] = useState<{
+    url: string;
+    type: "image" | "video" | "audio" | "file";
+    name: string;
+  } | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
   
   const storedRole = localStorage.getItem("usena_role") as string;
   const storedUserId = localStorage.getItem("usena_user_id") as string;
@@ -47,11 +124,32 @@ export default function EditorChat() {
 
   const isAllowed = ALLOWED_ROLES.includes(userRole as any);
 
+  const { uploadFile, isUploading, progress } = useUpload({
+    onSuccess: (response) => {
+      const fileName = response.metadata.name;
+      const contentType = response.metadata.contentType;
+      let attachmentType: "image" | "video" | "audio" | "file" = "file";
+      
+      if (contentType.startsWith("image/")) attachmentType = "image";
+      else if (contentType.startsWith("video/")) attachmentType = "video";
+      else if (contentType.startsWith("audio/")) attachmentType = "audio";
+
+      setPendingAttachment({
+        url: response.objectPath,
+        type: attachmentType,
+        name: fileName,
+      });
+      toast({ title: "File ready", description: "Click send to share the attachment" });
+    },
+    onError: (error) => {
+      toast({ title: "Upload failed", description: error.message, variant: "destructive" });
+    },
+  });
+
   const projectsQuery = useQuery<ProjectWithUnread[]>({
     queryKey: ["/api/admin/chat/projects"],
     queryFn: async () => {
       const headers = getAdminHeaders(userRole, userId);
-      // Add cache-busting timestamp to prevent stale data
       const response = await fetch(`/api/admin/chat/projects?_t=${Date.now()}`, { 
         headers,
         cache: 'no-store'
@@ -68,7 +166,6 @@ export default function EditorChat() {
     queryFn: async () => {
       if (!selectedProjectId) return [];
       const headers = getAdminHeaders(userRole, userId);
-      // Add cache-busting timestamp to prevent stale data
       const response = await fetch(`/api/admin/chat/project/${selectedProjectId}/messages?_t=${Date.now()}`, { 
         headers,
         cache: 'no-store'
@@ -81,7 +178,19 @@ export default function EditorChat() {
   });
 
   const sendMessageMutation = useMutation({
-    mutationFn: async ({ projectId, message }: { projectId: string; message: string }) => {
+    mutationFn: async ({ 
+      projectId, 
+      message,
+      attachmentUrl,
+      attachmentType,
+      attachmentName,
+    }: { 
+      projectId: string; 
+      message: string;
+      attachmentUrl?: string;
+      attachmentType?: string;
+      attachmentName?: string;
+    }) => {
       const headers = {
         ...getAdminHeaders(userRole, userId),
         "Content-Type": "application/json",
@@ -89,7 +198,12 @@ export default function EditorChat() {
       const response = await fetch(`/api/admin/chat/project/${projectId}/send`, {
         method: "POST",
         headers,
-        body: JSON.stringify({ message }),
+        body: JSON.stringify({ 
+          message,
+          attachmentUrl,
+          attachmentType,
+          attachmentName,
+        }),
       });
       if (!response.ok) {
         const data = await response.json();
@@ -99,6 +213,7 @@ export default function EditorChat() {
     },
     onSuccess: () => {
       setMessageText("");
+      setPendingAttachment(null);
       queryClient.invalidateQueries({ queryKey: ["/api/admin/chat/project", selectedProjectId, "messages"] });
       queryClient.invalidateQueries({ queryKey: ["/api/admin/chat/projects"] });
     },
@@ -115,8 +230,63 @@ export default function EditorChat() {
 
   const handleSendMessage = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!messageText.trim() || !selectedProjectId) return;
-    sendMessageMutation.mutate({ projectId: selectedProjectId, message: messageText.trim() });
+    if ((!messageText.trim() && !pendingAttachment) || !selectedProjectId) return;
+    
+    sendMessageMutation.mutate({ 
+      projectId: selectedProjectId, 
+      message: messageText.trim() || (pendingAttachment ? `Sent ${pendingAttachment.type}` : ""),
+      attachmentUrl: pendingAttachment?.url,
+      attachmentType: pendingAttachment?.type,
+      attachmentName: pendingAttachment?.name,
+    });
+  };
+
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      await uploadFile(file);
+    }
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  };
+
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mediaRecorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = mediaRecorder;
+      audioChunksRef.current = [];
+
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
+        }
+      };
+
+      mediaRecorder.onstop = async () => {
+        const audioBlob = new Blob(audioChunksRef.current, { type: "audio/webm" });
+        const audioFile = new File([audioBlob], `voice-note-${Date.now()}.webm`, { type: "audio/webm" });
+        stream.getTracks().forEach(track => track.stop());
+        await uploadFile(audioFile);
+      };
+
+      mediaRecorder.start();
+      setIsRecording(true);
+    } catch (error) {
+      toast({ 
+        title: "Microphone access denied", 
+        description: "Please allow microphone access to record voice notes",
+        variant: "destructive" 
+      });
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.stop();
+      setIsRecording(false);
+    }
   };
 
   const selectedProject = projectsQuery.data?.find(p => p.project.id === selectedProjectId);
@@ -269,7 +439,14 @@ export default function EditorChat() {
                               : "bg-muted rounded-bl-md"
                           }`}
                         >
-                          <p className="text-sm whitespace-pre-wrap">{msg.message}</p>
+                          {msg.message && <p className="text-sm whitespace-pre-wrap">{msg.message}</p>}
+                          {msg.attachmentUrl && msg.attachmentType && (
+                            <AttachmentPreview 
+                              url={msg.attachmentUrl} 
+                              type={msg.attachmentType} 
+                              name={msg.attachmentName}
+                            />
+                          )}
                           <div className={`text-xs mt-1 flex items-center gap-1 ${
                             msg.senderType === "retoucher" ? "text-primary-foreground/70" : "text-muted-foreground"
                           }`}>
@@ -286,24 +463,89 @@ export default function EditorChat() {
                 )}
               </ScrollArea>
 
-              <form onSubmit={handleSendMessage} className="p-4 border-t bg-card">
-                <div className="flex gap-2">
+              <div className="p-4 border-t bg-card">
+                {pendingAttachment && (
+                  <div className="mb-3 p-2 bg-muted rounded-lg flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      {pendingAttachment.type === "image" && <Image className="h-4 w-4" />}
+                      {pendingAttachment.type === "video" && <Video className="h-4 w-4" />}
+                      {pendingAttachment.type === "audio" && <Mic className="h-4 w-4" />}
+                      {pendingAttachment.type === "file" && <FileText className="h-4 w-4" />}
+                      <span className="text-sm truncate max-w-[200px]">{pendingAttachment.name}</span>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-6 w-6"
+                      onClick={() => setPendingAttachment(null)}
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                )}
+
+                {isUploading && (
+                  <div className="mb-3">
+                    <div className="h-1 bg-muted rounded-full overflow-hidden">
+                      <div 
+                        className="h-full bg-primary transition-all duration-300"
+                        style={{ width: `${progress}%` }}
+                      />
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1">Uploading... {progress}%</p>
+                  </div>
+                )}
+
+                <form onSubmit={handleSendMessage} className="flex gap-2">
+                  <input
+                    type="file"
+                    ref={fileInputRef}
+                    onChange={handleFileSelect}
+                    className="hidden"
+                    accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.txt"
+                  />
+                  
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={isUploading || sendMessageMutation.isPending}
+                  >
+                    <Paperclip className="h-5 w-5" />
+                  </Button>
+
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    onClick={isRecording ? stopRecording : startRecording}
+                    disabled={isUploading || sendMessageMutation.isPending}
+                    className={isRecording ? "text-red-500 animate-pulse" : ""}
+                  >
+                    <Mic className="h-5 w-5" />
+                  </Button>
+
                   <Input
                     value={messageText}
                     onChange={(e) => setMessageText(e.target.value)}
-                    placeholder="Type a message..."
+                    placeholder={isRecording ? "Recording..." : "Type a message..."}
                     className="flex-1"
-                    disabled={sendMessageMutation.isPending}
+                    disabled={sendMessageMutation.isPending || isRecording}
                   />
-                  <Button type="submit" disabled={!messageText.trim() || sendMessageMutation.isPending}>
+                  
+                  <Button 
+                    type="submit" 
+                    disabled={(!messageText.trim() && !pendingAttachment) || sendMessageMutation.isPending || isRecording}
+                  >
                     {sendMessageMutation.isPending ? (
                       <Loader2 className="h-4 w-4 animate-spin" />
                     ) : (
                       <Send className="h-4 w-4" />
                     )}
                   </Button>
-                </div>
-              </form>
+                </form>
+              </div>
             </>
           ) : (
             <div className="flex-1 flex items-center justify-center text-muted-foreground">

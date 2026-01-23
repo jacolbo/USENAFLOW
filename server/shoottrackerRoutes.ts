@@ -899,10 +899,11 @@ export function registerShoottrackerRoutes(app: Express): void {
   app.post("/api/client-chat/:token/send", async (req: Request, res: Response) => {
     try {
       const { token } = req.params;
-      const { message, email } = req.body;
+      const { message, email, attachmentUrl, attachmentType, attachmentName } = req.body;
       
-      if (!message || typeof message !== 'string' || !message.trim()) {
-        return res.status(400).json({ error: "Message is required" });
+      // Either message or attachment is required
+      if ((!message || typeof message !== 'string' || !message.trim()) && !attachmentUrl) {
+        return res.status(400).json({ error: "Message or attachment is required" });
       }
       
       const authToken = await storage.getClientAuthTokenByToken(token);
@@ -921,8 +922,11 @@ export function registerShoottrackerRoutes(app: Express): void {
         projectId: authToken.projectId,
         senderType: 'client',
         senderEmail: authToken.email.toLowerCase(),
-        message: message.trim(),
+        message: message?.trim() || '',
         isRead: false,
+        attachmentUrl: attachmentUrl || null,
+        attachmentType: attachmentType || null,
+        attachmentName: attachmentName || null,
       });
       
       res.json({ success: true, message: newMessage });
@@ -991,12 +995,13 @@ export function registerShoottrackerRoutes(app: Express): void {
   app.post("/api/admin/chat/project/:projectId/send", verifyChatRequest, async (req: Request, res: Response) => {
     try {
       const { projectId } = req.params;
-      const { message } = req.body;
+      const { message, attachmentUrl, attachmentType, attachmentName } = req.body;
       const role = req.headers["x-usena-role"] as string;
       const userId = req.headers["x-usena-user-id"] as string;
       
-      if (!message || typeof message !== 'string' || !message.trim()) {
-        return res.status(400).json({ error: "Message is required" });
+      // Either message or attachment is required
+      if ((!message || typeof message !== 'string' || !message.trim()) && !attachmentUrl) {
+        return res.status(400).json({ error: "Message or attachment is required" });
       }
       
       const project = await storage.getProject(projectId);
@@ -1014,8 +1019,11 @@ export function registerShoottrackerRoutes(app: Express): void {
         projectId,
         senderType: 'retoucher',
         senderEmail: userId || 'retoucher',
-        message: message.trim(),
+        message: message?.trim() || '',
         isRead: false,
+        attachmentUrl: attachmentUrl || null,
+        attachmentType: attachmentType || null,
+        attachmentName: attachmentName || null,
       });
       
       // Send email notification to client if they have an email

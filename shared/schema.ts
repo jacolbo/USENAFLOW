@@ -132,6 +132,9 @@ export const clientMessages = pgTable("client_messages", {
   message: text("message").notNull(),
   isRead: boolean("is_read").notNull().default(false),
   createdAt: timestamp("created_at").notNull().default(sql`now()`),
+  attachmentUrl: text("attachment_url"),
+  attachmentType: text("attachment_type"), // 'image', 'video', 'audio', 'file'
+  attachmentName: text("attachment_name"),
 });
 
 // Client authentication tokens for chat access

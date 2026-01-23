@@ -4,6 +4,7 @@ import { WebSocketServer, WebSocket } from "ws";
 import { storage } from "./storage";
 import { insertProjectSchema, updateProjectSchema, insertProjectNoteSchema, updateProjectNoteSchema, insertTradeOfferSchema, updateTradeOfferSchema, ProjectStatus, TradeOfferStatus } from "@shared/schema";
 import { ObjectStorageService, ObjectNotFoundError } from "./objectStorage";
+import { registerObjectStorageRoutes } from "./replit_integrations/object_storage";
 import type { Notification, WebSocketMessage } from "@shared/schema";
 import { triggerManualRollover, performManualRolloverToNextWeek, performManualRollbackFromNextWeek } from "./rolloverScheduler";
 import { registerShoottrackerRoutes } from "./shoottrackerRoutes";
@@ -1264,6 +1265,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Register ShootTracker routes (settings, sync, forecast, toggles)
   registerShoottrackerRoutes(app);
+
+  // Register object storage routes for file uploads
+  registerObjectStorageRoutes(app);
 
   // Dashboard preferences API
   app.get("/api/dashboard/preferences/:userId", async (req, res) => {
