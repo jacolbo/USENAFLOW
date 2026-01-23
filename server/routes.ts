@@ -231,11 +231,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         broadcastNotification(notification, assignedTo);
         
         // Send welcome email to client with chat link (if client has email)
+        console.log(`[Email Debug] Checking email conditions: clientEmail=${project.clientEmail}, updatedProject=${!!updatedProject}`);
         if (project.clientEmail && updatedProject) {
+          console.log(`[Email Debug] Conditions met, attempting to send welcome email to ${project.clientEmail}`);
           try {
             // Get the retoucher's name (username is the display name in this system)
             const retoucherUser = await storage.getUserByUsername(assignedTo);
             const retoucherDisplayName = retoucherUser?.username || assignedTo;
+            console.log(`[Email Debug] Retoucher display name: ${retoucherDisplayName}`);
             
             // Check for existing valid token, reuse if available
             let chatToken: string;
@@ -263,7 +266,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
             const photosSelected = updatedProject.selectedCount || 0;
             const extras = updatedProject.extras || 0;
             
-            await sendAssignmentWelcomeEmail(
+            console.log(`[Email Debug] Calling sendAssignmentWelcomeEmail with: email=${project.clientEmail}, client=${project.clientName}, retoucher=${retoucherDisplayName}, photos=${photosSelected}, extras=${extras}`);
+            
+            const emailResult = await sendAssignmentWelcomeEmail(
               project.clientEmail,
               project.clientName,
               retoucherDisplayName,
@@ -273,7 +278,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
               chatToken
             );
             
-            console.log(`[Email] Sent assignment welcome email to ${project.clientEmail} for project ${project.clientName} (retoucher: ${retoucherDisplayName})`);
+            console.log(`[Email Debug] sendAssignmentWelcomeEmail result:`, JSON.stringify(emailResult));
+            
+            if (emailResult.success) {
+              console.log(`[Email] Sent assignment welcome email to ${project.clientEmail} for project ${project.clientName} (retoucher: ${retoucherDisplayName})`);
+            } else {
+              console.error(`[Email] Failed to send assignment welcome email: ${emailResult.error}`);
+            }
           } catch (emailError) {
             console.error('[Email] Failed to send assignment welcome email:', emailError);
             // Don't fail the assignment if email fails
