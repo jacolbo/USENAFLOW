@@ -613,7 +613,7 @@ export async function sendAssignmentWelcomeEmail(
   const subject = `Your Photo Project is Now in Progress! - ${clientName}`;
   
   try {
-    const fromEmail = await getMyEmailAddress();
+    const { client, fromEmail } = await getResendClient();
     
     const baseUrl = process.env.REPLIT_DEV_DOMAIN 
       ? `https://${process.env.REPLIT_DEV_DOMAIN}`
@@ -699,23 +699,23 @@ export async function sendAssignmentWelcomeEmail(
       </div>
     `;
 
-    // Send via Gmail API
-    const response = await sendGmailEmail({
+    // Send via Resend API
+    const response = await client.emails.send({
+      from: fromEmail,
       to: clientEmail,
       subject,
       html: htmlContent,
-      headers: {
-        'X-Project-Id': projectId,
-      }
     });
 
-    if (response.success && response.messageId) {
-      await logEmail(projectId, EmailType.PROJECT_ASSIGNED, clientEmail, subject, 'sent', response.messageId);
-      console.log(`[Gmail] Assignment welcome email sent to ${clientEmail} for retoucher ${retoucherName}`);
-      return { success: true, messageId: response.messageId };
+    if (response.data?.id) {
+      await logEmail(projectId, EmailType.PROJECT_ASSIGNED, clientEmail, subject, 'sent', response.data.id);
+      console.log(`[Resend] Assignment welcome email sent to ${clientEmail} for retoucher ${retoucherName}`);
+      return { success: true, messageId: response.data.id };
+    } else {
+      const errorMsg = response.error?.message || 'Unknown error';
+      await logEmail(projectId, EmailType.PROJECT_ASSIGNED, clientEmail, subject, 'failed', undefined, errorMsg);
+      return { success: false, error: errorMsg };
     }
-
-    throw new Error(response.error || 'Unknown error from Gmail');
 
   } catch (error: any) {
     console.error(`[Email] Failed to send assignment welcome email:`, error);
