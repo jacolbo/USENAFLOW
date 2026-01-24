@@ -184,6 +184,70 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
+      // Check if project was just assigned to a retoucher (assignedTo changed from null/different to a new value)
+      const wasJustAssigned = validatedData.assignedTo && 
+        validatedData.assignedTo !== "__UNASSIGN__" && 
+        oldProject && 
+        oldProject.assignedTo !== validatedData.assignedTo;
+      
+      console.log(`[Assignment Check] wasJustAssigned=${wasJustAssigned}, newAssignedTo=${validatedData.assignedTo}, oldAssignedTo=${oldProject?.assignedTo}`);
+      
+      if (wasJustAssigned && oldProject?.clientEmail && validatedData.assignedTo) {
+        const assignedToRetoucher = validatedData.assignedTo;
+        console.log(`[Email] Project ${project.clientName} was just assigned to ${assignedToRetoucher}, sending welcome email to ${oldProject.clientEmail}`);
+        
+        try {
+          // Get the retoucher's display name
+          const retoucherUser = await storage.getUserByUsername(assignedToRetoucher);
+          const retoucherDisplayName = retoucherUser?.username || assignedToRetoucher;
+          
+          // Check for existing valid token, reuse if available
+          let chatToken: string;
+          const existingToken = await storage.getClientAuthTokenByProjectId(project.id);
+          
+          if (existingToken && new Date(existingToken.expiresAt) > new Date()) {
+            chatToken = existingToken.token;
+            console.log(`[Email] Reusing existing chat token for project ${project.id}`);
+          } else {
+            chatToken = generateToken();
+            const expiresAt = new Date();
+            expiresAt.setDate(expiresAt.getDate() + 30);
+            
+            await storage.createClientAuthToken({
+              token: chatToken,
+              projectId: project.id,
+              email: oldProject.clientEmail,
+              expiresAt,
+            });
+            console.log(`[Email] Created new chat token for project ${project.id}`);
+          }
+          
+          // Send the assignment welcome email
+          const photosSelected = project.selectedCount || 0;
+          const extras = project.extras || 0;
+          
+          console.log(`[Email] Sending assignment email: client=${project.clientName}, retoucher=${retoucherDisplayName}, photos=${photosSelected}, extras=${extras}`);
+          
+          const emailResult = await sendAssignmentWelcomeEmail(
+            oldProject.clientEmail,
+            project.clientName,
+            retoucherDisplayName,
+            photosSelected,
+            extras,
+            project.id,
+            chatToken
+          );
+          
+          if (emailResult.success) {
+            console.log(`[Email] Successfully sent assignment welcome email to ${oldProject.clientEmail}`);
+          } else {
+            console.error(`[Email] Failed to send assignment welcome email: ${emailResult.error}`);
+          }
+        } catch (emailError) {
+          console.error('[Email] Error sending assignment welcome email:', emailError);
+        }
+      }
+
       console.log('Broadcasting project update for:', project.clientName);
       broadcastProjectUpdate(project);
       res.json(project);
