@@ -8,6 +8,20 @@ import { sendEmail as sendGmailEmail, getMyEmailAddress } from './gmailService';
 
 let connectionSettings: any;
 
+// Get the base URL for email links - uses APP_URL in production, falls back to dev domain
+function getAppBaseUrl(): string {
+  // First check for explicit APP_URL (recommended for production)
+  if (process.env.APP_URL) {
+    return process.env.APP_URL.replace(/\/$/, ''); // Remove trailing slash
+  }
+  // Fall back to development domain
+  if (process.env.REPLIT_DEV_DOMAIN) {
+    return `https://${process.env.REPLIT_DEV_DOMAIN}`;
+  }
+  // Default fallback
+  return 'http://localhost:5000';
+}
+
 async function getCredentials() {
   const hostname = process.env.REPLIT_CONNECTORS_HOSTNAME;
   const xReplitToken = process.env.REPL_IDENTITY 
@@ -240,11 +254,7 @@ export async function sendProjectAddedEmail(
     const { client, fromEmail } = await getResendClient();
     
     const hasExtras = extras > 0;
-    const baseUrl = process.env.REPLIT_DEV_DOMAIN 
-      ? `https://${process.env.REPLIT_DEV_DOMAIN}`
-      : process.env.REPL_SLUG 
-        ? `https://${process.env.REPL_SLUG}.${process.env.REPL_OWNER}.repl.co`
-        : 'https://usenaflow.replit.app';
+    const baseUrl = getAppBaseUrl();
     
     const approvalUrl = `${baseUrl}/approve-extras/${approvalToken}`;
     
@@ -361,11 +371,7 @@ export async function sendChatLinkEmail(
   try {
     const { client, fromEmail } = await getResendClient();
     
-    const baseUrl = process.env.REPLIT_DEV_DOMAIN 
-      ? `https://${process.env.REPLIT_DEV_DOMAIN}`
-      : process.env.REPL_SLUG 
-        ? `https://${process.env.REPL_SLUG}.${process.env.REPL_OWNER}.repl.co`
-        : 'https://usenaflow.replit.app';
+    const baseUrl = getAppBaseUrl();
     
     const chatUrl = `${baseUrl}/client-chat/${chatToken}`;
     
@@ -469,11 +475,7 @@ export async function sendMessageNotificationEmail(
     // Get the Gmail sender address
     const fromEmail = await getMyEmailAddress();
     
-    const baseUrl = process.env.REPLIT_DEV_DOMAIN 
-      ? `https://${process.env.REPLIT_DEV_DOMAIN}`
-      : process.env.REPL_SLUG 
-        ? `https://${process.env.REPL_SLUG}.${process.env.REPL_OWNER}.repl.co`
-        : 'https://usenaflow.replit.app';
+    const baseUrl = getAppBaseUrl();
     
     const chatUrl = `${baseUrl}/client-chat/${chatToken}`;
     
@@ -628,11 +630,7 @@ export async function sendAssignmentWelcomeEmail(
   try {
     const { client, fromEmail } = await getResendClient();
     
-    const baseUrl = process.env.REPLIT_DEV_DOMAIN 
-      ? `https://${process.env.REPLIT_DEV_DOMAIN}`
-      : process.env.REPL_SLUG 
-        ? `https://${process.env.REPL_SLUG}.${process.env.REPL_OWNER}.repl.co`
-        : 'https://usenaflow.replit.app';
+    const baseUrl = getAppBaseUrl();
     
     const chatUrl = `${baseUrl}/client-chat/${chatToken}`;
     
