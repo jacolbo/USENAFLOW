@@ -44,13 +44,15 @@ export async function getResendClient() {
   const { apiKey, fromEmail } = await getCredentials();
   // Use verified domain email for sending (email.jepsonmyles.co.za)
   const verifiedFromEmail = 'Jepson Myles Studio <studio@email.jepsonmyles.co.za>';
-  // Reply-to goes to Gmail so the Gmail monitor can pick up client replies
-  const replyToEmail = 'jepsonmylesphotography@gmail.com';
   return {
     client: new Resend(apiKey),
-    fromEmail: verifiedFromEmail,
-    replyToEmail
+    fromEmail: verifiedFromEmail
   };
+}
+
+// Generate project-specific reply-to address for Resend inbound emails
+export function getProjectReplyToEmail(projectId: string): string {
+  return `reply+${projectId}@email.jepsonmyles.co.za`;
 }
 
 interface EmailResult {
@@ -189,8 +191,10 @@ export async function sendDeliveryEstimateEmail(
       </div>
     `;
 
+    const replyTo = getProjectReplyToEmail(projectId);
     const response = await client.emails.send({
       from: fromEmail,
+      replyTo: replyTo,
       to: clientEmail,
       subject,
       html: htmlContent,
@@ -312,8 +316,10 @@ export async function sendProjectAddedEmail(
       </div>
     `;
 
+    const replyTo = getProjectReplyToEmail(projectId);
     const response = await client.emails.send({
       from: fromEmail,
+      replyTo: replyTo,
       to: clientEmail,
       subject,
       html: htmlContent,
@@ -412,8 +418,10 @@ export async function sendChatLinkEmail(
       </div>
     `;
 
+    const replyTo = getProjectReplyToEmail(projectId);
     const response = await client.emails.send({
       from: fromEmail,
+      replyTo: replyTo,
       to: clientEmail,
       subject,
       html: htmlContent,
@@ -704,9 +712,11 @@ export async function sendAssignmentWelcomeEmail(
       </div>
     `;
 
-    // Send via Resend API
+    // Send via Resend API with project-specific reply-to for inbound email handling
+    const replyTo = getProjectReplyToEmail(projectId);
     const response = await client.emails.send({
       from: fromEmail,
+      replyTo: replyTo,
       to: clientEmail,
       subject,
       html: htmlContent,
@@ -714,7 +724,7 @@ export async function sendAssignmentWelcomeEmail(
 
     if (response.data?.id) {
       await logEmail(projectId, EmailType.PROJECT_ASSIGNED, clientEmail, subject, 'sent', response.data.id);
-      console.log(`[Resend] Assignment welcome email sent to ${clientEmail} for retoucher ${retoucherName}`);
+      console.log(`[Resend] Assignment welcome email sent to ${clientEmail} for retoucher ${retoucherName} (reply-to: ${replyTo})`);
       return { success: true, messageId: response.data.id };
     } else {
       const errorMsg = response.error?.message || 'Unknown error';
