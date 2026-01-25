@@ -23,6 +23,20 @@ function getAppBaseUrl(): string {
 }
 
 async function getCredentials() {
+  const isDeployment = process.env.REPLIT_DEPLOYMENT === '1';
+  
+  console.log(`[Resend] Getting credentials (deployment: ${isDeployment})`);
+  
+  // First, check for direct RESEND_API_KEY secret (fallback for production)
+  if (process.env.RESEND_API_KEY) {
+    console.log('[Resend] Using RESEND_API_KEY environment variable');
+    return {
+      apiKey: process.env.RESEND_API_KEY,
+      fromEmail: 'Jepson Myles Studio <studio@email.jepsonmyles.co.za>'
+    };
+  }
+  
+  // Try connector API
   const hostname = process.env.REPLIT_CONNECTORS_HOSTNAME;
   const xReplitToken = process.env.REPL_IDENTITY 
     ? 'repl ' + process.env.REPL_IDENTITY 
@@ -30,27 +44,63 @@ async function getCredentials() {
     ? 'depl ' + process.env.WEB_REPL_RENEWAL 
     : null;
 
+  console.log(`[Resend] Environment check:`);
+  console.log(`  - REPLIT_DEPLOYMENT: ${process.env.REPLIT_DEPLOYMENT || 'not set'}`);
+  console.log(`  - REPLIT_CONNECTORS_HOSTNAME: ${hostname || 'not set'}`);
+  console.log(`  - REPL_IDENTITY exists: ${!!process.env.REPL_IDENTITY}`);
+  console.log(`  - WEB_REPL_RENEWAL exists: ${!!process.env.WEB_REPL_RENEWAL}`);
+  console.log(`  - Token type: ${xReplitToken ? xReplitToken.substring(0, 10) + '...' : 'none'}`);
+
   if (!xReplitToken) {
-    throw new Error('X_REPLIT_TOKEN not found for repl/depl');
+    throw new Error('[Resend] X_REPLIT_TOKEN not found - neither REPL_IDENTITY nor WEB_REPL_RENEWAL is set. Add RESEND_API_KEY secret as fallback.');
   }
 
-  connectionSettings = await fetch(
-    'https://' + hostname + '/api/v2/connection?include_secrets=true&connector_names=resend',
-    {
+  try {
+    const url = `https://${hostname}/api/v2/connection?include_secrets=true&connector_names=resend`;
+    console.log(`[Resend] Fetching credentials from: ${url}`);
+    
+    const response = await fetch(url, {
       headers: {
         'Accept': 'application/json',
         'X_REPLIT_TOKEN': xReplitToken
       }
+    });
+    
+    console.log(`[Resend] Connector API response status: ${response.status} ${response.statusText}`);
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`[Resend] Connector API error: ${errorText}`);
+      throw new Error(`Connector API returned ${response.status}: ${errorText}`);
     }
-  ).then(res => res.json()).then(data => data.items?.[0]);
+    
+    const data = await response.json();
+    console.log(`[Resend] Connector API response structure:`);
+    console.log(`  - Has items array: ${!!data.items}`);
+    console.log(`  - Items count: ${data.items?.length || 0}`);
+    
+    connectionSettings = data.items?.[0];
+    
+    if (connectionSettings) {
+      console.log(`[Resend] First connection:`);
+      console.log(`  - Has settings: ${!!connectionSettings.settings}`);
+      console.log(`  - Has api_key: ${!!connectionSettings.settings?.api_key}`);
+    }
 
-  if (!connectionSettings || (!connectionSettings.settings.api_key)) {
-    throw new Error('Resend not connected');
+    if (!connectionSettings || (!connectionSettings.settings?.api_key)) {
+      console.error('[Resend] Connector returned no API key. Please add RESEND_API_KEY secret as fallback.');
+      throw new Error('Resend connector returned no API key');
+    }
+    
+    console.log('[Resend] Successfully retrieved credentials from connector');
+    return {
+      apiKey: connectionSettings.settings.api_key, 
+      fromEmail: connectionSettings.settings.from_email
+    };
+  } catch (error: any) {
+    console.error(`[Resend] Failed to get credentials from connector: ${error.message}`);
+    throw new Error(`Resend not connected: ${error.message}. Add RESEND_API_KEY secret as fallback.`);
   }
-  return {
-    apiKey: connectionSettings.settings.api_key, 
-    fromEmail: connectionSettings.settings.from_email
-  };
 }
 
 // WARNING: Never cache this client - tokens expire
