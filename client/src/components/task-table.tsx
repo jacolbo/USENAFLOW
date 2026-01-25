@@ -38,7 +38,7 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
   
   // Helper function to check if user has retouching abilities
   const hasRetouchingAbilities = (userRole: string) => {
-    return ['Admin', 'LeadRetoucher', 'Retoucher'].includes(userRole);
+    return ['Admin', 'LeadRetoucher', 'Retoucher1', 'Retoucher2', 'Retoucher3', 'Retoucher'].includes(userRole);
   };
   
   // Fetch complaints for all projects to show report button status
@@ -885,7 +885,7 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
 
   // Filter projects for retouchers
   let visibleProjects = projects;
-  if (user.role === "Retoucher") {
+  if (['Retoucher1', 'Retoucher2', 'Retoucher3', 'Retoucher'].includes(user.role)) {
     visibleProjects = projects.filter(p => 
       p.assignedTo && 
       p.assignedTo.toLowerCase() === user.name.toLowerCase() &&
@@ -1881,7 +1881,7 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
                                     <SelectItem value="__UNASSIGN__">Unassign</SelectItem>
                                     {/* All retouchers + Admin as retoucher */}
                                     {allUsers
-                                      .filter(u => u.role === "Retoucher" || (u.role === "Admin" && u.name === "Anesu's Pops"))
+                                      .filter(u => ['Retoucher1', 'Retoucher2', 'Retoucher3', 'Retoucher'].includes(u.role) || (u.role === "Admin" && u.name === "Anesu's Pops"))
                                       .map(retoucher => (
                                         <SelectItem key={retoucher.value || retoucher.name} value={retoucher.name}>
                                           {retoucher.name}

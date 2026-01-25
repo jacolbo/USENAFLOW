@@ -607,9 +607,9 @@ export default function Dashboard() {
   // Session timeout duration (2 hours in milliseconds)
   const SESSION_TIMEOUT = 2 * 60 * 60 * 1000;
   const [users, setUsers] = useState<User[]>([
-    { id: "1", name: "Earl", role: "Retoucher", value: "Retoucher1", abbr: "EC" },
-    { id: "2", name: "Dr Asa", role: "Retoucher", value: "Retoucher2", abbr: "ASA" },
-    { id: "3", name: "Lucky", role: "Retoucher", value: "Retoucher3", abbr: "LM" },
+    { id: "1", name: "Earl", role: "Retoucher1", value: "Retoucher1", abbr: "EC" },
+    { id: "2", name: "Dr Asa", role: "Retoucher2", value: "Retoucher2", abbr: "ASA" },
+    { id: "3", name: "Lucky", role: "Retoucher3", value: "Retoucher3", abbr: "LM" },
     { id: "4", name: "Anesu's Pops", role: "Admin", value: "Admin", abbr: "AP" },
     { id: "5", name: "Evans", role: "Evans", value: "Evans", abbr: "EV" },
     // Default system users without IDs (cannot be edited/deleted)
@@ -626,10 +626,10 @@ export default function Dashboard() {
     { id: "sales", username: "sales", password: "sales420", role: "Sales", name: "Sales", abbreviation: "SAL" },
     { id: "workflow", username: "workflow", password: "Chabs360", role: "LeadRetoucher", name: "Workflow Manager", abbreviation: "WFM" },
     { id: "data", username: "data", password: "Data360", role: "DataWrangler", name: "Data Wrangler", abbreviation: "DW" },
-    { id: "earl", username: "earl", password: "earl123", role: "Retoucher", name: "Earl", abbreviation: "EC" },
-    { id: "asa", username: "asa", password: "asa123", role: "Retoucher", name: "Dr Asa", abbreviation: "ASA" },
+    { id: "earl", username: "earl", password: "earl123", role: "Retoucher1", name: "Earl", abbreviation: "EC" },
+    { id: "asa", username: "asa", password: "asa123", role: "Retoucher2", name: "Dr Asa", abbreviation: "ASA" },
     // Single working account for Lucky with all his projects
-    { id: "lucky", username: "lucky", password: "lucky123", role: "Retoucher", name: "Lucky", abbreviation: "LM" },
+    { id: "lucky", username: "lucky", password: "lucky123", role: "Retoucher3", name: "Lucky", abbreviation: "LM" },
     { id: "evans", username: "evans", password: "evans123", role: "Evans", name: "Evans", abbreviation: "EV" },
   ]);
 
@@ -1028,7 +1028,7 @@ export default function Dashboard() {
                     />
 
                     {/* Trade Offer Button for Retouchers and Admin */}
-                    {(user.role === "Retoucher" || user.role === "Admin") && (
+                    {(['Retoucher1', 'Retoucher2', 'Retoucher3', 'Retoucher'].includes(user.role) || user.role === "Admin") && (
                       <Button 
                         variant="outline"
                         size="sm"
@@ -1427,7 +1427,7 @@ export default function Dashboard() {
               </div>
 
               {/* Show project creation form for non-Sales roles that can add projects - only in current view */}
-              {!showArchive && user.role !== "Retoucher" && (
+              {!showArchive && !['Retoucher1', 'Retoucher2', 'Retoucher3', 'Retoucher'].includes(user.role) && (
                 <AddProjectForm onAddProject={() => {}} user={user} />
               )}
             </>

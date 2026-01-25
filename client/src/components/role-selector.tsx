@@ -19,7 +19,7 @@ export function RoleSelector({ user, onChangeRole, allUsers }: RoleSelectorProps
     if (user.value === "Retoucher3") return "Lucky (Retoucher 3)";
     
     // Custom users
-    if (user.role === "Retoucher") return `${user.name} (${user.role})`;
+    if (["Retoucher1", "Retoucher2", "Retoucher3", "Retoucher"].includes(user.role)) return `${user.name} (Retoucher)`;
     return `${user.name} (${user.role})`;
   };
 

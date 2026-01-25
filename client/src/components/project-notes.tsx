@@ -154,7 +154,7 @@ export function ProjectNotes({ projectId, userRole, hasNotes }: ProjectNotesProp
 
   // ONLY NOW check permissions after ALL hooks are declared
   const canManageNotes = ["Admin", "Sales", "DataWrangler"].includes(userRole);
-  const isRetoucher = ["Retoucher"].includes(userRole);
+  const isRetoucher = ["Retoucher1", "Retoucher2", "Retoucher3", "Retoucher"].includes(userRole);
   
   // Early return for retouchers without notes - AFTER all hooks
   if (isRetoucher && !hasNotes) {
