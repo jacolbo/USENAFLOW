@@ -749,10 +749,21 @@ export default function Dashboard() {
     }).length;
   };
 
+  // Valid roles that should have access to different features
+  const VALID_RETOUCHER_ROLES = ['Retoucher1', 'Retoucher2', 'Retoucher3'];
+  const VALID_ROLES = ['Admin', 'LeadRetoucher', 'Sales', 'DataWrangler', 'Evans', ...VALID_RETOUCHER_ROLES];
+
   // Check for existing session on component mount and periodically
   useEffect(() => {
     const storedUser = getStoredSession();
     if (storedUser && !user) {
+      // Validate that the stored role is still valid - clear stale sessions with outdated roles
+      if (!VALID_ROLES.includes(storedUser.role)) {
+        console.log('Clearing stale session with invalid role:', storedUser.role);
+        clearSession();
+        return;
+      }
+      
       setUser(storedUser);
       // Sync with users array for consistency
       const existingUserIndex = users.findIndex(u => u.name === storedUser.name);
