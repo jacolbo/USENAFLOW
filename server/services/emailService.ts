@@ -44,9 +44,12 @@ export async function getResendClient() {
   const { apiKey, fromEmail } = await getCredentials();
   // Use verified domain email for sending (email.jepsonmyles.co.za)
   const verifiedFromEmail = 'Jepson Myles Studio <studio@email.jepsonmyles.co.za>';
+  // Reply-to goes to Gmail so the Gmail monitor can pick up client replies
+  const replyToEmail = 'jepsonmylesphotography@gmail.com';
   return {
     client: new Resend(apiKey),
-    fromEmail: verifiedFromEmail
+    fromEmail: verifiedFromEmail,
+    replyToEmail
   };
 }
 
