@@ -1104,9 +1104,18 @@ export function registerShoottrackerRoutes(app: Express): void {
       
       console.log("[Email Webhook] Received inbound email:", JSON.stringify(req.body, null, 2));
       
-      const { from, to, subject, text, html } = req.body;
+      // Resend wraps inbound emails in an event structure
+      // Handle both direct format and event wrapper format
+      let emailData = req.body;
+      if (req.body.type === 'email.received' && req.body.data) {
+        emailData = req.body.data;
+        console.log("[Email Webhook] Extracted email data from event wrapper");
+      }
+      
+      const { from, to, subject, text, html } = emailData;
       
       if (!from || !to) {
+        console.log("[Email Webhook] Missing from or to fields in:", emailData);
         return res.status(400).json({ error: "Missing required fields" });
       }
       
