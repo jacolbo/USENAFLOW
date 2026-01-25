@@ -42,9 +42,11 @@ async function getCredentials() {
 // WARNING: Never cache this client - tokens expire
 export async function getResendClient() {
   const { apiKey, fromEmail } = await getCredentials();
+  // Use verified domain email for sending (email.jepsonmyles.co.za)
+  const verifiedFromEmail = 'Jepson Myles Studio <studio@email.jepsonmyles.co.za>';
   return {
     client: new Resend(apiKey),
-    fromEmail
+    fromEmail: verifiedFromEmail
   };
 }
 
