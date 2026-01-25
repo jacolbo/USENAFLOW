@@ -509,7 +509,7 @@ interface ThreadMessage {
 
 // Email 4: New Message Notification with Conversation Thread
 // Sent to client when retoucher sends them a message - includes full conversation history
-// Uses Gmail API instead of Resend for sending
+// Uses Resend API for sending
 export async function sendMessageNotificationEmail(
   clientEmail: string,
   clientName: string,
@@ -522,8 +522,8 @@ export async function sendMessageNotificationEmail(
   const subject = `New Message from ${retoucherName} - Jepson Myles Studio`;
   
   try {
-    // Get the Gmail sender address
-    const fromEmail = await getMyEmailAddress();
+    // Get Resend client
+    const { client, fromEmail } = await getResendClient();
     
     const baseUrl = getAppBaseUrl();
     
@@ -626,26 +626,25 @@ export async function sendMessageNotificationEmail(
       </div>
     `;
 
-    // Reply-to is the Gmail address itself (clients reply directly to Gmail)
-    // We'll monitor the inbox for replies
-    
-    // Send via Gmail API
-    const response = await sendGmailEmail({
+    // Send via Resend API with project-specific reply-to address
+    const replyTo = getProjectReplyToEmail(projectId);
+    const response = await client.emails.send({
+      from: fromEmail,
+      replyTo: replyTo,
       to: clientEmail,
       subject,
       html: htmlContent,
-      headers: {
-        'X-Project-Id': projectId,
-      }
     });
 
-    if (response.success && response.messageId) {
-      await logEmail(projectId, EmailType.MESSAGE_NOTIFICATION, clientEmail, subject, 'sent', response.messageId);
-      console.log(`[Gmail] Message notification sent to ${clientEmail} with ${conversationThread.length} messages in thread`);
-      return { success: true, messageId: response.messageId };
+    if (response.data?.id) {
+      await logEmail(projectId, EmailType.MESSAGE_NOTIFICATION, clientEmail, subject, 'sent', response.data.id);
+      console.log(`[Resend] Message notification sent to ${clientEmail} with ${conversationThread.length} messages in thread`);
+      return { success: true, messageId: response.data.id };
+    } else {
+      const errorMsg = response.error?.message || 'Unknown error';
+      await logEmail(projectId, EmailType.MESSAGE_NOTIFICATION, clientEmail, subject, 'failed', undefined, errorMsg);
+      return { success: false, error: errorMsg };
     }
-
-    throw new Error(response.error || 'Unknown error from Gmail');
 
   } catch (error: any) {
     console.error(`[Email] Failed to send message notification:`, error);
