@@ -794,9 +794,10 @@ export default function Dashboard() {
       timestamp: Date.now()
     };
     localStorage.setItem('usenaflow_session', JSON.stringify(sessionData));
-    // Also store role and user ID separately for editor chat authentication
+    // Also store role and user name separately for editor chat authentication
+    // Use user.name because project assignments use names, not IDs
     localStorage.setItem('usena_role', user.role);
-    localStorage.setItem('usena_user_id', user.id || user.name || '');
+    localStorage.setItem('usena_user_id', user.name || user.id || '');
   };
 
   const getStoredSession = () => {
@@ -816,10 +817,11 @@ export default function Dashboard() {
       }
       
       // Ensure chat auth keys are set (for backward compatibility)
+      // Use name because project assignments use names, not IDs
       const storedUser = sessionData.user;
       if (storedUser) {
         localStorage.setItem('usena_role', storedUser.role);
-        localStorage.setItem('usena_user_id', storedUser.id || storedUser.name || '');
+        localStorage.setItem('usena_user_id', storedUser.name || storedUser.id || '');
       }
       
       return storedUser;
