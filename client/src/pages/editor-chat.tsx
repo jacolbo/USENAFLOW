@@ -321,7 +321,7 @@ export default function EditorChat() {
   } : null;
 
   return (
-    <AppLayout currentUser={currentUserData}>
+    <AppLayout currentUser={currentUserData} unreadChatCount={totalUnread}>
       <PageHeader 
         title="Client Messages"
         description={totalUnread > 0 ? `${totalUnread} unread message${totalUnread !== 1 ? 's' : ''}` : "Chat with clients about their projects"}

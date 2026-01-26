@@ -177,8 +177,23 @@ export default function ShootTrackerSettings() {
       return response.json();
     },
     enabled: hasAccess,
+  });
+
+  // Query chat projects for unread count (for sidebar badge)
+  const chatRoles = ["Admin", "LeadRetoucher", "Retoucher1", "Retoucher2", "Retoucher3", "Evans"];
+  const { data: chatProjects = [] } = useQuery<Array<{ project: any; unreadCount: number }>>({
+    queryKey: ["/api/admin/chat/projects"],
+    queryFn: async () => {
+      const response = await fetch(`/api/admin/chat/projects`, {
+        headers: getAdminHeaders(userRole, userId),
+      });
+      if (!response.ok) return [];
+      return response.json();
+    },
+    enabled: hasAccess && chatRoles.includes(userRole),
     refetchInterval: 30000,
   });
+  const totalChatUnread = chatProjects.reduce((sum, p) => sum + p.unreadCount, 0);
 
   const form = useForm<ShoottrackerSettings>({
     resolver: zodResolver(shoottrackerSettingsSchema),
@@ -734,7 +749,7 @@ export default function ShootTrackerSettings() {
   } : null;
 
   return (
-    <AppLayout currentUser={currentUserData}>
+    <AppLayout currentUser={currentUserData} unreadChatCount={totalChatUnread}>
       <PageHeader 
         title="ShootTracker"
         description="Configure calendar sync and project scheduling"

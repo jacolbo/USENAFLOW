@@ -645,6 +645,25 @@ export default function Dashboard() {
     enabled: !!user && user.role === "Evans",
   });
 
+  // Query chat projects for unread count (for sidebar badge)
+  const chatRoles = ["Admin", "LeadRetoucher", "Retoucher1", "Retoucher2", "Retoucher3", "Evans"];
+  const { data: chatProjects = [] } = useQuery<Array<{ project: Project; unreadCount: number }>>({
+    queryKey: ["/api/admin/chat/projects"],
+    queryFn: async () => {
+      const response = await fetch(`/api/admin/chat/projects`, {
+        headers: {
+          "X-Usena-Role": user?.role || "",
+          "X-Usena-User-Id": user?.role || "",
+        },
+      });
+      if (!response.ok) return [];
+      return response.json();
+    },
+    enabled: !!user && chatRoles.includes(user.role),
+    refetchInterval: 30000,
+  });
+  const totalChatUnread = chatProjects.reduce((sum, p) => sum + p.unreadCount, 0);
+
   // Filter projects based on user role for shadow project visibility
   const visibleProjects = useMemo(() => {
     // For Sales users, only show original projects (not shadows)
@@ -1022,6 +1041,7 @@ export default function Dashboard() {
     <AppLayout 
       currentUser={user ? { name: user.name, role: user.role === "LeadRetoucher" ? "Workflow Manager" : user.role, abbreviation: user.abbr } : null}
       onLogout={handleLogout}
+      unreadChatCount={totalChatUnread}
     >
       {/* Page Header */}
       <PageHeader 

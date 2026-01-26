@@ -18,6 +18,7 @@ interface AppLayoutProps {
     abbreviation?: string;
   } | null;
   onLogout?: () => void;
+  unreadChatCount?: number;
 }
 
 interface NavItem {
@@ -25,15 +26,17 @@ interface NavItem {
   href: string;
   icon: typeof LayoutDashboard;
   roles?: string[];
+  showBadge?: boolean;
 }
 
 const navItems: NavItem[] = [
   { label: "Dashboard", href: "/", icon: LayoutDashboard },
   { label: "ShootTracker", href: "/shoottracker", icon: Calendar, roles: ["Admin", "LeadRetoucher"] },
-  { label: "Editor Chat", href: "/editor-chat", icon: MessageCircle, roles: ["Admin", "LeadRetoucher", "Retoucher1", "Retoucher2", "Retoucher3", "Evans"] },
+  { label: "Editor Chat", href: "/editor-chat", icon: MessageCircle, roles: ["Admin", "LeadRetoucher", "Retoucher1", "Retoucher2", "Retoucher3", "Evans"], showBadge: true },
+  { label: "Settings", href: "/settings", icon: Settings, roles: ["Admin", "LeadRetoucher"] },
 ];
 
-export function AppLayout({ children, currentUser, onLogout }: AppLayoutProps) {
+export function AppLayout({ children, currentUser, onLogout, unreadChatCount = 0 }: AppLayoutProps) {
   const [location] = useLocation();
   const [workspaceOpen, setWorkspaceOpen] = useState(false);
 
@@ -69,11 +72,17 @@ export function AppLayout({ children, currentUser, onLogout }: AppLayoutProps) {
         <nav className="flex-1 p-3 space-y-1">
           {filteredNavItems.map((item) => {
             const isActive = location === item.href;
+            const showBadgeCount = item.showBadge && unreadChatCount > 0;
             return (
               <Link key={item.href} href={item.href}>
                 <div className={cn("sidebar-item cursor-pointer", isActive && "active")}>
                   <item.icon className="w-4 h-4" />
-                  <span>{item.label}</span>
+                  <span className="flex-1">{item.label}</span>
+                  {showBadgeCount && (
+                    <span className="ml-auto bg-red-500 text-white text-xs font-medium px-1.5 py-0.5 rounded-full min-w-[18px] text-center">
+                      {unreadChatCount > 99 ? "99+" : unreadChatCount}
+                    </span>
+                  )}
                 </div>
               </Link>
             );
