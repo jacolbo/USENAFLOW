@@ -88,6 +88,17 @@ Use `getAdminHeaders(role, userId)` from `client/src/lib/adminAuth.ts`
 - Settings stored in database: `auto_sync_enabled`, `auto_sync_interval_minutes`, `last_auto_sync_at`
 - API endpoint: `GET /api/admin/shoottracker/autosync-status` - Get current auto-sync status
 
+**Weekly Delay Notification System:**
+- Automated scheduler runs every Thursday morning (8-9 AM)
+- Identifies clients whose photos were originally due next week but have been rolled over to the following week
+- Calculates exact delay in working days (excludes weekends and holidays)
+- Sends branded delay notification emails to affected clients with original and new delivery dates
+- Prevents duplicate emails (only sends once per project per week)
+- Failed sends can be retried within the same week
+- API endpoints:
+  - `GET /api/admin/shoottracker/delay-check/preview` - Preview delayed projects without sending emails
+  - `POST /api/admin/shoottracker/delay-check/send` - Manually trigger delay notifications
+
 ### Client-Editor Communication System
 WhatsApp-style messaging interface enabling direct communication between editors and clients:
 - **Editor Chat Dashboard**: `/editor-chat` route with WhatsApp Web-style layout (project list + conversation view)
