@@ -1,6 +1,8 @@
 import { Storage, File } from "@google-cloud/storage";
 import { Response } from "express";
 import { randomUUID } from "crypto";
+import * as fs from "fs";
+import * as path from "path";
 // Simple object storage without ACL for basic file serving
 // import {
 //   ObjectAclPolicy,
@@ -208,6 +210,50 @@ export class ObjectStorageService {
     aclPolicy?: any
   ): Promise<string> {
     return this.normalizeObjectEntityPath(rawPath);
+  }
+
+  // Upload a file to the public folder
+  async uploadPublicFile(
+    localFilePath: string,
+    destinationFileName: string,
+    contentType: string = "image/png"
+  ): Promise<string> {
+    const publicPaths = this.getPublicObjectSearchPaths();
+    if (publicPaths.length === 0) {
+      throw new Error("No public object storage paths configured");
+    }
+
+    // Use the first public path
+    const publicPath = publicPaths[0];
+    const { bucketName, objectName: basePath } = parseObjectPath(publicPath);
+    
+    const bucket = objectStorageClient.bucket(bucketName);
+    const file = bucket.file(`${basePath}/${destinationFileName}`);
+    
+    const fileBuffer = fs.readFileSync(localFilePath);
+    
+    await file.save(fileBuffer, {
+      contentType,
+      metadata: {
+        cacheControl: "public, max-age=31536000", // 1 year cache
+      },
+    });
+    
+    // Return the public URL
+    return `https://storage.googleapis.com/${bucketName}/${basePath}/${destinationFileName}`;
+  }
+
+  // Get the public URL for a file in the public folder
+  getPublicFileUrl(fileName: string): string {
+    const publicPaths = this.getPublicObjectSearchPaths();
+    if (publicPaths.length === 0) {
+      return "";
+    }
+    
+    const publicPath = publicPaths[0];
+    const { bucketName, objectName: basePath } = parseObjectPath(publicPath);
+    
+    return `https://storage.googleapis.com/${bucketName}/${basePath}/${fileName}`;
   }
 
   // Simplified access check - allow all for notes

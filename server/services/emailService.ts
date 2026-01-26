@@ -176,6 +176,40 @@ function formatDateForEmail(date: Date): string {
   return date.toLocaleDateString('en-ZA', options);
 }
 
+// Get the logo URL for emails
+function getLogoUrl(): string {
+  // Use the app's public route to serve the logo (handles auth properly)
+  const baseUrl = getAppBaseUrl();
+  return `${baseUrl}/public/jepson-myles-logo.png`;
+}
+
+// Generate email header with logo
+function getEmailHeader(subtitle: string = ''): string {
+  const logoUrl = getLogoUrl();
+  const baseUrl = getAppBaseUrl();
+  
+  if (logoUrl) {
+    return `
+      <div style="text-align: center; margin-bottom: 30px;">
+        <a href="${baseUrl}" style="text-decoration: none;">
+          <img src="${logoUrl}" alt="Jepson Myles Studio" style="max-width: 200px; height: auto; margin-bottom: 10px;" />
+        </a>
+        ${subtitle ? `<p style="color: #666; margin: 5px 0 0 0; font-size: 14px;">${subtitle}</p>` : ''}
+      </div>
+    `;
+  }
+  
+  // Fallback to text header if no logo
+  return `
+    <div style="text-align: center; margin-bottom: 30px;">
+      <a href="${baseUrl}" style="text-decoration: none;">
+        <h1 style="color: #1a1a1a; margin: 0; font-size: 28px;">Jepson Myles Studio</h1>
+      </a>
+      ${subtitle ? `<p style="color: #666; margin: 5px 0 0 0; font-size: 14px;">${subtitle}</p>` : ''}
+    </div>
+  `;
+}
+
 // Calculate delivery week text (e.g., "Week of January 20, 2025")
 function getDeliveryWeekText(deliveryDueDate: Date): string {
   // Get start of week (Monday)
@@ -210,10 +244,7 @@ export async function sendDeliveryEstimateEmail(
     
     const htmlContent = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-        <div style="text-align: center; margin-bottom: 30px;">
-          <h1 style="color: #1a1a1a; margin: 0;">Jepson Myles Studio</h1>
-          <p style="color: #666; margin: 5px 0 0 0;">Photo Delivery Estimate</p>
-        </div>
+        ${getEmailHeader('Photo Delivery Estimate')}
         
         <p style="color: #333; font-size: 16px; line-height: 1.6;">
           Dear ${clientName},
@@ -325,10 +356,7 @@ export async function sendProjectAddedEmail(
     
     const htmlContent = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-        <div style="text-align: center; margin-bottom: 30px;">
-          <h1 style="color: #1a1a1a; margin: 0;">Jepson Myles Studio</h1>
-          <p style="color: #666; margin: 5px 0 0 0;">Photo Selection Confirmation</p>
-        </div>
+        ${getEmailHeader('Photo Selection Confirmation')}
         
         <p style="color: #333; font-size: 16px; line-height: 1.6;">
           Dear ${clientName},
@@ -427,10 +455,7 @@ export async function sendChatLinkEmail(
     
     const htmlContent = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-        <div style="text-align: center; margin-bottom: 30px;">
-          <h1 style="color: #1a1a1a; margin: 0;">Jepson Myles Studio</h1>
-          <p style="color: #666; margin: 5px 0 0 0;">Direct Communication</p>
-        </div>
+        ${getEmailHeader('Direct Communication')}
         
         <p style="color: #333; font-size: 16px; line-height: 1.6;">
           Dear ${clientName},
@@ -446,7 +471,7 @@ export async function sendChatLinkEmail(
         
         <div style="text-align: center; margin: 30px 0;">
           <a href="${chatUrl}" style="display: inline-block; background: #25d366; color: white; text-decoration: none; padding: 15px 40px; border-radius: 30px; font-weight: bold; font-size: 16px;">
-            💬 Open Chat
+            Chat with your retoucher
           </a>
         </div>
         
@@ -572,10 +597,7 @@ export async function sendMessageNotificationEmail(
     
     const htmlContent = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-        <div style="text-align: center; margin-bottom: 30px;">
-          <h1 style="color: #1a1a1a; margin: 0;">Jepson Myles Studio</h1>
-          <p style="color: #666; margin: 5px 0 0 0;">New Message</p>
-        </div>
+        ${getEmailHeader('New Message')}
         
         <p style="color: #333; font-size: 16px; line-height: 1.6;">
           Hi ${clientName},
@@ -602,14 +624,14 @@ export async function sendMessageNotificationEmail(
             <strong>How to reply:</strong>
           </p>
           <p style="color: #555; font-size: 14px; line-height: 1.6; margin: 0;">
-            📧 <strong>Reply to this email</strong> - Your message will be delivered directly<br>
-            💬 <strong>Use the button below</strong> - Open the chat for a real-time conversation
+            Reply to this email - Your message will be delivered directly<br>
+            Use the button below - Open the chat for a real-time conversation
           </p>
         </div>
         
         <div style="text-align: center; margin: 30px 0;">
           <a href="${chatUrl}" style="display: inline-block; background: #25d366; color: white; text-decoration: none; padding: 15px 40px; border-radius: 30px; font-weight: bold; font-size: 16px;">
-            💬 Open Chat
+            Chat with your retoucher
           </a>
         </div>
         
@@ -687,10 +709,7 @@ export async function sendAssignmentWelcomeEmail(
     
     const htmlContent = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-        <div style="text-align: center; margin-bottom: 30px;">
-          <h1 style="color: #1a1a1a; margin: 0;">Jepson Myles Studio</h1>
-          <p style="color: #666; margin: 5px 0 0 0;">Your Project is In Progress</p>
-        </div>
+        ${getEmailHeader('Your Project is In Progress')}
         
         <p style="color: #333; font-size: 16px; line-height: 1.6;">
           Hi ${clientName}!
@@ -698,7 +717,7 @@ export async function sendAssignmentWelcomeEmail(
         
         <div style="background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%); border-radius: 12px; padding: 25px; margin: 25px 0;">
           <p style="color: #2e7d32; font-size: 18px; line-height: 1.6; margin: 0;">
-            👋 I'm <strong>${retoucherName}</strong> and I'll be handling your photo project!
+            I'm <strong>${retoucherName}</strong> and I'll be handling your photo project!
           </p>
         </div>
         
@@ -709,12 +728,12 @@ export async function sendAssignmentWelcomeEmail(
         <div style="background: #f8f8f8; border-radius: 8px; padding: 20px; margin: 25px 0;">
           <table style="width: 100%; border-collapse: collapse;">
             <tr>
-              <td style="padding: 10px 0; color: #666; font-size: 15px;">📸 Photos Selected:</td>
+              <td style="padding: 10px 0; color: #666; font-size: 15px;">Photos Selected:</td>
               <td style="padding: 10px 0; color: #333; font-weight: bold; text-align: right; font-size: 18px;">${photosSelected}</td>
             </tr>
             ${hasExtras ? `
             <tr style="border-top: 1px solid #e0e0e0;">
-              <td style="padding: 10px 0; color: #e65100; font-size: 15px;">✨ Extra Photos:</td>
+              <td style="padding: 10px 0; color: #e65100; font-size: 15px;">Extra Photos:</td>
               <td style="padding: 10px 0; color: #e65100; font-weight: bold; text-align: right; font-size: 18px;">+${extras}</td>
             </tr>
             <tr style="border-top: 1px solid #e0e0e0; background: #fff3e0;">
@@ -731,13 +750,13 @@ export async function sendAssignmentWelcomeEmail(
         
         <div style="text-align: center; margin: 30px 0;">
           <a href="${chatUrl}" style="display: inline-block; background: #25d366; color: white; text-decoration: none; padding: 15px 40px; border-radius: 30px; font-weight: bold; font-size: 16px;">
-            💬 Chat with ${retoucherName}
+            Chat with ${retoucherName}
           </a>
         </div>
         
         <div style="background: #f0f7ff; border-radius: 8px; padding: 15px 20px; margin: 25px 0;">
           <p style="color: #555; font-size: 14px; line-height: 1.6; margin: 0;">
-            <strong>💡 Tip:</strong> You can send text messages, images, voice notes, and files through the chat. It's the fastest way to communicate with your retoucher!
+            <strong>Tip:</strong> You can send text messages, images, voice notes, and files through the chat. It's the fastest way to communicate with your retoucher!
           </p>
         </div>
         

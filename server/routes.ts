@@ -1410,6 +1410,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Upload logo to public storage (Admin only)
+  app.post("/api/admin/upload-logo", async (req, res) => {
+    try {
+      const logoPath = "attached_assets/USENA-FLOW_1754522507856.png";
+      const fs = await import("fs");
+      
+      if (!fs.existsSync(logoPath)) {
+        return res.status(404).json({ error: "Logo file not found" });
+      }
+      
+      const logoUploadService = new ObjectStorageService();
+      const publicUrl = await logoUploadService.uploadPublicFile(
+        logoPath,
+        "jepson-myles-logo.png",
+        "image/png"
+      );
+      
+      console.log(`[Logo] Uploaded logo to: ${publicUrl}`);
+      res.json({ success: true, logoUrl: publicUrl });
+    } catch (error: any) {
+      console.error("Error uploading logo:", error);
+      res.status(500).json({ error: error.message || "Failed to upload logo" });
+    }
+  });
+
   // Register ShootTracker routes (settings, sync, forecast, toggles)
   registerShoottrackerRoutes(app);
 
