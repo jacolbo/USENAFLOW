@@ -90,6 +90,27 @@ function broadcastProjectUpdate(project: any) {
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // Email configuration diagnostic endpoint
+  app.get("/api/admin/email-diagnostics", async (req, res) => {
+    const diagnostics = {
+      timestamp: new Date().toISOString(),
+      environment: {
+        REPLIT_DEPLOYMENT: process.env.REPLIT_DEPLOYMENT || 'not set',
+        APP_URL: process.env.APP_URL || 'not set',
+        REPLIT_DEV_DOMAIN: process.env.REPLIT_DEV_DOMAIN ? 'set' : 'not set',
+        RESEND_API_KEY: process.env.RESEND_API_KEY ? 'set (hidden)' : 'NOT SET - THIS IS THE PROBLEM',
+        REPLIT_CONNECTORS_HOSTNAME: process.env.REPLIT_CONNECTORS_HOSTNAME ? 'set' : 'not set',
+        REPL_IDENTITY: process.env.REPL_IDENTITY ? 'set' : 'not set',
+        WEB_REPL_RENEWAL: process.env.WEB_REPL_RENEWAL ? 'set' : 'not set',
+      },
+      canSendEmails: !!process.env.RESEND_API_KEY,
+      message: process.env.RESEND_API_KEY 
+        ? 'Email service should work - RESEND_API_KEY is available'
+        : 'Email service CANNOT work - RESEND_API_KEY secret is missing. Check your Secrets tab in Replit.'
+    };
+    res.json(diagnostics);
+  });
+
   // Get all projects
   app.get("/api/projects", async (req, res) => {
     try {
