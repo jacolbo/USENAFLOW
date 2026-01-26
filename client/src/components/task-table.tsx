@@ -716,10 +716,10 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
     }
   };
 
-  // Mutation for updating project assignment
+  // Mutation for updating project assignment - uses dedicated assign endpoint which sends welcome email
   const assignProjectMutation = useMutation({
     mutationFn: async ({ projectId, assignedTo }: { projectId: string; assignedTo: string | null }) => {
-      return await apiRequest("PATCH", `/api/projects/${projectId}`, { assignedTo });
+      return await apiRequest("PATCH", `/api/projects/${projectId}/assign`, { assignedTo });
     },
     onMutate: async ({ projectId, assignedTo }) => {
       // Cancel outgoing refetches
