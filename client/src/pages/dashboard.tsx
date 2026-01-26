@@ -19,10 +19,11 @@ import { WRUButton } from "@/components/WRUButton";
 import { useSSE } from "@/hooks/use-sse";
 import { User } from "@/lib/types";
 import { Project } from "@shared/schema";
-import { User as UserIcon, LogOut, Settings, Archive, ArrowRightLeft, DollarSign, AlertTriangle, Calendar, MessageCircle, LayoutDashboard } from "lucide-react";
+import { User as UserIcon, LogOut, Settings, Archive, ArrowRightLeft, DollarSign, AlertTriangle, Calendar, MessageCircle, LayoutDashboard, Plus } from "lucide-react";
 import { useLocation } from "wouter";
 import logoImage from "@assets/USENA-FLOW_1754522507856.png";
 import { WidgetCustomizer, useWidgetPreferences } from "@/components/widget-customizer";
+import { AppLayout, PageHeader, StatsRow } from "@/components/app-layout";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -1001,241 +1002,188 @@ export default function Dashboard() {
     );
   }
 
+  const getPageTitle = () => {
+    if (showArchive) return "Archive";
+    if (showCommissions) return "Commissions";
+    if (showExtraPhotosSales) return "Extra Photos Sales";
+    if (showComplaints) return "Complaints";
+    return "Dashboard";
+  };
+
+  const getPageDescription = () => {
+    if (showArchive) return "View past and archived projects";
+    if (showCommissions) return "Track your commission earnings";
+    if (showExtraPhotosSales) return "Monitor extra photo revenue";
+    if (showComplaints) return "Manage client complaints";
+    return undefined;
+  };
+
   return (
-    <div className="min-h-screen bg-gray-50">
+    <AppLayout 
+      currentUser={user ? { name: user.name, role: user.role === "LeadRetoucher" ? "Workflow Manager" : user.role, abbreviation: user.abbr } : null}
+      onLogout={handleLogout}
+    >
+      {/* Page Header */}
+      <PageHeader 
+        title={getPageTitle()}
+        description={getPageDescription()}
+        actions={
+          <div className="flex items-center gap-2">
+            {/* Notification Center */}
+            <NotificationCenter
+              notifications={notifications}
+              unreadCount={unreadCount}
+              isConnected={isConnected}
+              onMarkAsRead={markNotificationAsRead}
+              onClearAll={clearAllNotifications}
+            />
 
-      <div className="container mx-auto px-4 py-8">
-        <div className="bg-white rounded-lg shadow-sm mb-8">
-          <div className="px-6 py-4 border-b border-gray-200">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center">
-                <img 
-                  src={logoImage} 
-                  alt="USENA FLOW" 
-                  className="h-12 mr-2"
-                />
-                <span className="text-sm text-gray-600">by Jepson Myles Studio</span>
-              </div>
-              <div className="flex items-center space-x-4">
-                {user && (
-                  <div className="flex items-center space-x-4">
-                    <div className="flex items-center space-x-2">
-                      <Avatar className="w-8 h-8">
-                        <AvatarFallback>{user.name.charAt(0)}</AvatarFallback>
-                      </Avatar>
-                      <div className="flex flex-col">
-                        <span className="text-sm font-medium">{user.name}</span>
-                        <span className="text-xs text-gray-500">
-                          {user.role === "LeadRetoucher" ? "Workflow Manager" : user.role}
-                        </span>
-                      </div>
-                    </div>
-                    
-                    {/* Notification Center */}
-                    <NotificationCenter
-                      notifications={notifications}
-                      unreadCount={unreadCount}
-                      isConnected={isConnected}
-                      onMarkAsRead={markNotificationAsRead}
-                      onClearAll={clearAllNotifications}
-                    />
+            {/* Trade Offer Button for Retouchers and Admin */}
+            {(['Retoucher1', 'Retoucher2', 'Retoucher3', 'Retoucher'].includes(user.role) || user.role === "Admin") && (
+              <Button 
+                variant="outline"
+                size="sm"
+                onClick={() => setShowTradeModal(true)}
+                data-testid="button-open-trade-modal"
+              >
+                <ArrowRightLeft className="h-4 w-4" />
+                Trade
+              </Button>
+            )}
 
-                    {/* Trade Offer Button for Retouchers and Admin */}
-                    {(['Retoucher1', 'Retoucher2', 'Retoucher3', 'Retoucher'].includes(user.role) || user.role === "Admin") && (
-                      <Button 
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setShowTradeModal(true)}
-                        className="flex items-center gap-2 bg-gradient-to-r from-blue-50 to-purple-50 hover:from-blue-100 hover:to-purple-100 border-blue-200"
-                        data-testid="button-open-trade-modal"
-                      >
-                        <ArrowRightLeft className="h-4 w-4" />
-                        Trade Project
-                      </Button>
-                    )}
+            {/* WRU Button for Admin */}
+            <WRUButton 
+              projects={projects} 
+              currentUser={user.name} 
+              isAdmin={user.role === "Admin"} 
+            />
 
-                    {/* WRU Button for Admin */}
-                    <WRUButton 
-                      projects={projects} 
-                      currentUser={user.name} 
-                      isAdmin={user.role === "Admin"} 
-                    />
+            {/* Dashboard Customizer */}
+            <WidgetCustomizer
+              userId={widgetUserId}
+              userRole={user.role}
+              onPreferencesChange={handlePreferencesChange}
+            />
 
-                    {/* Dashboard Customizer */}
-                    <WidgetCustomizer
-                      userId={widgetUserId}
-                      userRole={user.role}
-                      onPreferencesChange={handlePreferencesChange}
-                    />
+            {/* Archive Button */}
+            <Button 
+              variant={showArchive ? "default" : "outline"}
+              size="sm"
+              onClick={() => {
+                setShowArchive(!showArchive);
+                setShowCommissions(false);
+                setShowExtraPhotosSales(false);
+              }}
+            >
+              <Archive className="h-4 w-4" />
+              {showArchive ? "Current" : "Archive"}
+            </Button>
 
-                    {/* Archive Button */}
-                    <Button 
-                      variant={showArchive ? "default" : "outline"}
-                      size="sm"
-                      onClick={() => {
-                        setShowArchive(!showArchive);
-                        setShowCommissions(false);
-                        setShowExtraPhotosSales(false);
-                      }}
-                      className="flex items-center gap-2"
-                    >
-                      <Archive className="h-4 w-4" />
-                      {showArchive ? `Current (${getCurrentProjectCount()})` : `Archive (${getArchiveProjectCount()})`}
-                    </Button>
+            {/* Commissions Button - Only for DataWrangler */}
+            {user.role === "DataWrangler" && (
+              <Button 
+                variant={showCommissions ? "default" : "outline"}
+                size="sm"
+                onClick={() => {
+                  setShowCommissions(!showCommissions);
+                  setShowArchive(false);
+                  setShowExtraPhotosSales(false);
+                  setShowComplaints(false);
+                }}
+              >
+                <DollarSign className="h-4 w-4" />
+                Commissions
+              </Button>
+            )}
 
-                    {/* Commissions Button - Only for DataWrangler */}
-                    {user.role === "DataWrangler" && (
-                      <Button 
-                        variant={showCommissions ? "default" : "outline"}
-                        size="sm"
-                        onClick={() => {
-                          setShowCommissions(!showCommissions);
-                          setShowArchive(false);
-                          setShowExtraPhotosSales(false);
-                          setShowComplaints(false);
-                        }}
-                        className="flex items-center gap-2 bg-green-50 hover:bg-green-100 border-green-200 text-green-700"
-                      >
-                        <DollarSign className="h-4 w-4" />
-                        Commissions
-                      </Button>
-                    )}
+            {/* Extra Photos Sales Button - Only for Sales */}
+            {user.role === "Sales" && (
+              <Button 
+                variant={showExtraPhotosSales ? "default" : "outline"}
+                size="sm"
+                onClick={() => {
+                  setShowExtraPhotosSales(!showExtraPhotosSales);
+                  setShowArchive(false);
+                  setShowCommissions(false);
+                  setShowComplaints(false);
+                }}
+              >
+                <DollarSign className="h-4 w-4" />
+                Extra Sales
+              </Button>
+            )}
 
-                    {/* Extra Photos Sales Button - Only for Sales */}
-                    {user.role === "Sales" && (
-                      <Button 
-                        variant={showExtraPhotosSales ? "default" : "outline"}
-                        size="sm"
-                        onClick={() => {
-                          setShowExtraPhotosSales(!showExtraPhotosSales);
-                          setShowArchive(false);
-                          setShowCommissions(false);
-                          setShowComplaints(false);
-                        }}
-                        className="flex items-center gap-2 bg-purple-50 hover:bg-purple-100 border-purple-200 text-purple-700"
-                      >
-                        <DollarSign className="h-4 w-4" />
-                        Extra Photos Sales
-                      </Button>
-                    )}
+            {/* Manual Rollover Buttons for Admin */}
+            {user.role === "Admin" && (
+              <>
+                <Button 
+                  variant="outline"
+                  size="sm"
+                  onClick={handleManualRollover}
+                  data-testid="button-manual-rollover"
+                >
+                  <ArrowRightLeft className="h-4 w-4" />
+                  Roll Forward
+                </Button>
+                <Button 
+                  variant="outline"
+                  size="sm"
+                  onClick={handleManualRollback}
+                  data-testid="button-manual-rollback"
+                >
+                  <ArrowRightLeft className="h-4 w-4 rotate-180" />
+                  Roll Back
+                </Button>
+              </>
+            )}
 
-                    {/* ShootTracker Settings Button - Admin, LeadRetoucher, DataWrangler only */}
-                    {['Admin', 'LeadRetoucher', 'DataWrangler'].includes(user.role) && (
-                      <Button 
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setLocation('/shoottracker')}
-                        className="flex items-center gap-2 bg-teal-50 hover:bg-teal-100 border-teal-200 text-teal-700"
-                      >
-                        <Calendar className="h-4 w-4" />
-                        ShootTracker
-                      </Button>
-                    )}
+            {/* Settings Icon - Only visible to Admin users */}
+            {user.role === "Admin" && (
+              <Dialog>
+                <DialogTrigger asChild>
+                  <Button variant="outline" size="sm">
+                    <Settings className="h-4 w-4" />
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+                  <DialogHeader>
+                    <DialogTitle>Settings</DialogTitle>
+                  </DialogHeader>
+                  <SettingsPanel
+                    users={users}
+                    userCredentials={userCredentials}
+                    onAddUser={handleAddUser}
+                    onEditUser={handleEditUser}
+                    onDeleteUser={handleDeleteUser}
+                    onUpdateUserCredentials={handleUpdateUserCredentials}
+                    currentUser={user}
+                  />
+                </DialogContent>
+              </Dialog>
+            )}
 
-                    {/* Client Messages Button - for Admin, LeadRetoucher, and all Retouchers */}
-                    {['Admin', 'LeadRetoucher', 'Retoucher1', 'Retoucher2', 'Retoucher3', 'Evans'].includes(user.role) && (
-                      <Button 
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setLocation('/editor-chat')}
-                        className="flex items-center gap-2 bg-blue-50 hover:bg-blue-100 border-blue-200 text-blue-700"
-                      >
-                        <MessageCircle className="h-4 w-4" />
-                        Client Messages
-                      </Button>
-                    )}
-
-                    {/* Manual Rollover Buttons for Admin */}
-                    {user.role === "Admin" && (
-                      <div className="flex items-center gap-2">
-                        <Button 
-                          variant="outline"
-                          size="sm"
-                          onClick={handleManualRollover}
-                          className="flex items-center gap-2 bg-orange-50 hover:bg-orange-100 border-orange-200 text-orange-700"
-                          data-testid="button-manual-rollover"
-                        >
-                          <ArrowRightLeft className="h-4 w-4" />
-                          Roll Forward
-                        </Button>
-                        <Button 
-                          variant="outline"
-                          size="sm"
-                          onClick={handleManualRollback}
-                          className="flex items-center gap-2 bg-blue-50 hover:bg-blue-100 border-blue-200 text-blue-700"
-                          data-testid="button-manual-rollback"
-                        >
-                          <ArrowRightLeft className="h-4 w-4 rotate-180" />
-                          Roll Back
-                        </Button>
-                      </div>
-                    )}
-
-                    {/* Settings Icon - Only visible to Admin users */}
-                    {user.role === "Admin" && (
-                      <Dialog>
-                        <DialogTrigger asChild>
-                          <Button 
-                            variant="outline" 
-                            size="sm"
-                            className="flex items-center gap-2"
-                          >
-                            <Settings className="h-4 w-4" />
-                            Settings
-                          </Button>
-                        </DialogTrigger>
-                        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-                          <DialogHeader>
-                            <DialogTitle>Settings</DialogTitle>
-                          </DialogHeader>
-                          <SettingsPanel
-                            users={users}
-                            userCredentials={userCredentials}
-                            onAddUser={handleAddUser}
-                            onEditUser={handleEditUser}
-                            onDeleteUser={handleDeleteUser}
-                            onUpdateUserCredentials={handleUpdateUserCredentials}
-                            currentUser={user}
-                          />
-                        </DialogContent>
-                      </Dialog>
-                    )}
-
-                    {/* Complaints Button - Only for Evans */}
-                    {user.role === "Evans" && (
-                      <Button 
-                        variant={showComplaints ? "default" : "outline"}
-                        size="sm"
-                        onClick={() => {
-                          setShowComplaints(!showComplaints);
-                          setShowArchive(false);
-                          setShowCommissions(false);
-                          setShowExtraPhotosSales(false);
-                        }}
-                        className="flex items-center gap-2 bg-yellow-50 hover:bg-yellow-100 border-yellow-300 text-yellow-700"
-                      >
-                        <AlertTriangle className="h-4 w-4" />
-                        Complaints
-                      </Button>
-                    )}
-
-                    <Button 
-                      variant="outline" 
-                      size="sm"
-                      onClick={handleLogout}
-                      className="flex items-center gap-2"
-                    >
-                      <LogOut className="h-4 w-4" />
-                      Logout
-                    </Button>
-                  </div>
-                )}
-              </div>
-            </div>
+            {/* Complaints Button - Only for Evans */}
+            {user.role === "Evans" && (
+              <Button 
+                variant={showComplaints ? "default" : "outline"}
+                size="sm"
+                onClick={() => {
+                  setShowComplaints(!showComplaints);
+                  setShowArchive(false);
+                  setShowCommissions(false);
+                  setShowExtraPhotosSales(false);
+                }}
+              >
+                <AlertTriangle className="h-4 w-4" />
+                Complaints
+              </Button>
+            )}
           </div>
-        </div>
+        }
+      />
 
-        <div className="space-y-8">  
+      {/* Main Content */}
+      <div className="p-6 space-y-6">  
           {/* Widgets rendered in user's preferred order */}
           {widgetOrder.map((widgetId) => {
             // Daily Quote Widget
@@ -1448,7 +1396,6 @@ export default function Dashboard() {
 
 
 
-        </div>
       </div>
 
       {/* Trade Offer Modal */}
@@ -1458,6 +1405,6 @@ export default function Dashboard() {
         currentUser={user.name}
         projects={projects}
       />
-    </div>
+    </AppLayout>
   );
 }
