@@ -18,7 +18,6 @@ import { getAdminHeaders } from "@/lib/adminAuth";
 import { UserRoles, shoottrackerSettingsSchema, type ShoottrackerSettings, StagingStatus, type CalendarEventStaging, type KeywordTurnaroundRule, type Holiday } from "@shared/schema";
 import { ArrowLeft, Calendar, Settings, RefreshCw, Clock, AlertTriangle, CheckCircle, Loader2, CalendarPlus, Eye, EyeOff, Plus, ChevronRight, Search, X, Mail, MessageCircle, Send } from "lucide-react";
 import { format, startOfWeek, addWeeks, subWeeks } from "date-fns";
-import { AppLayout, PageHeader } from "@/components/app-layout";
 import {
   Form,
   FormControl,
@@ -177,23 +176,8 @@ export default function ShootTrackerSettings() {
       return response.json();
     },
     enabled: hasAccess,
-  });
-
-  // Query chat projects for unread count (for sidebar badge)
-  const chatRoles = ["Admin", "LeadRetoucher", "Retoucher1", "Retoucher2", "Retoucher3", "Evans"];
-  const { data: chatProjects = [] } = useQuery<Array<{ project: any; unreadCount: number }>>({
-    queryKey: ["/api/admin/chat/projects"],
-    queryFn: async () => {
-      const response = await fetch(`/api/admin/chat/projects`, {
-        headers: getAdminHeaders(userRole, userId),
-      });
-      if (!response.ok) return [];
-      return response.json();
-    },
-    enabled: hasAccess && chatRoles.includes(userRole),
     refetchInterval: 30000,
   });
-  const totalChatUnread = chatProjects.reduce((sum, p) => sum + p.unreadCount, 0);
 
   const form = useForm<ShoottrackerSettings>({
     resolver: zodResolver(shoottrackerSettingsSchema),
@@ -742,19 +726,22 @@ export default function ShootTrackerSettings() {
     );
   }
 
-  const storedName = localStorage.getItem("usena_name") || userId;
-  const currentUserData = storedName ? {
-    name: storedName,
-    role: userRole
-  } : null;
-
   return (
-    <AppLayout currentUser={currentUserData} unreadChatCount={totalChatUnread}>
-      <PageHeader 
-        title="ShootTracker"
-        description="Configure calendar sync and project scheduling"
-      />
-      <div className="p-6 max-w-4xl">
+    <div className="min-h-screen bg-background">
+      <div className="container mx-auto py-6 px-4 max-w-4xl">
+        <div className="flex items-center gap-4 mb-6">
+          <Button variant="ghost" size="icon" onClick={() => setLocation("/")}>
+            <ArrowLeft className="h-5 w-5" />
+          </Button>
+          <div>
+            <h1 className="text-2xl font-bold flex items-center gap-2">
+              <Calendar className="h-6 w-6" />
+              ShootTracker Settings
+            </h1>
+            <p className="text-muted-foreground">Configure calendar sync and project scheduling</p>
+          </div>
+        </div>
+
         <Tabs defaultValue="projects" className="space-y-6">
           <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="projects" className="flex items-center gap-2">
@@ -1637,6 +1624,6 @@ export default function ShootTrackerSettings() {
           </TabsContent>
         </Tabs>
       </div>
-    </AppLayout>
+    </div>
   );
 }

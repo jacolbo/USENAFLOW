@@ -13,7 +13,6 @@ import { getAdminHeaders } from "@/lib/adminAuth";
 import { UserRoles, type Project } from "@shared/schema";
 import { ArrowLeft, Send, MessageCircle, User, Clock, Loader2, Search, X, Paperclip, Mic, Video, Image, FileText, Play, Pause, Download } from "lucide-react";
 import { format, formatDistanceToNow } from "date-fns";
-import { AppLayout, PageHeader } from "@/components/app-layout";
 
 interface Message {
   id: string;
@@ -314,19 +313,24 @@ export default function EditorChat() {
     );
   }
 
-  const storedName = localStorage.getItem("usena_name") || userId;
-  const currentUserData = storedName ? {
-    name: storedName,
-    role: userRole
-  } : null;
-
   return (
-    <AppLayout currentUser={currentUserData} unreadChatCount={totalUnread}>
-      <PageHeader 
-        title="Client Messages"
-        description={totalUnread > 0 ? `${totalUnread} unread message${totalUnread !== 1 ? 's' : ''}` : "Chat with clients about their projects"}
-      />
-      <div className="flex flex-1 overflow-hidden" style={{ height: 'calc(100vh - 73px)' }}>
+    <div className="h-screen flex flex-col bg-background">
+      <div className="border-b px-4 py-3 flex items-center justify-between bg-card">
+        <div className="flex items-center gap-3">
+          <Button variant="ghost" size="icon" onClick={() => navigate("/")}>
+            <ArrowLeft className="h-5 w-5" />
+          </Button>
+          <div className="flex items-center gap-2">
+            <MessageCircle className="h-5 w-5 text-primary" />
+            <h1 className="font-semibold text-lg">Client Messages</h1>
+            {totalUnread > 0 && (
+              <Badge variant="destructive" className="ml-1">{totalUnread}</Badge>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <div className="flex flex-1 overflow-hidden">
         <div className="w-80 border-r flex flex-col bg-card">
           <div className="p-3 border-b">
             <div className="relative">
@@ -554,6 +558,6 @@ export default function EditorChat() {
           )}
         </div>
       </div>
-    </AppLayout>
+    </div>
   );
 }
