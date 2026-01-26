@@ -805,3 +805,96 @@ export async function sendAssignmentWelcomeEmail(
     return { success: false, error: error.message };
   }
 }
+
+// Email 6: Delay Notification Email
+// Sent when a client's photos have been delayed to the following week
+export async function sendDelayNotificationEmail(
+  clientEmail: string,
+  clientName: string,
+  originalDeliveryWeek: Date,
+  newDeliveryWeek: Date,
+  delayDays: number,
+  projectId: string
+): Promise<EmailResult> {
+  try {
+    const { client, fromEmail } = await getResendClient();
+    
+    const subject = `Update on Your Photo Delivery - ${clientName}`;
+    const originalWeekText = getDeliveryWeekText(originalDeliveryWeek);
+    const newWeekText = getDeliveryWeekText(newDeliveryWeek);
+    
+    const htmlContent = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+        ${getEmailHeader('Delivery Update')}
+        
+        <p style="color: #333; font-size: 16px; line-height: 1.6;">
+          Dear ${clientName},
+        </p>
+        
+        <p style="color: #333; font-size: 16px; line-height: 1.6;">
+          We wanted to reach out to give you an update on your photo delivery.
+        </p>
+        
+        <p style="color: #333; font-size: 16px; line-height: 1.6;">
+          Due to high demand, your photos have been rescheduled. We apologize for any inconvenience this may cause.
+        </p>
+        
+        <div style="background: #fff3cd; border-left: 4px solid #ffc107; padding: 15px 20px; margin: 25px 0;">
+          <p style="color: #333; font-size: 14px; margin: 0;">
+            <strong>Original Delivery:</strong> ${originalWeekText}<br>
+            <strong>New Delivery:</strong> ${newWeekText}<br>
+            <strong>Delay:</strong> ${delayDays} working day${delayDays !== 1 ? 's' : ''}
+          </p>
+        </div>
+        
+        <p style="color: #333; font-size: 16px; line-height: 1.6;">
+          We truly appreciate your patience and understanding. Rest assured, your photos are in our queue and we will deliver them as soon as possible.
+        </p>
+        
+        <p style="color: #333; font-size: 16px; line-height: 1.6;">
+          If you have any questions or concerns, please don't hesitate to reply to this email.
+        </p>
+        
+        <p style="color: #333; font-size: 16px; line-height: 1.6;">
+          Thank you for your continued trust in us.
+        </p>
+        
+        <p style="color: #333; font-size: 16px; line-height: 1.6;">
+          Warm regards,<br>
+          <strong>The Jepson Myles Studio Team</strong>
+        </p>
+        
+        <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;">
+        
+        <p style="color: #999; font-size: 12px; text-align: center;">
+          This is an automated message from Jepson Myles Studio.
+        </p>
+      </div>
+    `;
+
+    const replyTo = getProjectReplyToEmail(projectId);
+    const response = await client.emails.send({
+      from: fromEmail,
+      replyTo: replyTo,
+      to: clientEmail,
+      subject,
+      html: htmlContent,
+    });
+
+    if (response.data?.id) {
+      await logEmail(projectId, EmailType.DELAY_NOTIFICATION, clientEmail, subject, 'sent', response.data.id);
+      console.log(`[Resend] Delay notification email sent to ${clientEmail} for project ${projectId}`);
+      return { success: true, messageId: response.data.id };
+    } else {
+      const errorMsg = response.error?.message || 'Unknown error';
+      await logEmail(projectId, EmailType.DELAY_NOTIFICATION, clientEmail, subject, 'failed', undefined, errorMsg);
+      return { success: false, error: errorMsg };
+    }
+
+  } catch (error: any) {
+    console.error(`[Email] Failed to send delay notification email:`, error);
+    const fallbackSubject = `Update on Your Photo Delivery - ${clientName}`;
+    await logEmail(projectId, EmailType.DELAY_NOTIFICATION, clientEmail, fallbackSubject, 'failed', undefined, error.message);
+    return { success: false, error: error.message };
+  }
+}

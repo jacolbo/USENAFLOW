@@ -39,6 +39,11 @@ import {
   sendMessageNotificationEmail,
   generateToken,
 } from "./services/emailService";
+import { 
+  sendDelayNotifications, 
+  getDelayedProjectsForNextWeek,
+  startDelayNotificationScheduler 
+} from "./services/delayNotificationScheduler";
 
 // Verify Resend webhook signature
 function verifyResendWebhookSignature(payload: string, signature: string, secret: string): boolean {
@@ -1215,6 +1220,50 @@ export function registerShoottrackerRoutes(app: Express): void {
   // } catch (error) {
   //   console.log("⚠️ Gmail reply monitor not started (may not be configured)");
   // }
+
+  // Delay notification routes
+  
+  // GET /api/admin/shoottracker/delay-check/preview - Preview delayed projects without sending emails
+  app.get("/api/admin/shoottracker/delay-check/preview", verifyAdminRequest, async (req: Request, res: Response) => {
+    try {
+      const delayedProjects = await getDelayedProjectsForNextWeek();
+      res.json({
+        success: true,
+        totalDelayed: delayedProjects.length,
+        projects: delayedProjects.map(p => ({
+          id: p.id,
+          clientName: p.clientName,
+          clientEmail: p.clientEmail,
+          originalDueDate: p.originalDueDate,
+          deliveryDueDate: p.deliveryDueDate,
+          delayDays: p.delayDays,
+          rolloverCount: p.rolloverCount,
+        })),
+      });
+    } catch (error: any) {
+      console.error("[DelayCheck] Error previewing delayed projects:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // POST /api/admin/shoottracker/delay-check/send - Manually trigger delay notifications
+  app.post("/api/admin/shoottracker/delay-check/send", verifyAdminRequest, async (req: Request, res: Response) => {
+    try {
+      console.log("[DelayCheck] Manual delay notification triggered");
+      const result = await sendDelayNotifications();
+      res.json({
+        success: true,
+        ...result,
+      });
+    } catch (error: any) {
+      console.error("[DelayCheck] Error sending delay notifications:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Start the Thursday morning delay notification scheduler
+  startDelayNotificationScheduler();
+  console.log("✅ Delay notification scheduler started");
 
   console.log("✅ ShootTracker routes registered");
 }
