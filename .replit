@@ -44,4 +44,4 @@ integrations = ["google-calendar:1.0.0", "resend:1.0.0", "google-mail:1.0.0", "j
 [userenv]
 
 [userenv.shared]
-APP_URL = "https://workspace.jepsonmylesphot.replit.app"
+APP_URL = "https://Usenaflow.replit.app"
