@@ -11,6 +11,7 @@ import { User } from "@/lib/types";
 import { AlertCircle } from "lucide-react";
 import logoImage from "@assets/USENA-FLOW_1754522507856.png";
 import { useToast } from "@/hooks/use-toast";
+import { apiRequest } from "@/lib/queryClient";
 
 const loginSchema = z.object({
   username: z.string().min(1, "Username is required"),
@@ -19,22 +20,12 @@ const loginSchema = z.object({
 
 type LoginFormData = z.infer<typeof loginSchema>;
 
-interface UserCredentials {
-  id: string;
-  username: string;
-  password: string;
-  name: string;
-  role: string;
-  abbreviation: string;
-}
-
 interface LoginFormProps {
   onLogin: (user: User) => void;
   onShowRegister: () => void;
-  userCredentials: UserCredentials[];
 }
 
-export function LoginForm({ onLogin, onShowRegister, userCredentials }: LoginFormProps) {
+export function LoginForm({ onLogin, onShowRegister }: LoginFormProps) {
   const { toast } = useToast();
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -96,16 +87,15 @@ export function LoginForm({ onLogin, onShowRegister, userCredentials }: LoginFor
     setIsLoading(true);
     setError(null);
 
-    // Simulate a small delay for realistic login experience
-    await new Promise(resolve => setTimeout(resolve, 500));
+    try {
+      const response = await apiRequest("POST", "/api/auth/login", {
+        username: data.username,
+        password: data.password,
+      });
+      const foundUser = await response.json();
 
-    const foundUser = userCredentials.find(
-      u => u.username === data.username && u.password === data.password
-    );
-
-    if (foundUser) {
       const user: User = {
-        id: foundUser.id || foundUser.username,
+        id: foundUser.id,
         name: foundUser.name,
         role: foundUser.role,
         value: foundUser.role === "Retoucher" ? `${foundUser.name}_${Date.now()}` : foundUser.role,
@@ -117,7 +107,7 @@ export function LoginForm({ onLogin, onShowRegister, userCredentials }: LoginFor
         title: "Login Successful",
         description: `Welcome back, ${foundUser.name}!`,
       });
-    } else {
+    } catch (err: any) {
       setError("Invalid username or password. Please try again.");
       toast({
         title: "Login Failed",
@@ -208,7 +198,6 @@ export function LoginForm({ onLogin, onShowRegister, userCredentials }: LoginFor
               </div>
             </form>
             
-
 
             {/* Animation Display */}
             {showAnimation && (

@@ -898,3 +898,455 @@ export async function sendDelayNotificationEmail(
     return { success: false, error: error.message };
   }
 }
+
+// Email 8: Sneak Peek Email
+// Sent when a retoucher shares a preview photo with the client before the full set is done
+export async function sendSneakPeekEmail(
+  clientEmail: string,
+  clientName: string,
+  imageUrl: string,
+  caption: string | null,
+  projectId: string
+): Promise<EmailResult> {
+  const subject = `A Special Preview of Your Photos! - Jepson Myles Studio`;
+  
+  try {
+    const { client, fromEmail } = await getResendClient();
+    
+    const captionSection = caption ? `
+      <p style="color: #555; font-size: 15px; font-style: italic; text-align: center; margin: 15px 0 25px 0;">
+        "${caption}"
+      </p>
+    ` : '';
+    
+    const htmlContent = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+        ${getEmailHeader('A Special Preview')}
+        
+        <p style="color: #333; font-size: 16px; line-height: 1.6;">
+          Dear ${clientName},
+        </p>
+        
+        <div style="background: linear-gradient(135deg, #fce4ec 0%, #f8bbd0 100%); border-radius: 12px; padding: 25px; margin: 25px 0; text-align: center;">
+          <p style="color: #c2185b; font-size: 18px; line-height: 1.6; margin: 0; font-weight: bold;">
+            ✨ Sneak Peek!
+          </p>
+          <p style="color: #333; font-size: 16px; line-height: 1.6; margin: 10px 0 0 0;">
+            We're still working on your full set, but we couldn't wait to share this with you!
+          </p>
+        </div>
+        
+        <div style="text-align: center; margin: 25px 0;">
+          <img src="${imageUrl}" alt="Preview Photo" style="max-width: 100%; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15);" />
+        </div>
+        
+        ${captionSection}
+        
+        <p style="color: #333; font-size: 16px; line-height: 1.6;">
+          We hope this little preview gets you excited for the full set! We're putting our best work into every single photo.
+        </p>
+        
+        <p style="color: #333; font-size: 16px; line-height: 1.6;">
+          Stay tuned for the complete delivery coming soon!
+        </p>
+        
+        <p style="color: #333; font-size: 16px; line-height: 1.6;">
+          Warm regards,<br>
+          <strong>The Jepson Myles Studio Team</strong>
+        </p>
+        
+        <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;">
+        
+        <p style="color: #999; font-size: 12px; text-align: center;">
+          This is an automated message from Jepson Myles Studio.
+        </p>
+      </div>
+    `;
+
+    const replyTo = getProjectReplyToEmail(projectId);
+    const response = await client.emails.send({
+      from: fromEmail,
+      replyTo: replyTo,
+      to: clientEmail,
+      subject,
+      html: htmlContent,
+    });
+
+    if (response.data?.id) {
+      await logEmail(projectId, EmailType.SNEAK_PEEK, clientEmail, subject, 'sent', response.data.id);
+      console.log(`[Resend] Sneak peek email sent to ${clientEmail} for project ${projectId}`);
+      return { success: true, messageId: response.data.id };
+    } else {
+      const errorMsg = response.error?.message || 'Unknown error';
+      await logEmail(projectId, EmailType.SNEAK_PEEK, clientEmail, subject, 'failed', undefined, errorMsg);
+      return { success: false, error: errorMsg };
+    }
+
+  } catch (error: any) {
+    console.error(`[Email] Failed to send sneak peek email:`, error);
+    await logEmail(projectId, EmailType.SNEAK_PEEK, clientEmail, subject, 'failed', undefined, error.message);
+    return { success: false, error: error.message };
+  }
+}
+
+// Email 7: Gallery Delivery Email
+// Sent when Sales approves the gallery link delivery - sends client a link to view their photos
+export async function sendGalleryDeliveryEmail(
+  clientEmail: string,
+  clientName: string,
+  galleryLink: string,
+  projectId: string,
+  referralCode?: string
+): Promise<EmailResult> {
+  const subject = `Your Photos Are Ready! - Jepson Myles Studio`;
+  
+  try {
+    const { client, fromEmail } = await getResendClient();
+    const baseUrl = getAppBaseUrl();
+    
+    let referralSection = '';
+    if (referralCode) {
+      const referralLink = `${baseUrl}/refer/${referralCode}`;
+      referralSection = `
+        <div style="background: linear-gradient(135deg, #fce4ec 0%, #f8bbd0 100%); border-radius: 12px; padding: 25px; margin: 25px 0; text-align: center;">
+          <p style="color: #c2185b; font-size: 18px; line-height: 1.6; margin: 0 0 10px 0; font-weight: bold;">
+            💝 Share the Love
+          </p>
+          <p style="color: #333; font-size: 15px; line-height: 1.6; margin: 0 0 15px 0;">
+            Know someone who'd love professional photos? Share your personal referral link and help us grow our community!
+          </p>
+          <a href="${referralLink}" style="display: inline-block; background: #e91e63; color: white; text-decoration: none; padding: 12px 30px; border-radius: 25px; font-weight: bold; font-size: 15px;">
+            Share Your Referral Link
+          </a>
+          <p style="color: #666; font-size: 12px; margin: 10px 0 0 0;">
+            <a href="${referralLink}" style="color: #e91e63; word-break: break-all;">${referralLink}</a>
+          </p>
+        </div>
+      `;
+    }
+    
+    const htmlContent = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+        ${getEmailHeader('Your Photos Are Ready!')}
+        
+        <p style="color: #333; font-size: 16px; line-height: 1.6;">
+          Dear ${clientName},
+        </p>
+        
+        <div style="background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%); border-radius: 12px; padding: 25px; margin: 25px 0; text-align: center;">
+          <p style="color: #2e7d32; font-size: 20px; line-height: 1.6; margin: 0; font-weight: bold;">
+            Congratulations!
+          </p>
+          <p style="color: #333; font-size: 16px; line-height: 1.6; margin: 10px 0 0 0;">
+            Your beautifully retouched photos are ready for you to view and download.
+          </p>
+        </div>
+        
+        <p style="color: #333; font-size: 16px; line-height: 1.6;">
+          We've put a lot of care and attention into every photo, and we hope you love the results as much as we do!
+        </p>
+        
+        <div style="text-align: center; margin: 30px 0;">
+          <a href="${galleryLink}" style="display: inline-block; background: #e91e63; color: white; text-decoration: none; padding: 16px 48px; border-radius: 30px; font-weight: bold; font-size: 18px; letter-spacing: 0.5px;">
+            View Your Gallery
+          </a>
+        </div>
+        
+        <div style="background: #f8f8f8; border-radius: 8px; padding: 15px 20px; margin: 25px 0;">
+          <p style="color: #555; font-size: 14px; line-height: 1.6; margin: 0;">
+            <strong>Gallery Link:</strong><br>
+            <a href="${galleryLink}" style="color: #e91e63; word-break: break-all;">${galleryLink}</a>
+          </p>
+        </div>
+        
+        ${referralSection}
+        
+        <p style="color: #333; font-size: 16px; line-height: 1.6;">
+          Thank you for choosing Jepson Myles Studio. It's been a pleasure working on your photos, and we look forward to capturing more special moments with you in the future!
+        </p>
+        
+        <p style="color: #333; font-size: 16px; line-height: 1.6;">
+          Warm regards,<br>
+          <strong>The Jepson Myles Studio Team</strong>
+        </p>
+        
+        <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;">
+        
+        <p style="color: #999; font-size: 12px; text-align: center;">
+          This is an automated message from Jepson Myles Studio.<br>
+          If you have any questions, please reply to this email.
+        </p>
+      </div>
+    `;
+
+    const replyTo = getProjectReplyToEmail(projectId);
+    const response = await client.emails.send({
+      from: fromEmail,
+      replyTo: replyTo,
+      to: clientEmail,
+      subject,
+      html: htmlContent,
+    });
+
+    if (response.data?.id) {
+      await logEmail(projectId, EmailType.GALLERY_DELIVERY, clientEmail, subject, 'sent', response.data.id);
+      console.log(`[Resend] Gallery delivery email sent to ${clientEmail} for project ${projectId}`);
+      return { success: true, messageId: response.data.id };
+    } else {
+      const errorMsg = response.error?.message || 'Unknown error';
+      await logEmail(projectId, EmailType.GALLERY_DELIVERY, clientEmail, subject, 'failed', undefined, errorMsg);
+      return { success: false, error: errorMsg };
+    }
+
+  } catch (error: any) {
+    console.error(`[Email] Failed to send gallery delivery email:`, error);
+    await logEmail(projectId, EmailType.GALLERY_DELIVERY, clientEmail, subject, 'failed', undefined, error.message);
+    return { success: false, error: error.message };
+  }
+}
+
+// Email 10: Scheduling Notification Email
+// Sent when a Data Wrangler schedules a project for a specific week
+export async function sendSchedulingNotificationEmail(
+  clientEmail: string,
+  clientName: string,
+  weekStartDate: Date,
+  weekEndDate: Date,
+  projectId: string
+): Promise<EmailResult> {
+  const subject = `Your Photos Are Scheduled! - Jepson Myles Studio`;
+
+  try {
+    const { client, fromEmail } = await getResendClient();
+
+    const weekStartText = weekStartDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+    const weekEndText = weekEndDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+
+    const htmlContent = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+        ${getEmailHeader('Your Photos Are Scheduled!')}
+
+        <p style="color: #333; font-size: 16px; line-height: 1.6;">
+          Dear ${clientName},
+        </p>
+
+        <div style="background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%); border-radius: 12px; padding: 25px; margin: 25px 0; text-align: center;">
+          <p style="color: #2e7d32; font-size: 20px; line-height: 1.6; margin: 0; font-weight: bold;">
+            Great News!
+          </p>
+          <p style="color: #333; font-size: 16px; line-height: 1.6; margin: 10px 0 0 0;">
+            Your photos have been scheduled for delivery during the week of
+          </p>
+          <p style="color: #2e7d32; font-size: 18px; font-weight: bold; margin: 10px 0 0 0;">
+            ${weekStartText} - ${weekEndText}
+          </p>
+        </div>
+
+        <p style="color: #333; font-size: 16px; line-height: 1.6;">
+          Our team is working hard to ensure your photos are beautifully retouched and ready for you. We're looking forward to sharing them with you!
+        </p>
+
+        <p style="color: #333; font-size: 16px; line-height: 1.6;">
+          If you have any questions in the meantime, please don't hesitate to reach out.
+        </p>
+
+        <p style="color: #333; font-size: 16px; line-height: 1.6;">
+          Warm regards,<br>
+          <strong>The Jepson Myles Studio Team</strong>
+        </p>
+
+        <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;">
+
+        <p style="color: #999; font-size: 12px; text-align: center;">
+          This is an automated message from Jepson Myles Studio.
+        </p>
+      </div>
+    `;
+
+    const replyTo = getProjectReplyToEmail(projectId);
+    const response = await client.emails.send({
+      from: fromEmail,
+      replyTo: replyTo,
+      to: clientEmail,
+      subject,
+      html: htmlContent,
+    });
+
+    if (response.data?.id) {
+      await logEmail(projectId, EmailType.SCHEDULING_NOTIFICATION, clientEmail, subject, 'sent', response.data.id);
+      console.log(`[Resend] Scheduling notification email sent to ${clientEmail} for project ${projectId}`);
+      return { success: true, messageId: response.data.id };
+    } else {
+      const errorMsg = response.error?.message || 'Unknown error';
+      await logEmail(projectId, EmailType.SCHEDULING_NOTIFICATION, clientEmail, subject, 'failed', undefined, errorMsg);
+      return { success: false, error: errorMsg };
+    }
+
+  } catch (error: any) {
+    console.error(`[Email] Failed to send scheduling notification email:`, error);
+    await logEmail(projectId, EmailType.SCHEDULING_NOTIFICATION, clientEmail, subject, 'failed', undefined, error.message);
+    return { success: false, error: error.message };
+  }
+}
+
+// Email 11: Manual Delay Notice Email
+// Sent when a Data Wrangler manually sends a delay notice to a client
+export async function sendManualDelayNoticeEmail(
+  clientEmail: string,
+  clientName: string,
+  targetWeekStart: Date,
+  targetWeekEnd: Date,
+  projectId: string
+): Promise<EmailResult> {
+  const subject = `Update on Your Photos - Jepson Myles Studio`;
+
+  try {
+    const { client, fromEmail } = await getResendClient();
+
+    const weekStartText = targetWeekStart.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+    const weekEndText = targetWeekEnd.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+
+    const htmlContent = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+        ${getEmailHeader('Update on Your Photos')}
+
+        <p style="color: #333; font-size: 16px; line-height: 1.6;">
+          Dear ${clientName},
+        </p>
+
+        <p style="color: #333; font-size: 16px; line-height: 1.6;">
+          We wanted to let you know that your photos are taking a bit longer than expected. We sincerely apologize for any inconvenience.
+        </p>
+
+        <div style="background: #fff3cd; border-left: 4px solid #ffc107; padding: 15px 20px; margin: 25px 0;">
+          <p style="color: #333; font-size: 14px; margin: 0;">
+            <strong>Your photos are now scheduled for delivery during the week of:</strong><br>
+            <span style="font-size: 16px; color: #856404; font-weight: bold;">${weekStartText} - ${weekEndText}</span>
+          </p>
+        </div>
+
+        <p style="color: #333; font-size: 16px; line-height: 1.6;">
+          We want you to know that our team is putting extra care and attention into every detail of your photos. Quality is our top priority, and we want to make sure you receive nothing but the best.
+        </p>
+
+        <p style="color: #333; font-size: 16px; line-height: 1.6;">
+          Thank you for your patience and understanding. If you have any questions, please don't hesitate to reach out.
+        </p>
+
+        <p style="color: #333; font-size: 16px; line-height: 1.6;">
+          Warm regards,<br>
+          <strong>The Jepson Myles Studio Team</strong>
+        </p>
+
+        <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;">
+
+        <p style="color: #999; font-size: 12px; text-align: center;">
+          This is an automated message from Jepson Myles Studio.
+        </p>
+      </div>
+    `;
+
+    const replyTo = getProjectReplyToEmail(projectId);
+    const response = await client.emails.send({
+      from: fromEmail,
+      replyTo: replyTo,
+      to: clientEmail,
+      subject,
+      html: htmlContent,
+    });
+
+    if (response.data?.id) {
+      await logEmail(projectId, EmailType.MANUAL_DELAY_NOTICE, clientEmail, subject, 'sent', response.data.id);
+      console.log(`[Resend] Manual delay notice email sent to ${clientEmail} for project ${projectId}`);
+      return { success: true, messageId: response.data.id };
+    } else {
+      const errorMsg = response.error?.message || 'Unknown error';
+      await logEmail(projectId, EmailType.MANUAL_DELAY_NOTICE, clientEmail, subject, 'failed', undefined, errorMsg);
+      return { success: false, error: errorMsg };
+    }
+
+  } catch (error: any) {
+    console.error(`[Email] Failed to send manual delay notice email:`, error);
+    await logEmail(projectId, EmailType.MANUAL_DELAY_NOTICE, clientEmail, subject, 'failed', undefined, error.message);
+    return { success: false, error: error.message };
+  }
+}
+
+// Email 9: Satisfaction Survey Email
+export async function sendSatisfactionSurveyEmail(
+  clientEmail: string,
+  clientName: string,
+  surveyToken: string,
+  projectId: string
+): Promise<EmailResult> {
+  const subject = `How Was Your Experience? - Jepson Myles Studio`;
+  
+  try {
+    const { client, fromEmail } = await getResendClient();
+    const baseUrl = getAppBaseUrl();
+    const surveyUrl = `${baseUrl}/survey/${surveyToken}`;
+    
+    const htmlContent = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+        ${getEmailHeader('We Value Your Feedback')}
+        
+        <p style="color: #333; font-size: 16px; line-height: 1.6;">
+          Dear ${clientName},
+        </p>
+        
+        <p style="color: #333; font-size: 16px; line-height: 1.6;">
+          We hope you're enjoying your beautiful photos! We'd love to hear about your experience with Jepson Myles Studio.
+        </p>
+        
+        <p style="color: #333; font-size: 16px; line-height: 1.6;">
+          Your feedback helps us improve and continue delivering the best possible service. It only takes a minute!
+        </p>
+        
+        <div style="text-align: center; margin: 30px 0;">
+          <a href="${surveyUrl}" style="display: inline-block; background: #e91e63; color: white; text-decoration: none; padding: 16px 48px; border-radius: 30px; font-weight: bold; font-size: 18px; letter-spacing: 0.5px;">
+            Share Your Feedback
+          </a>
+        </div>
+        
+        <p style="color: #333; font-size: 16px; line-height: 1.6;">
+          Thank you for being a valued client. We truly appreciate your time and your trust in us.
+        </p>
+        
+        <p style="color: #333; font-size: 16px; line-height: 1.6;">
+          Warm regards,<br>
+          <strong>The Jepson Myles Studio Team</strong>
+        </p>
+        
+        <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;">
+        
+        <p style="color: #999; font-size: 12px; text-align: center;">
+          This is an automated message from Jepson Myles Studio.
+        </p>
+      </div>
+    `;
+
+    const replyTo = getProjectReplyToEmail(projectId);
+    const response = await client.emails.send({
+      from: fromEmail,
+      replyTo: replyTo,
+      to: clientEmail,
+      subject,
+      html: htmlContent,
+    });
+
+    if (response.data?.id) {
+      await logEmail(projectId, EmailType.SATISFACTION_SURVEY, clientEmail, subject, 'sent', response.data.id);
+      console.log(`[Resend] Satisfaction survey email sent to ${clientEmail} for project ${projectId}`);
+      return { success: true, messageId: response.data.id };
+    } else {
+      const errorMsg = response.error?.message || 'Unknown error';
+      await logEmail(projectId, EmailType.SATISFACTION_SURVEY, clientEmail, subject, 'failed', undefined, errorMsg);
+      return { success: false, error: errorMsg };
+    }
+
+  } catch (error: any) {
+    console.error(`[Email] Failed to send satisfaction survey email:`, error);
+    await logEmail(projectId, EmailType.SATISFACTION_SURVEY, clientEmail, subject, 'failed', undefined, error.message);
+    return { success: false, error: error.message };
+  }
+}

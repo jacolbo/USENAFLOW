@@ -4,7 +4,6 @@ import { apiRequest } from "@/lib/queryClient";
 import { motion, AnimatePresence } from "framer-motion";
 import { useToast } from "@/hooks/use-toast";
 import { LoginForm } from "@/components/login-form";
-import { RegisterForm } from "@/components/register-form";
 import { SettingsPanel } from "@/components/settings-panel";
 import { AddProjectForm } from "@/components/add-project-form";
 import { TaskTable } from "@/components/task-table";
@@ -19,7 +18,7 @@ import { WRUButton } from "@/components/WRUButton";
 import { useSSE } from "@/hooks/use-sse";
 import { User } from "@/lib/types";
 import { Project } from "@shared/schema";
-import { User as UserIcon, LogOut, Settings, Archive, ArrowRightLeft, DollarSign, AlertTriangle, Calendar, MessageCircle, LayoutDashboard } from "lucide-react";
+import { User as UserIcon, LogOut, Settings, Archive, ArrowRightLeft, DollarSign, AlertTriangle, Calendar, MessageCircle, LayoutDashboard, Gift, Crown, RefreshCw, Mail } from "lucide-react";
 import { useLocation } from "wouter";
 import logoImage from "@assets/USENA-FLOW_1754522507856.png";
 import { WidgetCustomizer, useWidgetPreferences } from "@/components/widget-customizer";
@@ -27,19 +26,9 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 
-interface UserCredential {
-  username: string;
-  password: string;
-  role: string;
-  name: string;
-  abbr: string;
-  id?: string;
-}
-
-interface UserCredentials {
+interface ApiUser {
   id: string;
   username: string;
-  password: string;
   name: string;
   role: string;
   abbreviation: string;
@@ -573,14 +562,505 @@ function ComplaintCard({ complaint, onUpdateStatus, onDelete, isPending, isCompl
   );
 }
 
+function ReferralDashboard({ userRole }: { userRole: string }) {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  
+  const { data: referralsList = [], isLoading } = useQuery<any[]>({
+    queryKey: ["/api/referrals"],
+    queryFn: async () => {
+      const res = await fetch("/api/referrals", {
+        headers: { "x-usena-role": userRole },
+      });
+      if (!res.ok) throw new Error("Failed to fetch");
+      return res.json();
+    },
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: async ({ id, status }: { id: string; status: string }) => {
+      const res = await fetch(`/api/referrals/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", "x-usena-role": userRole },
+        body: JSON.stringify({ status }),
+      });
+      if (!res.ok) throw new Error("Failed to update");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/referrals"] });
+      toast({ title: "Referral updated" });
+    },
+  });
+
+  const statusColors: Record<string, string> = {
+    pending: "bg-yellow-100 text-yellow-800",
+    completed: "bg-blue-100 text-blue-800",
+    rewarded: "bg-green-100 text-green-800",
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-white rounded-lg shadow-sm p-6">
+        <div className="flex items-center gap-3 mb-4">
+          <Gift className="h-6 w-6 text-pink-600" />
+          <div>
+            <h2 className="text-xl font-semibold text-gray-900">Referral Dashboard</h2>
+            <p className="text-sm text-gray-600">Track and manage client referrals</p>
+          </div>
+        </div>
+
+        {isLoading ? (
+          <div className="text-center py-8 text-gray-500">Loading referrals...</div>
+        ) : referralsList.length === 0 ? (
+          <div className="text-center py-8 text-gray-500">No referrals yet. Referral codes are automatically created when projects are delivered.</div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-gray-200">
+                  <th className="text-left py-3 px-4 font-medium text-gray-600">Referrer</th>
+                  <th className="text-left py-3 px-4 font-medium text-gray-600">Code</th>
+                  <th className="text-left py-3 px-4 font-medium text-gray-600">Referred Client</th>
+                  <th className="text-left py-3 px-4 font-medium text-gray-600">Status</th>
+                  <th className="text-left py-3 px-4 font-medium text-gray-600">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {referralsList.map((ref: any) => (
+                  <tr key={ref.id} className="border-b border-gray-100 hover:bg-gray-50">
+                    <td className="py-3 px-4">
+                      <div className="font-medium text-gray-900">{ref.referrerName}</div>
+                      <div className="text-xs text-gray-500">{ref.referrerEmail}</div>
+                    </td>
+                    <td className="py-3 px-4">
+                      <code className="text-xs bg-gray-100 px-2 py-1 rounded">{ref.referralCode}</code>
+                    </td>
+                    <td className="py-3 px-4">
+                      {ref.referredName ? (
+                        <div>
+                          <div className="font-medium text-gray-900">{ref.referredName}</div>
+                          <div className="text-xs text-gray-500">{ref.referredEmail}</div>
+                        </div>
+                      ) : (
+                        <span className="text-gray-400 italic">No referral yet</span>
+                      )}
+                    </td>
+                    <td className="py-3 px-4">
+                      <span className={`inline-flex px-2 py-1 rounded-full text-xs font-medium ${statusColors[ref.status] || "bg-gray-100 text-gray-800"}`}>
+                        {ref.status}
+                      </span>
+                    </td>
+                    <td className="py-3 px-4">
+                      <div className="flex gap-1">
+                        {ref.status === "pending" && ref.referredName && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => updateMutation.mutate({ id: ref.id, status: "completed" })}
+                            disabled={updateMutation.isPending}
+                            className="text-xs"
+                          >
+                            Mark Completed
+                          </Button>
+                        )}
+                        {ref.status === "completed" && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => updateMutation.mutate({ id: ref.id, status: "rewarded" })}
+                            disabled={updateMutation.isPending}
+                            className="text-xs bg-green-50 text-green-700"
+                          >
+                            Mark Rewarded
+                          </Button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// VIP Client Management Component
+function VipClientDashboard({ userRole }: { userRole: string }) {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const [editingNotes, setEditingNotes] = useState<string | null>(null);
+  const [notesValue, setNotesValue] = useState("");
+
+  const { data: clients = [], isLoading } = useQuery<any[]>({
+    queryKey: ["/api/admin/clients"],
+    queryFn: async () => {
+      const res = await fetch("/api/admin/clients", {
+        headers: { "x-usena-role": userRole },
+      });
+      if (!res.ok) throw new Error("Failed to fetch");
+      return res.json();
+    },
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: async ({ id, updates }: { id: string; updates: any }) => {
+      const res = await fetch(`/api/admin/clients/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", "x-usena-role": userRole },
+        body: JSON.stringify(updates),
+      });
+      if (!res.ok) throw new Error("Failed to update");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/clients"] });
+      toast({ title: "Client profile updated" });
+      setEditingNotes(null);
+    },
+  });
+
+  const recalculateMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch("/api/admin/clients/recalculate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-usena-role": userRole },
+      });
+      if (!res.ok) throw new Error("Failed to recalculate");
+      return res.json();
+    },
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/clients"] });
+      toast({ title: "VIP Tiers Recalculated", description: `${data.recalculated} client profiles updated` });
+    },
+  });
+
+  const tierColors: Record<string, string> = {
+    Standard: "bg-gray-100 text-gray-700 border-gray-300",
+    Silver: "bg-gray-200 text-gray-800 border-gray-400",
+    Gold: "bg-amber-100 text-amber-800 border-amber-400",
+    Platinum: "bg-purple-100 text-purple-800 border-purple-400",
+  };
+
+  const tierIcons: Record<string, string> = {
+    Standard: "",
+    Silver: "🥈",
+    Gold: "🥇",
+    Platinum: "💎",
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-white rounded-lg shadow-sm p-6">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-3">
+            <Crown className="h-6 w-6 text-amber-600" />
+            <div>
+              <h2 className="text-xl font-semibold text-gray-900">VIP Client Management</h2>
+              <p className="text-sm text-gray-600">Track client tiers, bonus photos, and priority status</p>
+            </div>
+          </div>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => recalculateMutation.mutate()}
+            disabled={recalculateMutation.isPending}
+            className="flex items-center gap-2 bg-amber-50 hover:bg-amber-100 border-amber-300 text-amber-700"
+          >
+            <RefreshCw className={`h-4 w-4 ${recalculateMutation.isPending ? "animate-spin" : ""}`} />
+            Recalculate Tiers
+          </Button>
+        </div>
+
+        {isLoading ? (
+          <div className="text-center py-8 text-gray-500">Loading client profiles...</div>
+        ) : clients.length === 0 ? (
+          <div className="text-center py-8 text-gray-500">
+            No client profiles yet. Profiles are automatically created when projects are delivered.
+            <div className="mt-2">
+              <Button size="sm" variant="outline" onClick={() => recalculateMutation.mutate()} disabled={recalculateMutation.isPending}>
+                Scan Existing Projects
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-gray-200">
+                  <th className="text-left py-3 px-4 font-medium text-gray-600">Client</th>
+                  <th className="text-left py-3 px-4 font-medium text-gray-600">VIP Tier</th>
+                  <th className="text-left py-3 px-4 font-medium text-gray-600">Projects</th>
+                  <th className="text-left py-3 px-4 font-medium text-gray-600">Bonus Photos</th>
+                  <th className="text-left py-3 px-4 font-medium text-gray-600">Priority</th>
+                  <th className="text-left py-3 px-4 font-medium text-gray-600">Notes</th>
+                </tr>
+              </thead>
+              <tbody>
+                {clients.map((client: any) => (
+                  <tr key={client.id} className="border-b border-gray-100 hover:bg-gray-50">
+                    <td className="py-3 px-4">
+                      <div className="font-medium text-gray-900">{client.clientName}</div>
+                      <div className="text-xs text-gray-500">{client.clientEmail}</div>
+                    </td>
+                    <td className="py-3 px-4">
+                      <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold border ${tierColors[client.vipTier] || tierColors.Standard}`}>
+                        {tierIcons[client.vipTier]} {client.vipTier}
+                      </span>
+                    </td>
+                    <td className="py-3 px-4">
+                      <div className="text-gray-900 font-medium">{client.totalDelivered}</div>
+                      <div className="text-xs text-gray-500">delivered</div>
+                    </td>
+                    <td className="py-3 px-4">
+                      {client.bonusPhotos > 0 ? (
+                        <span className="inline-flex items-center gap-1 px-2 py-1 rounded bg-green-50 text-green-700 text-xs font-medium">
+                          +{client.bonusPhotos} bonus
+                        </span>
+                      ) : (
+                        <span className="text-gray-400 text-xs">—</span>
+                      )}
+                    </td>
+                    <td className="py-3 px-4">
+                      {client.priorityTurnaround ? (
+                        <span className="inline-flex items-center gap-1 px-2 py-1 rounded bg-blue-50 text-blue-700 text-xs font-medium">
+                          ⚡ Priority
+                        </span>
+                      ) : (
+                        <span className="text-gray-400 text-xs">—</span>
+                      )}
+                    </td>
+                    <td className="py-3 px-4 max-w-[200px]">
+                      {editingNotes === client.id ? (
+                        <div className="flex gap-1">
+                          <input
+                            type="text"
+                            value={notesValue}
+                            onChange={(e) => setNotesValue(e.target.value)}
+                            className="text-xs border rounded px-2 py-1 w-full"
+                            placeholder="Add notes..."
+                            autoFocus
+                          />
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="text-xs h-7"
+                            onClick={() => updateMutation.mutate({ id: client.id, updates: { notes: notesValue } })}
+                          >
+                            Save
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="text-xs h-7"
+                            onClick={() => setEditingNotes(null)}
+                          >
+                            ✕
+                          </Button>
+                        </div>
+                      ) : (
+                        <div
+                          className="text-xs text-gray-500 cursor-pointer hover:text-gray-700 truncate"
+                          onClick={() => { setEditingNotes(client.id); setNotesValue(client.notes || ""); }}
+                          title={client.notes || "Click to add notes"}
+                        >
+                          {client.notes || <span className="italic text-gray-400">Click to add notes...</span>}
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        <div className="mt-4 pt-4 border-t border-gray-200">
+          <div className="flex gap-6 text-xs text-gray-500">
+            <div className="flex items-center gap-1"><span className={`inline-block w-3 h-3 rounded-full bg-gray-300`}></span> Standard (0-2 projects)</div>
+            <div className="flex items-center gap-1"><span className={`inline-block w-3 h-3 rounded-full bg-gray-400`}></span> Silver (3-5 projects)</div>
+            <div className="flex items-center gap-1"><span className={`inline-block w-3 h-3 rounded-full bg-amber-400`}></span> Gold (6-9 projects)</div>
+            <div className="flex items-center gap-1"><span className={`inline-block w-3 h-3 rounded-full bg-purple-400`}></span> Platinum (10+ projects)</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Data Wrangler Delay Alert Component
+function DelayAlertBanner({ projects, user }: { projects: Project[]; user: User }) {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const [selectedProject, setSelectedProject] = useState<Project | null>(null);
+  const [targetWeekStart, setTargetWeekStart] = useState("");
+  const [dialogOpen, setDialogOpen] = useState(false);
+
+  const now = new Date();
+  const startOfWeek = new Date(now);
+  startOfWeek.setDate(now.getDate() - now.getDay());
+  startOfWeek.setHours(0, 0, 0, 0);
+  const endOfWeek = new Date(startOfWeek);
+  endOfWeek.setDate(startOfWeek.getDate() + 6);
+  endOfWeek.setHours(23, 59, 59, 999);
+
+  const overdueProjects = projects.filter(p => {
+    if (!p.dueDate || !p.clientEmail) return false;
+    const due = new Date(p.dueDate);
+    const isPastOrThisWeek = due <= endOfWeek;
+    const isNotDelivered = p.status !== "Delivered" && p.status !== "Review";
+    const isNotAssigned = !p.assignedTo;
+    return isPastOrThisWeek && isNotDelivered && isNotAssigned;
+  });
+
+  const sendDelayMutation = useMutation({
+    mutationFn: async ({ projectId, targetWeekStart, sentBy }: { projectId: string; targetWeekStart: string; sentBy: string }) => {
+      const res = await apiRequest("POST", `/api/projects/${projectId}/send-delay-notice`, {
+        targetWeekStart,
+        sentBy,
+      });
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({ title: "Delay notice sent", description: "The client has been notified about the delay." });
+      setDialogOpen(false);
+      setSelectedProject(null);
+      setTargetWeekStart("");
+    },
+    onError: () => {
+      toast({ title: "Failed to send", description: "Could not send the delay notice.", variant: "destructive" });
+    },
+  });
+
+  if (overdueProjects.length === 0) return null;
+
+  const getNextMonday = () => {
+    const d = new Date();
+    d.setDate(d.getDate() + (8 - d.getDay()) % 7);
+    if (d.getDay() === 0) d.setDate(d.getDate() + 1);
+    return d.toISOString().split("T")[0];
+  };
+
+  const formatWeekRange = (startStr: string) => {
+    if (!startStr) return "";
+    const start = new Date(startStr + "T00:00:00");
+    const end = new Date(start);
+    end.setDate(start.getDate() + 4);
+    return `${start.toLocaleDateString('en-US', { month: 'long', day: 'numeric' })} - ${end.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}`;
+  };
+
+  return (
+    <>
+      <div className="bg-orange-50 border border-orange-200 rounded-lg p-4 mb-4">
+        <div className="flex items-center gap-2 mb-3">
+          <AlertTriangle className="h-5 w-5 text-orange-600" />
+          <h3 className="font-semibold text-orange-800">Delay Alert - Unassigned Projects Due</h3>
+          <span className="ml-auto text-sm text-orange-600 font-medium">{overdueProjects.length} project{overdueProjects.length !== 1 ? "s" : ""}</span>
+        </div>
+        <div className="space-y-2">
+          {overdueProjects.map(project => (
+            <div key={project.id} className="flex items-center justify-between bg-white rounded-lg p-3 border border-orange-100">
+              <div>
+                <div className="font-medium text-gray-900">{project.clientName}</div>
+                <div className="text-xs text-gray-500">
+                  {project.clientEmail} • Due: {project.dueDate ? new Date(project.dueDate).toLocaleDateString() : "N/A"} • Status: {project.status}
+                </div>
+              </div>
+              <Button
+                size="sm"
+                variant="outline"
+                className="bg-orange-50 hover:bg-orange-100 border-orange-300 text-orange-700"
+                onClick={() => {
+                  setSelectedProject(project);
+                  setTargetWeekStart(getNextMonday());
+                  setDialogOpen(true);
+                }}
+              >
+                <Mail className="h-3 w-3 mr-1" />
+                Send Delay Notice
+              </Button>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Send Delay Notice</DialogTitle>
+          </DialogHeader>
+          {selectedProject && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-sm font-medium text-gray-600">Client Name</label>
+                  <div className="text-sm text-gray-900 bg-gray-50 rounded px-3 py-2">{selectedProject.clientName}</div>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-600">Client Email</label>
+                  <div className="text-sm text-gray-900 bg-gray-50 rounded px-3 py-2">{selectedProject.clientEmail}</div>
+                </div>
+              </div>
+              <div>
+                <label className="text-sm font-medium text-gray-600">Target Delivery Week (Monday start)</label>
+                <input
+                  type="date"
+                  value={targetWeekStart}
+                  onChange={(e) => setTargetWeekStart(e.target.value)}
+                  className="w-full border rounded px-3 py-2 text-sm mt-1"
+                />
+                {targetWeekStart && (
+                  <div className="text-xs text-gray-500 mt-1">
+                    Week of {formatWeekRange(targetWeekStart)}
+                  </div>
+                )}
+              </div>
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+                <div className="text-xs font-medium text-amber-700 mb-2">Email Preview:</div>
+                <div className="text-sm text-gray-700">
+                  <p className="mb-2">Dear {selectedProject.clientName},</p>
+                  <p className="mb-2">We wanted to let you know that your photos are taking a bit longer than expected. We sincerely apologize for any inconvenience.</p>
+                  {targetWeekStart && (
+                    <p className="mb-2 font-medium">Your photos are now scheduled for delivery during the week of {formatWeekRange(targetWeekStart)}.</p>
+                  )}
+                  <p>Thank you for your patience and understanding.</p>
+                </div>
+              </div>
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
+                <Button
+                  onClick={() => sendDelayMutation.mutate({
+                    projectId: selectedProject.id,
+                    targetWeekStart,
+                    sentBy: user.name,
+                  })}
+                  disabled={!targetWeekStart || sendDelayMutation.isPending}
+                  className="bg-orange-600 hover:bg-orange-700 text-white"
+                >
+                  {sendDelayMutation.isPending ? "Sending..." : "Send Notification"}
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
+
 export default function Dashboard() {
   const [, setLocation] = useLocation();
   const [user, setUser] = useState<User | null>(null);
-  const [currentView, setCurrentView] = useState<'login' | 'register'>('login');
+  const [currentView, setCurrentView] = useState<'login'>('login');
   const [showArchive, setShowArchive] = useState(false);
   const [showCommissions, setShowCommissions] = useState(false);
   const [showExtraPhotosSales, setShowExtraPhotosSales] = useState(false);
   const [showComplaints, setShowComplaints] = useState(false);
+  const [showReferrals, setShowReferrals] = useState(false);
+  const [showVipClients, setShowVipClients] = useState(false);
   const [showTradeModal, setShowTradeModal] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -606,32 +1086,19 @@ export default function Dashboard() {
   
   // Session timeout duration (2 hours in milliseconds)
   const SESSION_TIMEOUT = 2 * 60 * 60 * 1000;
-  const [users, setUsers] = useState<User[]>([
-    { id: "1", name: "Earl", role: "Retoucher1", value: "Retoucher1", abbr: "EC" },
-    { id: "2", name: "Dr Asa", role: "Retoucher2", value: "Retoucher2", abbr: "ASA" },
-    { id: "3", name: "Lucky", role: "Retoucher3", value: "Retoucher3", abbr: "LM" },
-    { id: "4", name: "Anesu's Pops", role: "Admin", value: "Admin", abbr: "AP" },
-    { id: "5", name: "Evans", role: "Evans", value: "Evans", abbr: "EV" },
-    // Default system users without IDs (cannot be edited/deleted)
-    { name: "Admin", role: "Admin", value: "Admin" },
-    { name: "Sales", role: "Sales", value: "Sales" },
-    { name: "Workflow Manager", role: "LeadRetoucher", value: "LeadRetoucher" },
-    { name: "Data Wrangler", role: "DataWrangler", value: "DataWrangler" },
-    { name: "Evans", role: "Evans", value: "Evans" },
-  ]);
+  const { data: apiUsers = [] } = useQuery<ApiUser[]>({
+    queryKey: ["/api/users"],
+  });
 
-  // User credentials for login/register system
-  const [userCredentials, setUserCredentials] = useState<UserCredentials[]>([
-    { id: "admin", username: "admin", password: "admin720", role: "Admin", name: "Anesu's Pops", abbreviation: "AP" },
-    { id: "sales", username: "sales", password: "sales420", role: "Sales", name: "Sales", abbreviation: "SAL" },
-    { id: "workflow", username: "workflow", password: "Chabs360", role: "LeadRetoucher", name: "Workflow Manager", abbreviation: "WFM" },
-    { id: "data", username: "data", password: "Data360", role: "DataWrangler", name: "Data Wrangler", abbreviation: "DW" },
-    { id: "earl", username: "earl", password: "earl123", role: "Retoucher1", name: "Earl", abbreviation: "EC" },
-    { id: "asa", username: "asa", password: "asa123", role: "Retoucher2", name: "Dr Asa", abbreviation: "ASA" },
-    // Single working account for Lucky with all his projects
-    { id: "lucky", username: "lucky", password: "lucky123", role: "Retoucher3", name: "Lucky", abbreviation: "LM" },
-    { id: "evans", username: "evans", password: "evans123", role: "Evans", name: "Evans", abbreviation: "EV" },
-  ]);
+  const users: User[] = useMemo(() => {
+    return apiUsers.map(u => ({
+      id: u.id,
+      name: u.name,
+      role: u.role,
+      value: u.role,
+      abbr: u.abbreviation,
+    }));
+  }, [apiUsers]);
 
   const { data: allProjects = [], isLoading } = useQuery<Project[]>({
     queryKey: ["/api/projects"],
@@ -765,11 +1232,6 @@ export default function Dashboard() {
       }
       
       setUser(storedUser);
-      // Sync with users array for consistency
-      const existingUserIndex = users.findIndex(u => u.name === storedUser.name);
-      if (existingUserIndex === -1) {
-        setUsers(prev => [...prev, storedUser]);
-      }
     }
 
     // Set up interval to check session expiry every minute
@@ -843,71 +1305,12 @@ export default function Dashboard() {
     setUser(loggedInUser);
     setCurrentView('login');
     saveSession(loggedInUser);
-    
-    // Sync with users array for consistency
-    const existingUserIndex = users.findIndex(u => u.name === loggedInUser.name);
-    if (existingUserIndex === -1) {
-      setUsers(prev => [...prev, loggedInUser]);
-    }
-  };
-
-  const handleRegister = (newUserCredential: UserCredential) => {
-    // Convert to UserCredentials format and add to credentials array
-    const newCredentials: UserCredentials = {
-      id: newUserCredential.id || Date.now().toString(),
-      username: newUserCredential.username,
-      password: newUserCredential.password,
-      name: newUserCredential.name,
-      role: newUserCredential.role,
-      abbreviation: newUserCredential.abbr
-    };
-    setUserCredentials(prev => [...prev, newCredentials]);
-    
-    // Create User object for immediate login
-    const newUser: User = {
-      id: newUserCredential.id,
-      name: newUserCredential.name,
-      role: newUserCredential.role,
-      value: newUserCredential.role === "Retoucher" ? `${newUserCredential.name}_${Date.now()}` : newUserCredential.role,
-      abbr: newUserCredential.abbr
-    };
-    
-    // Auto-login after registration
-    handleLogin(newUser);
   };
 
   const handleLogout = () => {
     setUser(null);
     setCurrentView('login');
     clearSession();
-  };
-
-  const handleUpdateUserCredentials = (credentials: UserCredentials[]) => {
-    setUserCredentials(credentials);
-  };
-
-  const handleAddUser = (newUser: User) => {
-    setUsers(prev => [...prev, newUser]);
-  };
-
-  const handleEditUser = (userId: string, updatedUser: Partial<User>) => {
-    setUsers(prev => prev.map(u => 
-      u.id === userId ? { ...u, ...updatedUser } : u
-    ));
-    
-    // If editing the current user, update the user state
-    if (user && user.id === userId) {
-      setUser(prev => prev ? { ...prev, ...updatedUser } : null);
-    }
-  };
-
-  const handleDeleteUser = (userId: string) => {
-    setUsers(prev => prev.filter(u => u.id !== userId));
-    
-    // If deleting the current user, reset to null
-    if (user && user.id === userId) {
-      setUser(null);
-    }
   };
 
   // Manual rollover mutation
@@ -968,23 +1371,11 @@ export default function Dashboard() {
     }
   };
 
-  // Show login/register form if user is not logged in
   if (!user) {
-    if (currentView === 'register') {
-      return (
-        <RegisterForm 
-          onRegister={handleRegister}
-          onBackToLogin={() => setCurrentView('login')}
-          existingUsers={userCredentials}
-        />
-      );
-    }
-    
     return (
       <LoginForm 
         onLogin={handleLogin}
-        onShowRegister={() => {}} // No longer used, kept for compatibility
-        userCredentials={userCredentials}
+        onShowRegister={() => {}}
       />
     );
   }
@@ -1076,6 +1467,7 @@ export default function Dashboard() {
                         setShowArchive(!showArchive);
                         setShowCommissions(false);
                         setShowExtraPhotosSales(false);
+                        setShowReferrals(false);
                       }}
                       className="flex items-center gap-2"
                     >
@@ -1093,6 +1485,7 @@ export default function Dashboard() {
                           setShowArchive(false);
                           setShowExtraPhotosSales(false);
                           setShowComplaints(false);
+                          setShowReferrals(false);
                         }}
                         className="flex items-center gap-2 bg-green-50 hover:bg-green-100 border-green-200 text-green-700"
                       >
@@ -1111,6 +1504,7 @@ export default function Dashboard() {
                           setShowArchive(false);
                           setShowCommissions(false);
                           setShowComplaints(false);
+                          setShowReferrals(false);
                         }}
                         className="flex items-center gap-2 bg-purple-50 hover:bg-purple-100 border-purple-200 text-purple-700"
                       >
@@ -1189,12 +1583,6 @@ export default function Dashboard() {
                             <DialogTitle>Settings</DialogTitle>
                           </DialogHeader>
                           <SettingsPanel
-                            users={users}
-                            userCredentials={userCredentials}
-                            onAddUser={handleAddUser}
-                            onEditUser={handleEditUser}
-                            onDeleteUser={handleDeleteUser}
-                            onUpdateUserCredentials={handleUpdateUserCredentials}
                             currentUser={user}
                           />
                         </DialogContent>
@@ -1211,11 +1599,52 @@ export default function Dashboard() {
                           setShowArchive(false);
                           setShowCommissions(false);
                           setShowExtraPhotosSales(false);
+                          setShowReferrals(false);
                         }}
                         className="flex items-center gap-2 bg-yellow-50 hover:bg-yellow-100 border-yellow-300 text-yellow-700"
                       >
                         <AlertTriangle className="h-4 w-4" />
                         Complaints
+                      </Button>
+                    )}
+
+                    {/* Referrals Button - Admin and Sales */}
+                    {["Admin", "Sales"].includes(user.role) && (
+                      <Button 
+                        variant={showReferrals ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => {
+                          setShowReferrals(!showReferrals);
+                          setShowArchive(false);
+                          setShowCommissions(false);
+                          setShowExtraPhotosSales(false);
+                          setShowComplaints(false);
+                          setShowVipClients(false);
+                        }}
+                        className="flex items-center gap-2 bg-pink-50 hover:bg-pink-100 border-pink-200 text-pink-700"
+                      >
+                        <Gift className="h-4 w-4" />
+                        Referrals
+                      </Button>
+                    )}
+
+                    {/* VIP Clients Button - Admin and Sales */}
+                    {["Admin", "Sales"].includes(user.role) && (
+                      <Button 
+                        variant={showVipClients ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => {
+                          setShowVipClients(!showVipClients);
+                          setShowArchive(false);
+                          setShowCommissions(false);
+                          setShowExtraPhotosSales(false);
+                          setShowComplaints(false);
+                          setShowReferrals(false);
+                        }}
+                        className="flex items-center gap-2 bg-amber-50 hover:bg-amber-100 border-amber-200 text-amber-700"
+                      >
+                        <Crown className="h-4 w-4" />
+                        VIP Clients
                       </Button>
                     )}
 
@@ -1343,6 +1772,8 @@ export default function Dashboard() {
             if (widgetId === "ready_delivery" && isWidgetVisible("ready_delivery") && 
                 user.role === "Sales" && !showExtraPhotosSales) {
               const reviewProjects = projects.filter(p => p.status === "Review");
+              const readyForDelivery = reviewProjects.filter(p => p.galleryLink && !p.deliveryApproved);
+              const awaitingGallery = reviewProjects.filter(p => !p.galleryLink);
               return (
                 <div key={widgetId} className="bg-white rounded-lg shadow-sm">
                   <div className="px-6 py-4 border-b border-gray-200">
@@ -1352,8 +1783,20 @@ export default function Dashboard() {
                         <h2 className="text-lg font-semibold text-gray-900">Ready for Delivery</h2>
                         <span className="text-sm text-gray-500">Completed by retouchers</span>
                       </div>
-                      <div className="text-sm text-gray-600">
-                        {reviewProjects.length} project{reviewProjects.length !== 1 ? 's' : ''}
+                      <div className="flex items-center gap-3">
+                        {readyForDelivery.length > 0 && (
+                          <span className="text-xs font-medium bg-green-100 text-green-800 px-2 py-1 rounded-full">
+                            {readyForDelivery.length} ready to send
+                          </span>
+                        )}
+                        {awaitingGallery.length > 0 && (
+                          <span className="text-xs font-medium bg-yellow-100 text-yellow-800 px-2 py-1 rounded-full">
+                            {awaitingGallery.length} awaiting gallery
+                          </span>
+                        )}
+                        <div className="text-sm text-gray-600">
+                          {reviewProjects.length} project{reviewProjects.length !== 1 ? 's' : ''}
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -1405,6 +1848,21 @@ export default function Dashboard() {
           {/* Extra Photos Sales View for Sales */}
           {user.role === "Sales" && showExtraPhotosSales && (
             <ExtraPhotosSalesView projects={allProjects || []} />
+          )}
+          
+          {/* Referral Dashboard for Admin/Sales */}
+          {["Admin", "Sales"].includes(user.role) && showReferrals && (
+            <ReferralDashboard userRole={user.role} />
+          )}
+
+          {/* VIP Client Dashboard for Admin/Sales */}
+          {["Admin", "Sales"].includes(user.role) && showVipClients && (
+            <VipClientDashboard userRole={user.role} />
+          )}
+
+          {/* Delay Alert Banner for DataWrangler */}
+          {user.role === "DataWrangler" && !showCommissions && (
+            <DelayAlertBanner projects={projects} user={user} />
           )}
           
           {/* Commission View for DataWrangler */}

@@ -2,13 +2,16 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { WebSocketServer, WebSocket } from "ws";
 import { storage } from "./storage";
-import { insertProjectSchema, updateProjectSchema, insertProjectNoteSchema, updateProjectNoteSchema, insertTradeOfferSchema, updateTradeOfferSchema, ProjectStatus, TradeOfferStatus } from "@shared/schema";
+import { insertProjectSchema, updateProjectSchema, insertProjectNoteSchema, updateProjectNoteSchema, insertTradeOfferSchema, updateTradeOfferSchema, ProjectStatus, TradeOfferStatus, insertUserSchema, loginUserSchema, insertSneakPeekSchema, sneakPeeks as sneakPeeksTable } from "@shared/schema";
+import { db } from "./db";
+import { eq } from "drizzle-orm";
 import { ObjectStorageService, ObjectNotFoundError } from "./objectStorage";
 import { registerObjectStorageRoutes } from "./replit_integrations/object_storage";
 import type { Notification, WebSocketMessage } from "@shared/schema";
 import { triggerManualRollover, performManualRolloverToNextWeek, performManualRollbackFromNextWeek } from "./rolloverScheduler";
 import { registerShoottrackerRoutes } from "./shoottrackerRoutes";
-import { sendAssignmentWelcomeEmail, generateToken } from "./services/emailService";
+import { sendAssignmentWelcomeEmail, sendGalleryDeliveryEmail, sendSneakPeekEmail, sendSatisfactionSurveyEmail, sendSchedulingNotificationEmail, sendManualDelayNoticeEmail, generateToken } from "./services/emailService";
+import { VipTier } from "@shared/schema";
 
 // Global WebSocket connections store
 const wsConnections = new Map<string, { ws: WebSocket, userId?: string }>();
@@ -65,6 +68,18 @@ function broadcastNotification(notification: Notification, targetUserId?: string
   });
 }
 
+// VIP tier calculation helper
+function calculateVipTier(totalDelivered: number): { vipTier: string; bonusPhotos: number; priorityTurnaround: boolean } {
+  if (totalDelivered >= 10) {
+    return { vipTier: VipTier.PLATINUM, bonusPhotos: 3, priorityTurnaround: true };
+  } else if (totalDelivered >= 6) {
+    return { vipTier: VipTier.GOLD, bonusPhotos: 2, priorityTurnaround: true };
+  } else if (totalDelivered >= 3) {
+    return { vipTier: VipTier.SILVER, bonusPhotos: 1, priorityTurnaround: false };
+  }
+  return { vipTier: VipTier.STANDARD, bonusPhotos: 0, priorityTurnaround: false };
+}
+
 // Helper function to broadcast project updates
 function broadcastProjectUpdate(project: any) {
   // SSE broadcast
@@ -89,7 +104,104 @@ function broadcastProjectUpdate(project: any) {
   });
 }
 
+async function seedDefaultUsers() {
+  const defaultUsers = [
+    { id: "admin", username: "admin", password: "admin720", role: "Admin", name: "Anesu's Pops", abbreviation: "AP" },
+    { id: "sales", username: "sales", password: "sales420", role: "Sales", name: "Sales", abbreviation: "SAL" },
+    { id: "workflow", username: "workflow", password: "Chabs360", role: "LeadRetoucher", name: "Workflow Manager", abbreviation: "WFM" },
+    { id: "data", username: "data", password: "Data360", role: "DataWrangler", name: "Data Wrangler", abbreviation: "DW" },
+    { id: "earl", username: "earl", password: "earl123", role: "Retoucher1", name: "Earl", abbreviation: "EC" },
+    { id: "asa", username: "asa", password: "asa123", role: "Retoucher2", name: "Dr Asa", abbreviation: "ASA" },
+    { id: "lucky", username: "lucky", password: "lucky123", role: "Retoucher3", name: "Lucky", abbreviation: "LM" },
+    { id: "evans", username: "evans", password: "evans123", role: "Evans", name: "Evans", abbreviation: "EV" },
+  ];
+
+  for (const userData of defaultUsers) {
+    const existing = await storage.getUserByUsername(userData.username);
+    if (!existing) {
+      await storage.createUser({
+        username: userData.username,
+        password: userData.password,
+        role: userData.role,
+        name: userData.name,
+        abbreviation: userData.abbreviation,
+      });
+      console.log(`Seeded user: ${userData.username}`);
+    }
+  }
+  console.log("User seeding complete");
+}
+
 export async function registerRoutes(app: Express): Promise<Server> {
+  await seedDefaultUsers();
+
+  app.post("/api/auth/login", async (req, res) => {
+    try {
+      const { username, password } = loginUserSchema.parse(req.body);
+      const user = await storage.getUserByUsername(username);
+      if (!user || user.password !== password) {
+        return res.status(401).json({ error: "Invalid username or password" });
+      }
+      const { password: _, ...userWithoutPassword } = user;
+      res.json(userWithoutPassword);
+    } catch (error) {
+      res.status(400).json({ error: "Invalid request" });
+    }
+  });
+
+  app.get("/api/users", async (req, res) => {
+    try {
+      const allUsers = await storage.getAllUsers();
+      const usersWithoutPasswords = allUsers.map(({ password, ...rest }) => rest);
+      res.json(usersWithoutPasswords);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch users" });
+    }
+  });
+
+  app.post("/api/users", async (req, res) => {
+    try {
+      const validatedData = insertUserSchema.parse(req.body);
+      const existing = await storage.getUserByUsername(validatedData.username);
+      if (existing) {
+        return res.status(409).json({ error: "Username already exists" });
+      }
+      const user = await storage.createUser(validatedData);
+      const { password: _, ...userWithoutPassword } = user;
+      res.status(201).json(userWithoutPassword);
+    } catch (error) {
+      res.status(400).json({ error: "Invalid user data" });
+    }
+  });
+
+  app.patch("/api/users/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const updates = req.body;
+      const user = await storage.updateUser(id, updates);
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
+      const { password: _, ...userWithoutPassword } = user;
+      res.json(userWithoutPassword);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to update user" });
+    }
+  });
+
+  app.delete("/api/users/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const deleted = await storage.deleteUser(id);
+      if (!deleted) {
+        return res.status(404).json({ error: "User not found" });
+      }
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to delete user" });
+    }
+  });
+
   // Email configuration diagnostic endpoint
   app.get("/api/admin/email-diagnostics", async (req, res) => {
     const diagnostics = {
@@ -266,6 +378,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
         } catch (emailError) {
           console.error('[Email] Error sending assignment welcome email:', emailError);
+        }
+      }
+
+      // Check if dueDate was changed - send scheduling notification
+      if (validatedData.dueDate && oldProject && oldProject.clientEmail) {
+        const oldDue = oldProject.dueDate ? new Date(oldProject.dueDate).toDateString() : null;
+        const newDue = new Date(validatedData.dueDate).toDateString();
+        if (oldDue !== newDue) {
+          try {
+            const dueDate = new Date(validatedData.dueDate);
+            const weekStart = new Date(dueDate);
+            weekStart.setDate(dueDate.getDate() - dueDate.getDay() + 1); // Monday
+            const weekEnd = new Date(weekStart);
+            weekEnd.setDate(weekStart.getDate() + 4); // Friday
+
+            await sendSchedulingNotificationEmail(
+              oldProject.clientEmail,
+              project.clientName,
+              weekStart,
+              weekEnd,
+              project.id
+            );
+            console.log(`[Email] Scheduling notification sent to ${oldProject.clientEmail} for project ${project.clientName}`);
+          } catch (emailError) {
+            console.error('[Email] Error sending scheduling notification:', emailError);
+          }
         }
       }
 
@@ -906,6 +1044,308 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Gallery Link - Add/update gallery link for a project (Retoucher action)
+  app.patch("/api/projects/:id/gallery-link", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { galleryLink, addedBy } = req.body;
+
+      if (!galleryLink || !addedBy) {
+        return res.status(400).json({ error: "galleryLink and addedBy are required" });
+      }
+
+      const project = await storage.getProject(id);
+      if (!project) {
+        return res.status(404).json({ error: "Project not found" });
+      }
+
+      const updatedProject = await storage.updateProject(id, {
+        galleryLink,
+        galleryLinkAddedAt: new Date(),
+        galleryLinkAddedBy: addedBy,
+      });
+
+      if (updatedProject) {
+        broadcastProjectUpdate(updatedProject);
+      }
+
+      res.json(updatedProject);
+    } catch (error) {
+      console.error("Error adding gallery link:", error);
+      res.status(500).json({ error: "Failed to add gallery link" });
+    }
+  });
+
+  // Approve Delivery - Sales approves gallery delivery and sends email to client
+  app.post("/api/projects/:id/approve-delivery", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { approvedBy } = req.body;
+
+      if (!approvedBy) {
+        return res.status(400).json({ error: "approvedBy is required" });
+      }
+
+      const project = await storage.getProject(id);
+      if (!project) {
+        return res.status(404).json({ error: "Project not found" });
+      }
+
+      if (!project.galleryLink) {
+        return res.status(400).json({ error: "Project has no gallery link to deliver" });
+      }
+
+      if (project.deliveryApproved) {
+        return res.status(400).json({ error: "Delivery has already been approved" });
+      }
+
+      const updateData: any = {
+        deliveryApproved: true,
+        deliveryApprovedAt: new Date(),
+        deliveryApprovedBy: approvedBy,
+        status: ProjectStatus.DELIVERED,
+        deliveredAt: new Date(),
+      };
+
+      let referralCode: string | undefined;
+      
+      // Create referral for the client
+      if (project.clientEmail) {
+        try {
+          referralCode = generateToken();
+          await storage.createReferral({
+            referrerEmail: project.clientEmail,
+            referrerName: project.clientName,
+            referralCode,
+            status: "pending",
+          });
+          console.log(`[Referral] Created referral code ${referralCode} for ${project.clientName}`);
+        } catch (refError) {
+          console.error('[Referral] Error creating referral:', refError);
+        }
+      }
+
+      // Send delivery email if client has an email
+      if (project.clientEmail && project.galleryLink) {
+        try {
+          const emailResult = await sendGalleryDeliveryEmail(
+            project.clientEmail,
+            project.clientName,
+            project.galleryLink,
+            project.id,
+            referralCode
+          );
+
+          if (emailResult.success) {
+            updateData.deliveryEmailSentAt = new Date();
+            console.log(`[Email] Gallery delivery email sent to ${project.clientEmail} for project ${project.clientName}`);
+          } else {
+            console.error(`[Email] Failed to send gallery delivery email: ${emailResult.error}`);
+          }
+        } catch (emailError) {
+          console.error('[Email] Error sending gallery delivery email:', emailError);
+        }
+
+        // Create survey and send survey email
+        try {
+          const surveyToken = generateToken();
+          await storage.createSurvey({
+            projectId: project.id,
+            clientEmail: project.clientEmail,
+            clientName: project.clientName,
+            surveyToken,
+          });
+          await sendSatisfactionSurveyEmail(
+            project.clientEmail,
+            project.clientName,
+            surveyToken,
+            project.id
+          );
+          console.log(`[Survey] Survey created and email sent for project ${project.clientName}`);
+        } catch (surveyError) {
+          console.error('[Survey] Error creating survey:', surveyError);
+        }
+      }
+
+      const updatedProject = await storage.updateProject(id, updateData);
+
+      // Update VIP client profile after delivery
+      if (project.clientEmail) {
+        try {
+          const existingProfile = await storage.getClientProfile(project.clientEmail);
+          const newDelivered = (existingProfile?.totalDelivered || 0) + 1;
+          const newProjects = (existingProfile?.totalProjects || 0) + (existingProfile ? 0 : 1);
+          const tierInfo = calculateVipTier(newDelivered);
+
+          await storage.upsertClientProfile({
+            clientEmail: project.clientEmail,
+            clientName: project.clientName,
+            totalDelivered: newDelivered,
+            totalProjects: newProjects,
+            ...tierInfo,
+            lastProjectAt: new Date(),
+            firstProjectAt: existingProfile?.firstProjectAt || new Date(),
+          });
+          console.log(`[VIP] Updated client profile for ${project.clientEmail}: tier=${tierInfo.vipTier}, delivered=${newDelivered}`);
+        } catch (vipError) {
+          console.error('[VIP] Error updating client profile:', vipError);
+        }
+      }
+
+      if (updatedProject) {
+        const notification: Notification = {
+          id: `notif_${Date.now()}_${Math.random()}`,
+          type: 'PROJECT_COMPLETED',
+          title: 'Project Delivered!',
+          message: `Project "${project.clientName}" has been delivered to the client`,
+          projectId: project.id,
+          projectName: project.clientName,
+          createdAt: new Date(),
+          read: false
+        };
+        broadcastNotification(notification);
+        broadcastProjectUpdate(updatedProject);
+      }
+
+      res.json(updatedProject);
+    } catch (error) {
+      console.error("Error approving delivery:", error);
+      res.status(500).json({ error: "Failed to approve delivery" });
+    }
+  });
+
+  // Survey endpoints (public)
+  app.get("/api/survey/:token", async (req, res) => {
+    try {
+      const survey = await storage.getSurveyByToken(req.params.token);
+      if (!survey) {
+        return res.status(404).json({ error: "Survey not found" });
+      }
+      res.json(survey);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to get survey" });
+    }
+  });
+
+  app.post("/api/survey/:token", async (req, res) => {
+    try {
+      const survey = await storage.getSurveyByToken(req.params.token);
+      if (!survey) {
+        return res.status(404).json({ error: "Survey not found" });
+      }
+      if (survey.completedAt) {
+        return res.status(400).json({ error: "Survey already completed" });
+      }
+      const { rating, feedback, wouldRecommend } = req.body;
+      if (!rating || rating < 1 || rating > 5) {
+        return res.status(400).json({ error: "Rating must be between 1 and 5" });
+      }
+      const updated = await storage.updateSurvey(survey.id, {
+        rating,
+        feedback: feedback || null,
+        wouldRecommend: wouldRecommend ?? null,
+        completedAt: new Date(),
+      });
+      const googleReviewPrompt = rating >= 4;
+      res.json({ ...updated, googleReviewPrompt });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to submit survey" });
+    }
+  });
+
+  // Referral endpoints
+  app.get("/api/referrals", async (req, res) => {
+    try {
+      const role = req.headers["x-usena-role"] as string;
+      if (!role || !["Admin", "Sales"].includes(role)) {
+        return res.status(403).json({ error: "Unauthorized" });
+      }
+      const allReferrals = await storage.getAllReferrals();
+      res.json(allReferrals);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to get referrals" });
+    }
+  });
+
+  app.get("/api/referral/:code", async (req, res) => {
+    try {
+      const referral = await storage.getReferralByCode(req.params.code);
+      if (!referral) {
+        return res.status(404).json({ error: "Referral not found" });
+      }
+      res.json({ referrerName: referral.referrerName, referralCode: referral.referralCode });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to get referral" });
+    }
+  });
+
+  app.post("/api/referrals", async (req, res) => {
+    try {
+      const { referrerEmail, referrerName } = req.body;
+      if (!referrerEmail || !referrerName) {
+        return res.status(400).json({ error: "referrerEmail and referrerName are required" });
+      }
+      const referralCode = generateToken();
+      const referral = await storage.createReferral({
+        referrerEmail,
+        referrerName,
+        referralCode,
+        status: "pending",
+      });
+      res.json(referral);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to create referral" });
+    }
+  });
+
+  app.patch("/api/referrals/:id", async (req, res) => {
+    try {
+      const role = req.headers["x-usena-role"] as string;
+      if (!role || !["Admin", "Sales"].includes(role)) {
+        return res.status(403).json({ error: "Unauthorized" });
+      }
+      const updates: any = {};
+      if (req.body.status) updates.status = req.body.status;
+      if (req.body.rewardNote) updates.rewardNote = req.body.rewardNote;
+      if (req.body.referredEmail) updates.referredEmail = req.body.referredEmail;
+      if (req.body.referredName) updates.referredName = req.body.referredName;
+      if (req.body.status === "completed" || req.body.status === "rewarded") {
+        updates.completedAt = new Date();
+      }
+      const updated = await storage.updateReferral(req.params.id, updates);
+      if (!updated) {
+        return res.status(404).json({ error: "Referral not found" });
+      }
+      res.json(updated);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to update referral" });
+    }
+  });
+
+  // Referral submission from landing page (public)
+  app.post("/api/referral/:code/submit", async (req, res) => {
+    try {
+      const referral = await storage.getReferralByCode(req.params.code);
+      if (!referral) {
+        return res.status(404).json({ error: "Referral not found" });
+      }
+      const { name, email, interest } = req.body;
+      if (!name || !email) {
+        return res.status(400).json({ error: "Name and email are required" });
+      }
+      const updated = await storage.updateReferral(referral.id, {
+        referredEmail: email,
+        referredName: name,
+        status: "completed",
+        completedAt: new Date(),
+        rewardNote: interest ? `Interested in: ${interest}` : null,
+      });
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to submit referral" });
+    }
+  });
+
   // Server-Sent Events for real-time notifications
 
   app.get('/api/events', (req, res) => {
@@ -1198,6 +1638,155 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // VIP Client Admin Endpoints
+  app.get("/api/admin/clients", async (req, res) => {
+    try {
+      const role = req.headers["x-usena-role"] as string;
+      if (!role || !["Admin", "Sales"].includes(role)) {
+        return res.status(403).json({ error: "Unauthorized" });
+      }
+      const profiles = await storage.getAllClientProfiles();
+      res.json(profiles);
+    } catch (error) {
+      console.error("Error fetching client profiles:", error);
+      res.status(500).json({ error: "Failed to fetch client profiles" });
+    }
+  });
+
+  app.get("/api/admin/clients/:email", async (req, res) => {
+    try {
+      const role = req.headers["x-usena-role"] as string;
+      if (!role || !["Admin", "Sales"].includes(role)) {
+        return res.status(403).json({ error: "Unauthorized" });
+      }
+      const profile = await storage.getClientProfile(decodeURIComponent(req.params.email));
+      if (!profile) {
+        return res.status(404).json({ error: "Client profile not found" });
+      }
+      res.json(profile);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch client profile" });
+    }
+  });
+
+  app.patch("/api/admin/clients/:id", async (req, res) => {
+    try {
+      const role = req.headers["x-usena-role"] as string;
+      if (!role || !["Admin", "Sales"].includes(role)) {
+        return res.status(403).json({ error: "Unauthorized" });
+      }
+      const updates: any = {};
+      if (req.body.notes !== undefined) updates.notes = req.body.notes;
+      if (req.body.vipTier) updates.vipTier = req.body.vipTier;
+      if (req.body.bonusPhotos !== undefined) updates.bonusPhotos = req.body.bonusPhotos;
+      if (req.body.priorityTurnaround !== undefined) updates.priorityTurnaround = req.body.priorityTurnaround;
+
+      const updated = await storage.updateClientProfile(req.params.id, updates);
+      if (!updated) {
+        return res.status(404).json({ error: "Client profile not found" });
+      }
+      res.json(updated);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to update client profile" });
+    }
+  });
+
+  app.post("/api/admin/clients/recalculate", async (req, res) => {
+    try {
+      const role = req.headers["x-usena-role"] as string;
+      if (!role || !["Admin", "Sales"].includes(role)) {
+        return res.status(403).json({ error: "Unauthorized" });
+      }
+
+      const allProjects = await storage.getAllProjects();
+      const deliveredProjects = allProjects.filter(p => p.status === ProjectStatus.DELIVERED && p.clientEmail);
+
+      const clientMap = new Map<string, { email: string; name: string; delivered: number; lastAt: Date | null; firstAt: Date | null }>();
+      for (const project of deliveredProjects) {
+        const email = project.clientEmail!;
+        const existing = clientMap.get(email);
+        const projectDate = project.deliveredAt ? new Date(project.deliveredAt) : new Date(project.createdAt);
+        if (existing) {
+          existing.delivered += 1;
+          existing.name = project.clientName;
+          if (!existing.lastAt || projectDate > existing.lastAt) existing.lastAt = projectDate;
+          if (!existing.firstAt || projectDate < existing.firstAt) existing.firstAt = projectDate;
+        } else {
+          clientMap.set(email, {
+            email,
+            name: project.clientName,
+            delivered: 1,
+            lastAt: projectDate,
+            firstAt: projectDate,
+          });
+        }
+      }
+
+      const results = [];
+      for (const [email, data] of clientMap) {
+        const tierInfo = calculateVipTier(data.delivered);
+        const profile = await storage.upsertClientProfile({
+          clientEmail: email,
+          clientName: data.name,
+          totalDelivered: data.delivered,
+          totalProjects: data.delivered,
+          ...tierInfo,
+          lastProjectAt: data.lastAt,
+          firstProjectAt: data.firstAt,
+        });
+        results.push(profile);
+      }
+
+      res.json({ recalculated: results.length, profiles: results });
+    } catch (error) {
+      console.error("Error recalculating VIP tiers:", error);
+      res.status(500).json({ error: "Failed to recalculate VIP tiers" });
+    }
+  });
+
+  // Send delay notice endpoint for Data Wrangler
+  app.post("/api/projects/:id/send-delay-notice", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { targetWeekStart, sentBy } = req.body;
+
+      if (!targetWeekStart || !sentBy) {
+        return res.status(400).json({ error: "targetWeekStart and sentBy are required" });
+      }
+
+      const project = await storage.getProject(id);
+      if (!project) {
+        return res.status(404).json({ error: "Project not found" });
+      }
+
+      if (!project.clientEmail) {
+        return res.status(400).json({ error: "Project has no client email" });
+      }
+
+      const weekStart = new Date(targetWeekStart);
+      const weekEnd = new Date(weekStart);
+      weekEnd.setDate(weekStart.getDate() + 4); // Friday
+
+      const emailResult = await sendManualDelayNoticeEmail(
+        project.clientEmail,
+        project.clientName,
+        weekStart,
+        weekEnd,
+        project.id
+      );
+
+      if (emailResult.success) {
+        console.log(`[Email] Manual delay notice sent by ${sentBy} to ${project.clientEmail} for project ${project.clientName}`);
+        res.json({ success: true, messageId: emailResult.messageId });
+      } else {
+        res.status(500).json({ error: emailResult.error || "Failed to send delay notice" });
+      }
+    } catch (error) {
+      console.error("Error sending delay notice:", error);
+      res.status(500).json({ error: "Failed to send delay notice" });
+    }
+  });
+
   // Manual rollover endpoint for testing
   app.post("/api/rollover", async (req, res) => {
     try {
@@ -1468,6 +2057,106 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error: any) {
       console.error("Error updating dashboard preferences:", error);
       res.status(500).json({ error: "Failed to update dashboard preferences" });
+    }
+  });
+
+  // Sneak Peek endpoints
+  app.get("/api/projects/:id/sneak-peeks", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const project = await storage.getProject(id);
+      if (!project) {
+        return res.status(404).json({ error: "Project not found" });
+      }
+      const peeks = await storage.getSneakPeeks(id);
+      res.json(peeks);
+    } catch (error: any) {
+      console.error("Error getting sneak peeks:", error);
+      res.status(500).json({ error: "Failed to get sneak peeks" });
+    }
+  });
+
+  app.post("/api/projects/:id/sneak-peeks", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const project = await storage.getProject(id);
+      if (!project) {
+        return res.status(404).json({ error: "Project not found" });
+      }
+      const existingPeeks = await storage.getSneakPeeks(id);
+      if (existingPeeks.length >= 3) {
+        return res.status(400).json({ error: "Maximum of 3 sneak peeks per project" });
+      }
+      const { imageUrl, caption, sentBy } = req.body;
+      if (!imageUrl || !sentBy) {
+        return res.status(400).json({ error: "imageUrl and sentBy are required" });
+      }
+      const peek = await storage.createSneakPeek({
+        projectId: id,
+        imageUrl,
+        caption: caption || null,
+        sentBy,
+      });
+      res.json(peek);
+    } catch (error: any) {
+      console.error("Error creating sneak peek:", error);
+      res.status(500).json({ error: "Failed to create sneak peek" });
+    }
+  });
+
+  app.post("/api/projects/:id/sneak-peeks/:peekId/send", async (req, res) => {
+    try {
+      const { id, peekId } = req.params;
+      const project = await storage.getProject(id);
+      if (!project) {
+        return res.status(404).json({ error: "Project not found" });
+      }
+      if (!project.clientEmail) {
+        return res.status(400).json({ error: "Project does not have a client email" });
+      }
+      const peeks = await storage.getSneakPeeks(id);
+      const peek = peeks.find(p => p.id === peekId);
+      if (!peek) {
+        return res.status(404).json({ error: "Sneak peek not found" });
+      }
+      const result = await sendSneakPeekEmail(
+        project.clientEmail,
+        project.clientName,
+        peek.imageUrl,
+        peek.caption,
+        id
+      );
+      if (result.success) {
+        await storage.deleteSneakPeek(peekId);
+        const updatedPeek = await storage.createSneakPeek({
+          projectId: id,
+          imageUrl: peek.imageUrl,
+          caption: peek.caption,
+          sentBy: peek.sentBy,
+        });
+        await db.update(sneakPeeksTable).set({ sentAt: new Date() }).where(eq(sneakPeeksTable.id, updatedPeek.id));
+        const finalPeeks = await storage.getSneakPeeks(id);
+        res.json({ success: true, messageId: result.messageId, peeks: finalPeeks });
+      } else {
+        res.status(500).json({ error: result.error || "Failed to send email" });
+      }
+    } catch (error: any) {
+      console.error("Error sending sneak peek:", error);
+      res.status(500).json({ error: "Failed to send sneak peek" });
+    }
+  });
+
+  app.delete("/api/projects/:id/sneak-peeks/:peekId", async (req, res) => {
+    try {
+      const { peekId } = req.params;
+      const deleted = await storage.deleteSneakPeek(peekId);
+      if (!deleted) {
+        return res.status(404).json({ error: "Sneak peek not found" });
+      }
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error("Error deleting sneak peek:", error);
+      res.status(500).json({ error: "Failed to delete sneak peek" });
     }
   });
 

@@ -7,6 +7,9 @@ export const users = pgTable("users", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   username: text("username").notNull().unique(),
   password: text("password").notNull(),
+  role: text("role").notNull(),
+  name: text("name").notNull(),
+  abbreviation: text("abbreviation").notNull(),
 });
 
 export const projects = pgTable("projects", {
@@ -51,6 +54,14 @@ export const projects = pgTable("projects", {
   // Email notification tracking
   deliveryEstimateEmailSentAt: timestamp("delivery_estimate_email_sent_at"),
   projectAddedEmailSentAt: timestamp("project_added_email_sent_at"),
+  // Gallery link delivery fields
+  galleryLink: text("gallery_link"),
+  galleryLinkAddedAt: timestamp("gallery_link_added_at"),
+  galleryLinkAddedBy: text("gallery_link_added_by"),
+  deliveryApproved: boolean("delivery_approved").notNull().default(false),
+  deliveryApprovedAt: timestamp("delivery_approved_at"),
+  deliveryApprovedBy: text("delivery_approved_by"),
+  deliveryEmailSentAt: timestamp("delivery_email_sent_at"),
 });
 
 // ShootTracker metadata table (1:1 with projects)
@@ -202,6 +213,14 @@ export const complaints = pgTable("complaints", {
 export const insertUserSchema = createInsertSchema(users).pick({
   username: true,
   password: true,
+  role: true,
+  name: true,
+  abbreviation: true,
+});
+
+export const loginUserSchema = z.object({
+  username: z.string().min(1),
+  password: z.string().min(1),
 });
 
 export const insertProjectSchema = createInsertSchema(projects).omit({
@@ -478,6 +497,109 @@ export const insertEmailLogSchema = createInsertSchema(emailLogs).omit({
 export type EmailLog = typeof emailLogs.$inferSelect;
 export type InsertEmailLog = z.infer<typeof insertEmailLogSchema>;
 
+// Sneak peeks table for preview photos sent to clients
+export const sneakPeeks = pgTable("sneak_peeks", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  projectId: varchar("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
+  imageUrl: text("image_url").notNull(),
+  caption: text("caption"),
+  sentAt: timestamp("sent_at"),
+  sentBy: text("sent_by").notNull(),
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+});
+
+export const insertSneakPeekSchema = createInsertSchema(sneakPeeks).omit({
+  id: true,
+  createdAt: true,
+  sentAt: true,
+});
+
+export type SneakPeek = typeof sneakPeeks.$inferSelect;
+export type InsertSneakPeek = z.infer<typeof insertSneakPeekSchema>;
+
+// Client satisfaction surveys
+export const clientSurveys = pgTable("client_surveys", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  projectId: varchar("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
+  clientEmail: text("client_email").notNull(),
+  clientName: text("client_name").notNull(),
+  rating: integer("rating"),
+  feedback: text("feedback"),
+  wouldRecommend: boolean("would_recommend"),
+  surveyToken: text("survey_token").notNull().unique(),
+  completedAt: timestamp("completed_at"),
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+});
+
+export const insertSurveySchema = createInsertSchema(clientSurveys).omit({
+  id: true,
+  createdAt: true,
+  completedAt: true,
+  rating: true,
+  feedback: true,
+  wouldRecommend: true,
+});
+
+export type Survey = typeof clientSurveys.$inferSelect;
+export type InsertSurvey = z.infer<typeof insertSurveySchema>;
+
+// Referral rewards system
+export const referrals = pgTable("referrals", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  referrerEmail: text("referrer_email").notNull(),
+  referrerName: text("referrer_name").notNull(),
+  referralCode: text("referral_code").notNull().unique(),
+  referredEmail: text("referred_email"),
+  referredName: text("referred_name"),
+  referredProjectId: varchar("referred_project_id").references(() => projects.id),
+  status: text("status").notNull().default("pending"),
+  rewardNote: text("reward_note"),
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+  completedAt: timestamp("completed_at"),
+});
+
+export const insertReferralSchema = createInsertSchema(referrals).omit({
+  id: true,
+  createdAt: true,
+  completedAt: true,
+});
+
+export type Referral = typeof referrals.$inferSelect;
+export type InsertReferral = z.infer<typeof insertReferralSchema>;
+
+// VIP Client Profiles
+export const clientProfiles = pgTable("client_profiles", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  clientEmail: text("client_email").notNull().unique(),
+  clientName: text("client_name").notNull(),
+  totalProjects: integer("total_projects").notNull().default(0),
+  totalDelivered: integer("total_delivered").notNull().default(0),
+  vipTier: text("vip_tier").notNull().default("Standard"),
+  bonusPhotos: integer("bonus_photos").notNull().default(0),
+  priorityTurnaround: boolean("priority_turnaround").notNull().default(false),
+  notes: text("notes"),
+  firstProjectAt: timestamp("first_project_at"),
+  lastProjectAt: timestamp("last_project_at"),
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+  updatedAt: timestamp("updated_at").notNull().default(sql`now()`),
+});
+
+export const insertClientProfileSchema = createInsertSchema(clientProfiles).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type ClientProfile = typeof clientProfiles.$inferSelect;
+export type InsertClientProfile = z.infer<typeof insertClientProfileSchema>;
+
+export const VipTier = {
+  STANDARD: "Standard",
+  SILVER: "Silver",
+  GOLD: "Gold",
+  PLATINUM: "Platinum",
+} as const;
+
 // Email types
 export const EmailType = {
   DELIVERY_ESTIMATE: "delivery_estimate",
@@ -487,6 +609,11 @@ export const EmailType = {
   MESSAGE_NOTIFICATION: "message_notification",
   PROJECT_ASSIGNED: "project_assigned",
   DELAY_NOTIFICATION: "delay_notification",
+  GALLERY_DELIVERY: "gallery_delivery",
+  SNEAK_PEEK: "sneak_peek",
+  SATISFACTION_SURVEY: "satisfaction_survey",
+  SCHEDULING_NOTIFICATION: "scheduling_notification",
+  MANUAL_DELAY_NOTICE: "manual_delay_notice",
 } as const;
 
 export type EmailTypeValue = typeof EmailType[keyof typeof EmailType];

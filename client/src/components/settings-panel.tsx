@@ -12,15 +12,17 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { User } from "@/lib/types";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 
 interface UserCredentials {
   id: string;
   username: string;
-  password: string;
   name: string;
   role: string;
   abbreviation: string;
 }
+
 import { UserPlus, Users, Trash2, Edit, Eye, EyeOff, Key, UserCog } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
@@ -32,32 +34,118 @@ const addUserSchema = z.object({
   abbreviation: z.string().min(1, "Abbreviation is required").max(3, "Abbreviation should be 3 characters or less"),
 });
 
+const editUserSchema = z.object({
+  username: z.string().min(1, "Username is required"),
+  password: z.string().optional(),
+  name: z.string().min(1, "Full name is required"),
+  role: z.string().min(1, "Role is required"),
+  abbreviation: z.string().min(1, "Abbreviation is required").max(3, "Abbreviation should be 3 characters or less"),
+});
+
 type AddUserFormData = z.infer<typeof addUserSchema>;
+type EditUserFormData = z.infer<typeof editUserSchema>;
 
 interface SettingsPanelProps {
-  users: User[];
-  userCredentials: UserCredentials[];
-  onAddUser: (user: User) => void;
-  onEditUser: (userId: string, updatedUser: Partial<User>) => void;
-  onDeleteUser: (userId: string) => void;
-  onUpdateUserCredentials: (credentials: UserCredentials[]) => void;
   currentUser: User;
 }
 
 export function SettingsPanel({ 
-  users, 
-  userCredentials,
-  onAddUser, 
-  onEditUser, 
-  onDeleteUser, 
-  onUpdateUserCredentials,
   currentUser 
 }: SettingsPanelProps) {
   const { toast } = useToast();
-  const [isAddingUser, setIsAddingUser] = useState(false);
-  const [editingUser, setEditingUser] = useState<User | null>(null);
-  const [editingCredentials, setEditingCredentials] = useState<UserCredentials | null>(null);
+  const [editingUser, setEditingUser] = useState<UserCredentials | null>(null);
   const [showPasswords, setShowPasswords] = useState<Record<string, boolean>>({});
+  const [passwordInputs, setPasswordInputs] = useState<Record<string, string>>({});
+
+  const { data: userCredentials = [] } = useQuery<UserCredentials[]>({
+    queryKey: ["/api/users"],
+  });
+
+  const createUserMutation = useMutation({
+    mutationFn: async (data: AddUserFormData) => {
+      const response = await apiRequest("POST", "/api/users", data);
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/users"] });
+      resetAdd();
+      toast({
+        title: "Success",
+        description: "User has been created successfully.",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to create user.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const updateUserMutation = useMutation({
+    mutationFn: async ({ id, updates }: { id: string; updates: Partial<EditUserFormData> }) => {
+      const response = await apiRequest("PATCH", `/api/users/${id}`, updates);
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/users"] });
+      setEditingUser(null);
+      resetEdit();
+      toast({
+        title: "Success",
+        description: "User has been updated successfully.",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update user.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const deleteUserMutation = useMutation({
+    mutationFn: async (id: string) => {
+      await apiRequest("DELETE", `/api/users/${id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/users"] });
+      toast({
+        title: "Success",
+        description: "User has been deleted successfully.",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to delete user.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const updatePasswordMutation = useMutation({
+    mutationFn: async ({ id, password }: { id: string; password: string }) => {
+      const response = await apiRequest("PATCH", `/api/users/${id}`, { password });
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/users"] });
+      toast({
+        title: "Success",
+        description: "Password updated successfully.",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update password.",
+        variant: "destructive",
+      });
+    },
+  });
 
   const {
     register: registerAdd,
@@ -77,8 +165,8 @@ export function SettingsPanel({
     setValue: setValueEdit,
     watch: watchEdit,
     formState: { errors: errorsEdit }
-  } = useForm<AddUserFormData>({
-    resolver: zodResolver(addUserSchema)
+  } = useForm<EditUserFormData>({
+    resolver: zodResolver(editUserSchema)
   });
 
   const selectedRole = watchAdd("role");
@@ -92,101 +180,37 @@ export function SettingsPanel({
   };
 
   const onSubmitAdd = (data: AddUserFormData) => {
-    // Add to team users
-    const newUser: User = {
-      id: Date.now().toString(),
-      name: data.name,
-      role: data.role,
-      value: data.role === "Retoucher" ? `${data.name}_${Date.now()}` : `${data.role}_${Date.now()}`,
-      abbr: data.abbreviation
-    };
-
-    // Add to user credentials
-    const newCredentials: UserCredentials = {
-      id: newUser.id || Date.now().toString(),
-      username: data.username,
-      password: data.password,
-      name: data.name,
-      role: data.role,
-      abbreviation: data.abbreviation
-    };
-
-    onAddUser(newUser);
-    onUpdateUserCredentials([...userCredentials, newCredentials]);
-    
-    resetAdd();
-    setIsAddingUser(false);
-    
-    toast({
-      title: "Success",
-      description: `User ${data.name} has been created successfully.`,
-    });
+    createUserMutation.mutate(data);
   };
 
-  const onSubmitEdit = (data: AddUserFormData) => {
+  const onSubmitEdit = (data: EditUserFormData) => {
     if (!editingUser) return;
-
-    // Update team user
-    onEditUser(editingUser.id || "", {
+    const updates: Partial<EditUserFormData> = {
+      username: data.username,
       name: data.name,
       role: data.role,
-      abbr: data.abbreviation
-    });
-
-    // Update credentials if editing credentials
-    if (editingCredentials) {
-      const updatedCredentials = userCredentials.map(cred => 
-        cred.id === editingCredentials.id 
-          ? { ...cred, username: data.username, password: data.password, name: data.name, role: data.role, abbreviation: data.abbreviation }
-          : cred
-      );
-      onUpdateUserCredentials(updatedCredentials);
+      abbreviation: data.abbreviation,
+    };
+    if (data.password && data.password.trim().length > 0) {
+      updates.password = data.password;
     }
-
-    resetEdit();
-    setEditingUser(null);
-    setEditingCredentials(null);
-    
-    toast({
-      title: "Success",
-      description: `User ${data.name} has been updated successfully.`,
+    updateUserMutation.mutate({
+      id: editingUser.id,
+      updates,
     });
   };
 
-  const startEditUser = (user: User) => {
-    setEditingUser(user);
-    const credentials = userCredentials.find(cred => cred.id === user.id);
-    setEditingCredentials(credentials || null);
-    
-    setValueEdit("username", credentials?.username || "");
-    setValueEdit("password", credentials?.password || "");
-    setValueEdit("name", user.name);
-    setValueEdit("role", user.role);
-    setValueEdit("abbreviation", user.abbr || "");
+  const startEditUser = (cred: UserCredentials) => {
+    setEditingUser(cred);
+    setValueEdit("username", cred.username);
+    setValueEdit("password", "");
+    setValueEdit("name", cred.name);
+    setValueEdit("role", cred.role);
+    setValueEdit("abbreviation", cred.abbreviation);
   };
 
   const handleDeleteUser = (userId: string) => {
-    onDeleteUser(userId);
-    // Also remove from credentials
-    const updatedCredentials = userCredentials.filter(cred => cred.id !== userId);
-    onUpdateUserCredentials(updatedCredentials);
-    
-    toast({
-      title: "Success",
-      description: "User has been deleted successfully.",
-    });
-  };
-
-  const updatePassword = (credId: string, newPassword: string) => {
-    const updatedCredentials = userCredentials.map(cred => 
-      cred.id === credId ? { ...cred, password: newPassword } : cred
-    );
-    onUpdateUserCredentials(updatedCredentials);
-    
-    toast({
-      title: "Success",
-      description: "Password updated successfully.",
-    });
+    deleteUserMutation.mutate(userId);
   };
 
   const getRoleBadgeColor = (role: string) => {
@@ -249,30 +273,30 @@ export function SettingsPanel({
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {users.map((user) => (
-                      <TableRow key={user.id || user.name}>
-                        <TableCell className="font-medium">{user.name}</TableCell>
+                    {userCredentials.map((cred) => (
+                      <TableRow key={cred.id}>
+                        <TableCell className="font-medium">{cred.name}</TableCell>
                         <TableCell>
-                          <Badge className={getRoleBadgeColor(user.role)}>
-                            {getDisplayRole(user.role)}
+                          <Badge className={getRoleBadgeColor(cred.role)}>
+                            {getDisplayRole(cred.role)}
                           </Badge>
                         </TableCell>
                         <TableCell>
-                          <Badge variant="outline">{user.abbr}</Badge>
+                          <Badge variant="outline">{cred.abbreviation}</Badge>
                         </TableCell>
                         <TableCell className="text-right">
                           <div className="flex justify-end gap-2">
                             <Button
                               variant="outline"
                               size="sm"
-                              onClick={() => startEditUser(user)}
+                              onClick={() => startEditUser(cred)}
                             >
                               <Edit className="h-4 w-4" />
                             </Button>
                             <Button
                               variant="outline"
                               size="sm"
-                              onClick={() => handleDeleteUser(user.id || "")}
+                              onClick={() => handleDeleteUser(cred.id)}
                               className="text-red-600 hover:text-red-700"
                             >
                               <Trash2 className="h-4 w-4" />
@@ -304,7 +328,6 @@ export function SettingsPanel({
                       <TableHead>Username</TableHead>
                       <TableHead>Name</TableHead>
                       <TableHead>Role</TableHead>
-                      <TableHead>Password</TableHead>
                       <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -318,20 +341,6 @@ export function SettingsPanel({
                             {getDisplayRole(cred.role)}
                           </Badge>
                         </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            <span className="font-mono text-sm">
-                              {showPasswords[cred.id] ? cred.password : '••••••••'}
-                            </span>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => togglePasswordVisibility(cred.id)}
-                            >
-                              {showPasswords[cred.id] ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                            </Button>
-                          </div>
-                        </TableCell>
                         <TableCell className="text-right">
                           <Dialog>
                             <DialogTrigger asChild>
@@ -341,23 +350,33 @@ export function SettingsPanel({
                             </DialogTrigger>
                             <DialogContent>
                               <DialogHeader>
-                                <DialogTitle>Reset Password</DialogTitle>
+                                <DialogTitle>Reset Password for {cred.name}</DialogTitle>
                               </DialogHeader>
                               <div className="space-y-4">
                                 <div>
-                                  <Label htmlFor="new-password">New Password</Label>
+                                  <Label htmlFor={`new-password-${cred.id}`}>New Password</Label>
                                   <Input
-                                    id="new-password"
+                                    id={`new-password-${cred.id}`}
                                     type="text"
-                                    defaultValue={cred.password}
+                                    placeholder="Enter new password"
+                                    value={passwordInputs[cred.id] || ""}
                                     onChange={(e) => {
-                                      const newPassword = e.target.value;
-                                      if (newPassword) {
-                                        updatePassword(cred.id, newPassword);
-                                      }
+                                      setPasswordInputs(prev => ({ ...prev, [cred.id]: e.target.value }));
                                     }}
                                   />
                                 </div>
+                                <Button
+                                  onClick={() => {
+                                    const newPassword = passwordInputs[cred.id];
+                                    if (newPassword && newPassword.trim().length > 0) {
+                                      updatePasswordMutation.mutate({ id: cred.id, password: newPassword.trim() });
+                                      setPasswordInputs(prev => ({ ...prev, [cred.id]: "" }));
+                                    }
+                                  }}
+                                  disabled={!passwordInputs[cred.id]?.trim() || updatePasswordMutation.isPending}
+                                >
+                                  {updatePasswordMutation.isPending ? "Saving..." : "Save Password"}
+                                </Button>
                               </div>
                             </DialogContent>
                           </Dialog>
@@ -453,17 +472,14 @@ export function SettingsPanel({
                 </div>
 
                 <div className="flex gap-2">
-                  <Button type="submit">
+                  <Button type="submit" disabled={createUserMutation.isPending}>
                     <UserPlus className="h-4 w-4 mr-2" />
-                    Add User
+                    {createUserMutation.isPending ? "Adding..." : "Add User"}
                   </Button>
                   <Button
                     type="button"
                     variant="outline"
-                    onClick={() => {
-                      resetAdd();
-                      setIsAddingUser(false);
-                    }}
+                    onClick={() => resetAdd()}
                   >
                     Cancel
                   </Button>
@@ -481,34 +497,32 @@ export function SettingsPanel({
             <DialogTitle>Edit User</DialogTitle>
           </DialogHeader>
           <form onSubmit={handleSubmitEdit(onSubmitEdit)} className="space-y-4">
-            {editingCredentials && (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="edit-username">Username</Label>
-                  <Input
-                    id="edit-username"
-                    {...registerEdit("username")}
-                    placeholder="Enter username"
-                  />
-                  {errorsEdit.username && (
-                    <p className="text-sm text-red-600 mt-1">{errorsEdit.username.message}</p>
-                  )}
-                </div>
-                
-                <div>
-                  <Label htmlFor="edit-password">Password</Label>
-                  <Input
-                    id="edit-password"
-                    type="text"
-                    {...registerEdit("password")}
-                    placeholder="Enter password"
-                  />
-                  {errorsEdit.password && (
-                    <p className="text-sm text-red-600 mt-1">{errorsEdit.password.message}</p>
-                  )}
-                </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="edit-username">Username</Label>
+                <Input
+                  id="edit-username"
+                  {...registerEdit("username")}
+                  placeholder="Enter username"
+                />
+                {errorsEdit.username && (
+                  <p className="text-sm text-red-600 mt-1">{errorsEdit.username.message}</p>
+                )}
               </div>
-            )}
+              
+              <div>
+                <Label htmlFor="edit-password">Password</Label>
+                <Input
+                  id="edit-password"
+                  type="text"
+                  {...registerEdit("password")}
+                  placeholder="Enter password (leave blank to keep current)"
+                />
+                {errorsEdit.password && (
+                  <p className="text-sm text-red-600 mt-1">{errorsEdit.password.message}</p>
+                )}
+              </div>
+            </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
@@ -560,14 +574,15 @@ export function SettingsPanel({
             </div>
 
             <div className="flex gap-2">
-              <Button type="submit">Update User</Button>
+              <Button type="submit" disabled={updateUserMutation.isPending}>
+                {updateUserMutation.isPending ? "Updating..." : "Update User"}
+              </Button>
               <Button
                 type="button"
                 variant="outline"
                 onClick={() => {
                   resetEdit();
                   setEditingUser(null);
-                  setEditingCredentials(null);
                 }}
               >
                 Cancel

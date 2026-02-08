@@ -1,4 +1,4 @@
-import { type User, type InsertUser, type Project, type InsertProject, type UpdateProject, type ProjectNote, type InsertProjectNote, type UpdateProjectNote, type TradeOffer, type InsertTradeOffer, type UpdateTradeOffer, type WranglerCommission, type InsertWranglerCommission, type ProjectEvent, type InsertProjectEvent, type Complaint, type InsertComplaint, type ShoottrackerMeta, type InsertShoottrackerMeta, type UpdateShoottrackerMeta, type AppSetting, type CalendarEventStaging, type InsertCalendarEventStaging, type UpdateCalendarEventStaging, type ClientAuthToken, type InsertClientAuthToken, type ClientMessage, type InsertClientMessage, type DashboardPreferences, type InsertDashboardPreferences, ProjectStatus, TradeOfferStatus, StagingStatus, users, projects, projectNotes, tradeOffers, wranglerCommissions, projectEvents, complaints, shoottrackerMeta, appSettings, calendarEventsStaging, clientAuthTokens, clientMessages, dashboardPreferences } from "@shared/schema";
+import { type User, type InsertUser, type Project, type InsertProject, type UpdateProject, type ProjectNote, type InsertProjectNote, type UpdateProjectNote, type TradeOffer, type InsertTradeOffer, type UpdateTradeOffer, type WranglerCommission, type InsertWranglerCommission, type ProjectEvent, type InsertProjectEvent, type Complaint, type InsertComplaint, type ShoottrackerMeta, type InsertShoottrackerMeta, type UpdateShoottrackerMeta, type AppSetting, type CalendarEventStaging, type InsertCalendarEventStaging, type UpdateCalendarEventStaging, type ClientAuthToken, type InsertClientAuthToken, type ClientMessage, type InsertClientMessage, type DashboardPreferences, type InsertDashboardPreferences, type SneakPeek, type InsertSneakPeek, type Survey, type InsertSurvey, type Referral, type InsertReferral, type ClientProfile, type InsertClientProfile, ProjectStatus, TradeOfferStatus, StagingStatus, users, projects, projectNotes, tradeOffers, wranglerCommissions, projectEvents, complaints, shoottrackerMeta, appSettings, calendarEventsStaging, clientAuthTokens, clientMessages, dashboardPreferences, sneakPeeks, clientSurveys, referrals, clientProfiles } from "@shared/schema";
 import { db } from "./db";
 import { eq, sql, asc } from "drizzle-orm";
 import { randomUUID } from "crypto";
@@ -7,6 +7,9 @@ export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
+  getAllUsers(): Promise<User[]>;
+  updateUser(id: string, updates: Partial<{username: string, password: string, role: string, name: string, abbreviation: string}>): Promise<User | undefined>;
+  deleteUser(id: string): Promise<boolean>;
   
   getAllProjects(): Promise<Project[]>;
   getProject(id: string): Promise<Project | undefined>;
@@ -82,6 +85,30 @@ export interface IStorage {
   // Dashboard preferences methods
   getDashboardPreferences(userId: string): Promise<DashboardPreferences | undefined>;
   upsertDashboardPreferences(userId: string, prefs: Partial<InsertDashboardPreferences>): Promise<DashboardPreferences>;
+  
+  // Sneak peek methods
+  getSneakPeeks(projectId: string): Promise<SneakPeek[]>;
+  createSneakPeek(peek: InsertSneakPeek): Promise<SneakPeek>;
+  deleteSneakPeek(id: string): Promise<boolean>;
+  
+  // Survey methods
+  createSurvey(survey: InsertSurvey): Promise<Survey>;
+  getSurveyByToken(token: string): Promise<Survey | undefined>;
+  getSurveyByProjectId(projectId: string): Promise<Survey | undefined>;
+  updateSurvey(id: string, updates: Partial<Survey>): Promise<Survey | undefined>;
+  
+  // Referral methods
+  createReferral(referral: InsertReferral): Promise<Referral>;
+  getReferralByCode(code: string): Promise<Referral | undefined>;
+  getReferralsByReferrer(email: string): Promise<Referral[]>;
+  updateReferral(id: string, updates: Partial<Referral>): Promise<Referral | undefined>;
+  getAllReferrals(): Promise<Referral[]>;
+
+  // Client profile methods
+  getClientProfile(email: string): Promise<ClientProfile | undefined>;
+  getAllClientProfiles(): Promise<ClientProfile[]>;
+  upsertClientProfile(profile: Partial<InsertClientProfile> & { clientEmail: string; clientName: string }): Promise<ClientProfile>;
+  updateClientProfile(id: string, updates: Partial<ClientProfile>): Promise<ClientProfile | undefined>;
 }
 
 export class MemStorage implements IStorage {
@@ -303,6 +330,22 @@ export class MemStorage implements IStorage {
     const user: User = { ...insertUser, id };
     this.users.set(id, user);
     return user;
+  }
+
+  async getAllUsers(): Promise<User[]> {
+    return Array.from(this.users.values());
+  }
+
+  async updateUser(id: string, updates: Partial<{username: string, password: string, role: string, name: string, abbreviation: string}>): Promise<User | undefined> {
+    const user = this.users.get(id);
+    if (!user) return undefined;
+    const updated = { ...user, ...updates };
+    this.users.set(id, updated);
+    return updated;
+  }
+
+  async deleteUser(id: string): Promise<boolean> {
+    return this.users.delete(id);
   }
 
   async getAllProjects(): Promise<Project[]> {
@@ -680,6 +723,46 @@ export class MemStorage implements IStorage {
       updatedAt: new Date(),
     };
   }
+
+  async getSneakPeeks(projectId: string): Promise<SneakPeek[]> {
+    return [];
+  }
+
+  async createSneakPeek(peek: InsertSneakPeek): Promise<SneakPeek> {
+    throw new Error("Not implemented in MemStorage");
+  }
+
+  async deleteSneakPeek(id: string): Promise<boolean> {
+    return false;
+  }
+
+  async createSurvey(survey: InsertSurvey): Promise<Survey> {
+    throw new Error("Not implemented in MemStorage");
+  }
+  async getSurveyByToken(token: string): Promise<Survey | undefined> {
+    return undefined;
+  }
+  async getSurveyByProjectId(projectId: string): Promise<Survey | undefined> {
+    return undefined;
+  }
+  async updateSurvey(id: string, updates: Partial<Survey>): Promise<Survey | undefined> {
+    return undefined;
+  }
+  async createReferral(referral: InsertReferral): Promise<Referral> {
+    throw new Error("Not implemented in MemStorage");
+  }
+  async getReferralByCode(code: string): Promise<Referral | undefined> {
+    return undefined;
+  }
+  async getReferralsByReferrer(email: string): Promise<Referral[]> {
+    return [];
+  }
+  async updateReferral(id: string, updates: Partial<Referral>): Promise<Referral | undefined> {
+    return undefined;
+  }
+  async getAllReferrals(): Promise<Referral[]> {
+    return [];
+  }
 }
 
 // Database Storage Implementation
@@ -700,6 +783,24 @@ export class DatabaseStorage implements IStorage {
       .values(insertUser)
       .returning();
     return user;
+  }
+
+  async getAllUsers(): Promise<User[]> {
+    return await db.select().from(users);
+  }
+
+  async updateUser(id: string, updates: Partial<{username: string, password: string, role: string, name: string, abbreviation: string}>): Promise<User | undefined> {
+    const [user] = await db
+      .update(users)
+      .set(updates)
+      .where(eq(users.id, id))
+      .returning();
+    return user || undefined;
+  }
+
+  async deleteUser(id: string): Promise<boolean> {
+    const result = await db.delete(users).where(eq(users.id, id));
+    return (result.rowCount || 0) > 0;
   }
 
   async getAllProjects(): Promise<Project[]> {
@@ -1250,6 +1351,94 @@ export class DatabaseStorage implements IStorage {
         .returning();
       return created;
     }
+  }
+
+  // Sneak peek methods
+  async getSneakPeeks(projectId: string): Promise<SneakPeek[]> {
+    return await db.select().from(sneakPeeks).where(eq(sneakPeeks.projectId, projectId)).orderBy(asc(sneakPeeks.createdAt));
+  }
+
+  async createSneakPeek(peek: InsertSneakPeek): Promise<SneakPeek> {
+    const [created] = await db.insert(sneakPeeks).values(peek).returning();
+    return created;
+  }
+
+  async deleteSneakPeek(id: string): Promise<boolean> {
+    const result = await db.delete(sneakPeeks).where(eq(sneakPeeks.id, id));
+    return (result.rowCount || 0) > 0;
+  }
+
+  async createSurvey(survey: InsertSurvey): Promise<Survey> {
+    const [created] = await db.insert(clientSurveys).values(survey).returning();
+    return created;
+  }
+
+  async getSurveyByToken(token: string): Promise<Survey | undefined> {
+    const [found] = await db.select().from(clientSurveys).where(eq(clientSurveys.surveyToken, token));
+    return found || undefined;
+  }
+
+  async getSurveyByProjectId(projectId: string): Promise<Survey | undefined> {
+    const [found] = await db.select().from(clientSurveys).where(eq(clientSurveys.projectId, projectId));
+    return found || undefined;
+  }
+
+  async updateSurvey(id: string, updates: Partial<Survey>): Promise<Survey | undefined> {
+    const [updated] = await db.update(clientSurveys).set(updates).where(eq(clientSurveys.id, id)).returning();
+    return updated || undefined;
+  }
+
+  async createReferral(referral: InsertReferral): Promise<Referral> {
+    const [created] = await db.insert(referrals).values(referral).returning();
+    return created;
+  }
+
+  async getReferralByCode(code: string): Promise<Referral | undefined> {
+    const [found] = await db.select().from(referrals).where(eq(referrals.referralCode, code));
+    return found || undefined;
+  }
+
+  async getReferralsByReferrer(email: string): Promise<Referral[]> {
+    return await db.select().from(referrals).where(eq(referrals.referrerEmail, email));
+  }
+
+  async updateReferral(id: string, updates: Partial<Referral>): Promise<Referral | undefined> {
+    const [updated] = await db.update(referrals).set(updates).where(eq(referrals.id, id)).returning();
+    return updated || undefined;
+  }
+
+  async getAllReferrals(): Promise<Referral[]> {
+    return await db.select().from(referrals).orderBy(asc(referrals.createdAt));
+  }
+
+  async getClientProfile(email: string): Promise<ClientProfile | undefined> {
+    const [found] = await db.select().from(clientProfiles).where(eq(clientProfiles.clientEmail, email));
+    return found || undefined;
+  }
+
+  async getAllClientProfiles(): Promise<ClientProfile[]> {
+    return await db.select().from(clientProfiles).orderBy(asc(clientProfiles.clientName));
+  }
+
+  async upsertClientProfile(profile: Partial<InsertClientProfile> & { clientEmail: string; clientName: string }): Promise<ClientProfile> {
+    const existing = await this.getClientProfile(profile.clientEmail);
+    if (existing) {
+      const [updated] = await db.update(clientProfiles)
+        .set({ ...profile, updatedAt: new Date() })
+        .where(eq(clientProfiles.clientEmail, profile.clientEmail))
+        .returning();
+      return updated;
+    }
+    const [created] = await db.insert(clientProfiles).values(profile).returning();
+    return created;
+  }
+
+  async updateClientProfile(id: string, updates: Partial<ClientProfile>): Promise<ClientProfile | undefined> {
+    const [updated] = await db.update(clientProfiles)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(clientProfiles.id, id))
+      .returning();
+    return updated || undefined;
   }
 }
 

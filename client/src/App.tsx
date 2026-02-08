@@ -8,6 +8,8 @@ import ShootTrackerSettings from "@/pages/shoottracker-settings";
 import ApproveExtras from "@/pages/approve-extras";
 import ClientChat from "@/pages/client-chat";
 import EditorChat from "@/pages/editor-chat";
+import SurveyPage from "@/pages/survey";
+import ReferralPage from "@/pages/referral";
 import NotFound from "@/pages/not-found";
 
 function Router() {
@@ -18,6 +20,8 @@ function Router() {
       <Route path="/approve-extras/:token" component={ApproveExtras} />
       <Route path="/client-chat/:token" component={ClientChat} />
       <Route path="/editor-chat" component={EditorChat} />
+      <Route path="/survey/:token" component={SurveyPage} />
+      <Route path="/refer/:code" component={ReferralPage} />
       <Route component={NotFound} />
     </Switch>
   );

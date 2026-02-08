@@ -137,6 +137,62 @@ User-configurable dashboard allowing personalized widget visibility:
 - Defined in `AVAILABLE_WIDGETS` array in `shared/schema.ts`
 - Each widget has: id, name, description, icon, defaultEnabled, and roles array
 
+### Persistent User Management
+User accounts and roles are stored in the database (not hardcoded):
+- Users table includes: id, username, password, role, name, abbreviation
+- Default users seeded on server startup (upsert by username)
+- API endpoints: `POST /api/auth/login`, `GET /api/users`, `POST /api/users`, `PATCH /api/users/:id`, `DELETE /api/users/:id`
+- Passwords stored as plaintext (matching original system behavior)
+
+### Gallery Link Delivery Workflow
+Retouchers paste gallery links (Pixieset/Google Drive), Sales approves delivery:
+- Retoucher adds gallery link to project in Review status
+- Sales sees "Ready for Delivery" indicator on dashboard
+- Sales clicks "Approve & Send" to trigger branded delivery email to client
+- Project automatically moves to "Delivered" status
+- API: `PATCH /api/projects/:id/gallery-link`, `POST /api/projects/:id/approve-delivery`
+
+### Sneak Peek Feature
+Retouchers can send 1-2 preview photos to clients before the full set is done:
+- Max 3 sneak peeks per project
+- Each preview can include an image URL and optional caption
+- Branded email sent to client with preview image
+- API: `GET/POST /api/projects/:id/sneak-peeks`, `POST /api/projects/:id/sneak-peeks/:peekId/send`
+
+### Satisfaction Survey System
+After delivery, clients receive a feedback survey:
+- Auto-triggered when delivery is approved
+- Branded survey page at `/survey/:token` with 5-star rating, feedback, recommendation toggle
+- Clients rating >= 4 stars are prompted to leave a Google review
+- API: `GET/POST /api/survey/:token`
+
+### Referral Rewards System
+Clients can share referral links to bring in new business:
+- Referral code auto-generated on delivery and included in delivery email
+- Referred clients see branded landing page at `/refer/:code`
+- Admin/Sales can track referrals and mark as completed/rewarded
+- API: `GET /api/referrals`, `POST /api/referrals`, `PATCH /api/referrals/:id`
+
+### VIP Client Tiers
+Automatic client loyalty tracking:
+- Standard (0-2 projects), Silver (3-5, 1 bonus photo), Gold (6-9, 2 bonus + priority), Platinum (10+, 3 bonus + priority)
+- Auto-updated on delivery approval
+- Admin/Sales can view VIP dashboard and override tiers
+- API: `GET /api/admin/clients`, `POST /api/admin/clients/recalculate`
+
+### Client Scheduling Notification
+Auto-email to client when Data Wrangler schedules their project:
+- Triggered when project due date is updated
+- Branded email confirms delivery week
+- Uses `sendSchedulingNotificationEmail` in emailService
+
+### Data Wrangler Delay Alert
+Manual delay notification workflow:
+- Dashboard shows projects due this week that are unassigned
+- Data Wrangler opens dialog, selects target delivery week, sends delay email
+- Pre-filled branded email template with apology and new delivery date
+- API: `POST /api/projects/:id/send-delay-notice`
+
 ## External Dependencies
 
 - **@tanstack/react-query**: Server state management.

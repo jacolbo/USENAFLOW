@@ -7,11 +7,11 @@ import { Input } from "@/components/ui/input";
 import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import { ProjectNotes } from "./project-notes";
 import { ErrorBoundary } from "./ErrorBoundary";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Project } from "@shared/schema";
 import { User, formatRetoucherAbbr, getRetoucherFullName } from "@/lib/types";
-import { Calendar, Star, ChevronDown, ChevronRight, Copy, UserPlus, Search, X, Camera } from "lucide-react";
+import { Calendar, Star, ChevronDown, ChevronRight, Copy, UserPlus, Search, X, Camera, Link, Send, CheckCircle, ExternalLink, Eye, Trash2, Image } from "lucide-react";
 import { useState, useMemo, useCallback, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from 'framer-motion';
 import { LoadingSpinner, FloatingAction, StaggeredList } from './LoadingStates';
@@ -494,6 +494,48 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
       endpoint: "deliver",
     });
   };
+
+  const galleryLinkMutation = useMutation({
+    mutationFn: async ({ projectId, galleryLink, addedBy }: { projectId: string; galleryLink: string; addedBy: string }) => {
+      const response = await apiRequest("PATCH", `/api/projects/${projectId}/gallery-link`, { galleryLink, addedBy });
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
+      toast({
+        title: "Gallery Link Added",
+        description: "The gallery link has been saved successfully.",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to save gallery link. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const approveDeliveryMutation = useMutation({
+    mutationFn: async ({ projectId, approvedBy }: { projectId: string; approvedBy: string }) => {
+      const response = await apiRequest("POST", `/api/projects/${projectId}/approve-delivery`, { approvedBy });
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
+      toast({
+        title: "Delivery Approved!",
+        description: "The gallery has been delivered and the client has been notified via email.",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to approve delivery. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
 
   const handleSetRating = (projectId: string, rating: number) => {
     updateProjectMutation.mutate({
@@ -1516,20 +1558,48 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
                                     Mark Paid
                                   </Button>
                                 )}
-                                {project.status === 'Review' && (
+                                {project.status === 'Review' && project.galleryLink && !project.deliveryApproved && (
                                   <Button
-                                    onClick={() => handleDeliver(project.id)}
+                                    onClick={() => approveDeliveryMutation.mutate({ projectId: project.id, approvedBy: user.name })}
                                     variant="outline"
                                     size="sm"
-                                    className="text-blue-600 hover:text-blue-700"
-                                    data-testid={`button-deliver-${project.id}`}
-                                    disabled={loadingStates[project.id + 'deliver']}
+                                    className="text-green-600 hover:text-green-700 border-green-300"
+                                    disabled={approveDeliveryMutation.isPending}
                                   >
-                                    {loadingStates[project.id + 'deliver'] ? (
+                                    {approveDeliveryMutation.isPending ? (
                                       <LoadingSpinner size={14} className="mr-2" />
-                                    ) : null}
-                                    Deliver
+                                    ) : (
+                                      <Send className="h-4 w-4 mr-1" />
+                                    )}
+                                    Approve & Send
                                   </Button>
+                                )}
+                                {project.status === 'Review' && !project.galleryLink && (
+                                  <Badge variant="secondary" className="bg-yellow-100 text-yellow-800 text-xs">
+                                    <Clock className="h-3 w-3 mr-1" />
+                                    Awaiting Gallery
+                                  </Badge>
+                                )}
+                                {project.status === 'Review' && project.galleryLink && !project.deliveryApproved && (
+                                  <a href={project.galleryLink} target="_blank" rel="noopener noreferrer">
+                                    <Button size="sm" variant="ghost" className="h-7 px-2 text-blue-600">
+                                      <ExternalLink className="h-3 w-3 mr-1" />
+                                      Preview
+                                    </Button>
+                                  </a>
+                                )}
+                                {project.deliveryApproved && (
+                                  <div className="flex items-center gap-1">
+                                    <Badge variant="secondary" className="bg-green-100 text-green-800 text-xs">
+                                      <CheckCircle className="h-3 w-3 mr-1" />
+                                      Delivered
+                                    </Badge>
+                                    {project.deliveryEmailSentAt && (
+                                      <span className="text-xs text-gray-500" title={`Email sent ${new Date(project.deliveryEmailSentAt).toLocaleString()}`}>
+                                        {new Date(project.deliveryEmailSentAt).toLocaleDateString()}
+                                      </span>
+                                    )}
+                                  </div>
                                 )}
                               </div>
                             </TableCell>
@@ -1987,8 +2057,111 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
                                 </Button>
                               )}
                               
-                              {/* Admin can deliver when in Review */}
-                              {user.role === 'Admin' && project.status === 'Review' && (
+                              {/* Gallery link for retouchers on Review projects */}
+                              {hasRetouchingAbilities(user.role) && project.status === 'Review' && (
+                                project.galleryLink ? (
+                                  <div className="flex items-center gap-1">
+                                    <Badge variant="secondary" className="bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300 text-xs">
+                                      <Link className="h-3 w-3 mr-1" />
+                                      Gallery Added
+                                    </Badge>
+                                    <a href={project.galleryLink} target="_blank" rel="noopener noreferrer">
+                                      <Button size="sm" variant="ghost" className="h-6 w-6 p-0">
+                                        <ExternalLink className="h-3 w-3" />
+                                      </Button>
+                                    </a>
+                                  </div>
+                                ) : (
+                                  <Dialog>
+                                    <DialogTrigger asChild>
+                                      <Button 
+                                        size="sm" 
+                                        variant="outline"
+                                        className="text-blue-600 hover:text-blue-700 border-blue-300 hover:border-blue-400"
+                                      >
+                                        <Link className="h-4 w-4 mr-1" />
+                                        Add Gallery Link
+                                      </Button>
+                                    </DialogTrigger>
+                                    <DialogContent>
+                                      <DialogHeader>
+                                        <DialogTitle>Add Gallery Link</DialogTitle>
+                                        <DialogDescription>
+                                          Paste the Pixieset or Google Drive gallery link for {project.clientName}'s project.
+                                        </DialogDescription>
+                                      </DialogHeader>
+                                      <form onSubmit={(e) => {
+                                        e.preventDefault();
+                                        const formData = new FormData(e.currentTarget);
+                                        const galleryLink = formData.get('galleryLink') as string;
+                                        if (galleryLink) {
+                                          galleryLinkMutation.mutate({
+                                            projectId: project.id,
+                                            galleryLink,
+                                            addedBy: user.name,
+                                          });
+                                        }
+                                      }}>
+                                        <div className="space-y-4">
+                                          <div>
+                                            <Label htmlFor="gallery-link-input">Gallery URL</Label>
+                                            <Input
+                                              id="gallery-link-input"
+                                              name="galleryLink"
+                                              type="url"
+                                              placeholder="https://pixieset.com/... or https://drive.google.com/..."
+                                              required
+                                            />
+                                          </div>
+                                          <div className="flex justify-end gap-2">
+                                            <DialogClose asChild>
+                                              <Button type="button" variant="outline">Cancel</Button>
+                                            </DialogClose>
+                                            <Button 
+                                              type="submit" 
+                                              className="bg-blue-600 hover:bg-blue-700"
+                                              disabled={galleryLinkMutation.isPending}
+                                            >
+                                              {galleryLinkMutation.isPending ? (
+                                                <LoadingSpinner size={14} className="mr-2" />
+                                              ) : (
+                                                <Link className="h-4 w-4 mr-1" />
+                                              )}
+                                              Submit Gallery Link
+                                            </Button>
+                                          </div>
+                                        </div>
+                                      </form>
+                                    </DialogContent>
+                                  </Dialog>
+                                )
+                              )}
+
+                              {/* Sneak Peek button for retouchers on assigned projects */}
+                              {hasRetouchingAbilities(user.role) && project.assignedTo === user.name && project.clientEmail && 
+                               !['Delivered', 'Done'].includes(project.status) && (
+                                <SneakPeekDialog project={project} user={user} />
+                              )}
+
+                              {/* Admin/Sales can approve delivery when in Review with gallery link */}
+                              {(user.role === 'Admin' || user.role === 'Sales') && project.status === 'Review' && project.galleryLink && !project.deliveryApproved && (
+                                <Button 
+                                  size="sm" 
+                                  onClick={() => approveDeliveryMutation.mutate({ projectId: project.id, approvedBy: user.name })}
+                                  disabled={approveDeliveryMutation.isPending}
+                                  className="bg-green-600 hover:bg-green-700"
+                                >
+                                  {approveDeliveryMutation.isPending ? (
+                                    <LoadingSpinner size={14} className="mr-2" />
+                                  ) : (
+                                    <Send className="h-4 w-4 mr-1" />
+                                  )}
+                                  Approve & Send
+                                </Button>
+                              )}
+                              
+                              {/* Admin can deliver when in Review (without gallery link) */}
+                              {user.role === 'Admin' && project.status === 'Review' && !project.galleryLink && (
                                 <Button 
                                   size="sm" 
                                   onClick={() => handleDeliver(project.id)}
@@ -1997,6 +2170,16 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
                                 >
                                   Deliver
                                 </Button>
+                              )}
+
+                              {/* Delivery tracking info */}
+                              {project.deliveryApproved && project.status === 'Delivered' && (
+                                <div className="flex items-center gap-1">
+                                  <Badge variant="secondary" className="bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300 text-xs">
+                                    <CheckCircle className="h-3 w-3 mr-1" />
+                                    Delivered
+                                  </Badge>
+                                </div>
                               )}
                               
                               {/* Duplicate button for Admin, Sales, Data Wrangler, and Lead Retoucher (Manager) */}
@@ -2529,5 +2712,223 @@ function ReportIssueDialog({ project, onReport, formatClientDisplay }: ReportIss
         </DialogClose>
       </div>
     </div>
+  );
+}
+
+interface SneakPeekDialogProps {
+  project: Project;
+  user: User;
+}
+
+function SneakPeekDialog({ project, user }: SneakPeekDialogProps) {
+  const { toast } = useToast();
+  const qc = useQueryClient();
+  const [imageUrl, setImageUrl] = useState("");
+  const [caption, setCaption] = useState("");
+  const [open, setOpen] = useState(false);
+
+  const { data: sneakPeeks = [], isLoading } = useQuery<any[]>({
+    queryKey: ['/api/projects', project.id, 'sneak-peeks'],
+    queryFn: async () => {
+      const res = await fetch(`/api/projects/${project.id}/sneak-peeks`, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch");
+      return res.json();
+    },
+    enabled: open,
+  });
+
+  const createMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", `/api/projects/${project.id}/sneak-peeks`, {
+        imageUrl,
+        caption: caption || null,
+        sentBy: user.name,
+      });
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({ title: "Sneak Peek Added", description: "Preview image saved. You can now send it to the client." });
+      qc.invalidateQueries({ queryKey: ['/api/projects', project.id, 'sneak-peeks'] });
+      setImageUrl("");
+      setCaption("");
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const sendMutation = useMutation({
+    mutationFn: async (peekId: string) => {
+      const res = await apiRequest("POST", `/api/projects/${project.id}/sneak-peeks/${peekId}/send`, {});
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({ title: "Sneak Peek Sent!", description: "The client has been emailed the preview photo." });
+      qc.invalidateQueries({ queryKey: ['/api/projects', project.id, 'sneak-peeks'] });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Failed to Send", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (peekId: string) => {
+      await apiRequest("DELETE", `/api/projects/${project.id}/sneak-peeks/${peekId}`);
+    },
+    onSuccess: () => {
+      toast({ title: "Deleted", description: "Sneak peek removed." });
+      qc.invalidateQueries({ queryKey: ['/api/projects', project.id, 'sneak-peeks'] });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const canAddMore = sneakPeeks.length < 3;
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button size="sm" variant="outline" className="text-pink-600 hover:text-pink-700 border-pink-300 hover:border-pink-400">
+          <Eye className="h-4 w-4 mr-1" />
+          Sneak Peek
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Eye className="h-5 w-5 text-pink-600" />
+            Sneak Peek - {project.clientName}
+          </DialogTitle>
+          <DialogDescription>
+            Send a preview photo to your client before the full set is ready. Max 3 per project.
+          </DialogDescription>
+        </DialogHeader>
+
+        {canAddMore && (
+          <div className="space-y-3 border rounded-lg p-4 bg-gray-50 dark:bg-gray-900">
+            <div>
+              <Label htmlFor="peek-image-url">Image URL</Label>
+              <Input
+                id="peek-image-url"
+                type="url"
+                placeholder="https://drive.google.com/... or Pixieset link"
+                value={imageUrl}
+                onChange={(e) => setImageUrl(e.target.value)}
+              />
+            </div>
+            <div>
+              <Label htmlFor="peek-caption">Caption (optional)</Label>
+              <Textarea
+                id="peek-caption"
+                placeholder="A little sneak peek of your beautiful photos..."
+                value={caption}
+                onChange={(e) => setCaption(e.target.value)}
+                rows={2}
+              />
+            </div>
+            {imageUrl && (
+              <div className="rounded-lg overflow-hidden border">
+                <img
+                  src={imageUrl}
+                  alt="Preview"
+                  className="w-full max-h-48 object-cover"
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).style.display = 'none';
+                  }}
+                />
+              </div>
+            )}
+            <Button
+              onClick={() => createMutation.mutate()}
+              disabled={!imageUrl || createMutation.isPending}
+              className="w-full bg-pink-600 hover:bg-pink-700"
+            >
+              {createMutation.isPending ? (
+                <LoadingSpinner size={14} className="mr-2" />
+              ) : (
+                <Image className="h-4 w-4 mr-2" />
+              )}
+              Add Sneak Peek
+            </Button>
+          </div>
+        )}
+
+        {!canAddMore && (
+          <div className="text-center py-3 text-sm text-amber-600 bg-amber-50 dark:bg-amber-900/20 rounded-lg">
+            Maximum of 3 sneak peeks reached for this project.
+          </div>
+        )}
+
+        {isLoading ? (
+          <div className="flex justify-center py-4">
+            <LoadingSpinner size={24} />
+          </div>
+        ) : sneakPeeks.length > 0 ? (
+          <div className="space-y-3 mt-2">
+            <Label className="text-sm font-medium">Saved Previews ({sneakPeeks.length}/3)</Label>
+            {sneakPeeks.map((peek: any) => (
+              <div key={peek.id} className="border rounded-lg p-3 space-y-2">
+                <div className="rounded overflow-hidden">
+                  <img
+                    src={peek.imageUrl}
+                    alt="Sneak peek"
+                    className="w-full max-h-32 object-cover"
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).style.display = 'none';
+                    }}
+                  />
+                </div>
+                {peek.caption && (
+                  <p className="text-sm text-gray-600 dark:text-gray-400 italic">"{peek.caption}"</p>
+                )}
+                <div className="flex items-center justify-between">
+                  <div className="text-xs text-gray-500">
+                    {peek.sentAt ? (
+                      <span className="text-green-600 flex items-center gap-1">
+                        <CheckCircle className="h-3 w-3" />
+                        Sent {new Date(peek.sentAt).toLocaleDateString('en-ZA', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                    ) : (
+                      <span>Added {new Date(peek.createdAt).toLocaleDateString('en-ZA', { month: 'short', day: 'numeric' })}</span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-1">
+                    {!peek.sentAt && (
+                      <Button
+                        size="sm"
+                        onClick={() => sendMutation.mutate(peek.id)}
+                        disabled={sendMutation.isPending}
+                        className="bg-green-600 hover:bg-green-700 text-white h-7 text-xs"
+                      >
+                        {sendMutation.isPending ? (
+                          <LoadingSpinner size={12} className="mr-1" />
+                        ) : (
+                          <Send className="h-3 w-3 mr-1" />
+                        )}
+                        Send to Client
+                      </Button>
+                    )}
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => deleteMutation.mutate(peek.id)}
+                      disabled={deleteMutation.isPending}
+                      className="h-7 w-7 p-0 text-red-500 hover:text-red-700"
+                    >
+                      <Trash2 className="h-3 w-3" />
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="text-center py-4 text-sm text-gray-500">
+            No sneak peeks yet. Add a preview image above to get started.
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
   );
 }
