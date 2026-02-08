@@ -595,8 +595,16 @@ function ReferralDashboard({ userRole }: { userRole: string }) {
 
   const statusColors: Record<string, string> = {
     pending: "bg-yellow-100 text-yellow-800",
+    submitted: "bg-orange-100 text-orange-800",
     completed: "bg-blue-100 text-blue-800",
     rewarded: "bg-green-100 text-green-800",
+  };
+
+  const statusLabels: Record<string, string> = {
+    pending: "Waiting for sign-up",
+    submitted: "Signed up — awaiting booking",
+    completed: "Booked — reward due",
+    rewarded: "Rewarded",
   };
 
   return (
@@ -648,12 +656,12 @@ function ReferralDashboard({ userRole }: { userRole: string }) {
                     </td>
                     <td className="py-3 px-4">
                       <span className={`inline-flex px-2 py-1 rounded-full text-xs font-medium ${statusColors[ref.status] || "bg-gray-100 text-gray-800"}`}>
-                        {ref.status}
+                        {statusLabels[ref.status] || ref.status}
                       </span>
                     </td>
                     <td className="py-3 px-4">
                       <div className="flex gap-1">
-                        {ref.status === "pending" && ref.referredName && (
+                        {ref.status === "submitted" && (
                           <Button
                             size="sm"
                             variant="outline"
@@ -661,7 +669,7 @@ function ReferralDashboard({ userRole }: { userRole: string }) {
                             disabled={updateMutation.isPending}
                             className="text-xs"
                           >
-                            Mark Completed
+                            Confirm Booked
                           </Button>
                         )}
                         {ref.status === "completed" && (

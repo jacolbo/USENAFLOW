@@ -327,6 +327,20 @@ export function registerShoottrackerRoutes(app: Express): void {
         promotedBy: userId,
       });
       
+      try {
+        const matchingReferrals = await storage.getSubmittedReferralsByName(clientName);
+        for (const ref of matchingReferrals) {
+          await storage.updateReferral(ref.id, {
+            referredProjectId: newProject.id,
+            status: "completed",
+            completedAt: new Date(),
+          });
+          console.log(`🎉 Referral matched: "${clientName}" matched referral from ${ref.referrerName} (code: ${ref.referralCode})`);
+        }
+      } catch (matchError: any) {
+        console.error("Referral matching error (non-fatal):", matchError.message);
+      }
+      
       res.json({ success: true, project: newProject });
     } catch (error: any) {
       console.error("Error promoting staged event:", error);

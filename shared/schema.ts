@@ -551,6 +551,8 @@ export const referrals = pgTable("referrals", {
   referralCode: text("referral_code").notNull().unique(),
   referredEmail: text("referred_email"),
   referredName: text("referred_name"),
+  referredFirstName: text("referred_first_name"),
+  referredLastName: text("referred_last_name"),
   referredProjectId: varchar("referred_project_id").references(() => projects.id),
   status: text("status").notNull().default("pending"),
   rewardNote: text("reward_note"),

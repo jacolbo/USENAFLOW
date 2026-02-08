@@ -1329,16 +1329,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!referral) {
         return res.status(404).json({ error: "Referral not found" });
       }
-      const { name, email, interest } = req.body;
-      if (!name || !email) {
-        return res.status(400).json({ error: "Name and email are required" });
+      const firstName = (req.body.firstName || "").trim();
+      const lastName = (req.body.lastName || "").trim();
+      if (!firstName || !lastName) {
+        return res.status(400).json({ error: "First name and last name are required" });
       }
+      const fullName = `${firstName} ${lastName}`;
       const updated = await storage.updateReferral(referral.id, {
-        referredEmail: email,
-        referredName: name,
-        status: "completed",
-        completedAt: new Date(),
-        rewardNote: interest ? `Interested in: ${interest}` : null,
+        referredFirstName: firstName,
+        referredLastName: lastName,
+        referredName: fullName,
+        status: "submitted",
       });
       res.json({ success: true });
     } catch (error) {

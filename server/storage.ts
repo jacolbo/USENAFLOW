@@ -1,6 +1,6 @@
 import { type User, type InsertUser, type Project, type InsertProject, type UpdateProject, type ProjectNote, type InsertProjectNote, type UpdateProjectNote, type TradeOffer, type InsertTradeOffer, type UpdateTradeOffer, type WranglerCommission, type InsertWranglerCommission, type ProjectEvent, type InsertProjectEvent, type Complaint, type InsertComplaint, type ShoottrackerMeta, type InsertShoottrackerMeta, type UpdateShoottrackerMeta, type AppSetting, type CalendarEventStaging, type InsertCalendarEventStaging, type UpdateCalendarEventStaging, type ClientAuthToken, type InsertClientAuthToken, type ClientMessage, type InsertClientMessage, type DashboardPreferences, type InsertDashboardPreferences, type SneakPeek, type InsertSneakPeek, type Survey, type InsertSurvey, type Referral, type InsertReferral, type ClientProfile, type InsertClientProfile, ProjectStatus, TradeOfferStatus, StagingStatus, users, projects, projectNotes, tradeOffers, wranglerCommissions, projectEvents, complaints, shoottrackerMeta, appSettings, calendarEventsStaging, clientAuthTokens, clientMessages, dashboardPreferences, sneakPeeks, clientSurveys, referrals, clientProfiles } from "@shared/schema";
 import { db } from "./db";
-import { eq, sql, asc } from "drizzle-orm";
+import { eq, sql, asc, and, ilike } from "drizzle-orm";
 import { randomUUID } from "crypto";
 
 export interface IStorage {
@@ -103,6 +103,7 @@ export interface IStorage {
   getReferralsByReferrer(email: string): Promise<Referral[]>;
   updateReferral(id: string, updates: Partial<Referral>): Promise<Referral | undefined>;
   getAllReferrals(): Promise<Referral[]>;
+  getSubmittedReferralsByName(clientName: string): Promise<Referral[]>;
 
   // Client profile methods
   getClientProfile(email: string): Promise<ClientProfile | undefined>;
@@ -763,6 +764,9 @@ export class MemStorage implements IStorage {
   async getAllReferrals(): Promise<Referral[]> {
     return [];
   }
+  async getSubmittedReferralsByName(clientName: string): Promise<Referral[]> {
+    return [];
+  }
 }
 
 // Database Storage Implementation
@@ -1409,6 +1413,23 @@ export class DatabaseStorage implements IStorage {
 
   async getAllReferrals(): Promise<Referral[]> {
     return await db.select().from(referrals).orderBy(asc(referrals.createdAt));
+  }
+
+  async getSubmittedReferralsByName(clientName: string): Promise<Referral[]> {
+    const nameParts = clientName.trim().toLowerCase().split(/\s+/);
+    const allSubmitted = await db.select().from(referrals).where(eq(referrals.status, "submitted"));
+    return allSubmitted.filter(r => {
+      if (!r.referredFirstName || !r.referredLastName) return false;
+      const refFirst = r.referredFirstName.toLowerCase();
+      const refLast = r.referredLastName.toLowerCase();
+      const refFull = `${refFirst} ${refLast}`;
+      const clientLower = clientName.trim().toLowerCase();
+      if (refFull === clientLower) return true;
+      if (nameParts.length >= 2) {
+        return nameParts.some(p => p === refFirst) && nameParts.some(p => p === refLast);
+      }
+      return false;
+    });
   }
 
   async getClientProfile(email: string): Promise<ClientProfile | undefined> {

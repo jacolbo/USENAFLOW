@@ -169,8 +169,11 @@ After delivery, clients receive a feedback survey:
 ### Referral Rewards System
 Clients can share referral links to bring in new business:
 - Referral code auto-generated on delivery and included in delivery email
-- Referred clients see branded landing page at `/refer/:code`
-- Admin/Sales can track referrals and mark as completed/rewarded
+- Referred clients see branded landing page at `/refer/:code` where they enter first and last name
+- After submitting, referred client sees "View Our Services" button linking to Linktree (https://linktr.ee/jepsonmyles.photography)
+- Referral status flow: pending → submitted (name entered) → completed (auto-matched when booked via ShootTracker or manually) → rewarded
+- When ShootTracker promotes a calendar event to a project, the system auto-matches the client name against submitted referrals
+- Admin/Sales can track referrals, manually confirm bookings, and mark as rewarded
 - API: `GET /api/referrals`, `POST /api/referrals`, `PATCH /api/referrals/:id`
 
 ### VIP Client Tiers
