@@ -1,4 +1,4 @@
-import { type User, type InsertUser, type Project, type InsertProject, type UpdateProject, type ProjectNote, type InsertProjectNote, type UpdateProjectNote, type TradeOffer, type InsertTradeOffer, type UpdateTradeOffer, type WranglerCommission, type InsertWranglerCommission, type ProjectEvent, type InsertProjectEvent, type Complaint, type InsertComplaint, type ShoottrackerMeta, type InsertShoottrackerMeta, type UpdateShoottrackerMeta, type AppSetting, type CalendarEventStaging, type InsertCalendarEventStaging, type UpdateCalendarEventStaging, type ClientAuthToken, type InsertClientAuthToken, type ClientMessage, type InsertClientMessage, type DashboardPreferences, type InsertDashboardPreferences, type SneakPeek, type InsertSneakPeek, type Survey, type InsertSurvey, type Referral, type InsertReferral, type ClientProfile, type InsertClientProfile, type RewardClaim, type InsertRewardClaim, ProjectStatus, TradeOfferStatus, StagingStatus, users, projects, projectNotes, tradeOffers, wranglerCommissions, projectEvents, complaints, shoottrackerMeta, appSettings, calendarEventsStaging, clientAuthTokens, clientMessages, dashboardPreferences, sneakPeeks, clientSurveys, referrals, clientProfiles, referralRewardClaims } from "@shared/schema";
+import { type User, type InsertUser, type Project, type InsertProject, type UpdateProject, type ProjectNote, type InsertProjectNote, type UpdateProjectNote, type TradeOffer, type InsertTradeOffer, type UpdateTradeOffer, type WranglerCommission, type InsertWranglerCommission, type ProjectEvent, type InsertProjectEvent, type Complaint, type InsertComplaint, type ShoottrackerMeta, type InsertShoottrackerMeta, type UpdateShoottrackerMeta, type AppSetting, type CalendarEventStaging, type InsertCalendarEventStaging, type UpdateCalendarEventStaging, type ClientAuthToken, type InsertClientAuthToken, type ClientMessage, type InsertClientMessage, type DashboardPreferences, type InsertDashboardPreferences, type SneakPeek, type InsertSneakPeek, type Survey, type InsertSurvey, type Referral, type InsertReferral, type ClientProfile, type InsertClientProfile, type RewardClaim, type InsertRewardClaim, type EmailTemplate, type InsertEmailTemplate, ProjectStatus, TradeOfferStatus, StagingStatus, users, projects, projectNotes, tradeOffers, wranglerCommissions, projectEvents, complaints, shoottrackerMeta, appSettings, calendarEventsStaging, clientAuthTokens, clientMessages, dashboardPreferences, sneakPeeks, clientSurveys, referrals, clientProfiles, referralRewardClaims, emailTemplates } from "@shared/schema";
 import { db } from "./db";
 import { eq, sql, asc, and, ilike } from "drizzle-orm";
 import { randomUUID } from "crypto";
@@ -117,6 +117,11 @@ export interface IStorage {
   getRewardClaimsByClient(clientEmail: string): Promise<RewardClaim[]>;
   creditBonusPhotos(clientEmail: string, clientName: string, photos: number): Promise<ClientProfile>;
   applyBonusPhotos(clientEmail: string, projectId: string, clientName: string, photosToApply: number, appliedBy: string): Promise<{ claim: RewardClaim; profile: ClientProfile }>;
+
+  getAllEmailTemplates(): Promise<EmailTemplate[]>;
+  getEmailTemplateByKey(templateKey: string): Promise<EmailTemplate | undefined>;
+  upsertEmailTemplate(template: InsertEmailTemplate): Promise<EmailTemplate>;
+  updateEmailTemplate(id: string, updates: Partial<EmailTemplate>): Promise<EmailTemplate | undefined>;
 }
 
 export class MemStorage implements IStorage {
@@ -776,6 +781,18 @@ export class MemStorage implements IStorage {
   }
   async getSubmittedReferralsByEmail(clientEmail: string): Promise<Referral[]> {
     return [];
+  }
+  async getAllEmailTemplates(): Promise<EmailTemplate[]> {
+    return [];
+  }
+  async getEmailTemplateByKey(templateKey: string): Promise<EmailTemplate | undefined> {
+    return undefined;
+  }
+  async upsertEmailTemplate(template: InsertEmailTemplate): Promise<EmailTemplate> {
+    throw new Error("Not implemented in MemStorage");
+  }
+  async updateEmailTemplate(id: string, updates: Partial<EmailTemplate>): Promise<EmailTemplate | undefined> {
+    return undefined;
   }
 }
 
@@ -1528,6 +1545,36 @@ export class DatabaseStorage implements IStorage {
       .returning();
     
     return { claim, profile: updatedProfile };
+  }
+
+  async getAllEmailTemplates(): Promise<EmailTemplate[]> {
+    return await db.select().from(emailTemplates);
+  }
+
+  async getEmailTemplateByKey(templateKey: string): Promise<EmailTemplate | undefined> {
+    const [template] = await db.select().from(emailTemplates).where(eq(emailTemplates.templateKey, templateKey));
+    return template || undefined;
+  }
+
+  async upsertEmailTemplate(template: InsertEmailTemplate): Promise<EmailTemplate> {
+    const existing = await this.getEmailTemplateByKey(template.templateKey);
+    if (existing) {
+      const [updated] = await db.update(emailTemplates)
+        .set({ ...template, updatedAt: new Date() })
+        .where(eq(emailTemplates.templateKey, template.templateKey))
+        .returning();
+      return updated;
+    }
+    const [created] = await db.insert(emailTemplates).values(template).returning();
+    return created;
+  }
+
+  async updateEmailTemplate(id: string, updates: Partial<EmailTemplate>): Promise<EmailTemplate | undefined> {
+    const [updated] = await db.update(emailTemplates)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(emailTemplates.id, id))
+      .returning();
+    return updated || undefined;
   }
 }
 

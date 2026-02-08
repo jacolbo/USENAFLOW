@@ -11,6 +11,7 @@ import type { Notification, WebSocketMessage } from "@shared/schema";
 import { triggerManualRollover, performManualRolloverToNextWeek, performManualRollbackFromNextWeek } from "./rolloverScheduler";
 import { registerShoottrackerRoutes } from "./shoottrackerRoutes";
 import { sendAssignmentWelcomeEmail, sendGalleryDeliveryEmail, sendSneakPeekEmail, sendSatisfactionSurveyEmail, sendSchedulingNotificationEmail, sendManualDelayNoticeEmail, generateToken } from "./services/emailService";
+import { seedDefaultTemplates } from "./services/defaultEmailTemplates";
 import { VipTier } from "@shared/schema";
 
 // Global WebSocket connections store
@@ -2233,6 +2234,78 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ error: "Failed to delete sneak peek" });
     }
   });
+
+  // --- Email Template Admin Routes ---
+  app.get("/api/admin/email-templates", async (req, res) => {
+    try {
+      const templates = await storage.getAllEmailTemplates();
+      res.json(templates);
+    } catch (error: any) {
+      console.error("Error fetching email templates:", error);
+      res.status(500).json({ error: "Failed to fetch email templates" });
+    }
+  });
+
+  app.get("/api/admin/email-templates/:key", async (req, res) => {
+    try {
+      const { key } = req.params;
+      const template = await storage.getEmailTemplateByKey(key);
+      if (!template) {
+        return res.status(404).json({ error: "Template not found" });
+      }
+      res.json(template);
+    } catch (error: any) {
+      console.error("Error fetching email template:", error);
+      res.status(500).json({ error: "Failed to fetch email template" });
+    }
+  });
+
+  app.put("/api/admin/email-templates/:key", async (req, res) => {
+    try {
+      const { key } = req.params;
+      const { subject, htmlBody } = req.body;
+      const template = await storage.getEmailTemplateByKey(key);
+      if (!template) {
+        return res.status(404).json({ error: "Template not found" });
+      }
+      const updated = await storage.updateEmailTemplate(template.id, {
+        subject: subject || template.subject,
+        htmlBody: htmlBody || template.htmlBody,
+        isCustomized: true,
+      });
+      res.json(updated);
+    } catch (error: any) {
+      console.error("Error updating email template:", error);
+      res.status(500).json({ error: "Failed to update email template" });
+    }
+  });
+
+  app.post("/api/admin/email-templates/:key/reset", async (req, res) => {
+    try {
+      const { key } = req.params;
+      const template = await storage.getEmailTemplateByKey(key);
+      if (!template) {
+        return res.status(404).json({ error: "Template not found" });
+      }
+      const { DEFAULT_EMAIL_TEMPLATES } = await import('./services/defaultEmailTemplates');
+      const defaultTemplate = DEFAULT_EMAIL_TEMPLATES.find(t => t.templateKey === key);
+      if (!defaultTemplate) {
+        return res.status(404).json({ error: "Default template not found" });
+      }
+      const updated = await storage.updateEmailTemplate(template.id, {
+        subject: defaultTemplate.subject,
+        htmlBody: defaultTemplate.htmlBody,
+        isCustomized: false,
+      });
+      res.json(updated);
+    } catch (error: any) {
+      console.error("Error resetting email template:", error);
+      res.status(500).json({ error: "Failed to reset email template" });
+    }
+  });
+
+  // Seed default email templates
+  seedDefaultTemplates(storage).catch(err => console.error('Failed to seed email templates:', err));
 
   return httpServer;
 }

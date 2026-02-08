@@ -670,6 +670,25 @@ export interface WidgetConfig {
   roles: string[]; // Which roles can see this widget
 }
 
+export const emailTemplates = pgTable("email_templates", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  templateKey: text("template_key").notNull().unique(),
+  name: text("name").notNull(),
+  subject: text("subject").notNull(),
+  htmlBody: text("html_body").notNull(),
+  availableVariables: jsonb("available_variables").notNull().default(sql`'[]'::jsonb`),
+  isCustomized: boolean("is_customized").notNull().default(false),
+  updatedAt: timestamp("updated_at").notNull().default(sql`now()`),
+});
+
+export const insertEmailTemplateSchema = createInsertSchema(emailTemplates).omit({
+  id: true,
+  updatedAt: true,
+});
+
+export type EmailTemplate = typeof emailTemplates.$inferSelect;
+export type InsertEmailTemplate = z.infer<typeof insertEmailTemplateSchema>;
+
 export const AVAILABLE_WIDGETS: WidgetConfig[] = [
   { id: "daily_quote", name: "Daily Inspiration", description: "Motivational quote of the day", icon: "Quote", defaultEnabled: true, roles: ["Admin", "LeadRetoucher", "Retoucher1", "Retoucher2", "Retoucher3", "DataWrangler", "Sales", "Evans"] },
   { id: "my_tasks", name: "My Tasks", description: "Projects assigned to you", icon: "User", defaultEnabled: true, roles: ["Admin", "Retoucher1", "Retoucher2", "Retoucher3"] },

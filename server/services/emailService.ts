@@ -210,6 +210,21 @@ function getEmailHeader(subtitle: string = ''): string {
   `;
 }
 
+export function renderTemplate(template: string, variables: Record<string, string>): string {
+  return template.replace(/\{\{(\w+)\}\}/g, (match, key) => {
+    return variables[key] !== undefined ? variables[key] : match;
+  });
+}
+
+async function getTemplate(templateKey: string): Promise<{ subject: string; htmlBody: string } | null> {
+  try {
+    const { storage } = await import('../storage');
+    const template = await storage.getEmailTemplateByKey(templateKey);
+    if (template) return { subject: template.subject, htmlBody: template.htmlBody };
+    return null;
+  } catch { return null; }
+}
+
 // Calculate delivery week text (e.g., "Week of January 20, 2025")
 function getDeliveryWeekText(deliveryDueDate: Date): string {
   // Get start of week (Monday)
@@ -239,12 +254,18 @@ export async function sendDeliveryEstimateEmail(
   try {
     const { client, fromEmail } = await getResendClient();
     
-    const subject = `Your Photo Delivery Estimate - ${clientName}`;
     const deliveryWeek = getDeliveryWeekText(deliveryDueDate);
-    
-    const htmlContent = `
+    const variables: Record<string, string> = {
+      clientName,
+      shootDate: formatDateForEmail(shootDate),
+      deliveryWeek,
+      emailHeader: getEmailHeader('Photo Delivery Estimate'),
+    };
+
+    let subject = `Your Photo Delivery Estimate - ${clientName}`;
+    let htmlContent = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-        ${getEmailHeader('Photo Delivery Estimate')}
+        ${variables.emailHeader}
         
         <p style="color: #333; font-size: 16px; line-height: 1.6;">
           Dear ${clientName},
@@ -285,6 +306,12 @@ export async function sendDeliveryEstimateEmail(
         </p>
       </div>
     `;
+
+    const dbTemplate = await getTemplate('delivery_estimate');
+    if (dbTemplate) {
+      subject = renderTemplate(dbTemplate.subject, variables);
+      htmlContent = renderTemplate(dbTemplate.htmlBody, variables);
+    }
 
     const replyTo = getProjectReplyToEmail(projectId);
     const response = await client.emails.send({
@@ -329,7 +356,7 @@ export async function sendProjectAddedEmail(
   projectId: string,
   approvalToken: string
 ): Promise<EmailResult> {
-  const subject = `Your Photo Selection Confirmation - ${clientName}`;
+  let subject = `Your Photo Selection Confirmation - ${clientName}`;
   
   try {
     const { client, fromEmail } = await getResendClient();
@@ -353,10 +380,19 @@ export async function sendProjectAddedEmail(
         </div>
       `;
     }
+
+    const variables: Record<string, string> = {
+      clientName,
+      packageCount: String(packageCount),
+      selectedCount: String(selectedCount),
+      extras: String(extras),
+      extrasSection,
+      emailHeader: getEmailHeader('Photo Selection Confirmation'),
+    };
     
-    const htmlContent = `
+    let htmlContent = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-        ${getEmailHeader('Photo Selection Confirmation')}
+        ${variables.emailHeader}
         
         <p style="color: #333; font-size: 16px; line-height: 1.6;">
           Dear ${clientName},
@@ -404,6 +440,12 @@ export async function sendProjectAddedEmail(
       </div>
     `;
 
+    const dbTemplate = await getTemplate('project_added');
+    if (dbTemplate) {
+      subject = renderTemplate(dbTemplate.subject, variables);
+      htmlContent = renderTemplate(dbTemplate.htmlBody, variables);
+    }
+
     const replyTo = getProjectReplyToEmail(projectId);
     const response = await client.emails.send({
       from: fromEmail,
@@ -444,7 +486,7 @@ export async function sendChatLinkEmail(
   projectId: string,
   chatToken: string
 ): Promise<EmailResult> {
-  const subject = `Connect with Your Retoucher - ${clientName}`;
+  let subject = `Connect with Your Retoucher - ${clientName}`;
   
   try {
     const { client, fromEmail } = await getResendClient();
@@ -452,10 +494,18 @@ export async function sendChatLinkEmail(
     const baseUrl = getAppBaseUrl();
     
     const chatUrl = `${baseUrl}/client-chat/${chatToken}`;
+
+    const variables: Record<string, string> = {
+      clientName,
+      retoucherName,
+      chatUrl,
+      clientEmail,
+      emailHeader: getEmailHeader('Direct Communication'),
+    };
     
-    const htmlContent = `
+    let htmlContent = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-        ${getEmailHeader('Direct Communication')}
+        ${variables.emailHeader}
         
         <p style="color: #333; font-size: 16px; line-height: 1.6;">
           Dear ${clientName},
@@ -498,6 +548,12 @@ export async function sendChatLinkEmail(
         </p>
       </div>
     `;
+
+    const dbTemplate = await getTemplate('chat_link');
+    if (dbTemplate) {
+      subject = renderTemplate(dbTemplate.subject, variables);
+      htmlContent = renderTemplate(dbTemplate.htmlBody, variables);
+    }
 
     const replyTo = getProjectReplyToEmail(projectId);
     const response = await client.emails.send({
@@ -544,10 +600,9 @@ export async function sendMessageNotificationEmail(
   chatToken: string,
   conversationThread: ThreadMessage[] = []
 ): Promise<EmailResult> {
-  const subject = `New Message from ${retoucherName} - Jepson Myles Studio`;
+  let subject = `New Message from ${retoucherName} - Jepson Myles Studio`;
   
   try {
-    // Get Resend client
     const { client, fromEmail } = await getResendClient();
     
     const baseUrl = getAppBaseUrl();
@@ -595,9 +650,18 @@ export async function sendMessageNotificationEmail(
       }
     }
     
-    const htmlContent = `
+    const variables: Record<string, string> = {
+      clientName,
+      retoucherName,
+      newMessage,
+      chatUrl,
+      threadHtml,
+      emailHeader: getEmailHeader('New Message'),
+    };
+
+    let htmlContent = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-        ${getEmailHeader('New Message')}
+        ${variables.emailHeader}
         
         <p style="color: #333; font-size: 16px; line-height: 1.6;">
           Hi ${clientName},
@@ -648,6 +712,12 @@ export async function sendMessageNotificationEmail(
       </div>
     `;
 
+    const dbTemplate = await getTemplate('message_notification');
+    if (dbTemplate) {
+      subject = renderTemplate(dbTemplate.subject, variables);
+      htmlContent = renderTemplate(dbTemplate.htmlBody, variables);
+    }
+
     // Send via Resend API with project-specific reply-to address
     const replyTo = getProjectReplyToEmail(projectId);
     const response = await client.emails.send({
@@ -696,7 +766,7 @@ export async function sendAssignmentWelcomeEmail(
   projectId: string,
   chatToken: string
 ): Promise<EmailResult> {
-  const subject = `Your Photo Project is Now in Progress! - ${clientName}`;
+  let subject = `Your Photo Project is Now in Progress! - ${clientName}`;
   
   try {
     const { client, fromEmail } = await getResendClient();
@@ -706,8 +776,14 @@ export async function sendAssignmentWelcomeEmail(
     const chatUrl = `${baseUrl}/client-chat/${chatToken}`;
     
     const hasExtras = extras > 0;
+
+    const variables: Record<string, string> = {
+      clientName,
+      retoucherName,
+      emailHeader: getEmailHeader('Your Project is In Progress'),
+    };
     
-    const htmlContent = `
+    let htmlContent = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
         ${getEmailHeader('Your Project is In Progress')}
         
@@ -778,6 +854,12 @@ export async function sendAssignmentWelcomeEmail(
       </div>
     `;
 
+    const dbTemplate = await getTemplate('project_assigned');
+    if (dbTemplate) {
+      subject = renderTemplate(dbTemplate.subject, variables);
+      htmlContent = renderTemplate(dbTemplate.htmlBody, variables);
+    }
+
     // Send via Resend API with project-specific reply-to for inbound email handling
     const replyTo = getProjectReplyToEmail(projectId);
     const response = await client.emails.send({
@@ -819,13 +901,18 @@ export async function sendDelayNotificationEmail(
   try {
     const { client, fromEmail } = await getResendClient();
     
-    const subject = `Update on Your Photo Delivery - ${clientName}`;
+    let subject = `Update on Your Photo Delivery - ${clientName}`;
     const originalWeekText = getDeliveryWeekText(originalDeliveryWeek);
     const newWeekText = getDeliveryWeekText(newDeliveryWeek);
+
+    const variables: Record<string, string> = {
+      clientName,
+      emailHeader: getEmailHeader('Delivery Update'),
+    };
     
-    const htmlContent = `
+    let htmlContent = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-        ${getEmailHeader('Delivery Update')}
+        ${variables.emailHeader}
         
         <p style="color: #333; font-size: 16px; line-height: 1.6;">
           Dear ${clientName},
@@ -872,6 +959,12 @@ export async function sendDelayNotificationEmail(
       </div>
     `;
 
+    const dbTemplate = await getTemplate('delay_notification');
+    if (dbTemplate) {
+      subject = renderTemplate(dbTemplate.subject, variables);
+      htmlContent = renderTemplate(dbTemplate.htmlBody, variables);
+    }
+
     const replyTo = getProjectReplyToEmail(projectId);
     const response = await client.emails.send({
       from: fromEmail,
@@ -908,7 +1001,7 @@ export async function sendSneakPeekEmail(
   caption: string | null,
   projectId: string
 ): Promise<EmailResult> {
-  const subject = `A Special Preview of Your Photos! - Jepson Myles Studio`;
+  let subject = `A Special Preview of Your Photos! - Jepson Myles Studio`;
   
   try {
     const { client, fromEmail } = await getResendClient();
@@ -918,10 +1011,24 @@ export async function sendSneakPeekEmail(
         "${caption}"
       </p>
     ` : '';
+
+    const sneakPeekHtml = `
+      <div style="text-align: center; margin: 25px 0;">
+        <img src="${imageUrl}" alt="Preview Photo" style="max-width: 100%; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15);" />
+      </div>
+      ${captionSection}
+    `;
+
+    const variables: Record<string, string> = {
+      clientName,
+      retoucherName: '',
+      sneakPeekHtml,
+      emailHeader: getEmailHeader('A Special Preview'),
+    };
     
-    const htmlContent = `
+    let htmlContent = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-        ${getEmailHeader('A Special Preview')}
+        ${variables.emailHeader}
         
         <p style="color: #333; font-size: 16px; line-height: 1.6;">
           Dear ${clientName},
@@ -936,11 +1043,7 @@ export async function sendSneakPeekEmail(
           </p>
         </div>
         
-        <div style="text-align: center; margin: 25px 0;">
-          <img src="${imageUrl}" alt="Preview Photo" style="max-width: 100%; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15);" />
-        </div>
-        
-        ${captionSection}
+        ${sneakPeekHtml}
         
         <p style="color: #333; font-size: 16px; line-height: 1.6;">
           We hope this little preview gets you excited for the full set! We're putting our best work into every single photo.
@@ -962,6 +1065,12 @@ export async function sendSneakPeekEmail(
         </p>
       </div>
     `;
+
+    const dbTemplate = await getTemplate('sneak_peek');
+    if (dbTemplate) {
+      subject = renderTemplate(dbTemplate.subject, variables);
+      htmlContent = renderTemplate(dbTemplate.htmlBody, variables);
+    }
 
     const replyTo = getProjectReplyToEmail(projectId);
     const response = await client.emails.send({
@@ -998,7 +1107,7 @@ export async function sendGalleryDeliveryEmail(
   projectId: string,
   referralCode?: string
 ): Promise<EmailResult> {
-  const subject = `Your Photos Are Ready! - Jepson Myles Studio`;
+  let subject = `Your Photos Are Ready! - Jepson Myles Studio`;
   
   try {
     const { client, fromEmail } = await getResendClient();
@@ -1025,9 +1134,16 @@ export async function sendGalleryDeliveryEmail(
       `;
     }
     
-    const htmlContent = `
+    const variables: Record<string, string> = {
+      clientName,
+      galleryLink,
+      referralSection,
+      emailHeader: getEmailHeader('Your Photos Are Ready!'),
+    };
+
+    let htmlContent = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-        ${getEmailHeader('Your Photos Are Ready!')}
+        ${variables.emailHeader}
         
         <p style="color: #333; font-size: 16px; line-height: 1.6;">
           Dear ${clientName},
@@ -1079,6 +1195,12 @@ export async function sendGalleryDeliveryEmail(
       </div>
     `;
 
+    const dbTemplate = await getTemplate('gallery_delivery');
+    if (dbTemplate) {
+      subject = renderTemplate(dbTemplate.subject, variables);
+      htmlContent = renderTemplate(dbTemplate.htmlBody, variables);
+    }
+
     const replyTo = getProjectReplyToEmail(projectId);
     const response = await client.emails.send({
       from: fromEmail,
@@ -1114,7 +1236,7 @@ export async function sendSchedulingNotificationEmail(
   weekEndDate: Date,
   projectId: string
 ): Promise<EmailResult> {
-  const subject = `Your Photos Are Scheduled! - Jepson Myles Studio`;
+  let subject = `Your Photos Are Scheduled! - Jepson Myles Studio`;
 
   try {
     const { client, fromEmail } = await getResendClient();
@@ -1122,9 +1244,16 @@ export async function sendSchedulingNotificationEmail(
     const weekStartText = weekStartDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
     const weekEndText = weekEndDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
 
-    const htmlContent = `
+    const variables: Record<string, string> = {
+      clientName,
+      weekStartText,
+      weekEndText,
+      emailHeader: getEmailHeader('Your Photos Are Scheduled!'),
+    };
+
+    let htmlContent = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-        ${getEmailHeader('Your Photos Are Scheduled!')}
+        ${variables.emailHeader}
 
         <p style="color: #333; font-size: 16px; line-height: 1.6;">
           Dear ${clientName},
@@ -1163,6 +1292,12 @@ export async function sendSchedulingNotificationEmail(
       </div>
     `;
 
+    const dbTemplate = await getTemplate('scheduling_notification');
+    if (dbTemplate) {
+      subject = renderTemplate(dbTemplate.subject, variables);
+      htmlContent = renderTemplate(dbTemplate.htmlBody, variables);
+    }
+
     const replyTo = getProjectReplyToEmail(projectId);
     const response = await client.emails.send({
       from: fromEmail,
@@ -1198,7 +1333,7 @@ export async function sendManualDelayNoticeEmail(
   targetWeekEnd: Date,
   projectId: string
 ): Promise<EmailResult> {
-  const subject = `Update on Your Photos - Jepson Myles Studio`;
+  let subject = `Update on Your Photos - Jepson Myles Studio`;
 
   try {
     const { client, fromEmail } = await getResendClient();
@@ -1206,9 +1341,16 @@ export async function sendManualDelayNoticeEmail(
     const weekStartText = targetWeekStart.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
     const weekEndText = targetWeekEnd.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
 
-    const htmlContent = `
+    const variables: Record<string, string> = {
+      clientName,
+      weekStartText,
+      weekEndText,
+      emailHeader: getEmailHeader('Update on Your Photos'),
+    };
+
+    let htmlContent = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-        ${getEmailHeader('Update on Your Photos')}
+        ${variables.emailHeader}
 
         <p style="color: #333; font-size: 16px; line-height: 1.6;">
           Dear ${clientName},
@@ -1246,6 +1388,12 @@ export async function sendManualDelayNoticeEmail(
       </div>
     `;
 
+    const dbTemplate = await getTemplate('manual_delay_notice');
+    if (dbTemplate) {
+      subject = renderTemplate(dbTemplate.subject, variables);
+      htmlContent = renderTemplate(dbTemplate.htmlBody, variables);
+    }
+
     const replyTo = getProjectReplyToEmail(projectId);
     const response = await client.emails.send({
       from: fromEmail,
@@ -1279,16 +1427,22 @@ export async function sendSatisfactionSurveyEmail(
   surveyToken: string,
   projectId: string
 ): Promise<EmailResult> {
-  const subject = `How Was Your Experience? - Jepson Myles Studio`;
+  let subject = `How Was Your Experience? - Jepson Myles Studio`;
   
   try {
     const { client, fromEmail } = await getResendClient();
     const baseUrl = getAppBaseUrl();
     const surveyUrl = `${baseUrl}/survey/${surveyToken}`;
+
+    const variables: Record<string, string> = {
+      clientName,
+      surveyUrl,
+      emailHeader: getEmailHeader('We Value Your Feedback'),
+    };
     
-    const htmlContent = `
+    let htmlContent = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-        ${getEmailHeader('We Value Your Feedback')}
+        ${variables.emailHeader}
         
         <p style="color: #333; font-size: 16px; line-height: 1.6;">
           Dear ${clientName},
@@ -1324,6 +1478,12 @@ export async function sendSatisfactionSurveyEmail(
         </p>
       </div>
     `;
+
+    const dbTemplate = await getTemplate('satisfaction_survey');
+    if (dbTemplate) {
+      subject = renderTemplate(dbTemplate.subject, variables);
+      htmlContent = renderTemplate(dbTemplate.htmlBody, variables);
+    }
 
     const replyTo = getProjectReplyToEmail(projectId);
     const response = await client.emails.send({

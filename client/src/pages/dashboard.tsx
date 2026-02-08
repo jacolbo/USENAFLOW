@@ -23,6 +23,7 @@ import { useLocation } from "wouter";
 import logoImage from "@assets/USENA-FLOW_1754522507856.png";
 import { WidgetCustomizer, useWidgetPreferences } from "@/components/widget-customizer";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 
@@ -1059,6 +1060,217 @@ function DelayAlertBanner({ projects, user }: { projects: Project[]; user: User 
   );
 }
 
+function EmailTemplatesEditor() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const [editingTemplate, setEditingTemplate] = useState<any>(null);
+  const [editSubject, setEditSubject] = useState("");
+  const [editBody, setEditBody] = useState("");
+  const [showPreview, setShowPreview] = useState(false);
+
+  const { data: templates = [], isLoading } = useQuery<any[]>({
+    queryKey: ["/api/admin/email-templates"],
+    queryFn: async () => {
+      const res = await fetch("/api/admin/email-templates", {
+        headers: { "X-Usena-Role": "Admin" },
+      });
+      return res.json();
+    },
+  });
+
+  const saveMutation = useMutation({
+    mutationFn: async ({ key, subject, htmlBody }: { key: string; subject: string; htmlBody: string }) => {
+      const res = await fetch(`/api/admin/email-templates/${key}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", "X-Usena-Role": "Admin" },
+        body: JSON.stringify({ subject, htmlBody }),
+      });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/email-templates"] });
+      toast({ title: "Template saved successfully" });
+      setEditingTemplate(null);
+    },
+  });
+
+  const resetMutation = useMutation({
+    mutationFn: async (key: string) => {
+      const res = await fetch(`/api/admin/email-templates/${key}/reset`, {
+        method: "POST",
+        headers: { "X-Usena-Role": "Admin" },
+      });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/email-templates"] });
+      toast({ title: "Template reset to default" });
+      setEditingTemplate(null);
+    },
+  });
+
+  const openEditor = (template: any) => {
+    setEditingTemplate(template);
+    setEditSubject(template.subject);
+    setEditBody(template.htmlBody);
+    setShowPreview(false);
+  };
+
+  const getPreviewHtml = () => {
+    const sampleVars: Record<string, string> = {
+      clientName: "Jane Smith",
+      shootDate: "Saturday, January 15, 2026",
+      deliveryWeek: "Week of February 2, 2026",
+      packageCount: "50",
+      selectedCount: "65",
+      extras: "15",
+      retoucherName: "Alex Editor",
+      chatUrl: "#",
+      surveyUrl: "#",
+      galleryLink: "#",
+      weekStartText: "February 2, 2026",
+      weekEndText: "February 6, 2026",
+      clientEmail: "jane@example.com",
+      newMessage: "Hi Jane, your photos are looking amazing!",
+      emailHeader: '<div style="text-align: center; margin-bottom: 30px;"><h1 style="color: #1a1a1a; margin: 0; font-size: 28px;">Jepson Myles Studio</h1></div>',
+      extrasSection: '<div style="background: #fff3e0; border-left: 4px solid #ff9800; padding: 15px 20px; margin: 25px 0;"><h3 style="color: #e65100; margin: 0 0 10px 0;">Additional Photos Selected!</h3><p style="color: #333; font-size: 14px; margin: 0;">You have selected <strong>15 extra photos</strong> beyond your package.</p></div>',
+      referralSection: '<div style="background: linear-gradient(135deg, #fce4ec 0%, #f8bbd0 100%); border-radius: 12px; padding: 25px; margin: 25px 0; text-align: center;"><p style="color: #c2185b; font-size: 18px; font-weight: bold;">Share the Love</p></div>',
+      threadHtml: "",
+      sneakPeekHtml: '<div style="text-align: center; margin: 25px 0;"><p style="color: #666;">Preview photos would appear here</p></div>',
+    };
+    let preview = editBody;
+    preview = preview.replace(/\{\{(\w+)\}\}/g, (match: string, key: string) => {
+      return sampleVars[key] !== undefined ? sampleVars[key] : match;
+    });
+    return preview;
+  };
+
+  if (editingTemplate) {
+    const variables = (editingTemplate.availableVariables as string[]) || [];
+    return (
+      <div className="bg-white rounded-lg shadow-sm border border-blue-200 p-6 space-y-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-xl font-semibold text-gray-900">Edit: {editingTemplate.name}</h2>
+            <p className="text-sm text-gray-500 mt-1">Template key: {editingTemplate.templateKey}</p>
+          </div>
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" onClick={() => setShowPreview(!showPreview)}>
+              {showPreview ? "Edit" : "Preview"}
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => setEditingTemplate(null)}>Cancel</Button>
+          </div>
+        </div>
+
+        {variables.length > 0 && (
+          <div className="bg-blue-50 rounded-lg p-3">
+            <p className="text-xs font-medium text-blue-700 mb-2">Available variables (click to copy):</p>
+            <div className="flex flex-wrap gap-1">
+              {variables.map((v: string) => (
+                <button
+                  key={v}
+                  onClick={() => {
+                    navigator.clipboard.writeText(`{{${v}}}`);
+                    toast({ title: `Copied {{${v}}}` });
+                  }}
+                  className="text-xs bg-white border border-blue-200 text-blue-700 px-2 py-1 rounded hover:bg-blue-100 font-mono"
+                >
+                  {`{{${v}}}`}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {showPreview ? (
+          <div className="border rounded-lg overflow-hidden">
+            <div className="bg-gray-100 px-4 py-2 border-b">
+              <p className="text-sm font-medium text-gray-600">Subject: {editSubject.replace(/\{\{(\w+)\}\}/g, (_, k: string) => k === "clientName" ? "Jane Smith" : k === "retoucherName" ? "Alex Editor" : `[${k}]`)}</p>
+            </div>
+            <div className="p-4 bg-white" dangerouslySetInnerHTML={{ __html: getPreviewHtml() }} />
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-gray-700">Subject Line</label>
+              <Input value={editSubject} onChange={(e) => setEditSubject(e.target.value)} placeholder="Email subject..." />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-gray-700">HTML Body</label>
+              <textarea
+                value={editBody}
+                onChange={(e) => setEditBody(e.target.value)}
+                className="w-full h-96 p-3 border rounded-lg font-mono text-sm resize-y focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="HTML email body..."
+              />
+            </div>
+          </div>
+        )}
+
+        <div className="flex items-center justify-between pt-4 border-t">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              if (confirm("Reset this template to its default? Your customizations will be lost.")) {
+                resetMutation.mutate(editingTemplate.templateKey);
+              }
+            }}
+            disabled={resetMutation.isPending}
+            className="text-red-600 hover:text-red-700"
+          >
+            Reset to Default
+          </Button>
+          <Button
+            onClick={() => saveMutation.mutate({ key: editingTemplate.templateKey, subject: editSubject, htmlBody: editBody })}
+            disabled={saveMutation.isPending}
+            className="bg-blue-600 hover:bg-blue-700"
+          >
+            {saveMutation.isPending ? "Saving..." : "Save Template"}
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="bg-white rounded-lg shadow-sm border border-blue-200 p-6">
+      <div className="flex items-center gap-3 mb-4">
+        <Mail className="h-6 w-6 text-blue-600" />
+        <div>
+          <h2 className="text-xl font-semibold text-gray-900">Email Templates</h2>
+          <p className="text-sm text-gray-600">Customize the emails sent to your clients</p>
+        </div>
+      </div>
+
+      {isLoading ? (
+        <div className="text-center py-8 text-gray-500">Loading templates...</div>
+      ) : (
+        <div className="grid gap-3">
+          {templates.map((tmpl: any) => (
+            <div
+              key={tmpl.id}
+              className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50 cursor-pointer"
+              onClick={() => openEditor(tmpl)}
+            >
+              <div className="flex-1">
+                <div className="flex items-center gap-2">
+                  <span className="font-medium text-gray-900">{tmpl.name}</span>
+                  {tmpl.isCustomized && (
+                    <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">Customized</span>
+                  )}
+                </div>
+                <p className="text-sm text-gray-500 mt-1 truncate max-w-lg">{tmpl.subject}</p>
+              </div>
+              <Button variant="outline" size="sm">Edit</Button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function Dashboard() {
   const [, setLocation] = useLocation();
   const [user, setUser] = useState<User | null>(null);
@@ -1069,6 +1281,7 @@ export default function Dashboard() {
   const [showComplaints, setShowComplaints] = useState(false);
   const [showReferrals, setShowReferrals] = useState(false);
   const [showVipClients, setShowVipClients] = useState(false);
+  const [showEmailTemplates, setShowEmailTemplates] = useState(false);
   const [showTradeModal, setShowTradeModal] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -1628,6 +1841,7 @@ export default function Dashboard() {
                           setShowExtraPhotosSales(false);
                           setShowComplaints(false);
                           setShowVipClients(false);
+                          setShowEmailTemplates(false);
                         }}
                         className="flex items-center gap-2 bg-pink-50 hover:bg-pink-100 border-pink-200 text-pink-700"
                       >
@@ -1648,11 +1862,33 @@ export default function Dashboard() {
                           setShowExtraPhotosSales(false);
                           setShowComplaints(false);
                           setShowReferrals(false);
+                          setShowEmailTemplates(false);
                         }}
                         className="flex items-center gap-2 bg-amber-50 hover:bg-amber-100 border-amber-200 text-amber-700"
                       >
                         <Crown className="h-4 w-4" />
                         VIP Clients
+                      </Button>
+                    )}
+
+                    {/* Email Templates Button - Admin only */}
+                    {user.role === "Admin" && (
+                      <Button 
+                        variant={showEmailTemplates ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => {
+                          setShowEmailTemplates(!showEmailTemplates);
+                          setShowArchive(false);
+                          setShowCommissions(false);
+                          setShowExtraPhotosSales(false);
+                          setShowComplaints(false);
+                          setShowReferrals(false);
+                          setShowVipClients(false);
+                        }}
+                        className="flex items-center gap-2 bg-blue-50 hover:bg-blue-100 border-blue-200 text-blue-700"
+                      >
+                        <Mail className="h-4 w-4" />
+                        Email Templates
                       </Button>
                     )}
 
@@ -1866,6 +2102,11 @@ export default function Dashboard() {
           {/* VIP Client Dashboard for Admin/Sales */}
           {["Admin", "Sales"].includes(user.role) && showVipClients && (
             <VipClientDashboard userRole={user.role} />
+          )}
+
+          {/* Email Templates Editor for Admin */}
+          {user.role === "Admin" && showEmailTemplates && (
+            <EmailTemplatesEditor />
           )}
 
           {/* Delay Alert Banner for DataWrangler */}
