@@ -328,14 +328,25 @@ export function registerShoottrackerRoutes(app: Express): void {
       });
       
       try {
-        const matchingReferrals = await storage.getSubmittedReferralsByName(clientName);
+        const clientEmail = stagedEvent.clientEmail || "";
+        let matchingReferrals: any[] = [];
+        if (clientEmail) {
+          matchingReferrals = await storage.getSubmittedReferralsByEmail(clientEmail);
+        }
+        if (matchingReferrals.length === 0) {
+          matchingReferrals = await storage.getSubmittedReferralsByName(clientName);
+        }
+        const matchedIds = new Set<string>();
         for (const ref of matchingReferrals) {
+          if (matchedIds.has(ref.id)) continue;
+          matchedIds.add(ref.id);
           await storage.updateReferral(ref.id, {
             referredProjectId: newProject.id,
             status: "completed",
             completedAt: new Date(),
           });
-          console.log(`🎉 Referral matched: "${clientName}" matched referral from ${ref.referrerName} (code: ${ref.referralCode})`);
+          const matchMethod = clientEmail && ref.referredEmail === clientEmail.toLowerCase() ? "email" : "name";
+          console.log(`🎉 Referral matched by ${matchMethod}: "${clientName}" (${clientEmail}) matched referral from ${ref.referrerName} (code: ${ref.referralCode})`);
           try {
             await storage.creditBonusPhotos(ref.referrerEmail, ref.referrerName, 5);
             console.log(`🎁 Credited 5 bonus photos to ${ref.referrerEmail} for referral ${ref.referralCode}`);

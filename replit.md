@@ -28,7 +28,7 @@ Key features include:
 - **Gallery Link Delivery**: Facilitates retouchers adding gallery links and Sales approving delivery, triggering branded client emails and updating project status.
 - **Sneak Peek Feature**: Allows retouchers to send preview photos to clients before full delivery via branded emails.
 - **Satisfaction Survey System**: Triggers post-delivery surveys, prompting clients with high ratings for Google reviews.
-- **Referral Rewards System**: Clients receive referral codes for bonus photos, with automated tracking, matching of referred clients, and application of rewards.
+- **Referral Rewards System**: Clients receive referral codes for bonus photos. Referred clients enter name and email on the landing page. Auto-matching uses email as primary key (falling back to name), with 5 bonus photos credited on match.
 - **VIP Client Tiers**: Automated loyalty program based on project count, offering bonus photos and priority services, with an admin override.
 - **Automated Notifications**: Includes client scheduling notifications upon project due date updates and a Data Wrangler delay alert system for unassigned projects.
 - **Interactive Calendar**: Supports drag-and-drop project movement, quick assignment via double-click, real-time search, and color-coded project display based on status and rollover history.

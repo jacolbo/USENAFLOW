@@ -104,6 +104,7 @@ export interface IStorage {
   updateReferral(id: string, updates: Partial<Referral>): Promise<Referral | undefined>;
   getAllReferrals(): Promise<Referral[]>;
   getSubmittedReferralsByName(clientName: string): Promise<Referral[]>;
+  getSubmittedReferralsByEmail(clientEmail: string): Promise<Referral[]>;
 
   // Client profile methods
   getClientProfile(email: string): Promise<ClientProfile | undefined>;
@@ -773,6 +774,9 @@ export class MemStorage implements IStorage {
   async getSubmittedReferralsByName(clientName: string): Promise<Referral[]> {
     return [];
   }
+  async getSubmittedReferralsByEmail(clientEmail: string): Promise<Referral[]> {
+    return [];
+  }
 }
 
 // Database Storage Implementation
@@ -1436,6 +1440,12 @@ export class DatabaseStorage implements IStorage {
       }
       return false;
     });
+  }
+
+  async getSubmittedReferralsByEmail(clientEmail: string): Promise<Referral[]> {
+    return await db.select().from(referrals).where(
+      and(eq(referrals.status, "submitted"), eq(referrals.referredEmail, clientEmail.trim().toLowerCase()))
+    );
   }
 
   async getClientProfile(email: string): Promise<ClientProfile | undefined> {

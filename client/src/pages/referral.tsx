@@ -16,6 +16,7 @@ export default function ReferralPage() {
 
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
+  const [email, setEmail] = useState("");
   const [submitted, setSubmitted] = useState(false);
 
   const { data: referral, isLoading, error } = useQuery({
@@ -28,6 +29,7 @@ export default function ReferralPage() {
       const res = await apiRequest("POST", `/api/referral/${code}/submit`, {
         firstName,
         lastName,
+        email: email.trim(),
       });
       return res.json();
     },
@@ -103,7 +105,7 @@ export default function ReferralPage() {
             You've been referred by {(referral as any).referrerName}!
           </CardTitle>
           <p className="text-gray-500 mt-2">
-            We'd love to capture your special moments. Enter your name below so we can keep track of your referral.
+            We'd love to capture your special moments. Enter your details below so we can keep track of your referral.
           </p>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -127,9 +129,19 @@ export default function ReferralPage() {
             </div>
           </div>
 
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-gray-700">Email Address</label>
+            <Input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="your@email.com"
+            />
+          </div>
+
           <Button
             onClick={() => submitMutation.mutate()}
-            disabled={!firstName.trim() || !lastName.trim() || submitMutation.isPending}
+            disabled={!firstName.trim() || !lastName.trim() || !email.trim() || submitMutation.isPending}
             className="w-full bg-pink-600 hover:bg-pink-700"
           >
             {submitMutation.isPending ? (

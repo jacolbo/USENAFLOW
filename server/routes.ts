@@ -1339,14 +1339,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       const firstName = (req.body.firstName || "").trim();
       const lastName = (req.body.lastName || "").trim();
+      const email = (req.body.email || "").trim().toLowerCase();
       if (!firstName || !lastName) {
         return res.status(400).json({ error: "First name and last name are required" });
+      }
+      if (!email) {
+        return res.status(400).json({ error: "Email address is required" });
       }
       const fullName = `${firstName} ${lastName}`;
       const updated = await storage.updateReferral(referral.id, {
         referredFirstName: firstName,
         referredLastName: lastName,
         referredName: fullName,
+        referredEmail: email,
         status: "submitted",
       });
       res.json({ success: true });
