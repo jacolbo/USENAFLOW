@@ -2,7 +2,7 @@
 
 ## Overview
 
-USENA FLOW is a full-stack photography workflow management application designed for Jepson Myles Studio. Its primary purpose is to streamline project management from client submission to delivery, offering features like role-based access control, comprehensive project status tracking, and an intuitive dashboard interface. The application supports various user roles, including Sales/Admin, Lead Retoucher, Data Wrangler, and individual retouchers, each with specific permissions tailored to their workflow responsibilities. The business vision is to enhance efficiency in photography project management, reduce manual overhead, and provide a clear overview of project statuses.
+USENA FLOW is a full-stack photography workflow management application designed for Jepson Myles Studio. It streamlines project management from client submission to delivery, offering role-based access control, comprehensive project status tracking, and an intuitive dashboard. The application aims to enhance efficiency, reduce manual overhead, and provide a clear overview of project statuses across various user roles, including Sales/Admin, Lead Retoucher, Data Wrangler, and individual retouchers. The business vision is to improve operational efficiency and provide clear oversight of project lifecycles.
 
 ## User Preferences
 
@@ -11,207 +11,41 @@ Preferred communication style: Simple, everyday language.
 ## System Architecture
 
 ### UI/UX Design
-- **Framework**: React 18 with TypeScript.
-- **Build Tool**: Vite.
-- **UI Library**: shadcn/ui (built on Radix UI primitives).
-- **Styling**: Tailwind CSS with a custom design system and CSS variables.
-- **Responsive Design**: Mobile-first approach.
-- **Theming**: CSS custom properties with light/dark mode support.
-- **Visual Indicators**: Color-coded badges for project status.
-- **Interactive Tables**: Sortable and filterable data tables.
-- **Project Views**: Week-based organization (current, previous, next week) and an archive system for older projects.
-- **Analytics Visualization**: Integrated charts (e.g., line chart for photos delivered) for key performance indicators.
+The application uses React 18 with TypeScript and Vite, employing `shadcn/ui` (built on Radix UI) and Tailwind CSS for a responsive, mobile-first design. It supports light/dark mode theming and features color-coded visual indicators, sortable data tables, week-based project organization, and integrated charts for analytics.
 
 ### Technical Implementation
-- **Backend**: Node.js with Express.js (TypeScript, ES modules).
-- **API Design**: RESTful API with structured error handling.
-- **Database**: PostgreSQL with Drizzle ORM (using Neon Database serverless PostgreSQL).
-- **Data Validation**: Zod schemas for runtime type checking and API validation.
-- **Authentication**: Role-based access control with seven distinct user roles, cross-device login, and admin-controlled team management.
-- **State Management**: TanStack Query for server state management in the frontend.
-- **Routing**: Wouter for client-side routing.
-- **Forms**: React Hook Form with Zod validation.
-- **Data Persistence**: All user data persists across deployments.
-- **Real-time Communication**: WebSocket integration for live project updates and smart notifications (including browser notifications and custom sounds).
-- **Project Workflow**: Five-stage status tracking (Awaiting Payment → Ready → Assigned → Review → Delivered), project assignment, quality rating, and automatic due date calculation.
-- **Notes System**: Support for text and image notes with role-based access.
-- **Automated Calculations**: Automatic calculation of "extras" based on selected photo count.
-- **Project Duplication**: One-click project duplication.
-- **Team Analytics**: Integrated team performance analytics on the dashboard.
-- **Daily Inspiration**: Deterministic daily quotes displayed on the dashboard.
-- **Admin Capabilities**: Admin users can function as both administrators and retouchers.
-- **Calendar Logic**: Sunday-start weeks for consistent scheduling.
-- **Unassigned Project Handling**: Unassigned projects automatically roll over to the next week and are prioritized.
-- **Drag & Drop**: Projects can be moved between days within a week by clicking and dragging project badges.
-- **Quick Assignment**: Double-click any project badge to open assignment options without leaving the calendar view.
-- **Client Search**: Real-time search functionality for each week to filter projects by client name or assigned retoucher.
-- **Assignment Ratio Display**: Week headers show assigned vs total project counts (e.g., "5/48 projects") with green for assigned and red for total.
-- **Color-Coded Calendar**: Projects display with color rules - EC (black), ASA (purple), LM (blue), AP (pink) override rollover colors; rollover projects show green (rolled over once) or red (rolled over twice+); new projects show green.
+The backend is built with Node.js and Express.js (TypeScript), utilizing a RESTful API with structured error handling. PostgreSQL with Drizzle ORM (via Neon Database) serves as the database, and Zod schemas are used for data validation. Authentication is role-based, supporting seven distinct user roles with cross-device login and admin-controlled team management. The frontend manages state with TanStack Query and uses Wouter for routing and React Hook Form with Zod for form management.
 
-### ShootTracker Engine Module
-The ShootTracker Engine integrates Google Calendar to automatically create and manage projects:
-- **Google Calendar Sync**: Fetches events from selected calendars using Replit's Google Calendar connector
-- **Event Filtering**: Excludes non-shoot events based on configurable keywords (FULL DAY, BLOCK, HOLD, CANCEL, NO SHOW)
-- **Event Classification**: Categorizes events as DONE (past) or UPCOMING (future)
-- **Business Day Calculations**: Computes delivery due dates using configurable turnaround days, working days, and holidays
-- **Risk Level System**: Three-level risk assessment (SAFE/AT_RISK/OVERDUE) based on delivery due date proximity
-- **Idempotent Sync**: Calendar events linked to projects via unique calendar_event_id to prevent duplicates
-- **Project Metadata**: shoottracker_meta table stores link_sent, delivered status, and sync metadata
-- **Role-Based Access**: Admin routes protected via `verifyAdminRequest` middleware requiring X-Usena-Role and X-Usena-User-Id headers
-
-**ShootTracker API Endpoints:**
-- `GET /api/admin/shoottracker/settings` - Retrieve settings (Admin/Lead Retoucher, requires auth headers)
-- `PUT /api/admin/shoottracker/settings` - Update settings (Admin/Lead Retoucher, requires auth headers)
-- `POST /api/admin/shoottracker/sync` - Trigger calendar sync (Admin/Lead Retoucher, requires auth headers)
-- `GET /api/shoottracker/forecast?targetDate=YYYY-MM-DD` - Get capacity forecast
-- `PATCH /api/shoottracker/project/:id/link-sent` - Toggle link sent status
-- `PATCH /api/shoottracker/project/:id/delivered` - Toggle delivered status
-- `GET /api/shoottracker/project/:id/meta` - Get project metadata
-
-**Admin Authentication:**
-Frontend must include headers for admin routes:
-- `X-Usena-Role`: User's role (must be Admin or LeadRetoucher)
-- `X-Usena-User-Id`: User's ID
-Use `getAdminHeaders(role, userId)` from `client/src/lib/adminAuth.ts`
-
-**Default Settings:**
-- turnaround_days: 5
-- working_days: MON-FRI
-- timezone: Africa/Johannesburg
-- daily_capacity_projects: 3
-
-**Automatic Sync Feature:**
-- Configurable auto-sync with enable/disable toggle in ShootTracker Settings
-- Sync interval options: 5, 10, 15, 30, or 60 minutes
-- Scheduler checks every minute if sync is needed based on settings
-- Last sync timestamp displayed in UI with real-time status
-- Settings stored in database: `auto_sync_enabled`, `auto_sync_interval_minutes`, `last_auto_sync_at`
-- API endpoint: `GET /api/admin/shoottracker/autosync-status` - Get current auto-sync status
-
-**Weekly Delay Notification System:**
-- Automated scheduler runs every Thursday morning (8-9 AM)
-- Identifies clients whose photos were originally due next week but have been rolled over to the following week
-- Calculates exact delay in working days (excludes weekends and holidays)
-- Sends branded delay notification emails to affected clients with original and new delivery dates
-- Prevents duplicate emails (only sends once per project per week)
-- Failed sends can be retried within the same week
-- API endpoints:
-  - `GET /api/admin/shoottracker/delay-check/preview` - Preview delayed projects without sending emails
-  - `POST /api/admin/shoottracker/delay-check/send` - Manually trigger delay notifications
-
-### Client-Editor Communication System
-WhatsApp-style messaging interface enabling direct communication between editors and clients:
-- **Editor Chat Dashboard**: `/editor-chat` route with WhatsApp Web-style layout (project list + conversation view)
-- **Role-Based Access**: Admin, Lead Retoucher, Retoucher1-3, and Evans roles can access chat; retouchers only see assigned projects
-- **Message Threading**: Conversations organized by project with unread message counters and real-time search
-- **Email Notifications**: Automatic email sent to clients when editors send messages, including secure chat link
-- **Token Authentication**: Clients access chat via secure tokens (30-day expiry) embedded in email links
-- **Security**: All chat endpoints enforce project-level authorization - clients can only access their own projects
-- **Database**: `client_messages` table stores messages, `client_chat_tokens` manages authentication tokens
-
-**Chat API Endpoints:**
-- `GET /api/admin/chat/projects` - Get all projects with unread counts (role-based filtering)
-- `GET /api/admin/chat/project/:projectId/messages` - Get messages for a project
-- `POST /api/admin/chat/project/:projectId/messages` - Send message as editor (triggers client email)
-- `GET /api/client/chat/project/:projectId/messages` - Get messages (client auth via token)
-- `POST /api/client/chat/project/:projectId/messages` - Send message as client
-
-**Chat Authentication:**
-- Editor auth: `verifyChatRequest` middleware using X-Usena-Role and X-Usena-User-Id headers
-- Client auth: Token-based via `?token=` query parameter, validated against `client_chat_tokens` table
-
-### Customizable Dashboard Widget System
-User-configurable dashboard allowing personalized widget visibility:
-- **Widget Customizer Panel**: Slide-out panel accessible via "Customize Dashboard" button in header
-- **Toggle Visibility**: Each widget can be shown/hidden using toggle switches
-- **Drag-and-Drop Reordering**: Widgets can be reordered via drag-and-drop in the customizer
-- **Role-Based Availability**: Widgets only appear for roles they're configured for
-- **Persistent Preferences**: User preferences stored in `dashboard_preferences` table, keyed by user ID
-- **Available Widgets**: Daily Quote, My Tasks, ShootTracker, Team Analytics, Project Table, Pending Payments, Ready for Delivery
-
-**Widget API Endpoints:**
-- `GET /api/dashboard/preferences/:userId` - Get user's widget preferences
-- `PUT /api/dashboard/preferences/:userId` - Update widget order and visibility
-
-**Widget Configuration:**
-- Defined in `AVAILABLE_WIDGETS` array in `shared/schema.ts`
-- Each widget has: id, name, description, icon, defaultEnabled, and roles array
-
-### Persistent User Management
-User accounts and roles are stored in the database (not hardcoded):
-- Users table includes: id, username, password, role, name, abbreviation
-- Default users seeded on server startup (upsert by username)
-- API endpoints: `POST /api/auth/login`, `GET /api/users`, `POST /api/users`, `PATCH /api/users/:id`, `DELETE /api/users/:id`
-- Passwords stored as plaintext (matching original system behavior)
-
-### Gallery Link Delivery Workflow
-Retouchers paste gallery links (Pixieset/Google Drive), Sales approves delivery:
-- Retoucher adds gallery link to project in Review status
-- Sales sees "Ready for Delivery" indicator on dashboard
-- Sales clicks "Approve & Send" to trigger branded delivery email to client
-- Project automatically moves to "Delivered" status
-- API: `PATCH /api/projects/:id/gallery-link`, `POST /api/projects/:id/approve-delivery`
-
-### Sneak Peek Feature
-Retouchers can send 1-2 preview photos to clients before the full set is done:
-- Max 3 sneak peeks per project
-- Each preview can include an image URL and optional caption
-- Branded email sent to client with preview image
-- API: `GET/POST /api/projects/:id/sneak-peeks`, `POST /api/projects/:id/sneak-peeks/:peekId/send`
-
-### Satisfaction Survey System
-After delivery, clients receive a feedback survey:
-- Auto-triggered when delivery is approved
-- Branded survey page at `/survey/:token` with 5-star rating, feedback, recommendation toggle
-- Clients rating >= 4 stars are prompted to leave a Google review
-- API: `GET/POST /api/survey/:token`
-
-### Referral Rewards System
-Clients can share referral links to bring in new business:
-- Referral code auto-generated on delivery and included in delivery email
-- Referred clients see branded landing page at `/refer/:code` where they enter first and last name
-- After submitting, referred client sees "View Our Services" button linking to Linktree (https://linktr.ee/jepsonmyles.photography)
-- Referral status flow: pending → submitted (name entered) → completed (auto-matched when booked via ShootTracker or manually) → rewarded
-- When ShootTracker promotes a calendar event to a project, the system auto-matches the client name against submitted referrals
-- Admin/Sales can track referrals, manually confirm bookings, and mark as rewarded
-- API: `GET /api/referrals`, `POST /api/referrals`, `PATCH /api/referrals/:id`
-
-### VIP Client Tiers
-Automatic client loyalty tracking:
-- Standard (0-2 projects), Silver (3-5, 1 bonus photo), Gold (6-9, 2 bonus + priority), Platinum (10+, 3 bonus + priority)
-- Auto-updated on delivery approval
-- Admin/Sales can view VIP dashboard and override tiers
-- API: `GET /api/admin/clients`, `POST /api/admin/clients/recalculate`
-
-### Client Scheduling Notification
-Auto-email to client when Data Wrangler schedules their project:
-- Triggered when project due date is updated
-- Branded email confirms delivery week
-- Uses `sendSchedulingNotificationEmail` in emailService
-
-### Data Wrangler Delay Alert
-Manual delay notification workflow:
-- Dashboard shows projects due this week that are unassigned
-- Data Wrangler opens dialog, selects target delivery week, sends delay email
-- Pre-filled branded email template with apology and new delivery date
-- API: `POST /api/projects/:id/send-delay-notice`
+Key features include:
+- **Project Workflow**: Five-stage status tracking (Awaiting Payment → Ready → Assigned → Review → Delivered), project assignment, quality rating, and automated due date calculation.
+- **Real-time Communication**: WebSocket integration for live updates and smart notifications.
+- **Notes System**: Supports text and image notes with role-based access.
+- **Automated Calculations**: Calculates "extras" based on photo count.
+- **ShootTracker Engine**: Integrates Google Calendar for automated project creation, delivery due date calculation, risk assessment, and idempotent sync. It includes configurable settings for turnaround times, working days, and daily capacity, with automatic sync capabilities.
+- **Client-Editor Communication**: A WhatsApp-style messaging interface allows direct communication between editors and clients, featuring threading, unread message counters, email notifications, and token-based client authentication.
+- **Customizable Dashboard**: A widget system allows users to configure and reorder dashboard elements with persistent preferences stored per user.
+- **Persistent User Management**: User accounts and roles are stored in the database, including admin-controlled user creation and management.
+- **Gallery Link Delivery**: Facilitates retouchers adding gallery links and Sales approving delivery, triggering branded client emails and updating project status.
+- **Sneak Peek Feature**: Allows retouchers to send preview photos to clients before full delivery via branded emails.
+- **Satisfaction Survey System**: Triggers post-delivery surveys, prompting clients with high ratings for Google reviews.
+- **Referral Rewards System**: Clients receive referral codes for bonus photos, with automated tracking, matching of referred clients, and application of rewards.
+- **VIP Client Tiers**: Automated loyalty program based on project count, offering bonus photos and priority services, with an admin override.
+- **Automated Notifications**: Includes client scheduling notifications upon project due date updates and a Data Wrangler delay alert system for unassigned projects.
+- **Interactive Calendar**: Supports drag-and-drop project movement, quick assignment via double-click, real-time search, and color-coded project display based on status and rollover history.
 
 ## External Dependencies
 
 - **@tanstack/react-query**: Server state management.
-- **wouter**: React router.
+- **wouter**: Client-side routing.
 - **react-hook-form**: Form management.
-- **@hookform/resolvers**: Form validation resolvers.
-- **@radix-ui/***
-- **lucide-react**: Icon library.
-- **class-variance-authority**: CSS class variants.
-- **tailwind-merge**: Tailwind CSS utility.
 - **drizzle-orm**: ORM for PostgreSQL.
 - **@neondatabase/serverless**: Serverless PostgreSQL client.
-- **drizzle-zod**: Drizzle and Zod integration.
-- **connect-pg-simple**: PostgreSQL session store.
-- **vite**: Build tool.
-- **typescript**: Language.
-- **date-fns**: Date utility.
-- **clsx**: Conditional className utility.
 - **zod**: Schema validation.
+- **vite**: Build tool.
+- **typescript**: Programming language.
+- **date-fns**: Date utility library.
+- **connect-pg-simple**: PostgreSQL session store.
+- **@radix-ui/***: UI component primitives.
+- **lucide-react**: Icon library.
+- **tailwind-merge**: Utility for merging Tailwind CSS classes.
+- **clsx**: Utility for conditionally joining class names.

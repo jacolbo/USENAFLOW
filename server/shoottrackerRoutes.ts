@@ -336,6 +336,12 @@ export function registerShoottrackerRoutes(app: Express): void {
             completedAt: new Date(),
           });
           console.log(`🎉 Referral matched: "${clientName}" matched referral from ${ref.referrerName} (code: ${ref.referralCode})`);
+          try {
+            await storage.creditBonusPhotos(ref.referrerEmail, ref.referrerName, 5);
+            console.log(`🎁 Credited 5 bonus photos to ${ref.referrerEmail} for referral ${ref.referralCode}`);
+          } catch (creditErr: any) {
+            console.error("Error crediting bonus photos:", creditErr.message);
+          }
         }
       } catch (matchError: any) {
         console.error("Referral matching error (non-fatal):", matchError.message);

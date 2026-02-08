@@ -1,4 +1,4 @@
-import { type User, type InsertUser, type Project, type InsertProject, type UpdateProject, type ProjectNote, type InsertProjectNote, type UpdateProjectNote, type TradeOffer, type InsertTradeOffer, type UpdateTradeOffer, type WranglerCommission, type InsertWranglerCommission, type ProjectEvent, type InsertProjectEvent, type Complaint, type InsertComplaint, type ShoottrackerMeta, type InsertShoottrackerMeta, type UpdateShoottrackerMeta, type AppSetting, type CalendarEventStaging, type InsertCalendarEventStaging, type UpdateCalendarEventStaging, type ClientAuthToken, type InsertClientAuthToken, type ClientMessage, type InsertClientMessage, type DashboardPreferences, type InsertDashboardPreferences, type SneakPeek, type InsertSneakPeek, type Survey, type InsertSurvey, type Referral, type InsertReferral, type ClientProfile, type InsertClientProfile, ProjectStatus, TradeOfferStatus, StagingStatus, users, projects, projectNotes, tradeOffers, wranglerCommissions, projectEvents, complaints, shoottrackerMeta, appSettings, calendarEventsStaging, clientAuthTokens, clientMessages, dashboardPreferences, sneakPeeks, clientSurveys, referrals, clientProfiles } from "@shared/schema";
+import { type User, type InsertUser, type Project, type InsertProject, type UpdateProject, type ProjectNote, type InsertProjectNote, type UpdateProjectNote, type TradeOffer, type InsertTradeOffer, type UpdateTradeOffer, type WranglerCommission, type InsertWranglerCommission, type ProjectEvent, type InsertProjectEvent, type Complaint, type InsertComplaint, type ShoottrackerMeta, type InsertShoottrackerMeta, type UpdateShoottrackerMeta, type AppSetting, type CalendarEventStaging, type InsertCalendarEventStaging, type UpdateCalendarEventStaging, type ClientAuthToken, type InsertClientAuthToken, type ClientMessage, type InsertClientMessage, type DashboardPreferences, type InsertDashboardPreferences, type SneakPeek, type InsertSneakPeek, type Survey, type InsertSurvey, type Referral, type InsertReferral, type ClientProfile, type InsertClientProfile, type RewardClaim, type InsertRewardClaim, ProjectStatus, TradeOfferStatus, StagingStatus, users, projects, projectNotes, tradeOffers, wranglerCommissions, projectEvents, complaints, shoottrackerMeta, appSettings, calendarEventsStaging, clientAuthTokens, clientMessages, dashboardPreferences, sneakPeeks, clientSurveys, referrals, clientProfiles, referralRewardClaims } from "@shared/schema";
 import { db } from "./db";
 import { eq, sql, asc, and, ilike } from "drizzle-orm";
 import { randomUUID } from "crypto";
@@ -110,6 +110,12 @@ export interface IStorage {
   getAllClientProfiles(): Promise<ClientProfile[]>;
   upsertClientProfile(profile: Partial<InsertClientProfile> & { clientEmail: string; clientName: string }): Promise<ClientProfile>;
   updateClientProfile(id: string, updates: Partial<ClientProfile>): Promise<ClientProfile | undefined>;
+
+  createRewardClaim(claim: InsertRewardClaim): Promise<RewardClaim>;
+  getRewardClaimsByProject(projectId: string): Promise<RewardClaim[]>;
+  getRewardClaimsByClient(clientEmail: string): Promise<RewardClaim[]>;
+  creditBonusPhotos(clientEmail: string, clientName: string, photos: number): Promise<ClientProfile>;
+  applyBonusPhotos(clientEmail: string, projectId: string, clientName: string, photosToApply: number, appliedBy: string): Promise<{ claim: RewardClaim; profile: ClientProfile }>;
 }
 
 export class MemStorage implements IStorage {
@@ -1460,6 +1466,58 @@ export class DatabaseStorage implements IStorage {
       .where(eq(clientProfiles.id, id))
       .returning();
     return updated || undefined;
+  }
+
+  async createRewardClaim(claim: InsertRewardClaim): Promise<RewardClaim> {
+    const [created] = await db.insert(referralRewardClaims).values(claim).returning();
+    return created;
+  }
+
+  async getRewardClaimsByProject(projectId: string): Promise<RewardClaim[]> {
+    return await db.select().from(referralRewardClaims).where(eq(referralRewardClaims.projectId, projectId));
+  }
+
+  async getRewardClaimsByClient(clientEmail: string): Promise<RewardClaim[]> {
+    return await db.select().from(referralRewardClaims).where(eq(referralRewardClaims.clientEmail, clientEmail));
+  }
+
+  async creditBonusPhotos(clientEmail: string, clientName: string, photos: number): Promise<ClientProfile> {
+    const existing = await this.getClientProfile(clientEmail);
+    if (existing) {
+      const [updated] = await db.update(clientProfiles)
+        .set({ bonusPhotos: (existing.bonusPhotos || 0) + photos, updatedAt: new Date() })
+        .where(eq(clientProfiles.clientEmail, clientEmail))
+        .returning();
+      return updated;
+    }
+    const [created] = await db.insert(clientProfiles).values({
+      clientEmail,
+      clientName,
+      bonusPhotos: photos,
+    }).returning();
+    return created;
+  }
+
+  async applyBonusPhotos(clientEmail: string, projectId: string, clientName: string, photosToApply: number, appliedBy: string): Promise<{ claim: RewardClaim; profile: ClientProfile }> {
+    const profile = await this.getClientProfile(clientEmail);
+    if (!profile) throw new Error("Client profile not found");
+    const available = (profile.bonusPhotos || 0) - (profile.bonusPhotosUsed || 0);
+    if (photosToApply > available) throw new Error(`Only ${available} bonus photos available`);
+    
+    const claim = await this.createRewardClaim({
+      clientEmail,
+      clientName,
+      projectId,
+      photosApplied: photosToApply,
+      appliedBy,
+    });
+    
+    const [updatedProfile] = await db.update(clientProfiles)
+      .set({ bonusPhotosUsed: (profile.bonusPhotosUsed || 0) + photosToApply, updatedAt: new Date() })
+      .where(eq(clientProfiles.clientEmail, clientEmail))
+      .returning();
+    
+    return { claim, profile: updatedProfile };
   }
 }
 

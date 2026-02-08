@@ -578,6 +578,7 @@ export const clientProfiles = pgTable("client_profiles", {
   totalDelivered: integer("total_delivered").notNull().default(0),
   vipTier: text("vip_tier").notNull().default("Standard"),
   bonusPhotos: integer("bonus_photos").notNull().default(0),
+  bonusPhotosUsed: integer("bonus_photos_used").notNull().default(0),
   priorityTurnaround: boolean("priority_turnaround").notNull().default(false),
   notes: text("notes"),
   firstProjectAt: timestamp("first_project_at"),
@@ -594,6 +595,24 @@ export const insertClientProfileSchema = createInsertSchema(clientProfiles).omit
 
 export type ClientProfile = typeof clientProfiles.$inferSelect;
 export type InsertClientProfile = z.infer<typeof insertClientProfileSchema>;
+
+export const referralRewardClaims = pgTable("referral_reward_claims", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  clientEmail: text("client_email").notNull(),
+  clientName: text("client_name").notNull(),
+  projectId: varchar("project_id").notNull().references(() => projects.id),
+  photosApplied: integer("photos_applied").notNull(),
+  appliedBy: text("applied_by").notNull(),
+  appliedAt: timestamp("applied_at").notNull().default(sql`now()`),
+});
+
+export const insertRewardClaimSchema = createInsertSchema(referralRewardClaims).omit({
+  id: true,
+  appliedAt: true,
+});
+
+export type RewardClaim = typeof referralRewardClaims.$inferSelect;
+export type InsertRewardClaim = z.infer<typeof insertRewardClaimSchema>;
 
 export const VipTier = {
   STANDARD: "Standard",

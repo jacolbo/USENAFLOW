@@ -1316,6 +1316,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!updated) {
         return res.status(404).json({ error: "Referral not found" });
       }
+      if (req.body.status === "completed" && updated.referrerEmail) {
+        try {
+          await storage.creditBonusPhotos(updated.referrerEmail, updated.referrerName, 5);
+          console.log(`[Referral] Credited 5 bonus photos to ${updated.referrerEmail} for referral ${updated.referralCode}`);
+        } catch (creditError) {
+          console.error('[Referral] Error crediting bonus photos:', creditError);
+        }
+      }
       res.json(updated);
     } catch (error) {
       res.status(500).json({ error: "Failed to update referral" });
@@ -1344,6 +1352,66 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({ success: true });
     } catch (error) {
       res.status(500).json({ error: "Failed to submit referral" });
+    }
+  });
+
+  app.get("/api/client-bonus/:email", async (req, res) => {
+    try {
+      const profile = await storage.getClientProfile(decodeURIComponent(req.params.email));
+      if (!profile) {
+        return res.json({ bonusPhotos: 0, bonusPhotosUsed: 0, available: 0 });
+      }
+      res.json({
+        bonusPhotos: profile.bonusPhotos || 0,
+        bonusPhotosUsed: profile.bonusPhotosUsed || 0,
+        available: (profile.bonusPhotos || 0) - (profile.bonusPhotosUsed || 0),
+      });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to get bonus photos" });
+    }
+  });
+
+  app.post("/api/projects/:id/apply-bonus-photos", async (req, res) => {
+    try {
+      const role = req.headers["x-usena-role"] as string;
+      if (!role || !["Admin", "Sales", "DataWrangler"].includes(role)) {
+        return res.status(403).json({ error: "Only Admin, Sales, or Data Wrangler can apply bonus photos" });
+      }
+      const project = await storage.getProject(req.params.id);
+      if (!project) {
+        return res.status(404).json({ error: "Project not found" });
+      }
+      if (!project.clientEmail) {
+        return res.status(400).json({ error: "Project has no client email" });
+      }
+      const { photos } = req.body;
+      if (!photos || photos < 1) {
+        return res.status(400).json({ error: "Must apply at least 1 bonus photo" });
+      }
+      const appliedBy = req.headers["x-usena-user-id"] as string || "unknown";
+      const result = await storage.applyBonusPhotos(
+        project.clientEmail,
+        project.id,
+        project.clientName,
+        photos,
+        appliedBy
+      );
+      res.json({
+        success: true,
+        claim: result.claim,
+        remaining: (result.profile.bonusPhotos || 0) - (result.profile.bonusPhotosUsed || 0),
+      });
+    } catch (error: any) {
+      res.status(400).json({ error: error.message || "Failed to apply bonus photos" });
+    }
+  });
+
+  app.get("/api/projects/:id/reward-claims", async (req, res) => {
+    try {
+      const claims = await storage.getRewardClaimsByProject(req.params.id);
+      res.json(claims);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to get reward claims" });
     }
   });
 

@@ -11,7 +11,7 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Project } from "@shared/schema";
 import { User, formatRetoucherAbbr, getRetoucherFullName } from "@/lib/types";
-import { Calendar, Star, ChevronDown, ChevronRight, Copy, UserPlus, Search, X, Camera, Link, Send, CheckCircle, ExternalLink, Eye, Trash2, Image } from "lucide-react";
+import { Calendar, Star, ChevronDown, ChevronRight, Copy, UserPlus, Search, X, Camera, Link, Send, CheckCircle, ExternalLink, Eye, Trash2, Image, Gift } from "lucide-react";
 import { useState, useMemo, useCallback, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from 'framer-motion';
 import { LoadingSpinner, FloatingAction, StaggeredList } from './LoadingStates';
@@ -169,6 +169,81 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
       return notesData;
     },
   });
+
+  const canApplyBonusPhotos = ['Admin', 'Sales', 'DataWrangler'].includes(user.role);
+
+  const uniqueClientEmails = useMemo(() => {
+    const emails = new Set<string>();
+    projects.forEach(p => { if (p.clientEmail) emails.add(p.clientEmail); });
+    return Array.from(emails);
+  }, [projects]);
+
+  const { data: clientBonusMap = {} } = useQuery<Record<string, { bonusPhotos: number; bonusPhotosUsed: number; available: number }>>({
+    queryKey: ['/api/client-bonus-batch'],
+    queryFn: async () => {
+      const result: Record<string, { bonusPhotos: number; bonusPhotosUsed: number; available: number }> = {};
+      await Promise.all(
+        uniqueClientEmails.map(async (email) => {
+          try {
+            const response = await fetch(`/api/client-bonus/${encodeURIComponent(email)}`);
+            if (response.ok) {
+              const data = await response.json();
+              if (data.available > 0) {
+                result[email] = data;
+              }
+            }
+          } catch {}
+        })
+      );
+      return result;
+    },
+    enabled: uniqueClientEmails.length > 0,
+  });
+
+  const [bonusPhotoProject, setBonusPhotoProject] = useState<Project | null>(null);
+  const [bonusPhotoCount, setBonusPhotoCount] = useState(1);
+
+  const applyBonusPhotosMutation = useMutation({
+    mutationFn: async ({ projectId, photos }: { projectId: string; photos: number }) => {
+      const response = await fetch(`/api/projects/${projectId}/apply-bonus-photos`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Usena-Role": user.role,
+          "X-Usena-User-Id": String(user.id),
+        },
+        body: JSON.stringify({ photos }),
+      });
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({ error: "Failed" }));
+        throw new Error(err.error || "Failed to apply bonus photos");
+      }
+      return response.json();
+    },
+    onSuccess: (result) => {
+      toast({
+        title: "Bonus Photos Applied!",
+        description: `${bonusPhotoCount} bonus photo(s) applied. ${result.remaining} remaining.`,
+      });
+      setBonusPhotoProject(null);
+      setBonusPhotoCount(1);
+      queryClient.invalidateQueries({ queryKey: ['/api/client-bonus-batch'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/projects'] });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to apply bonus photos",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const getBonusIndicator = (project: any) => {
+    if (!project.clientEmail || !clientBonusMap[project.clientEmail]) return null;
+    const bonus = clientBonusMap[project.clientEmail];
+    return bonus;
+  };
 
   // Helper function to get week start (Sunday-based)
   const getWeekStart = (date: Date) => {
@@ -335,15 +410,24 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
     });
   };
 
-  // Helper function to format client display based on rollover shadow status
   const formatClientDisplay = (project: any) => {
-    // For shadow projects, always show (RO) suffix
-    if (project.isRolloverShadow) {
-      return `${project.clientName} (RO)`;
-    }
+    const name = project.isRolloverShadow ? `${project.clientName} (RO)` : project.clientName;
+    const bonus = getBonusIndicator(project);
     
-    // For original projects that have been rolled over, show without suffix since the shadow shows (RO)
-    return project.clientName;
+    return (
+      <span className="inline-flex items-center gap-1">
+        {name}
+        {bonus && (
+          <span
+            className="inline-flex items-center gap-0.5 bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 px-1.5 py-0 rounded-full text-[10px] font-semibold"
+            title={`${bonus.available} bonus photo(s) available from referral rewards`}
+          >
+            <Gift className="h-3 w-3" />
+            {bonus.available}
+          </span>
+        )}
+      </span>
+    );
   };
 
   // Handle rollover action with useMutation
@@ -1396,8 +1480,12 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
                                             initial={{ x: isLoading ? 20 : 0 }}
                                             animate={{ x: 0 }}
                                             transition={{ duration: 0.2 }}
+                                            className="inline-flex items-center gap-0.5"
                                           >
                                             {retoucherPrefix} {project.clientName}
+                                            {getBonusIndicator(project) && (
+                                              <Gift className="h-2.5 w-2.5 text-amber-600 dark:text-amber-400 ml-0.5" />
+                                            )}
                                           </motion.span>
                                         </Badge>
                                       </motion.div>
@@ -2182,6 +2270,22 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
                                 </div>
                               )}
                               
+                              {/* Apply Bonus Photos button for Admin, Sales, DataWrangler */}
+                              {canApplyBonusPhotos && project.clientEmail && getBonusIndicator(project) && (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => {
+                                    setBonusPhotoProject(project);
+                                    setBonusPhotoCount(1);
+                                  }}
+                                  className="text-amber-600 hover:text-amber-700 border-amber-300 hover:border-amber-400 bg-amber-50 hover:bg-amber-100"
+                                >
+                                  <Gift className="h-4 w-4 mr-1" />
+                                  Apply Bonus
+                                </Button>
+                              )}
+
                               {/* Duplicate button for Admin, Sales, Data Wrangler, and Lead Retoucher (Manager) */}
                               {(['Admin', 'Sales', 'DataWrangler', 'LeadRetoucher'].includes(user.role) || user.name === 'Sales') && (
                                 <motion.div
@@ -2451,6 +2555,75 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Apply Bonus Photos Dialog */}
+      <AnimatePresence>
+        {bonusPhotoProject && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+            onClick={() => setBonusPhotoProject(null)}
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-6 max-w-sm w-full mx-4"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <h3 className="text-lg font-semibold mb-1">Apply Bonus Photos</h3>
+              <p className="text-sm text-gray-500 mb-4">
+                Apply referral bonus photos to <strong>{bonusPhotoProject.clientName}</strong>'s project.
+              </p>
+              {(() => {
+                const bonus = bonusPhotoProject.clientEmail ? clientBonusMap[bonusPhotoProject.clientEmail] : null;
+                const available = bonus?.available || 0;
+                return (
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-2 p-3 bg-amber-50 dark:bg-amber-900/20 rounded-lg">
+                      <Gift className="h-5 w-5 text-amber-600" />
+                      <span className="text-sm font-medium text-amber-800 dark:text-amber-300">
+                        {available} bonus photo(s) available
+                      </span>
+                    </div>
+                    <div>
+                      <Label htmlFor="bonus-count">Photos to apply</Label>
+                      <Input
+                        id="bonus-count"
+                        type="number"
+                        min={1}
+                        max={available}
+                        value={bonusPhotoCount}
+                        onChange={(e) => setBonusPhotoCount(Math.min(Math.max(1, parseInt(e.target.value) || 1), available))}
+                        className="mt-1"
+                      />
+                    </div>
+                    <div className="flex justify-end gap-2">
+                      <Button variant="outline" onClick={() => setBonusPhotoProject(null)}>
+                        Cancel
+                      </Button>
+                      <Button
+                        onClick={() => applyBonusPhotosMutation.mutate({ projectId: bonusPhotoProject.id, photos: bonusPhotoCount })}
+                        disabled={applyBonusPhotosMutation.isPending || bonusPhotoCount < 1 || bonusPhotoCount > available}
+                        className="bg-amber-600 hover:bg-amber-700"
+                      >
+                        {applyBonusPhotosMutation.isPending ? (
+                          <LoadingSpinner size={14} className="mr-2" />
+                        ) : (
+                          <Gift className="h-4 w-4 mr-1" />
+                        )}
+                        Apply {bonusPhotoCount} Photo(s)
+                      </Button>
+                    </div>
+                  </div>
+                );
+              })()}
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
@@ -2459,7 +2632,7 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
 interface RolloverDialogProps {
   project: any;
   onRollover: (projectId: string, photosCompleted: number) => void;
-  formatClientDisplay: (project: any) => string;
+  formatClientDisplay: (project: any) => React.ReactNode;
 }
 
 function RolloverDialog({ project, onRollover, formatClientDisplay }: RolloverDialogProps) {
@@ -2550,7 +2723,7 @@ function RolloverDialog({ project, onRollover, formatClientDisplay }: RolloverDi
 interface ReportIssueDialogProps {
   project: any;
   onReport: (projectId: string, issueDescription: string, requestedDueDate: string, imageUrls?: string[]) => void;
-  formatClientDisplay: (project: any) => string;
+  formatClientDisplay: (project: any) => React.ReactNode;
 }
 
 function ReportIssueDialog({ project, onReport, formatClientDisplay }: ReportIssueDialogProps) {
