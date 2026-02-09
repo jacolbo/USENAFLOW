@@ -150,7 +150,8 @@ async function fetchHistoricalCalendarBookings(yearsBack: number = 2): Promise<C
 }
 
 function normalizeClientName(name: string): string {
-  return name.trim().toLowerCase().replace(/\s+/g, ' ');
+  let cleaned = name.replace(/\s*\(.*$/, '');
+  return cleaned.trim().toLowerCase().replace(/\s+/g, ' ');
 }
 
 function normalizePhone(phone: string): string {
@@ -217,6 +218,10 @@ function extractBookingsFromEvents(events: CalendarEvent[]): EventBooking[] {
 
     const clientName = parseClientNameFromEvent(event);
     if (!clientName) continue;
+
+    const normalizedName = normalizeClientName(clientName);
+    const skipNames = ['off', 'closed', 'holiday', 'public holiday', 'lunch', 'break', 'meeting', 'staff', 'maintenance', 'no bookings', 'blocked', 'unavailable'];
+    if (skipNames.includes(normalizedName)) continue;
 
     const emails = (event.attendeeEmails || []).filter(Boolean);
 
@@ -382,7 +387,7 @@ export async function syncRewards(yearsBack: number = 2): Promise<{
 
     for (const client of mergedClients) {
       try {
-        const primaryName = client.names[0];
+        const primaryName = client.names[0].replace(/\s*\(.*$/, '').trim();
         const emailArray = Array.from(client.emails);
         let clientEmail = emailArray.find(e => !e.includes('@unknown.pending')) || '';
 
