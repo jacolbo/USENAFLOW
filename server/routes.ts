@@ -2527,6 +2527,68 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.post("/api/test-drive-folder", verifyAdminRequest, async (req, res) => {
+    try {
+      const driveService = await import('./services/googleDriveService');
+      const testEmail = "jepsonmylesphotography@gmail.com";
+
+      const folder = await driveService.createFolder("USENA Test Delivery Folder");
+      console.log(`📁 Test folder created: ${folder.id}`);
+
+      const drive = await (async () => {
+        const { google } = await import('googleapis');
+        const accessToken = await (driveService as any).default?.getDriveAccessToken?.() || null;
+        
+        const hostname = process.env.REPLIT_CONNECTORS_HOSTNAME;
+        const xReplitToken = process.env.REPL_IDENTITY
+          ? 'repl ' + process.env.REPL_IDENTITY
+          : process.env.WEB_REPL_RENEWAL
+          ? 'depl ' + process.env.WEB_REPL_RENEWAL
+          : null;
+
+        const url = 'https://' + hostname + '/api/v2/connection?include_secrets=true&connector_names=google-drive';
+        const response = await fetch(url, {
+          headers: {
+            'Accept': 'application/json',
+            'X_REPLIT_TOKEN': xReplitToken!
+          }
+        });
+        const data = await response.json();
+        const conn = (data as any).items?.[0];
+        const token = conn?.settings?.access_token || conn?.settings?.oauth?.credentials?.access_token;
+
+        const oauth2Client = new google.auth.OAuth2();
+        oauth2Client.setCredentials({ access_token: token });
+        return google.drive({ version: 'v3', auth: oauth2Client });
+      })();
+
+      await drive.permissions.create({
+        fileId: folder.id,
+        requestBody: {
+          role: 'reader',
+          type: 'user',
+          emailAddress: testEmail,
+        },
+        sendNotificationEmail: true,
+      });
+
+      console.log(`📧 Shared test folder with ${testEmail}`);
+
+      res.json({
+        success: true,
+        message: `Test folder created and shared with ${testEmail}`,
+        folder: {
+          id: folder.id,
+          name: folder.name,
+          link: folder.webViewLink,
+        }
+      });
+    } catch (error: any) {
+      console.error('Test Drive folder error:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   // Create Drive folder for a project
   app.post("/api/drive/create-folder/:projectId", verifyAdminRequest, async (req, res) => {
     try {
