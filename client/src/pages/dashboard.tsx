@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { motion, AnimatePresence } from "framer-motion";
@@ -1243,14 +1243,8 @@ function EmailTemplatesEditor() {
   }
 
   return (
-    <div className="bg-white rounded-lg shadow-sm border border-blue-200 p-6">
-      <div className="flex items-center gap-3 mb-4">
-        <Mail className="h-6 w-6 text-blue-600" />
-        <div>
-          <h2 className="text-xl font-semibold text-gray-900">Email Templates</h2>
-          <p className="text-sm text-gray-600">Customize the emails sent to your clients</p>
-        </div>
-      </div>
+    <div>
+      <p className="text-sm text-gray-600 mb-4">Customize the emails sent to your clients. Click any template to edit it.</p>
 
       {isLoading ? (
         <div className="text-center py-8 text-gray-500">Loading templates...</div>
@@ -1291,7 +1285,6 @@ export default function Dashboard() {
   const [showReferrals, setShowReferrals] = useState(false);
   const [showVipClients, setShowVipClients] = useState(false);
   const [showEmailTemplates, setShowEmailTemplates] = useState(false);
-  const emailTemplatesRef = useRef<HTMLDivElement>(null);
   const [showTradeModal, setShowTradeModal] = useState(false);
   const [showSettingsDialog, setShowSettingsDialog] = useState(false);
   const { toast } = useToast();
@@ -1843,24 +1836,11 @@ export default function Dashboard() {
                             </DropdownMenuItem>
                             <DropdownMenuItem
                               onClick={() => {
-                                const newState = !showEmailTemplates;
-                                setShowEmailTemplates(newState);
-                                setShowArchive(false);
-                                setShowCommissions(false);
-                                setShowExtraPhotosSales(false);
-                                setShowComplaints(false);
-                                setShowReferrals(false);
-                                setShowVipClients(false);
-                                if (newState) {
-                                  setTimeout(() => {
-                                    emailTemplatesRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-                                  }, 100);
-                                }
+                                setShowEmailTemplates(true);
                               }}
                             >
                               <Mail className="h-4 w-4 mr-2" />
                               Email Templates
-                              {showEmailTemplates && <span className="ml-auto text-xs text-blue-600">Active</span>}
                             </DropdownMenuItem>
                             <DropdownMenuSeparator />
                             <DropdownMenuItem
@@ -2122,11 +2102,16 @@ export default function Dashboard() {
             <VipClientDashboard userRole={user.role} />
           )}
 
-          {/* Email Templates Editor for Admin */}
-          {user.role === "Admin" && showEmailTemplates && (
-            <div ref={emailTemplatesRef}>
-              <EmailTemplatesEditor />
-            </div>
+          {/* Email Templates Editor Dialog for Admin */}
+          {user.role === "Admin" && (
+            <Dialog open={showEmailTemplates} onOpenChange={setShowEmailTemplates}>
+              <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+                <DialogHeader>
+                  <DialogTitle>Email Templates</DialogTitle>
+                </DialogHeader>
+                <EmailTemplatesEditor />
+              </DialogContent>
+            </Dialog>
           )}
 
           {/* Delay Alert Banner for DataWrangler */}
