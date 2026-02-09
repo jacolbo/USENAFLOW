@@ -1237,12 +1237,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (survey.completedAt) {
         return res.status(400).json({ error: "Survey already completed" });
       }
-      const { rating, feedback, wouldRecommend } = req.body;
+      const { rating, communicationRating, feedback, wouldRecommend } = req.body;
       if (!rating || rating < 1 || rating > 5) {
         return res.status(400).json({ error: "Rating must be between 1 and 5" });
       }
+      if (communicationRating && (communicationRating < 1 || communicationRating > 5)) {
+        return res.status(400).json({ error: "Communication rating must be between 1 and 5" });
+      }
       const updated = await storage.updateSurvey(survey.id, {
         rating,
+        communicationRating: communicationRating || null,
         feedback: feedback || null,
         wouldRecommend: wouldRecommend ?? null,
         completedAt: new Date(),

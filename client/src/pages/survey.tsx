@@ -14,6 +14,8 @@ export default function SurveyPage() {
 
   const [rating, setRating] = useState(0);
   const [hoveredRating, setHoveredRating] = useState(0);
+  const [communicationRating, setCommunicationRating] = useState(0);
+  const [hoveredCommRating, setHoveredCommRating] = useState(0);
   const [feedback, setFeedback] = useState("");
   const [wouldRecommend, setWouldRecommend] = useState<boolean | null>(null);
   const [submitted, setSubmitted] = useState(false);
@@ -28,6 +30,7 @@ export default function SurveyPage() {
     mutationFn: async () => {
       const res = await apiRequest("POST", `/api/survey/${token}`, {
         rating,
+        communicationRating: communicationRating || undefined,
         feedback,
         wouldRecommend,
       });
@@ -123,7 +126,8 @@ export default function SurveyPage() {
         </CardHeader>
         <CardContent className="space-y-6">
           <div className="space-y-2">
-            <label className="text-sm font-medium text-gray-700">Rate your experience</label>
+            <label className="text-sm font-medium text-gray-700">Quality of work</label>
+            <p className="text-xs text-gray-500">How would you rate the quality of your photos?</p>
             <div className="flex gap-2 justify-center">
               {[1, 2, 3, 4, 5].map((star) => (
                 <button
@@ -151,6 +155,40 @@ export default function SurveyPage() {
                 {rating === 3 && "Good"}
                 {rating === 4 && "Great"}
                 {rating === 5 && "Excellent!"}
+              </p>
+            )}
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-gray-700">Communication</label>
+            <p className="text-xs text-gray-500">How was the communication with your retoucher?</p>
+            <div className="flex gap-2 justify-center">
+              {[1, 2, 3, 4, 5].map((star) => (
+                <button
+                  key={star}
+                  type="button"
+                  onClick={() => setCommunicationRating(star)}
+                  onMouseEnter={() => setHoveredCommRating(star)}
+                  onMouseLeave={() => setHoveredCommRating(0)}
+                  className="p-1 transition-transform hover:scale-110"
+                >
+                  <Star
+                    className={`h-10 w-10 ${
+                      star <= (hoveredCommRating || communicationRating)
+                        ? "fill-blue-400 text-blue-400"
+                        : "text-gray-300"
+                    }`}
+                  />
+                </button>
+              ))}
+            </div>
+            {communicationRating > 0 && (
+              <p className="text-center text-sm text-gray-500">
+                {communicationRating === 1 && "Poor"}
+                {communicationRating === 2 && "Fair"}
+                {communicationRating === 3 && "Good"}
+                {communicationRating === 4 && "Great"}
+                {communicationRating === 5 && "Excellent!"}
               </p>
             )}
           </div>

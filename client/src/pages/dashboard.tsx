@@ -24,6 +24,7 @@ import logoImage from "@assets/USENA-FLOW_1754522507856.png";
 import { WidgetCustomizer, useWidgetPreferences } from "@/components/widget-customizer";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Input } from "@/components/ui/input";
+import { getAdminHeaders } from "@/lib/adminAuth";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import {
@@ -1341,6 +1342,22 @@ export default function Dashboard() {
     enabled: !!user && user.role === "Evans",
   });
 
+  const chatRoles = ['Admin', 'LeadRetoucher', 'Retoucher1', 'Retoucher2', 'Retoucher3', 'Evans'];
+  const { data: chatProjects = [] } = useQuery<{ project: any; unreadCount: number }[]>({
+    queryKey: ["/api/admin/chat/projects"],
+    queryFn: async () => {
+      if (!user) return [];
+      const res = await fetch(`/api/admin/chat/projects?_t=${Date.now()}`, {
+        headers: getAdminHeaders(user.role, user.name || user.id || ''),
+      });
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: !!user && chatRoles.includes(user.role),
+    refetchInterval: 30000,
+  });
+  const totalUnreadMessages = chatProjects.reduce((sum, p) => sum + (p.unreadCount || 0), 0);
+
   // Filter projects based on user role for shadow project visibility
   const visibleProjects = useMemo(() => {
     // For Sales users, only show original projects (not shadows)
@@ -1678,15 +1695,20 @@ export default function Dashboard() {
                     </Button>
 
                     {/* Client Messages Button - for messaging roles */}
-                    {['Admin', 'LeadRetoucher', 'Retoucher1', 'Retoucher2', 'Retoucher3', 'Evans'].includes(user.role) && (
+                    {chatRoles.includes(user.role) && (
                       <Button 
                         variant="outline"
                         size="sm"
                         onClick={() => setLocation('/editor-chat')}
-                        className="flex items-center gap-2 bg-blue-50 hover:bg-blue-100 border-blue-200 text-blue-700"
+                        className="relative flex items-center gap-2 bg-blue-50 hover:bg-blue-100 border-blue-200 text-blue-700"
                       >
                         <MessageCircle className="h-4 w-4" />
                         Messages
+                        {totalUnreadMessages > 0 && (
+                          <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs font-bold rounded-full min-w-[20px] h-5 flex items-center justify-center px-1">
+                            {totalUnreadMessages > 99 ? '99+' : totalUnreadMessages}
+                          </span>
+                        )}
                       </Button>
                     )}
 

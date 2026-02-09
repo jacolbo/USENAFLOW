@@ -524,6 +524,7 @@ export const clientSurveys = pgTable("client_surveys", {
   clientEmail: text("client_email").notNull(),
   clientName: text("client_name").notNull(),
   rating: integer("rating"),
+  communicationRating: integer("communication_rating"),
   feedback: text("feedback"),
   wouldRecommend: boolean("would_recommend"),
   surveyToken: text("survey_token").notNull().unique(),
@@ -536,6 +537,7 @@ export const insertSurveySchema = createInsertSchema(clientSurveys).omit({
   createdAt: true,
   completedAt: true,
   rating: true,
+  communicationRating: true,
   feedback: true,
   wouldRecommend: true,
 });
