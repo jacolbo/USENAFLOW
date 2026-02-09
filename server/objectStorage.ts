@@ -243,6 +243,32 @@ export class ObjectStorageService {
     return `https://storage.googleapis.com/${bucketName}/${basePath}/${destinationFileName}`;
   }
 
+  async uploadPublicBuffer(
+    buffer: Buffer,
+    destinationFileName: string,
+    contentType: string = "image/png"
+  ): Promise<string> {
+    const publicPaths = this.getPublicObjectSearchPaths();
+    if (publicPaths.length === 0) {
+      throw new Error("No public object storage paths configured");
+    }
+
+    const publicPath = publicPaths[0];
+    const { bucketName, objectName: basePath } = parseObjectPath(publicPath);
+    
+    const bucket = objectStorageClient.bucket(bucketName);
+    const file = bucket.file(`${basePath}/${destinationFileName}`);
+    
+    await file.save(buffer, {
+      contentType,
+      metadata: {
+        cacheControl: "public, max-age=31536000",
+      },
+    });
+    
+    return destinationFileName;
+  }
+
   // Get the public URL for a file in the public folder
   getPublicFileUrl(fileName: string): string {
     const publicPaths = this.getPublicObjectSearchPaths();

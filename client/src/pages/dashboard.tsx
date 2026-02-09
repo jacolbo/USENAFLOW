@@ -1440,6 +1440,107 @@ function EmailTemplatesEditor() {
   const [editSubject, setEditSubject] = useState("");
   const [editBody, setEditBody] = useState("");
   const [showPreview, setShowPreview] = useState(false);
+  const [selectedImage, setSelectedImage] = useState<HTMLImageElement | null>(null);
+  const [imageUploading, setImageUploading] = useState(false);
+  const imageInputRef = useRef<HTMLInputElement>(null);
+
+  const handleImageUpload = async (file: File) => {
+    setImageUploading(true);
+    try {
+      const reader = new FileReader();
+      reader.onload = async () => {
+        const base64 = reader.result as string;
+        const res = await fetch("/api/admin/upload-email-image", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "X-Usena-Role": "Admin" },
+          body: JSON.stringify({ imageData: base64, fileName: file.name, contentType: file.type }),
+        });
+        const data = await res.json();
+        if (data.success && editorRef.current) {
+          editorRef.current.focus();
+          restoreSelection();
+          const img = document.createElement("img");
+          img.src = data.url;
+          img.alt = file.name;
+          img.style.maxWidth = "100%";
+          img.style.height = "auto";
+          img.style.display = "block";
+          img.style.margin = "10px auto";
+          img.style.cursor = "pointer";
+          img.setAttribute("data-email-image", "true");
+          const sel = window.getSelection();
+          if (sel && sel.rangeCount > 0) {
+            const range = sel.getRangeAt(0);
+            range.deleteContents();
+            range.insertNode(img);
+            range.setStartAfter(img);
+            range.collapse(true);
+            sel.removeAllRanges();
+            sel.addRange(range);
+          } else {
+            editorRef.current.appendChild(img);
+          }
+          toast({ title: "Image inserted" });
+        } else {
+          toast({ title: "Upload failed", description: data.error, variant: "destructive" });
+        }
+        setImageUploading(false);
+      };
+      reader.readAsDataURL(file);
+    } catch (err) {
+      toast({ title: "Upload failed", variant: "destructive" });
+      setImageUploading(false);
+    }
+  };
+
+  const handleEditorClick = (e: React.MouseEvent) => {
+    const target = e.target as HTMLElement;
+    if (editorRef.current) {
+      editorRef.current.querySelectorAll("img").forEach((img: HTMLImageElement) => {
+        img.style.outline = "none";
+      });
+    }
+    if (target.tagName === "IMG") {
+      const img = target as HTMLImageElement;
+      img.style.outline = "2px solid #3b82f6";
+      setSelectedImage(img);
+    } else {
+      setSelectedImage(null);
+    }
+  };
+
+  const resizeSelectedImage = (width: string) => {
+    if (selectedImage) {
+      selectedImage.style.maxWidth = width;
+      selectedImage.style.width = width;
+      selectedImage.style.height = "auto";
+    }
+  };
+
+  const alignSelectedImage = (align: string) => {
+    if (selectedImage) {
+      if (align === "center") {
+        selectedImage.style.display = "block";
+        selectedImage.style.margin = "10px auto";
+        selectedImage.style.float = "none";
+      } else if (align === "left") {
+        selectedImage.style.display = "block";
+        selectedImage.style.margin = "10px 10px 10px 0";
+        selectedImage.style.float = "left";
+      } else if (align === "right") {
+        selectedImage.style.display = "block";
+        selectedImage.style.margin = "10px 0 10px 10px";
+        selectedImage.style.float = "right";
+      }
+    }
+  };
+
+  const removeSelectedImage = () => {
+    if (selectedImage) {
+      selectedImage.remove();
+      setSelectedImage(null);
+    }
+  };
 
   const { data: templates = [], isLoading } = useQuery<any[]>({
     queryKey: ["/api/admin/email-templates"],
@@ -1549,7 +1650,13 @@ function EmailTemplatesEditor() {
   };
 
   const getEditorHtml = () => {
-    return editorRef.current ? editorRef.current.innerHTML : editBody;
+    if (!editorRef.current) return editBody;
+    const clone = editorRef.current.cloneNode(true) as HTMLElement;
+    clone.querySelectorAll("img").forEach((img: HTMLImageElement) => {
+      img.style.outline = "none";
+      img.style.cursor = "";
+    });
+    return clone.innerHTML;
   };
 
   const execFormat = (command: string, value?: string) => {
@@ -1653,14 +1760,57 @@ function EmailTemplatesEditor() {
                   className="p-1.5 rounded hover:bg-gray-200 text-sm text-blue-600"
                   title="Add Link"
                 >🔗</button>
+                <span className="w-px bg-gray-300 mx-1" />
+                <button
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    saveSelection();
+                    imageInputRef.current?.click();
+                  }}
+                  className="p-1.5 rounded hover:bg-gray-200 text-sm"
+                  title="Insert Image"
+                  disabled={imageUploading}
+                >{imageUploading ? "⏳" : "🖼️"}</button>
+                <input
+                  ref={imageInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) handleImageUpload(file);
+                    e.target.value = "";
+                  }}
+                />
                 <button onMouseDown={(e) => { e.preventDefault(); execFormat("removeFormat"); }} className="p-1.5 rounded hover:bg-gray-200 text-xs text-gray-500" title="Clear Formatting">✕</button>
               </div>
+              {selectedImage && (
+                <div className="bg-blue-50 border-b px-3 py-2 flex flex-wrap items-center gap-2">
+                  <span className="text-xs font-medium text-blue-700">Image:</span>
+                  <div className="flex gap-1">
+                    <button onClick={() => resizeSelectedImage("100%")} className="text-xs bg-white border border-blue-200 text-blue-700 px-2 py-0.5 rounded hover:bg-blue-100">Full</button>
+                    <button onClick={() => resizeSelectedImage("75%")} className="text-xs bg-white border border-blue-200 text-blue-700 px-2 py-0.5 rounded hover:bg-blue-100">75%</button>
+                    <button onClick={() => resizeSelectedImage("50%")} className="text-xs bg-white border border-blue-200 text-blue-700 px-2 py-0.5 rounded hover:bg-blue-100">50%</button>
+                    <button onClick={() => resizeSelectedImage("200px")} className="text-xs bg-white border border-blue-200 text-blue-700 px-2 py-0.5 rounded hover:bg-blue-100">Small</button>
+                    <button onClick={() => resizeSelectedImage("300px")} className="text-xs bg-white border border-blue-200 text-blue-700 px-2 py-0.5 rounded hover:bg-blue-100">Medium</button>
+                  </div>
+                  <span className="w-px h-4 bg-blue-200" />
+                  <div className="flex gap-1">
+                    <button onClick={() => alignSelectedImage("left")} className="text-xs bg-white border border-blue-200 text-blue-700 px-2 py-0.5 rounded hover:bg-blue-100">Left</button>
+                    <button onClick={() => alignSelectedImage("center")} className="text-xs bg-white border border-blue-200 text-blue-700 px-2 py-0.5 rounded hover:bg-blue-100">Center</button>
+                    <button onClick={() => alignSelectedImage("right")} className="text-xs bg-white border border-blue-200 text-blue-700 px-2 py-0.5 rounded hover:bg-blue-100">Right</button>
+                  </div>
+                  <span className="w-px h-4 bg-blue-200" />
+                  <button onClick={removeSelectedImage} className="text-xs bg-white border border-red-200 text-red-600 px-2 py-0.5 rounded hover:bg-red-50">Remove</button>
+                </div>
+              )}
               <div
                 ref={editorRef}
                 contentEditable
                 className="p-4 min-h-[400px] max-h-[500px] overflow-y-auto focus:outline-none text-sm"
                 onMouseUp={saveSelection}
                 onKeyUp={saveSelection}
+                onClick={handleEditorClick}
                 suppressContentEditableWarning
                 style={{ wordBreak: "break-word" }}
               />

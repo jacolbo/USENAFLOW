@@ -151,6 +151,49 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get("/public/email-images/:filename", async (req, res) => {
+    try {
+      const objectStorageService = new ObjectStorageService();
+      const file = await objectStorageService.searchPublicObject(`email-images/${req.params.filename}`);
+      if (!file) {
+        return res.status(404).send("Image not found");
+      }
+      await objectStorageService.downloadObject(file, res, 86400);
+    } catch (error) {
+      res.status(500).send("Error serving image");
+    }
+  });
+
+  app.post("/api/admin/upload-email-image", async (req, res) => {
+    try {
+      const { imageData, fileName, contentType } = req.body;
+      if (!imageData || !fileName) {
+        return res.status(400).json({ error: "imageData and fileName are required" });
+      }
+
+      const base64Data = imageData.replace(/^data:image\/\w+;base64,/, "");
+      const buffer = Buffer.from(base64Data, "base64");
+
+      const ext = fileName.split(".").pop() || "png";
+      const uniqueName = `email-images/${Date.now()}-${fileName.replace(/[^a-zA-Z0-9.-]/g, "_")}`;
+
+      const objectStorageService = new ObjectStorageService();
+      await objectStorageService.uploadPublicBuffer(
+        buffer,
+        uniqueName,
+        contentType || `image/${ext}`
+      );
+
+      const baseUrl = `${req.protocol}://${req.get("host")}`;
+      const publicUrl = `${baseUrl}/public/${uniqueName}`;
+
+      res.json({ success: true, url: publicUrl, fileName: uniqueName });
+    } catch (error: any) {
+      console.error("Error uploading email image:", error);
+      res.status(500).json({ error: error.message || "Failed to upload image" });
+    }
+  });
+
   app.post("/api/auth/login", async (req, res) => {
     try {
       const { username, password } = loginUserSchema.parse(req.body);
