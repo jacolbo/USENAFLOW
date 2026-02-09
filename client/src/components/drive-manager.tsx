@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { queryClient, apiRequest } from "@/lib/queryClient";
+import { queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -30,22 +30,45 @@ function formatDate(date: string | Date | null): string {
   return `${diffDays}d ago`;
 }
 
-export function DriveManager({ userRole }: { userRole: string }) {
+export function DriveManager({ userRole, userId }: { userRole: string; userId: string }) {
   const { toast } = useToast();
   const [monitorRunning, setMonitorRunning] = useState(false);
 
+  const adminHeaders: Record<string, string> = {
+    "x-usena-role": userRole,
+    "x-usena-user-id": userId,
+  };
+
+  const adminFetch = async (url: string, method = "GET", body?: any) => {
+    const headers: Record<string, string> = { ...adminHeaders };
+    if (body) headers["Content-Type"] = "application/json";
+    const res = await fetch(url, {
+      method,
+      headers,
+      body: body ? JSON.stringify(body) : undefined,
+      credentials: "include",
+    });
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(text || res.statusText);
+    }
+    return res.json();
+  };
+
   const { data: overview, isLoading: overviewLoading } = useQuery<any>({
-    queryKey: ["/api/drive/overview"],
+    queryKey: ["/api/drive/overview", userRole, userId],
+    queryFn: () => adminFetch("/api/drive/overview"),
   });
 
   const { data: connectionStatus, isLoading: connectionLoading } = useQuery<any>({
-    queryKey: ["/api/drive/test"],
+    queryKey: ["/api/drive/test", userRole, userId],
+    queryFn: () => adminFetch("/api/drive/test"),
   });
 
   const scanMutation = useMutation({
-    mutationFn: () => apiRequest("POST", "/api/drive/scan"),
+    mutationFn: () => adminFetch("/api/drive/scan", "POST"),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/drive/overview"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/drive/overview", userRole, userId] });
       toast({ title: "Scan complete" });
     },
     onError: (err: any) => {
@@ -54,9 +77,9 @@ export function DriveManager({ userRole }: { userRole: string }) {
   });
 
   const scanProjectMutation = useMutation({
-    mutationFn: (projectId: string) => apiRequest("POST", `/api/drive/scan/${projectId}`),
+    mutationFn: (projectId: string) => adminFetch(`/api/drive/scan/${projectId}`, "POST"),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/drive/overview"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/drive/overview", userRole, userId] });
       toast({ title: "Project scan complete" });
     },
     onError: (err: any) => {
@@ -65,7 +88,7 @@ export function DriveManager({ userRole }: { userRole: string }) {
   });
 
   const startMonitorMutation = useMutation({
-    mutationFn: () => apiRequest("POST", "/api/drive/monitor/start"),
+    mutationFn: () => adminFetch("/api/drive/monitor/start", "POST"),
     onSuccess: () => {
       setMonitorRunning(true);
       toast({ title: "Monitor started" });
@@ -76,7 +99,7 @@ export function DriveManager({ userRole }: { userRole: string }) {
   });
 
   const stopMonitorMutation = useMutation({
-    mutationFn: () => apiRequest("POST", "/api/drive/monitor/stop"),
+    mutationFn: () => adminFetch("/api/drive/monitor/stop", "POST"),
     onSuccess: () => {
       setMonitorRunning(false);
       toast({ title: "Monitor stopped" });
@@ -87,9 +110,9 @@ export function DriveManager({ userRole }: { userRole: string }) {
   });
 
   const createFolderMutation = useMutation({
-    mutationFn: (projectId: string) => apiRequest("POST", `/api/drive/create-folder/${projectId}`),
+    mutationFn: (projectId: string) => adminFetch(`/api/drive/create-folder/${projectId}`, "POST"),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/drive/overview"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/drive/overview", userRole, userId] });
       toast({ title: "Folder created" });
     },
     onError: (err: any) => {
@@ -99,9 +122,9 @@ export function DriveManager({ userRole }: { userRole: string }) {
 
   const createAllFoldersMutation = useMutation({
     mutationFn: (projectIds: string[]) =>
-      apiRequest("POST", "/api/drive/create-folders-batch", { projectIds }),
+      adminFetch("/api/drive/create-folders-batch", "POST", { projectIds }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/drive/overview"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/drive/overview", userRole, userId] });
       toast({ title: "All folders created" });
     },
     onError: (err: any) => {

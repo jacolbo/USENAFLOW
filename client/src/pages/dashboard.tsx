@@ -2626,7 +2626,7 @@ export default function Dashboard() {
 
           {/* Drive Manager for Admin */}
           {user.role === "Admin" && showDriveManager && (
-            <DriveManager userRole={user.role} />
+            <DriveManager userRole={user.role} userId={user.id || ""} />
           )}
 
           {/* Email Templates Editor Dialog for Admin */}
