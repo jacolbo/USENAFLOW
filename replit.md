@@ -34,6 +34,7 @@ Key features include:
 - **Editable Email Templates**: Admin can customize all 11 email templates (subject and body) via a built-in editor with live preview and variable placeholders. Templates are stored in the database with fallback to defaults.
 - **Automated Notifications**: Includes client scheduling notifications upon project due date updates and a Data Wrangler delay alert system for unassigned projects.
 - **Interactive Calendar**: Supports drag-and-drop project movement, quick assignment via double-click, real-time search, and color-coded project display based on status and rollover history.
+- **Google Drive Integration**: Automated photo delivery system that creates organized client folders `ClientName(photoCount)` with "Black and White" subfolders, monitors uploads every 5 minutes, auto-detects delivery completion when photo counts match selectedCount, generates shareable gallery links, and sends branded delivery emails. Includes B&W preview detection and email, storage tracking per project, and client access monitoring. Drive folders are auto-created on project creation (manual and ShootTracker promotion). All Drive API routes are admin-protected. Services: `googleDriveService.ts` (core Drive operations), `driveMonitorService.ts` (periodic scanning and auto-delivery), `drive-manager.tsx` (dashboard UI).
 
 ## External Dependencies
 
