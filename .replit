@@ -39,7 +39,7 @@ args = "npm run dev"
 waitForPort = 5000
 
 [agent]
-integrations = ["google-calendar:1.0.0", "resend:1.0.0", "google-mail:1.0.0", "javascript_object_storage:2.0.0"]
+integrations = ["google-calendar:1.0.0", "resend:1.0.0", "google-mail:1.0.0", "javascript_object_storage:2.0.0", "google-drive:1.0.0"]
 
 [userenv]
 

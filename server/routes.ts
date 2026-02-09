@@ -14,6 +14,7 @@ import { sendAssignmentWelcomeEmail, sendGalleryDeliveryEmail, sendSneakPeekEmai
 import { seedDefaultTemplates } from "./services/defaultEmailTemplates";
 import { VipTier } from "@shared/schema";
 import { sendStatusUpdateMessage } from './services/chatAutoResponder';
+import { verifyAdminRequest } from './middleware/adminAuth';
 
 // Global WebSocket connections store
 const wsConnections = new Map<string, { ws: WebSocket, userId?: string }>();
@@ -267,6 +268,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       };
       broadcastNotification(notification);
       broadcastProjectUpdate(project);
+
+      try {
+        const { createDriveFolderForProject } = await import('./services/driveMonitorService');
+        await createDriveFolderForProject(project.id);
+        console.log(`📁 Auto-created Drive folder for ${project.clientName}`);
+      } catch (driveErr: any) {
+        console.error(`📁 Drive folder creation failed for ${project.clientName}: ${driveErr.message}`);
+      }
       
       res.status(201).json(project);
     } catch (error) {
@@ -2480,6 +2489,264 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Seed default email templates
   seedDefaultTemplates(storage).catch(err => console.error('Failed to seed email templates:', err));
+
+  // ============================================
+  // Google Drive Integration Routes
+  // ============================================
+
+  // Test Drive connection
+  app.get("/api/drive/test", verifyAdminRequest, async (req, res) => {
+    try {
+      const { testDriveConnection } = await import('./services/googleDriveService');
+      const result = await testDriveConnection();
+      res.json(result);
+    } catch (error: any) {
+      res.status(500).json({ connected: false, error: error.message });
+    }
+  });
+
+  // Create Drive folder for a project
+  app.post("/api/drive/create-folder/:projectId", verifyAdminRequest, async (req, res) => {
+    try {
+      const { projectId } = req.params;
+      const { parentFolderId } = req.body || {};
+      const { createDriveFolderForProject } = await import('./services/driveMonitorService');
+      const result = await createDriveFolderForProject(projectId, parentFolderId);
+      res.json({ success: true, ...result });
+    } catch (error: any) {
+      console.error('Drive folder creation error:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Create Drive folders for multiple projects
+  app.post("/api/drive/create-folders-batch", verifyAdminRequest, async (req, res) => {
+    try {
+      const { projectIds, parentFolderId } = req.body;
+      if (!Array.isArray(projectIds)) {
+        return res.status(400).json({ error: "projectIds must be an array" });
+      }
+      const { createDriveFolderForProject } = await import('./services/driveMonitorService');
+      const results: any[] = [];
+      for (const projectId of projectIds) {
+        try {
+          const result = await createDriveFolderForProject(projectId, parentFolderId);
+          results.push({ projectId, success: true, ...result });
+        } catch (err: any) {
+          results.push({ projectId, success: false, error: err.message });
+        }
+      }
+      res.json({ results });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Manual scan of all project folders
+  app.post("/api/drive/scan", verifyAdminRequest, async (req, res) => {
+    try {
+      const { scanAllProjectFolders } = await import('./services/driveMonitorService');
+      const results = await scanAllProjectFolders();
+      res.json({
+        scanned: results.length,
+        complete: results.filter(r => r.status === 'complete').length,
+        incomplete: results.filter(r => r.status === 'incomplete').length,
+        over: results.filter(r => r.status === 'over').length,
+        deliveriesTriggered: results.filter(r => r.deliveryTriggered).length,
+        bwEmailsTriggered: results.filter(r => r.bwEmailTriggered).length,
+        results,
+      });
+    } catch (error: any) {
+      console.error('Drive scan error:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Scan a single project folder
+  app.post("/api/drive/scan/:projectId", verifyAdminRequest, async (req, res) => {
+    try {
+      const { projectId } = req.params;
+      const project = await storage.getProject(projectId);
+      if (!project) return res.status(404).json({ error: "Project not found" });
+      if (!project.driveFolderId) return res.status(400).json({ error: "No Drive folder linked to this project" });
+
+      const { scanProjectFolder } = await import('./services/driveMonitorService');
+      const result = await scanProjectFolder(project);
+      res.json(result);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Get Drive folder stats for a project
+  app.get("/api/drive/stats/:projectId", verifyAdminRequest, async (req, res) => {
+    try {
+      const { projectId } = req.params;
+      const project = await storage.getProject(projectId);
+      if (!project) return res.status(404).json({ error: "Project not found" });
+      if (!project.driveFolderId) return res.json({ hasDriveFolder: false });
+
+      const { getFolderStats, countImagesInFolder } = await import('./services/googleDriveService');
+      const mainStats = await getFolderStats(project.driveFolderId);
+      let bwStats = null;
+      if (project.driveBwFolderId) {
+        bwStats = await countImagesInFolder(project.driveBwFolderId);
+      }
+
+      res.json({
+        hasDriveFolder: true,
+        folderId: project.driveFolderId,
+        folderName: project.driveFolderName,
+        bwFolderId: project.driveBwFolderId,
+        selectedCount: project.selectedCount,
+        mainFolder: {
+          imageCount: mainStats.imageCount,
+          totalFiles: mainStats.totalFiles,
+          totalSizeBytes: mainStats.totalSizeBytes,
+        },
+        bwFolder: bwStats ? {
+          imageCount: bwStats.imageCount,
+          totalFiles: bwStats.totalFiles,
+          totalSizeBytes: bwStats.totalSizeBytes,
+        } : null,
+        driveDeliveryComplete: project.driveDeliveryComplete,
+        driveGalleryLink: project.driveGalleryLink,
+        driveBwSent: project.driveBwSent,
+        driveLastCheckedAt: project.driveLastCheckedAt,
+        driveClientAccessedAt: project.driveClientAccessedAt,
+      });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Get Drive overview for all projects (dashboard)
+  app.get("/api/drive/overview", verifyAdminRequest, async (req, res) => {
+    try {
+      const allProjects = await storage.getAllProjects();
+      const projectsWithDrive = allProjects.filter(p => p.driveFolderId);
+      const projectsWithoutDrive = allProjects.filter(p => !p.driveFolderId && p.status !== 'Done' && p.status !== 'Delivered');
+
+      const totalStorage = projectsWithDrive.reduce((sum, p) => sum + (p.driveStorageBytes || 0), 0);
+      const completeCount = projectsWithDrive.filter(p => p.driveDeliveryComplete).length;
+      const incompleteCount = projectsWithDrive.filter(p => !p.driveDeliveryComplete && p.drivePhotoCount < p.selectedCount).length;
+      const overCount = projectsWithDrive.filter(p => p.drivePhotoCount > p.selectedCount).length;
+      const bwSentCount = projectsWithDrive.filter(p => p.driveBwSent).length;
+
+      res.json({
+        totalProjects: allProjects.length,
+        projectsWithDrive: projectsWithDrive.length,
+        projectsNeedingFolders: projectsWithoutDrive.length,
+        totalStorageBytes: totalStorage,
+        deliveryComplete: completeCount,
+        deliveryIncomplete: incompleteCount,
+        overDelivered: overCount,
+        bwPreviewsSent: bwSentCount,
+        projects: projectsWithDrive.map(p => ({
+          id: p.id,
+          clientName: p.clientName,
+          selectedCount: p.selectedCount,
+          drivePhotoCount: p.drivePhotoCount,
+          driveBwPhotoCount: p.driveBwPhotoCount || 0,
+          driveStorageBytes: p.driveStorageBytes,
+          driveDeliveryComplete: p.driveDeliveryComplete,
+          driveGalleryLink: p.driveGalleryLink,
+          driveBwSent: p.driveBwSent,
+          driveFolderName: p.driveFolderName,
+          driveLastCheckedAt: p.driveLastCheckedAt,
+          status: p.status,
+          dueDate: p.dueDate,
+        })),
+        needingFolders: projectsWithoutDrive.map(p => ({
+          id: p.id,
+          clientName: p.clientName,
+          selectedCount: p.selectedCount,
+          status: p.status,
+          dueDate: p.dueDate,
+        })),
+      });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Start/stop Drive monitor
+  app.post("/api/drive/monitor/start", verifyAdminRequest, async (req, res) => {
+    try {
+      const { startDriveMonitor } = await import('./services/driveMonitorService');
+      startDriveMonitor();
+      res.json({ success: true, message: "Drive monitor started" });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/drive/monitor/stop", verifyAdminRequest, async (req, res) => {
+    try {
+      const { stopDriveMonitor } = await import('./services/driveMonitorService');
+      stopDriveMonitor();
+      res.json({ success: true, message: "Drive monitor stopped" });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Generate share link for a project folder
+  app.post("/api/drive/share/:projectId", verifyAdminRequest, async (req, res) => {
+    try {
+      const { projectId } = req.params;
+      const project = await storage.getProject(projectId);
+      if (!project) return res.status(404).json({ error: "Project not found" });
+      if (!project.driveFolderId) return res.status(400).json({ error: "No Drive folder linked" });
+
+      const { generateShareLink } = await import('./services/googleDriveService');
+      const link = await generateShareLink(project.driveFolderId);
+
+      await storage.updateProject(projectId, {
+        driveGalleryLink: link,
+        galleryLink: link,
+        galleryLinkAddedAt: new Date(),
+        galleryLinkAddedBy: 'Manual Drive Share',
+      } as any);
+
+      res.json({ success: true, galleryLink: link });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Link an existing Drive folder to a project
+  app.post("/api/drive/link/:projectId", verifyAdminRequest, async (req, res) => {
+    try {
+      const { projectId } = req.params;
+      const { folderId } = req.body;
+      if (!folderId) return res.status(400).json({ error: "folderId is required" });
+
+      const project = await storage.getProject(projectId);
+      if (!project) return res.status(404).json({ error: "Project not found" });
+
+      const { checkFolderExists } = await import('./services/googleDriveService');
+      const exists = await checkFolderExists(folderId);
+      if (!exists) return res.status(400).json({ error: "Folder not found in Drive" });
+
+      await storage.updateProject(projectId, {
+        driveFolderId: folderId,
+      } as any);
+
+      res.json({ success: true });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Start Drive monitor automatically
+  try {
+    const { startDriveMonitor } = await import('./services/driveMonitorService');
+    startDriveMonitor();
+    console.log('✅ Drive monitor started');
+  } catch (err: any) {
+    console.error('Failed to start Drive monitor:', err.message);
+  }
 
   return httpServer;
 }

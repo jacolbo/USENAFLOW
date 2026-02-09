@@ -327,6 +327,14 @@ export function registerShoottrackerRoutes(app: Express): void {
         promotedAt: new Date(),
         promotedBy: userId,
       });
+
+      try {
+        const { createDriveFolderForProject } = await import('./services/driveMonitorService');
+        await createDriveFolderForProject(newProject.id);
+        console.log(`📁 Auto-created Drive folder for ${clientName}`);
+      } catch (driveErr: any) {
+        console.error(`📁 Drive folder creation failed for ${clientName}: ${driveErr.message}`);
+      }
       
       try {
         const clientEmail = stagedEvent.clientEmail || "";

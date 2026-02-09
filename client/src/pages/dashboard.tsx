@@ -13,12 +13,13 @@ import { DailyQuote } from "@/components/daily-quote";
 import { NotificationCenter } from "@/components/notification-center";
 import { TradeOfferModal } from "@/components/TradeOfferModal";
 import { ComplaintsCalendar } from "@/components/complaints-calendar";
+import { DriveManager } from "@/components/drive-manager";
 
 import { WRUButton } from "@/components/WRUButton";
 import { useSSE } from "@/hooks/use-sse";
 import { User } from "@/lib/types";
 import { Project } from "@shared/schema";
-import { User as UserIcon, LogOut, Settings, Archive, ArrowRightLeft, DollarSign, AlertTriangle, Calendar, MessageCircle, LayoutDashboard, Gift, Crown, RefreshCw, Mail, MoreHorizontal, Wrench, Trophy, Star } from "lucide-react";
+import { User as UserIcon, LogOut, Settings, Archive, ArrowRightLeft, DollarSign, AlertTriangle, Calendar, MessageCircle, LayoutDashboard, Gift, Crown, RefreshCw, Mail, MoreHorizontal, Wrench, Trophy, Star, HardDrive } from "lucide-react";
 import { useLocation } from "wouter";
 import logoImage from "@assets/USENA-FLOW_1754522507856.png";
 import { WidgetCustomizer, useWidgetPreferences } from "@/components/widget-customizer";
@@ -1767,6 +1768,7 @@ export default function Dashboard() {
   const [showEmailTemplates, setShowEmailTemplates] = useState(false);
   const [showTradeModal, setShowTradeModal] = useState(false);
   const [showSettingsDialog, setShowSettingsDialog] = useState(false);
+  const [showDriveManager, setShowDriveManager] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
   
@@ -2326,6 +2328,23 @@ export default function Dashboard() {
                             <DropdownMenuSeparator />
                             <DropdownMenuLabel className="text-xs text-gray-500">Admin</DropdownMenuLabel>
                             <DropdownMenuItem
+                              onClick={() => {
+                                setShowDriveManager(!showDriveManager);
+                                setShowArchive(false);
+                                setShowCommissions(false);
+                                setShowExtraPhotosSales(false);
+                                setShowComplaints(false);
+                                setShowReferrals(false);
+                                setShowVipClients(false);
+                                setShowRewards(false);
+                                setShowEmailTemplates(false);
+                              }}
+                            >
+                              <HardDrive className="h-4 w-4 mr-2" />
+                              Drive Manager
+                              {showDriveManager && <span className="ml-auto text-xs text-blue-600">Active</span>}
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
                               onClick={() => setShowSettingsDialog(true)}
                             >
                               <Settings className="h-4 w-4 mr-2" />
@@ -2407,13 +2426,13 @@ export default function Dashboard() {
           {/* Widgets rendered in user's preferred order */}
           {widgetOrder.map((widgetId) => {
             // Daily Quote Widget
-            if (widgetId === "daily_quote" && isWidgetVisible("daily_quote") && !showRewards && !showReferrals && !showVipClients) {
+            if (widgetId === "daily_quote" && isWidgetVisible("daily_quote") && !showRewards && !showReferrals && !showVipClients && !showDriveManager) {
               return <DailyQuote key={widgetId} userId={user.value} />;
             }
             
             // My Tasks Widget - for Admin and retouchers
             if (widgetId === "my_tasks" && isWidgetVisible("my_tasks") && !showArchive && 
-                !showRewards && !showReferrals && !showVipClients &&
+                !showRewards && !showReferrals && !showVipClients && !showDriveManager &&
                 (user.role === "Admin" || ["Retoucher1", "Retoucher2", "Retoucher3"].includes(user.role))) {
               const myTasks = projects.filter(p => 
                 p.assignedTo && 
@@ -2457,7 +2476,7 @@ export default function Dashboard() {
             
             // ShootTracker Widget
             if (widgetId === "shoottracker" && isWidgetVisible("shoottracker") && !showArchive && 
-                !showCommissions && !showExtraPhotosSales && !showComplaints && !showRewards && !showReferrals && !showVipClients) {
+                !showCommissions && !showExtraPhotosSales && !showComplaints && !showRewards && !showReferrals && !showVipClients && !showDriveManager) {
               return (
                 <div key={widgetId} className="mb-6">
                   <ShootTrackerWidget />
@@ -2467,14 +2486,14 @@ export default function Dashboard() {
             
             // Team Analytics Widget
             if (widgetId === "team_analytics" && isWidgetVisible("team_analytics") && !showArchive && 
-                !showCommissions && !showExtraPhotosSales && !showComplaints && !showRewards && !showReferrals && !showVipClients) {
+                !showCommissions && !showExtraPhotosSales && !showComplaints && !showRewards && !showReferrals && !showVipClients && !showDriveManager) {
               return <TeamAnalytics key={widgetId} user={user} />;
             }
             
             // Project Table Widget
             if (widgetId === "project_table" && isWidgetVisible("project_table") && 
                 user.role !== "Sales" && user.role !== "Evans" && 
-                !showCommissions && !showExtraPhotosSales && !showComplaints && !showRewards && !showReferrals && !showVipClients) {
+                !showCommissions && !showExtraPhotosSales && !showComplaints && !showRewards && !showReferrals && !showVipClients && !showDriveManager) {
               return <TaskTable key={widgetId} projects={projects} user={user} allUsers={users} />;
             }
             
@@ -2605,6 +2624,11 @@ export default function Dashboard() {
             <RewardsDashboard userRole={user.role} />
           )}
 
+          {/* Drive Manager for Admin */}
+          {user.role === "Admin" && showDriveManager && (
+            <DriveManager userRole={user.role} />
+          )}
+
           {/* Email Templates Editor Dialog for Admin */}
           {user.role === "Admin" && (
             <Dialog open={showEmailTemplates} onOpenChange={setShowEmailTemplates}>
@@ -2628,7 +2652,7 @@ export default function Dashboard() {
           )}
           
           {/* Archive Status Header and Add Project Form for non-Sales, non-Evans roles */}
-          {user.role !== "Sales" && user.role !== "Evans" && !showCommissions && !showRewards && !showReferrals && !showVipClients && (
+          {user.role !== "Sales" && user.role !== "Evans" && !showCommissions && !showRewards && !showReferrals && !showVipClients && !showDriveManager && (
             <>
               <div className="bg-white rounded-lg shadow-sm p-4">
                 <div className="flex items-center justify-between">
