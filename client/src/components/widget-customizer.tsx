@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
-import { GripVertical, LayoutDashboard, Eye, EyeOff, Quote, User, Camera, BarChart3, Table, DollarSign, Package, Sparkles } from "lucide-react";
+import { GripVertical, LayoutDashboard, Eye, EyeOff, Quote, User, Camera, BarChart3, Table, DollarSign, Package, Sparkles, Brain } from "lucide-react";
 
 interface WidgetCustomizerProps {
   userId: string;
@@ -24,6 +24,7 @@ const iconMap: Record<string, any> = {
   DollarSign,
   Package,
   Sparkles,
+  Brain,
 };
 
 export function WidgetCustomizer({ userId, userRole, onPreferencesChange }: WidgetCustomizerProps) {

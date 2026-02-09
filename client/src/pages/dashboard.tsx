@@ -19,7 +19,7 @@ import { WRUButton } from "@/components/WRUButton";
 import { useSSE } from "@/hooks/use-sse";
 import { User } from "@/lib/types";
 import { Project } from "@shared/schema";
-import { User as UserIcon, LogOut, Settings, Archive, ArrowRightLeft, DollarSign, AlertTriangle, Calendar, MessageCircle, LayoutDashboard, Gift, Crown, RefreshCw, Mail, MoreHorizontal, Wrench, Trophy, Star, HardDrive, Sparkles } from "lucide-react";
+import { User as UserIcon, LogOut, Settings, Archive, ArrowRightLeft, DollarSign, AlertTriangle, Calendar, MessageCircle, LayoutDashboard, Gift, Crown, RefreshCw, Mail, MoreHorizontal, Wrench, Trophy, Star, HardDrive, Sparkles, Brain } from "lucide-react";
 import { useLocation } from "wouter";
 import logoImage from "@assets/USENA-FLOW_1754522507856.png";
 import { WidgetCustomizer, useWidgetPreferences } from "@/components/widget-customizer";
@@ -43,6 +43,83 @@ interface ApiUser {
   name: string;
   role: string;
   abbreviation: string;
+}
+
+function RetoucherCoachWidget({ retoucherName }: { retoucherName: string }) {
+  const { data, isLoading, refetch, isFetching } = useQuery<{ advice: string[]; encouragement: string; generatedAt: string }>({
+    queryKey: ["/api/ai/retoucher-advice", retoucherName],
+    queryFn: async () => {
+      const res = await fetch(`/api/ai/retoucher-advice/${encodeURIComponent(retoucherName)}`);
+      if (!res.ok) throw new Error("Failed to fetch advice");
+      return res.json();
+    },
+    staleTime: 10 * 60 * 1000,
+    refetchOnWindowFocus: false,
+  });
+
+  return (
+    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm">
+      <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <Brain className="h-5 w-5 text-purple-500" />
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">AI Coach</h2>
+            <span className="text-sm text-gray-500 dark:text-gray-400">Your personal performance tips</span>
+          </div>
+          <button
+            onClick={() => refetch()}
+            disabled={isFetching}
+            className="text-sm text-purple-600 hover:text-purple-800 dark:text-purple-400 disabled:opacity-50 flex items-center gap-1"
+          >
+            <RefreshCw className={`h-3.5 w-3.5 ${isFetching ? 'animate-spin' : ''}`} />
+            Refresh
+          </button>
+        </div>
+      </div>
+      <div className="px-6 py-4">
+        {isLoading ? (
+          <div className="space-y-3">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="flex items-start gap-3 animate-pulse">
+                <div className="w-2 h-2 mt-2 rounded-full bg-gray-200 dark:bg-gray-600 flex-shrink-0" />
+                <div className="flex-1 space-y-1">
+                  <div className="h-4 bg-gray-200 dark:bg-gray-600 rounded w-full" />
+                  <div className="h-4 bg-gray-200 dark:bg-gray-600 rounded w-3/4" />
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <>
+            {data?.encouragement && (
+              <div className="mb-4 p-3 rounded-lg bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-900/30 dark:to-purple-900/30 border border-blue-100 dark:border-blue-800">
+                <p className="text-sm font-medium text-blue-800 dark:text-blue-200">{data.encouragement}</p>
+              </div>
+            )}
+            {data?.advice && data.advice.length > 0 ? (
+              <ul className="space-y-3">
+                {data.advice.map((tip, index) => (
+                  <li key={index} className="flex items-start gap-3">
+                    <div className="w-2 h-2 mt-2 rounded-full bg-purple-500 flex-shrink-0" />
+                    <p className="text-sm text-gray-700 dark:text-gray-300">{tip}</p>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-4">
+                No advice available yet. Check back soon for personalized tips.
+              </p>
+            )}
+          </>
+        )}
+        {data?.generatedAt && (
+          <p className="text-xs text-gray-400 dark:text-gray-500 mt-4 text-right">
+            Generated {new Date(data.generatedAt).toLocaleTimeString()}
+          </p>
+        )}
+      </div>
+    </div>
+  );
 }
 
 // Extra Photos Sales View Component
@@ -2787,6 +2864,12 @@ export default function Dashboard() {
             if (widgetId === "ai_insights" && isWidgetVisible("ai_insights") && !showArchive && 
                 !showCommissions && !showExtraPhotosSales && !showComplaints && !showRewards && !showReferrals && !showVipClients && !showDriveManager) {
               return <AIInsightsWidget key={widgetId} />;
+            }
+
+            if (widgetId === "retoucher_coach" && isWidgetVisible("retoucher_coach") && !showArchive && 
+                !showCommissions && !showExtraPhotosSales && !showComplaints && !showRewards && !showReferrals && !showVipClients && !showDriveManager &&
+                ["Retoucher1", "Retoucher2", "Retoucher3"].includes(user.role)) {
+              return <RetoucherCoachWidget key={widgetId} retoucherName={user.name} />;
             }
 
             return null;

@@ -360,6 +360,138 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get("/api/ai/retoucher-advice/:retoucherName", async (req, res) => {
+    try {
+      const { retoucherName } = req.params;
+      const allProjects = await storage.getAllProjects();
+      const now = new Date();
+      const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+
+      const myProjects = allProjects.filter(
+        (p) => p.assignedTo && p.assignedTo.toLowerCase() === retoucherName.toLowerCase()
+      );
+
+      const completedProjects = myProjects.filter(
+        (p) => p.status === "Delivered" || p.status === "Done"
+      ).length;
+      const activeProjects = myProjects.filter(
+        (p) => p.status === "Assigned" || p.status === "Review"
+      ).length;
+      const overdueProjects = myProjects.filter(
+        (p) => p.riskLevel === "OVERDUE"
+      ).length;
+
+      const ratings = myProjects
+        .filter((p) => p.rating)
+        .map((p) => p.rating!);
+      const avgRating = ratings.length > 0
+        ? Math.round((ratings.reduce((a, b) => a + b, 0) / ratings.length) * 10) / 10
+        : null;
+      const recentRatings = myProjects
+        .filter((p) => p.rating && p.deliveredAt && new Date(p.deliveredAt) >= weekAgo)
+        .map((p) => p.rating!);
+
+      const turnarounds = myProjects
+        .filter((p) => p.deliveredAt && p.createdAt)
+        .map((p) => {
+          const start = new Date(p.createdAt).getTime();
+          const end = new Date(p.deliveredAt!).getTime();
+          return (end - start) / (1000 * 60 * 60 * 24);
+        });
+      const avgTurnaroundDays = turnarounds.length > 0
+        ? Math.round((turnarounds.reduce((a, b) => a + b, 0) / turnarounds.length) * 10) / 10
+        : null;
+
+      const { generateRetoucherAdvice } = await import("./services/aiService");
+      const result = await generateRetoucherAdvice({
+        name: retoucherName,
+        completedProjects,
+        activeProjects,
+        overdueProjects,
+        avgRating,
+        recentRatings,
+        avgTurnaroundDays,
+      });
+
+      res.json({ ...result, generatedAt: new Date().toISOString() });
+    } catch (error: any) {
+      console.error("Failed to generate retoucher advice:", error);
+      res.status(500).json({ error: "Failed to generate retoucher advice" });
+    }
+  });
+
+  app.post("/api/ai/review-photos", async (req, res) => {
+    try {
+      const { projectId } = req.body;
+      if (!projectId) {
+        return res.status(400).json({ error: "projectId is required" });
+      }
+
+      const project = await storage.getProject(projectId);
+      if (!project) {
+        return res.status(404).json({ error: "Project not found" });
+      }
+
+      const driveFolderId = (project as any).driveFolderId;
+      if (!driveFolderId) {
+        return res.status(400).json({ error: "No Drive folder linked to this project" });
+      }
+
+      const { getImageThumbnails } = await import("./services/googleDriveService");
+      const images = await getImageThumbnails(driveFolderId, 6);
+
+      if (images.length === 0) {
+        return res.status(400).json({ error: "No photos found in the project folder" });
+      }
+
+      const photos = images
+        .filter((img) => img.thumbnailLink)
+        .map((img) => ({
+          name: img.name,
+          thumbnailUrl: img.thumbnailLink!,
+        }));
+
+      if (photos.length === 0) {
+        return res.status(400).json({ error: "No photo thumbnails available for review" });
+      }
+
+      const { reviewDrivePhotos } = await import("./services/aiService");
+      const review = await reviewDrivePhotos(photos);
+
+      res.json({
+        ...review,
+        projectName: project.clientName,
+        photosReviewed: photos.length,
+        generatedAt: new Date().toISOString(),
+      });
+    } catch (error: any) {
+      console.error("Failed to review photos:", error);
+      res.status(500).json({ error: "Failed to review photos" });
+    }
+  });
+
+  app.post("/api/ai/suggest-reply", async (req, res) => {
+    try {
+      const { clientName, projectName, recentMessages, draftMessage } = req.body;
+      if (!clientName || !projectName || !recentMessages) {
+        return res.status(400).json({ error: "clientName, projectName, and recentMessages are required" });
+      }
+
+      const { suggestChatReply } = await import("./services/aiService");
+      const suggestion = await suggestChatReply({
+        clientName,
+        projectName,
+        recentMessages,
+        draftMessage,
+      });
+
+      res.json({ suggestion });
+    } catch (error: any) {
+      console.error("Failed to suggest reply:", error);
+      res.status(500).json({ error: "Failed to suggest reply" });
+    }
+  });
+
   // Get all projects
   app.get("/api/projects", async (req, res) => {
     try {

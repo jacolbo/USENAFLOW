@@ -11,7 +11,7 @@ import { useUpload } from "@/hooks/use-upload";
 import { queryClient } from "@/lib/queryClient";
 import { getAdminHeaders } from "@/lib/adminAuth";
 import { UserRoles, type Project } from "@shared/schema";
-import { ArrowLeft, Send, MessageCircle, User, Clock, Loader2, Search, X, Paperclip, Mic, Video, Image, FileText, Play, Pause, Download, Bot } from "lucide-react";
+import { ArrowLeft, Send, MessageCircle, User, Clock, Loader2, Search, X, Paperclip, Mic, Video, Image, FileText, Play, Pause, Download, Bot, Wand2 } from "lucide-react";
 import { format, formatDistanceToNow } from "date-fns";
 
 interface Message {
@@ -107,6 +107,8 @@ export default function EditorChat() {
   const [messageText, setMessageText] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [isRecording, setIsRecording] = useState(false);
+  const [showSuggestion, setShowSuggestion] = useState(false);
+  const [suggestedText, setSuggestedText] = useState("");
   const [pendingAttachment, setPendingAttachment] = useState<{
     url: string;
     type: "image" | "video" | "audio" | "file";
@@ -219,6 +221,42 @@ export default function EditorChat() {
     },
     onError: (error: any) => {
       toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const suggestReplyMutation = useMutation({
+    mutationFn: async () => {
+      const selectedProject = projectsQuery.data?.find((p: ProjectWithUnread) => p.project.id === selectedProjectId);
+      if (!selectedProject) throw new Error("No project selected");
+      
+      const messages = (messagesQuery.data || []).slice(-5).map((m: Message) => ({
+        sender: m.senderType === "client" ? selectedProject.project.clientName : "Studio",
+        message: m.message,
+      }));
+
+      const headers = {
+        ...getAdminHeaders(userRole, userId),
+        "Content-Type": "application/json",
+      };
+      const response = await fetch("/api/ai/suggest-reply", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          clientName: selectedProject.project.clientName,
+          projectName: selectedProject.project.clientName,
+          recentMessages: messages,
+          draftMessage: messageText.trim() || undefined,
+        }),
+      });
+      if (!response.ok) throw new Error("Failed to get suggestion");
+      return response.json();
+    },
+    onSuccess: (data) => {
+      setSuggestedText(data.suggestion);
+      setShowSuggestion(true);
+    },
+    onError: (error: any) => {
+      toast({ title: "AI Suggestion Failed", description: error.message, variant: "destructive" });
     },
   });
 
@@ -513,6 +551,44 @@ export default function EditorChat() {
                   </div>
                 )}
 
+                {showSuggestion && suggestedText && (
+                  <div className="mb-2 p-3 bg-purple-50 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-800 rounded-lg">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-start gap-2 flex-1">
+                        <Wand2 className="h-4 w-4 text-purple-500 mt-0.5 flex-shrink-0" />
+                        <p className="text-sm text-purple-900 dark:text-purple-100">{suggestedText}</p>
+                      </div>
+                      <div className="flex items-center gap-1 flex-shrink-0">
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="ghost"
+                          className="h-7 text-xs text-purple-600"
+                          onClick={() => {
+                            setMessageText(suggestedText);
+                            setShowSuggestion(false);
+                            setSuggestedText("");
+                          }}
+                        >
+                          Use this
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="ghost"
+                          className="h-7 text-xs"
+                          onClick={() => {
+                            setShowSuggestion(false);
+                            setSuggestedText("");
+                          }}
+                        >
+                          <X className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 <form onSubmit={handleSendMessage} className="flex gap-2">
                   <input
                     type="file"
@@ -541,6 +617,22 @@ export default function EditorChat() {
                     className={isRecording ? "text-red-500 animate-pulse" : ""}
                   >
                     <Mic className="h-5 w-5" />
+                  </Button>
+
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => suggestReplyMutation.mutate()}
+                    disabled={suggestReplyMutation.isPending || !selectedProjectId}
+                    title={messageText.trim() ? "Polish this message with AI" : "Suggest a reply with AI"}
+                    className="text-purple-500 hover:text-purple-700"
+                  >
+                    {suggestReplyMutation.isPending ? (
+                      <Loader2 className="h-5 w-5 animate-spin" />
+                    ) : (
+                      <Wand2 className="h-5 w-5" />
+                    )}
                   </Button>
 
                   <Input

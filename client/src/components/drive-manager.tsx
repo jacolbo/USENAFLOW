@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { HardDrive, FolderPlus, RefreshCw, CheckCircle, AlertTriangle, ExternalLink, Cloud, Play, Square } from "lucide-react";
+import { HardDrive, FolderPlus, RefreshCw, CheckCircle, AlertTriangle, ExternalLink, Cloud, Play, Square, Sparkles, Eye, Star, X } from "lucide-react";
 
 function formatBytes(bytes: number): string {
   if (!bytes || bytes === 0) return "0 B";
@@ -33,6 +33,8 @@ function formatDate(date: string | Date | null): string {
 export function DriveManager({ userRole, userId }: { userRole: string; userId: string }) {
   const { toast } = useToast();
   const [monitorRunning, setMonitorRunning] = useState(false);
+  const [reviewingProjectId, setReviewingProjectId] = useState<string | null>(null);
+  const [photoReview, setPhotoReview] = useState<any>(null);
 
   const adminHeaders: Record<string, string> = {
     "x-usena-role": userRole,
@@ -129,6 +131,20 @@ export function DriveManager({ userRole, userId }: { userRole: string; userId: s
     },
     onError: (err: any) => {
       toast({ title: "Failed to create folders", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const reviewPhotosMutation = useMutation({
+    mutationFn: async (projectId: string) => {
+      const res = await adminFetch("/api/ai/review-photos", "POST", { projectId });
+      return res;
+    },
+    onSuccess: (data) => {
+      setPhotoReview(data);
+      toast({ title: "Photo Review Complete", description: `Overall score: ${data.overallScore}/10` });
+    },
+    onError: (err: any) => {
+      toast({ title: "Review Failed", description: err.message, variant: "destructive" });
     },
   });
 
@@ -338,6 +354,18 @@ export function DriveManager({ userRole, userId }: { userRole: string; userId: s
                           <Button
                             size="sm"
                             variant="ghost"
+                            onClick={() => {
+                              setReviewingProjectId(project.id);
+                              reviewPhotosMutation.mutate(project.id);
+                            }}
+                            disabled={reviewPhotosMutation.isPending}
+                            title="AI Photo Review"
+                          >
+                            <Eye className={`h-3 w-3 ${reviewPhotosMutation.isPending && reviewingProjectId === project.id ? "animate-pulse" : ""}`} />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
                             onClick={() => scanProjectMutation.mutate(project.id)}
                             disabled={scanProjectMutation.isPending}
                           >
@@ -402,6 +430,65 @@ export function DriveManager({ userRole, userId }: { userRole: string; userId: s
                   </Button>
                 </div>
               ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+      {photoReview && (
+        <Card className="mt-4">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-lg flex items-center gap-2">
+                <Sparkles className="h-5 w-5 text-purple-500" />
+                AI Photo Review — {photoReview.projectName}
+              </CardTitle>
+              <div className="flex items-center gap-3">
+                <div className="flex items-center gap-1">
+                  <Star className="h-4 w-4 text-yellow-500 fill-yellow-500" />
+                  <span className="font-bold text-lg">{photoReview.overallScore}/10</span>
+                </div>
+                <Button size="sm" variant="ghost" onClick={() => setPhotoReview(null)}>
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+            <p className="text-xs text-muted-foreground">{photoReview.photosReviewed} photos reviewed</p>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              <div>
+                <h4 className="text-sm font-semibold mb-2">General Feedback</h4>
+                <ul className="space-y-1">
+                  {photoReview.feedback?.map((item: string, i: number) => (
+                    <li key={i} className="flex items-start gap-2 text-sm">
+                      <div className="w-1.5 h-1.5 mt-2 rounded-full bg-purple-500 flex-shrink-0" />
+                      {item}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              {photoReview.details && photoReview.details.length > 0 && (
+                <div>
+                  <h4 className="text-sm font-semibold mb-2">Per-Photo Details</h4>
+                  <div className="space-y-2">
+                    {photoReview.details.map((d: any, i: number) => (
+                      <div key={i} className="flex items-start gap-3 bg-muted/50 rounded-lg p-3">
+                        <div className="flex items-center gap-1 min-w-[60px]">
+                          <Star className="h-3 w-3 text-yellow-500 fill-yellow-500" />
+                          <span className="text-sm font-medium">{d.score}/10</span>
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium">{d.photo}</p>
+                          <p className="text-xs text-muted-foreground">{d.notes}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              <p className="text-xs text-muted-foreground text-right">
+                Reviewed {new Date(photoReview.generatedAt).toLocaleTimeString()}
+              </p>
             </div>
           </CardContent>
         </Card>
