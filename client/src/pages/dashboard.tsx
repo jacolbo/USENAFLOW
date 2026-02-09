@@ -18,7 +18,7 @@ import { WRUButton } from "@/components/WRUButton";
 import { useSSE } from "@/hooks/use-sse";
 import { User } from "@/lib/types";
 import { Project } from "@shared/schema";
-import { User as UserIcon, LogOut, Settings, Archive, ArrowRightLeft, DollarSign, AlertTriangle, Calendar, MessageCircle, LayoutDashboard, Gift, Crown, RefreshCw, Mail } from "lucide-react";
+import { User as UserIcon, LogOut, Settings, Archive, ArrowRightLeft, DollarSign, AlertTriangle, Calendar, MessageCircle, LayoutDashboard, Gift, Crown, RefreshCw, Mail, MoreHorizontal, Wrench } from "lucide-react";
 import { useLocation } from "wouter";
 import logoImage from "@assets/USENA-FLOW_1754522507856.png";
 import { WidgetCustomizer, useWidgetPreferences } from "@/components/widget-customizer";
@@ -26,6 +26,14 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 interface ApiUser {
   id: string;
@@ -1283,6 +1291,7 @@ export default function Dashboard() {
   const [showVipClients, setShowVipClients] = useState(false);
   const [showEmailTemplates, setShowEmailTemplates] = useState(false);
   const [showTradeModal, setShowTradeModal] = useState(false);
+  const [showSettingsDialog, setShowSettingsDialog] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
   
@@ -1652,35 +1661,7 @@ export default function Dashboard() {
                       onClearAll={clearAllNotifications}
                     />
 
-                    {/* Trade Offer Button for Retouchers and Admin */}
-                    {(['Retoucher1', 'Retoucher2', 'Retoucher3', 'Retoucher'].includes(user.role) || user.role === "Admin") && (
-                      <Button 
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setShowTradeModal(true)}
-                        className="flex items-center gap-2 bg-gradient-to-r from-blue-50 to-purple-50 hover:from-blue-100 hover:to-purple-100 border-blue-200"
-                        data-testid="button-open-trade-modal"
-                      >
-                        <ArrowRightLeft className="h-4 w-4" />
-                        Trade Project
-                      </Button>
-                    )}
-
-                    {/* WRU Button for Admin */}
-                    <WRUButton 
-                      projects={projects} 
-                      currentUser={user.name} 
-                      isAdmin={user.role === "Admin"} 
-                    />
-
-                    {/* Dashboard Customizer */}
-                    <WidgetCustomizer
-                      userId={widgetUserId}
-                      userRole={user.role}
-                      onPreferencesChange={handlePreferencesChange}
-                    />
-
-                    {/* Archive Button */}
+                    {/* Archive Button - always visible */}
                     <Button 
                       variant={showArchive ? "default" : "outline"}
                       size="sm"
@@ -1696,58 +1677,7 @@ export default function Dashboard() {
                       {showArchive ? `Current (${getCurrentProjectCount()})` : `Archive (${getArchiveProjectCount()})`}
                     </Button>
 
-                    {/* Commissions Button - Only for DataWrangler */}
-                    {user.role === "DataWrangler" && (
-                      <Button 
-                        variant={showCommissions ? "default" : "outline"}
-                        size="sm"
-                        onClick={() => {
-                          setShowCommissions(!showCommissions);
-                          setShowArchive(false);
-                          setShowExtraPhotosSales(false);
-                          setShowComplaints(false);
-                          setShowReferrals(false);
-                        }}
-                        className="flex items-center gap-2 bg-green-50 hover:bg-green-100 border-green-200 text-green-700"
-                      >
-                        <DollarSign className="h-4 w-4" />
-                        Commissions
-                      </Button>
-                    )}
-
-                    {/* Extra Photos Sales Button - Only for Sales */}
-                    {user.role === "Sales" && (
-                      <Button 
-                        variant={showExtraPhotosSales ? "default" : "outline"}
-                        size="sm"
-                        onClick={() => {
-                          setShowExtraPhotosSales(!showExtraPhotosSales);
-                          setShowArchive(false);
-                          setShowCommissions(false);
-                          setShowComplaints(false);
-                          setShowReferrals(false);
-                        }}
-                        className="flex items-center gap-2 bg-purple-50 hover:bg-purple-100 border-purple-200 text-purple-700"
-                      >
-                        <DollarSign className="h-4 w-4" />
-                        Extra Photos Sales
-                      </Button>
-                    )}
-
-                    {/* ShootTracker Settings Button - Admin, LeadRetoucher, DataWrangler only */}
-                    {['Admin', 'LeadRetoucher', 'DataWrangler'].includes(user.role) && (
-                      <Button 
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setLocation('/shoottracker')}
-                        className="flex items-center gap-2 bg-teal-50 hover:bg-teal-100 border-teal-200 text-teal-700"
-                      >
-                        <Calendar className="h-4 w-4" />
-                        ShootTracker
-                      </Button>
-                    )}
-
-                    {/* Client Messages Button - for Admin, LeadRetoucher, and all Retouchers */}
+                    {/* Client Messages Button - for messaging roles */}
                     {['Admin', 'LeadRetoucher', 'Retoucher1', 'Retoucher2', 'Retoucher3', 'Evans'].includes(user.role) && (
                       <Button 
                         variant="outline"
@@ -1756,49 +1686,190 @@ export default function Dashboard() {
                         className="flex items-center gap-2 bg-blue-50 hover:bg-blue-100 border-blue-200 text-blue-700"
                       >
                         <MessageCircle className="h-4 w-4" />
-                        Client Messages
+                        Messages
                       </Button>
                     )}
 
-                    {/* Manual Rollover Buttons for Admin */}
-                    {user.role === "Admin" && (
-                      <div className="flex items-center gap-2">
-                        <Button 
-                          variant="outline"
-                          size="sm"
-                          onClick={handleManualRollover}
-                          className="flex items-center gap-2 bg-orange-50 hover:bg-orange-100 border-orange-200 text-orange-700"
-                          data-testid="button-manual-rollover"
-                        >
-                          <ArrowRightLeft className="h-4 w-4" />
-                          Roll Forward
+                    {/* Tools Dropdown - groups operational tools */}
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="outline" size="sm" className="flex items-center gap-2">
+                          <Wrench className="h-4 w-4" />
+                          Tools
                         </Button>
-                        <Button 
-                          variant="outline"
-                          size="sm"
-                          onClick={handleManualRollback}
-                          className="flex items-center gap-2 bg-blue-50 hover:bg-blue-100 border-blue-200 text-blue-700"
-                          data-testid="button-manual-rollback"
-                        >
-                          <ArrowRightLeft className="h-4 w-4 rotate-180" />
-                          Roll Back
-                        </Button>
-                      </div>
-                    )}
-
-                    {/* Settings Icon - Only visible to Admin users */}
-                    {user.role === "Admin" && (
-                      <Dialog>
-                        <DialogTrigger asChild>
-                          <Button 
-                            variant="outline" 
-                            size="sm"
-                            className="flex items-center gap-2"
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-56">
+                        {/* Trade Project - Retouchers and Admin */}
+                        {(['Retoucher1', 'Retoucher2', 'Retoucher3', 'Retoucher'].includes(user.role) || user.role === "Admin") && (
+                          <DropdownMenuItem
+                            onClick={() => setShowTradeModal(true)}
+                            data-testid="button-open-trade-modal"
                           >
-                            <Settings className="h-4 w-4" />
-                            Settings
-                          </Button>
-                        </DialogTrigger>
+                            <ArrowRightLeft className="h-4 w-4 mr-2" />
+                            Trade Project
+                          </DropdownMenuItem>
+                        )}
+
+                        {/* ShootTracker - Admin, LeadRetoucher, DataWrangler */}
+                        {['Admin', 'LeadRetoucher', 'DataWrangler'].includes(user.role) && (
+                          <DropdownMenuItem onClick={() => setLocation('/shoottracker')}>
+                            <Calendar className="h-4 w-4 mr-2" />
+                            ShootTracker
+                          </DropdownMenuItem>
+                        )}
+
+                        {/* Commissions - DataWrangler */}
+                        {user.role === "DataWrangler" && (
+                          <DropdownMenuItem
+                            onClick={() => {
+                              setShowCommissions(!showCommissions);
+                              setShowArchive(false);
+                              setShowExtraPhotosSales(false);
+                              setShowComplaints(false);
+                              setShowReferrals(false);
+                            }}
+                          >
+                            <DollarSign className="h-4 w-4 mr-2" />
+                            Commissions
+                            {showCommissions && <span className="ml-auto text-xs text-green-600">Active</span>}
+                          </DropdownMenuItem>
+                        )}
+
+                        {/* Extra Photos Sales - Sales */}
+                        {user.role === "Sales" && (
+                          <DropdownMenuItem
+                            onClick={() => {
+                              setShowExtraPhotosSales(!showExtraPhotosSales);
+                              setShowArchive(false);
+                              setShowCommissions(false);
+                              setShowComplaints(false);
+                              setShowReferrals(false);
+                            }}
+                          >
+                            <DollarSign className="h-4 w-4 mr-2" />
+                            Extra Photos Sales
+                            {showExtraPhotosSales && <span className="ml-auto text-xs text-purple-600">Active</span>}
+                          </DropdownMenuItem>
+                        )}
+
+                        {/* Complaints - Evans */}
+                        {user.role === "Evans" && (
+                          <DropdownMenuItem
+                            onClick={() => {
+                              setShowComplaints(!showComplaints);
+                              setShowArchive(false);
+                              setShowCommissions(false);
+                              setShowExtraPhotosSales(false);
+                              setShowReferrals(false);
+                            }}
+                          >
+                            <AlertTriangle className="h-4 w-4 mr-2" />
+                            Complaints
+                            {showComplaints && <span className="ml-auto text-xs text-yellow-600">Active</span>}
+                          </DropdownMenuItem>
+                        )}
+
+                        {/* Referrals - Admin and Sales */}
+                        {["Admin", "Sales"].includes(user.role) && (
+                          <>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuLabel className="text-xs text-gray-500">Client Programs</DropdownMenuLabel>
+                            <DropdownMenuItem
+                              onClick={() => {
+                                setShowReferrals(!showReferrals);
+                                setShowArchive(false);
+                                setShowCommissions(false);
+                                setShowExtraPhotosSales(false);
+                                setShowComplaints(false);
+                                setShowVipClients(false);
+                                setShowEmailTemplates(false);
+                              }}
+                            >
+                              <Gift className="h-4 w-4 mr-2" />
+                              Referrals
+                              {showReferrals && <span className="ml-auto text-xs text-pink-600">Active</span>}
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={() => {
+                                setShowVipClients(!showVipClients);
+                                setShowArchive(false);
+                                setShowCommissions(false);
+                                setShowExtraPhotosSales(false);
+                                setShowComplaints(false);
+                                setShowReferrals(false);
+                                setShowEmailTemplates(false);
+                              }}
+                            >
+                              <Crown className="h-4 w-4 mr-2" />
+                              VIP Clients
+                              {showVipClients && <span className="ml-auto text-xs text-amber-600">Active</span>}
+                            </DropdownMenuItem>
+                          </>
+                        )}
+
+                        {/* Admin Tools Section */}
+                        {user.role === "Admin" && (
+                          <>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuLabel className="text-xs text-gray-500">Admin</DropdownMenuLabel>
+                            <DropdownMenuItem
+                              onClick={() => setShowSettingsDialog(true)}
+                            >
+                              <Settings className="h-4 w-4 mr-2" />
+                              Settings
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={() => {
+                                setShowEmailTemplates(!showEmailTemplates);
+                                setShowArchive(false);
+                                setShowCommissions(false);
+                                setShowExtraPhotosSales(false);
+                                setShowComplaints(false);
+                                setShowReferrals(false);
+                                setShowVipClients(false);
+                              }}
+                            >
+                              <Mail className="h-4 w-4 mr-2" />
+                              Email Templates
+                              {showEmailTemplates && <span className="ml-auto text-xs text-blue-600">Active</span>}
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                              onClick={handleManualRollover}
+                              data-testid="button-manual-rollover"
+                            >
+                              <ArrowRightLeft className="h-4 w-4 mr-2" />
+                              Roll Forward
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={handleManualRollback}
+                              data-testid="button-manual-rollback"
+                            >
+                              <ArrowRightLeft className="h-4 w-4 mr-2 rotate-180" />
+                              Roll Back
+                            </DropdownMenuItem>
+                          </>
+                        )}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+
+                    {/* WRU Button for Admin */}
+                    <WRUButton 
+                      projects={projects} 
+                      currentUser={user.name} 
+                      isAdmin={user.role === "Admin"} 
+                    />
+
+                    {/* Dashboard Customizer */}
+                    <WidgetCustomizer
+                      userId={widgetUserId}
+                      userRole={user.role}
+                      onPreferencesChange={handlePreferencesChange}
+                    />
+
+                    {/* Settings Dialog (controlled by state, opened from dropdown) */}
+                    {user.role === "Admin" && (
+                      <Dialog open={showSettingsDialog} onOpenChange={setShowSettingsDialog}>
                         <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
                           <DialogHeader>
                             <DialogTitle>Settings</DialogTitle>
@@ -1808,88 +1879,6 @@ export default function Dashboard() {
                           />
                         </DialogContent>
                       </Dialog>
-                    )}
-
-                    {/* Complaints Button - Only for Evans */}
-                    {user.role === "Evans" && (
-                      <Button 
-                        variant={showComplaints ? "default" : "outline"}
-                        size="sm"
-                        onClick={() => {
-                          setShowComplaints(!showComplaints);
-                          setShowArchive(false);
-                          setShowCommissions(false);
-                          setShowExtraPhotosSales(false);
-                          setShowReferrals(false);
-                        }}
-                        className="flex items-center gap-2 bg-yellow-50 hover:bg-yellow-100 border-yellow-300 text-yellow-700"
-                      >
-                        <AlertTriangle className="h-4 w-4" />
-                        Complaints
-                      </Button>
-                    )}
-
-                    {/* Referrals Button - Admin and Sales */}
-                    {["Admin", "Sales"].includes(user.role) && (
-                      <Button 
-                        variant={showReferrals ? "default" : "outline"}
-                        size="sm"
-                        onClick={() => {
-                          setShowReferrals(!showReferrals);
-                          setShowArchive(false);
-                          setShowCommissions(false);
-                          setShowExtraPhotosSales(false);
-                          setShowComplaints(false);
-                          setShowVipClients(false);
-                          setShowEmailTemplates(false);
-                        }}
-                        className="flex items-center gap-2 bg-pink-50 hover:bg-pink-100 border-pink-200 text-pink-700"
-                      >
-                        <Gift className="h-4 w-4" />
-                        Referrals
-                      </Button>
-                    )}
-
-                    {/* VIP Clients Button - Admin and Sales */}
-                    {["Admin", "Sales"].includes(user.role) && (
-                      <Button 
-                        variant={showVipClients ? "default" : "outline"}
-                        size="sm"
-                        onClick={() => {
-                          setShowVipClients(!showVipClients);
-                          setShowArchive(false);
-                          setShowCommissions(false);
-                          setShowExtraPhotosSales(false);
-                          setShowComplaints(false);
-                          setShowReferrals(false);
-                          setShowEmailTemplates(false);
-                        }}
-                        className="flex items-center gap-2 bg-amber-50 hover:bg-amber-100 border-amber-200 text-amber-700"
-                      >
-                        <Crown className="h-4 w-4" />
-                        VIP Clients
-                      </Button>
-                    )}
-
-                    {/* Email Templates Button - Admin only */}
-                    {user.role === "Admin" && (
-                      <Button 
-                        variant={showEmailTemplates ? "default" : "outline"}
-                        size="sm"
-                        onClick={() => {
-                          setShowEmailTemplates(!showEmailTemplates);
-                          setShowArchive(false);
-                          setShowCommissions(false);
-                          setShowExtraPhotosSales(false);
-                          setShowComplaints(false);
-                          setShowReferrals(false);
-                          setShowVipClients(false);
-                        }}
-                        className="flex items-center gap-2 bg-blue-50 hover:bg-blue-100 border-blue-200 text-blue-700"
-                      >
-                        <Mail className="h-4 w-4" />
-                        Email Templates
-                      </Button>
                     )}
 
                     <Button 
