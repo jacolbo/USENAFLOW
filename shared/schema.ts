@@ -587,6 +587,11 @@ export const clientProfiles = pgTable("client_profiles", {
   notes: text("notes"),
   firstProjectAt: timestamp("first_project_at"),
   lastProjectAt: timestamp("last_project_at"),
+  totalBookings: integer("total_bookings").notNull().default(0),
+  referralMatchCount: integer("referral_match_count").notNull().default(0),
+  rewardScore: integer("reward_score").notNull().default(0),
+  rewardTier: text("reward_tier").notNull().default("Bronze"),
+  lastRewardSyncAt: timestamp("last_reward_sync_at"),
   createdAt: timestamp("created_at").notNull().default(sql`now()`),
   updatedAt: timestamp("updated_at").notNull().default(sql`now()`),
 });
@@ -623,6 +628,14 @@ export const VipTier = {
   SILVER: "Silver",
   GOLD: "Gold",
   PLATINUM: "Platinum",
+} as const;
+
+export const RewardTier = {
+  BRONZE: "Bronze",
+  SILVER: "Silver",
+  GOLD: "Gold",
+  PLATINUM: "Platinum",
+  DIAMOND: "Diamond",
 } as const;
 
 // Email types

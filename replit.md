@@ -30,6 +30,7 @@ Key features include:
 - **Satisfaction Survey System**: Triggers post-delivery surveys, prompting clients with high ratings for Google reviews.
 - **Referral Rewards System**: Clients receive referral codes for bonus photos. Referred clients enter name and email on the landing page. Auto-matching uses email as primary key (falling back to name), with 5 bonus photos credited on match.
 - **VIP Client Tiers**: Automated loyalty program based on project count, offering bonus photos and priority services, with an admin override.
+- **Independent Rewards System**: Standalone rewards engine that pulls historical booking data directly from Google Calendar (up to 2 years back), combines it with referral match counts, and calculates reward scores/tiers per client (Bronze/Silver/Gold/Platinum/Diamond). Completely independent from ShootTracker -- has its own calendar sync, dashboard, and API routes. Scoring: 1 point per booking + 2 points per matched referral.
 - **Editable Email Templates**: Admin can customize all 11 email templates (subject and body) via a built-in editor with live preview and variable placeholders. Templates are stored in the database with fallback to defaults.
 - **Automated Notifications**: Includes client scheduling notifications upon project due date updates and a Data Wrangler delay alert system for unassigned projects.
 - **Interactive Calendar**: Supports drag-and-drop project movement, quick assignment via double-click, real-time search, and color-coded project display based on status and rollover history.

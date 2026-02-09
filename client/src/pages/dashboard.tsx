@@ -18,7 +18,7 @@ import { WRUButton } from "@/components/WRUButton";
 import { useSSE } from "@/hooks/use-sse";
 import { User } from "@/lib/types";
 import { Project } from "@shared/schema";
-import { User as UserIcon, LogOut, Settings, Archive, ArrowRightLeft, DollarSign, AlertTriangle, Calendar, MessageCircle, LayoutDashboard, Gift, Crown, RefreshCw, Mail, MoreHorizontal, Wrench } from "lucide-react";
+import { User as UserIcon, LogOut, Settings, Archive, ArrowRightLeft, DollarSign, AlertTriangle, Calendar, MessageCircle, LayoutDashboard, Gift, Crown, RefreshCw, Mail, MoreHorizontal, Wrench, Trophy, Star } from "lucide-react";
 import { useLocation } from "wouter";
 import logoImage from "@assets/USENA-FLOW_1754522507856.png";
 import { WidgetCustomizer, useWidgetPreferences } from "@/components/widget-customizer";
@@ -694,6 +694,190 @@ function ReferralDashboard({ userRole }: { userRole: string }) {
                           </Button>
                         )}
                       </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// Rewards Dashboard Component
+function RewardsDashboard({ userRole }: { userRole: string }) {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  const { data: rewardClients = [], isLoading } = useQuery<any[]>({
+    queryKey: ["/api/rewards/clients"],
+    queryFn: async () => {
+      const res = await fetch("/api/rewards/clients", {
+        headers: { "x-usena-role": userRole },
+      });
+      if (!res.ok) throw new Error("Failed to fetch");
+      return res.json();
+    },
+  });
+
+  const { data: summary } = useQuery<any>({
+    queryKey: ["/api/rewards/summary"],
+    queryFn: async () => {
+      const res = await fetch("/api/rewards/summary", {
+        headers: { "x-usena-role": userRole },
+      });
+      if (!res.ok) throw new Error("Failed to fetch");
+      return res.json();
+    },
+  });
+
+  const syncMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch("/api/rewards/sync", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-usena-role": userRole },
+        body: JSON.stringify({ yearsBack: 2 }),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || "Failed to sync");
+      }
+      return res.json();
+    },
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/rewards/clients"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/rewards/summary"] });
+      toast({ title: "Rewards Synced", description: `${data.synced} clients updated from calendar history` });
+    },
+    onError: (error: any) => {
+      toast({ title: "Sync Failed", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const rewardTierColors: Record<string, string> = {
+    Bronze: "bg-orange-100 text-orange-800 border-orange-300",
+    Silver: "bg-gray-200 text-gray-800 border-gray-400",
+    Gold: "bg-amber-100 text-amber-800 border-amber-400",
+    Platinum: "bg-purple-100 text-purple-800 border-purple-400",
+    Diamond: "bg-cyan-100 text-cyan-800 border-cyan-400",
+  };
+
+  const rewardTierIcons: Record<string, string> = {
+    Bronze: "🥉",
+    Silver: "🥈",
+    Gold: "🥇",
+    Platinum: "💎",
+    Diamond: "👑",
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-white rounded-lg shadow-sm p-6">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-3">
+            <Trophy className="h-6 w-6 text-emerald-600" />
+            <div>
+              <h2 className="text-xl font-semibold text-gray-900">Client Rewards</h2>
+              <p className="text-sm text-gray-600">Rewards based on bookings and referral matches from the last 2 years</p>
+            </div>
+          </div>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => syncMutation.mutate()}
+            disabled={syncMutation.isPending}
+            className="flex items-center gap-2 bg-emerald-50 hover:bg-emerald-100 border-emerald-300 text-emerald-700"
+          >
+            <RefreshCw className={`h-4 w-4 ${syncMutation.isPending ? "animate-spin" : ""}`} />
+            {syncMutation.isPending ? "Syncing Calendar..." : "Sync Rewards"}
+          </Button>
+        </div>
+
+        {summary && (
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
+            {["Bronze", "Silver", "Gold", "Platinum", "Diamond"].map(tier => (
+              <div key={tier} className={`rounded-lg p-3 text-center border ${rewardTierColors[tier]}`}>
+                <div className="text-2xl">{rewardTierIcons[tier]}</div>
+                <div className="text-lg font-bold">{summary.tierBreakdown?.[tier] || 0}</div>
+                <div className="text-xs font-medium">{tier}</div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div className="mb-4 p-3 bg-gray-50 rounded-lg text-xs text-gray-600">
+          <div className="font-medium mb-1">How Reward Scores Work:</div>
+          <div className="flex flex-wrap gap-4">
+            <span>Each booking = <strong>1 point</strong></span>
+            <span>Each matched referral = <strong>2 points</strong></span>
+          </div>
+          <div className="flex flex-wrap gap-3 mt-1">
+            <span>🥉 Bronze: 0-4</span>
+            <span>🥈 Silver: 5-9</span>
+            <span>🥇 Gold: 10-14</span>
+            <span>💎 Platinum: 15-24</span>
+            <span>👑 Diamond: 25+</span>
+          </div>
+        </div>
+
+        {isLoading ? (
+          <div className="text-center py-8 text-gray-500">Loading rewards data...</div>
+        ) : rewardClients.length === 0 ? (
+          <div className="text-center py-8 text-gray-500">
+            No reward data yet. Click "Sync Rewards" to pull booking history from Google Calendar.
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-gray-200">
+                  <th className="text-left py-3 px-4 font-medium text-gray-600">Client</th>
+                  <th className="text-center py-3 px-4 font-medium text-gray-600">Reward Tier</th>
+                  <th className="text-center py-3 px-4 font-medium text-gray-600">Bookings</th>
+                  <th className="text-center py-3 px-4 font-medium text-gray-600">Referral Matches</th>
+                  <th className="text-center py-3 px-4 font-medium text-gray-600">Reward Score</th>
+                  <th className="text-center py-3 px-4 font-medium text-gray-600">Bonus Photos</th>
+                  <th className="text-left py-3 px-4 font-medium text-gray-600">Last Synced</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rewardClients.map((client: any) => (
+                  <tr key={client.id} className="border-b border-gray-100 hover:bg-gray-50">
+                    <td className="py-3 px-4">
+                      <div className="font-medium text-gray-900">{client.clientName}</div>
+                      <div className="text-xs text-gray-500">{client.clientEmail}</div>
+                    </td>
+                    <td className="py-3 px-4 text-center">
+                      <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold border ${rewardTierColors[client.rewardTier] || rewardTierColors.Bronze}`}>
+                        {rewardTierIcons[client.rewardTier] || "🥉"} {client.rewardTier}
+                      </span>
+                    </td>
+                    <td className="py-3 px-4 text-center">
+                      <span className="inline-flex items-center gap-1 text-blue-700 bg-blue-50 px-2 py-1 rounded-full text-xs font-medium">
+                        <Calendar className="h-3 w-3" /> {client.totalBookings}
+                      </span>
+                    </td>
+                    <td className="py-3 px-4 text-center">
+                      <span className="inline-flex items-center gap-1 text-pink-700 bg-pink-50 px-2 py-1 rounded-full text-xs font-medium">
+                        <Gift className="h-3 w-3" /> {client.referralMatchCount}
+                      </span>
+                    </td>
+                    <td className="py-3 px-4 text-center">
+                      <span className="inline-flex items-center gap-1 text-emerald-700 bg-emerald-50 px-2 py-1 rounded-full text-xs font-bold">
+                        <Star className="h-3 w-3" /> {client.rewardScore}
+                      </span>
+                    </td>
+                    <td className="py-3 px-4 text-center">
+                      <span className="text-xs text-gray-600">
+                        {client.bonusPhotos - client.bonusPhotosUsed} available
+                      </span>
+                    </td>
+                    <td className="py-3 px-4">
+                      <span className="text-xs text-gray-500">
+                        {client.lastRewardSyncAt ? new Date(client.lastRewardSyncAt).toLocaleDateString() : "Never"}
+                      </span>
                     </td>
                   </tr>
                 ))}
@@ -1400,6 +1584,7 @@ export default function Dashboard() {
   const [showComplaints, setShowComplaints] = useState(false);
   const [showReferrals, setShowReferrals] = useState(false);
   const [showVipClients, setShowVipClients] = useState(false);
+  const [showRewards, setShowRewards] = useState(false);
   const [showEmailTemplates, setShowEmailTemplates] = useState(false);
   const [showTradeModal, setShowTradeModal] = useState(false);
   const [showSettingsDialog, setShowSettingsDialog] = useState(false);
@@ -1929,12 +2114,29 @@ export default function Dashboard() {
                                 setShowExtraPhotosSales(false);
                                 setShowComplaints(false);
                                 setShowReferrals(false);
+                                setShowRewards(false);
                                 setShowEmailTemplates(false);
                               }}
                             >
                               <Crown className="h-4 w-4 mr-2" />
                               VIP Clients
                               {showVipClients && <span className="ml-auto text-xs text-amber-600">Active</span>}
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={() => {
+                                setShowRewards(!showRewards);
+                                setShowArchive(false);
+                                setShowCommissions(false);
+                                setShowExtraPhotosSales(false);
+                                setShowComplaints(false);
+                                setShowReferrals(false);
+                                setShowVipClients(false);
+                                setShowEmailTemplates(false);
+                              }}
+                            >
+                              <Trophy className="h-4 w-4 mr-2" />
+                              Rewards
+                              {showRewards && <span className="ml-auto text-xs text-emerald-600">Active</span>}
                             </DropdownMenuItem>
                           </>
                         )}
@@ -2216,6 +2418,11 @@ export default function Dashboard() {
           {/* VIP Client Dashboard for Admin/Sales */}
           {["Admin", "Sales"].includes(user.role) && showVipClients && (
             <VipClientDashboard userRole={user.role} />
+          )}
+
+          {/* Rewards Dashboard for Admin/Sales */}
+          {["Admin", "Sales"].includes(user.role) && showRewards && (
+            <RewardsDashboard userRole={user.role} />
           )}
 
           {/* Email Templates Editor Dialog for Admin */}

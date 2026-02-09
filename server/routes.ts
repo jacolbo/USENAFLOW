@@ -1826,6 +1826,72 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ==================== REWARDS SYSTEM ====================
+
+  app.post("/api/rewards/sync", async (req, res) => {
+    try {
+      const role = req.headers["x-usena-role"] as string;
+      if (!role || !["Admin", "Sales"].includes(role)) {
+        return res.status(403).json({ error: "Unauthorized" });
+      }
+
+      const { syncRewards } = await import('./services/rewardsEngine');
+      const yearsBack = req.body?.yearsBack || 2;
+      const result = await syncRewards(yearsBack);
+      res.json(result);
+    } catch (error: any) {
+      console.error("Error syncing rewards:", error);
+      res.status(500).json({ error: "Failed to sync rewards: " + error.message });
+    }
+  });
+
+  app.get("/api/rewards/summary", async (req, res) => {
+    try {
+      const role = req.headers["x-usena-role"] as string;
+      if (!role || !["Admin", "Sales"].includes(role)) {
+        return res.status(403).json({ error: "Unauthorized" });
+      }
+      const { getRewardsSummary } = await import('./services/rewardsEngine');
+      const summary = await getRewardsSummary();
+      res.json(summary);
+    } catch (error) {
+      console.error("Error getting rewards summary:", error);
+      res.status(500).json({ error: "Failed to get rewards summary" });
+    }
+  });
+
+  app.get("/api/rewards/clients", async (req, res) => {
+    try {
+      const role = req.headers["x-usena-role"] as string;
+      if (!role || !["Admin", "Sales"].includes(role)) {
+        return res.status(403).json({ error: "Unauthorized" });
+      }
+      const profiles = await storage.getAllClientProfiles();
+      const rewardClients = profiles
+        .map(p => ({
+          id: p.id,
+          clientName: p.clientName,
+          clientEmail: p.clientEmail,
+          totalBookings: p.totalBookings || 0,
+          referralMatchCount: p.referralMatchCount || 0,
+          rewardScore: p.rewardScore || 0,
+          rewardTier: p.rewardTier || 'Bronze',
+          vipTier: p.vipTier,
+          bonusPhotos: p.bonusPhotos || 0,
+          bonusPhotosUsed: p.bonusPhotosUsed || 0,
+          totalDelivered: p.totalDelivered || 0,
+          firstProjectAt: p.firstProjectAt,
+          lastProjectAt: p.lastProjectAt,
+          lastRewardSyncAt: p.lastRewardSyncAt,
+        }))
+        .sort((a, b) => b.rewardScore - a.rewardScore);
+      res.json(rewardClients);
+    } catch (error) {
+      console.error("Error getting reward clients:", error);
+      res.status(500).json({ error: "Failed to get reward clients" });
+    }
+  });
+
   // Send delay notice endpoint for Data Wrangler
   app.post("/api/projects/:id/send-delay-notice", async (req, res) => {
     try {
