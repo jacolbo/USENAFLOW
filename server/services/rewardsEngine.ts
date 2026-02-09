@@ -167,6 +167,15 @@ function extractPhoneNumbers(text: string): string[] {
     .filter(p => p.length >= 7 && p.length <= 15);
 }
 
+function extractEmailAddresses(text: string): string[] {
+  if (!text) return [];
+  const emailRegex = /[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}/g;
+  const matches = text.match(emailRegex) || [];
+  return matches
+    .map(e => e.toLowerCase().trim())
+    .filter(e => !e.includes('calendar.google.com') && !e.includes('group.calendar'));
+}
+
 class UnionFind {
   private parent: Map<string, string> = new Map();
 
@@ -223,18 +232,20 @@ function extractBookingsFromEvents(events: CalendarEvent[]): EventBooking[] {
     const skipNames = ['off', 'closed', 'holiday', 'public holiday', 'lunch', 'break', 'meeting', 'staff', 'maintenance', 'no bookings', 'blocked', 'unavailable'];
     if (skipNames.includes(normalizedName)) continue;
 
-    const emails = (event.attendeeEmails || []).filter(Boolean);
+    const emails: string[] = [...(event.attendeeEmails || []).filter(Boolean)];
+    if (event.description) emails.push(...extractEmailAddresses(event.description));
+    if (event.location) emails.push(...extractEmailAddresses(event.location));
+    const uniqueEmails = Array.from(new Set(emails));
 
     const phones: string[] = [];
     if (event.description) phones.push(...extractPhoneNumbers(event.description));
     if (event.location) phones.push(...extractPhoneNumbers(event.location));
     if (event.summary) phones.push(...extractPhoneNumbers(event.summary));
-
     const uniquePhones = Array.from(new Set(phones));
 
     bookings.push({
       name: clientName,
-      emails,
+      emails: uniqueEmails,
       phones: uniquePhones,
       start: event.start,
     });
