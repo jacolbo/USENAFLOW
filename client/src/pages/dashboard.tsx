@@ -1154,34 +1154,86 @@ function EmailTemplatesEditor() {
     return preview;
   };
 
+  const [savedRange, setSavedRange] = useState<Range | null>(null);
+  const [editorMode, setEditorMode] = useState<"visual" | "code">("visual");
+
+  const saveSelection = () => {
+    const sel = window.getSelection();
+    if (sel && sel.rangeCount > 0) {
+      const range = sel.getRangeAt(0);
+      const editorEl = document.getElementById("email-visual-editor");
+      if (editorEl && editorEl.contains(range.commonAncestorContainer)) {
+        setSavedRange(range.cloneRange());
+      }
+    }
+  };
+
+  const restoreSelection = () => {
+    if (savedRange) {
+      const sel = window.getSelection();
+      if (sel) {
+        sel.removeAllRanges();
+        sel.addRange(savedRange);
+      }
+    }
+  };
+
+  const handleVisualEdit = () => {
+    const editorEl = document.getElementById("email-visual-editor");
+    if (editorEl) {
+      setEditBody(editorEl.innerHTML);
+    }
+  };
+
+  const execFormat = (command: string, value?: string) => {
+    restoreSelection();
+    const editorEl = document.getElementById("email-visual-editor");
+    if (editorEl) editorEl.focus();
+    document.execCommand(command, false, value);
+    saveSelection();
+    handleVisualEdit();
+  };
+
+  const insertVariable = (variable: string) => {
+    const editorEl = document.getElementById("email-visual-editor");
+    if (editorEl) {
+      editorEl.focus();
+      restoreSelection();
+      document.execCommand("insertText", false, `{{${variable}}}`);
+      saveSelection();
+      handleVisualEdit();
+    }
+  };
+
   if (editingTemplate) {
     const variables = (editingTemplate.availableVariables as string[]) || [];
     return (
-      <div className="bg-white rounded-lg shadow-sm border border-blue-200 p-6 space-y-4">
+      <div className="space-y-4">
         <div className="flex items-center justify-between">
           <div>
             <h2 className="text-xl font-semibold text-gray-900">Edit: {editingTemplate.name}</h2>
-            <p className="text-sm text-gray-500 mt-1">Template key: {editingTemplate.templateKey}</p>
           </div>
           <div className="flex gap-2">
             <Button variant="outline" size="sm" onClick={() => setShowPreview(!showPreview)}>
-              {showPreview ? "Edit" : "Preview"}
+              {showPreview ? "Back to Editor" : "Preview with Sample Data"}
             </Button>
-            <Button variant="outline" size="sm" onClick={() => setEditingTemplate(null)}>Cancel</Button>
+            <Button variant="outline" size="sm" onClick={() => setEditingTemplate(null)}>Back to List</Button>
           </div>
+        </div>
+
+        <div className="space-y-2">
+          <label className="text-sm font-medium text-gray-700">Subject Line</label>
+          <Input value={editSubject} onChange={(e) => setEditSubject(e.target.value)} placeholder="Email subject..." />
         </div>
 
         {variables.length > 0 && (
           <div className="bg-blue-50 rounded-lg p-3">
-            <p className="text-xs font-medium text-blue-700 mb-2">Available variables (click to copy):</p>
+            <p className="text-xs font-medium text-blue-700 mb-2">Insert variable (click to add at cursor):</p>
             <div className="flex flex-wrap gap-1">
               {variables.map((v: string) => (
                 <button
                   key={v}
-                  onClick={() => {
-                    navigator.clipboard.writeText(`{{${v}}}`);
-                    toast({ title: `Copied {{${v}}}` });
-                  }}
+                  onClick={() => insertVariable(v)}
                   className="text-xs bg-white border border-blue-200 text-blue-700 px-2 py-1 rounded hover:bg-blue-100 font-mono"
                 >
                   {`{{${v}}}`}
@@ -1198,21 +1250,78 @@ function EmailTemplatesEditor() {
             </div>
             <div className="p-4 bg-white" dangerouslySetInnerHTML={{ __html: getPreviewHtml() }} />
           </div>
-        ) : (
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-gray-700">Subject Line</label>
-              <Input value={editSubject} onChange={(e) => setEditSubject(e.target.value)} placeholder="Email subject..." />
+        ) : editorMode === "visual" ? (
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <label className="text-sm font-medium text-gray-700">Email Body</label>
+              <button
+                onClick={() => {
+                  handleVisualEdit();
+                  setEditorMode("code");
+                }}
+                className="text-xs text-blue-600 hover:underline"
+              >
+                Switch to code view
+              </button>
             </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-gray-700">HTML Body</label>
-              <textarea
-                value={editBody}
-                onChange={(e) => setEditBody(e.target.value)}
-                className="w-full h-96 p-3 border rounded-lg font-mono text-sm resize-y focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="HTML email body..."
+            <div className="border rounded-lg overflow-hidden">
+              <div className="bg-gray-50 border-b px-2 py-1.5 flex flex-wrap gap-1">
+                <button onMouseDown={(e) => { e.preventDefault(); execFormat("bold"); }} className="p-1.5 rounded hover:bg-gray-200 text-sm font-bold" title="Bold">B</button>
+                <button onMouseDown={(e) => { e.preventDefault(); execFormat("italic"); }} className="p-1.5 rounded hover:bg-gray-200 text-sm italic" title="Italic">I</button>
+                <button onMouseDown={(e) => { e.preventDefault(); execFormat("underline"); }} className="p-1.5 rounded hover:bg-gray-200 text-sm underline" title="Underline">U</button>
+                <span className="w-px bg-gray-300 mx-1" />
+                <button onMouseDown={(e) => { e.preventDefault(); execFormat("fontSize", "5"); }} className="p-1.5 rounded hover:bg-gray-200 text-sm" title="Large Text">A+</button>
+                <button onMouseDown={(e) => { e.preventDefault(); execFormat("fontSize", "3"); }} className="p-1.5 rounded hover:bg-gray-200 text-xs" title="Normal Text">A</button>
+                <span className="w-px bg-gray-300 mx-1" />
+                <button onMouseDown={(e) => { e.preventDefault(); execFormat("justifyLeft"); }} className="p-1.5 rounded hover:bg-gray-200 text-sm" title="Align Left">⫷</button>
+                <button onMouseDown={(e) => { e.preventDefault(); execFormat("justifyCenter"); }} className="p-1.5 rounded hover:bg-gray-200 text-sm" title="Align Center">⫸</button>
+                <span className="w-px bg-gray-300 mx-1" />
+                <button onMouseDown={(e) => { e.preventDefault(); execFormat("foreColor", "#c2185b"); }} className="p-1.5 rounded hover:bg-gray-200 text-sm" title="Pink Text" style={{ color: "#c2185b" }}>A</button>
+                <button onMouseDown={(e) => { e.preventDefault(); execFormat("foreColor", "#1565c0"); }} className="p-1.5 rounded hover:bg-gray-200 text-sm" title="Blue Text" style={{ color: "#1565c0" }}>A</button>
+                <button onMouseDown={(e) => { e.preventDefault(); execFormat("foreColor", "#333333"); }} className="p-1.5 rounded hover:bg-gray-200 text-sm" title="Dark Text" style={{ color: "#333" }}>A</button>
+                <span className="w-px bg-gray-300 mx-1" />
+                <button
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    const url = prompt("Enter link URL:");
+                    if (url) execFormat("createLink", url);
+                  }}
+                  className="p-1.5 rounded hover:bg-gray-200 text-sm text-blue-600"
+                  title="Add Link"
+                >🔗</button>
+                <button onMouseDown={(e) => { e.preventDefault(); execFormat("removeFormat"); }} className="p-1.5 rounded hover:bg-gray-200 text-xs text-gray-500" title="Clear Formatting">✕</button>
+              </div>
+              <div
+                id="email-visual-editor"
+                contentEditable
+                className="p-4 min-h-[400px] max-h-[500px] overflow-y-auto focus:outline-none text-sm"
+                dangerouslySetInnerHTML={{ __html: editBody }}
+                onInput={handleVisualEdit}
+                onMouseUp={saveSelection}
+                onKeyUp={saveSelection}
+                onBlur={() => { saveSelection(); handleVisualEdit(); }}
+                suppressContentEditableWarning
+                style={{ wordBreak: "break-word" }}
               />
             </div>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <label className="text-sm font-medium text-gray-700">HTML Code</label>
+              <button
+                onClick={() => setEditorMode("visual")}
+                className="text-xs text-blue-600 hover:underline"
+              >
+                Switch to visual editor
+              </button>
+            </div>
+            <textarea
+              value={editBody}
+              onChange={(e) => setEditBody(e.target.value)}
+              className="w-full h-96 p-3 border rounded-lg font-mono text-sm resize-y focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="HTML email body..."
+            />
           </div>
         )}
 
@@ -1231,7 +1340,10 @@ function EmailTemplatesEditor() {
             Reset to Default
           </Button>
           <Button
-            onClick={() => saveMutation.mutate({ key: editingTemplate.templateKey, subject: editSubject, htmlBody: editBody })}
+            onClick={() => {
+              handleVisualEdit();
+              saveMutation.mutate({ key: editingTemplate.templateKey, subject: editSubject, htmlBody: editBody });
+            }}
             disabled={saveMutation.isPending}
             className="bg-blue-600 hover:bg-blue-700"
           >
