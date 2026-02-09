@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { motion, AnimatePresence } from "framer-motion";
@@ -1291,6 +1291,7 @@ export default function Dashboard() {
   const [showReferrals, setShowReferrals] = useState(false);
   const [showVipClients, setShowVipClients] = useState(false);
   const [showEmailTemplates, setShowEmailTemplates] = useState(false);
+  const emailTemplatesRef = useRef<HTMLDivElement>(null);
   const [showTradeModal, setShowTradeModal] = useState(false);
   const [showSettingsDialog, setShowSettingsDialog] = useState(false);
   const { toast } = useToast();
@@ -1842,13 +1843,19 @@ export default function Dashboard() {
                             </DropdownMenuItem>
                             <DropdownMenuItem
                               onClick={() => {
-                                setShowEmailTemplates(!showEmailTemplates);
+                                const newState = !showEmailTemplates;
+                                setShowEmailTemplates(newState);
                                 setShowArchive(false);
                                 setShowCommissions(false);
                                 setShowExtraPhotosSales(false);
                                 setShowComplaints(false);
                                 setShowReferrals(false);
                                 setShowVipClients(false);
+                                if (newState) {
+                                  setTimeout(() => {
+                                    emailTemplatesRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+                                  }, 100);
+                                }
                               }}
                             >
                               <Mail className="h-4 w-4 mr-2" />
@@ -2117,7 +2124,9 @@ export default function Dashboard() {
 
           {/* Email Templates Editor for Admin */}
           {user.role === "Admin" && showEmailTemplates && (
-            <EmailTemplatesEditor />
+            <div ref={emailTemplatesRef}>
+              <EmailTemplatesEditor />
+            </div>
           )}
 
           {/* Delay Alert Banner for DataWrangler */}
