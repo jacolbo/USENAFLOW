@@ -2505,6 +2505,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.post("/api/test-delivery-email", verifyAdminRequest, async (req, res) => {
+    try {
+      const { sendGalleryDeliveryEmail } = await import('./services/emailService');
+      const testEmail = "jepsonmylesphotography@gmail.com";
+      const testClientName = "Test Client";
+      const testGalleryLink = "https://drive.google.com/drive/folders/test-gallery-link";
+      const testProjectId = "test-delivery-email";
+
+      const result = await sendGalleryDeliveryEmail(
+        testEmail,
+        testClientName,
+        testGalleryLink,
+        testProjectId
+      );
+
+      res.json({ success: result.success, message: `Test delivery email sent to ${testEmail}`, details: result });
+    } catch (error: any) {
+      console.error('Test delivery email error:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   // Create Drive folder for a project
   app.post("/api/drive/create-folder/:projectId", verifyAdminRequest, async (req, res) => {
     try {
