@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { motion, AnimatePresence } from "framer-motion";
@@ -1122,7 +1122,13 @@ function EmailTemplatesEditor() {
     setEditingTemplate(template);
     setEditSubject(template.subject);
     setEditBody(template.htmlBody);
+    setEditorMode("visual");
     setShowPreview(false);
+    setTimeout(() => {
+      if (editorRef.current) {
+        editorRef.current.innerHTML = template.htmlBody;
+      }
+    }, 0);
   };
 
   const getPreviewHtml = () => {
@@ -1147,61 +1153,54 @@ function EmailTemplatesEditor() {
       threadHtml: "",
       sneakPeekHtml: '<div style="text-align: center; margin: 25px 0;"><p style="color: #666;">Preview photos would appear here</p></div>',
     };
-    let preview = editBody;
+    let preview = editorMode === "visual" ? getEditorHtml() : editBody;
     preview = preview.replace(/\{\{(\w+)\}\}/g, (match: string, key: string) => {
       return sampleVars[key] !== undefined ? sampleVars[key] : match;
     });
     return preview;
   };
 
-  const [savedRange, setSavedRange] = useState<Range | null>(null);
   const [editorMode, setEditorMode] = useState<"visual" | "code">("visual");
+  const editorRef = useRef<HTMLDivElement>(null);
+  const savedRangeRef = useRef<Range | null>(null);
 
   const saveSelection = () => {
     const sel = window.getSelection();
     if (sel && sel.rangeCount > 0) {
       const range = sel.getRangeAt(0);
-      const editorEl = document.getElementById("email-visual-editor");
-      if (editorEl && editorEl.contains(range.commonAncestorContainer)) {
-        setSavedRange(range.cloneRange());
+      if (editorRef.current && editorRef.current.contains(range.commonAncestorContainer)) {
+        savedRangeRef.current = range.cloneRange();
       }
     }
   };
 
   const restoreSelection = () => {
-    if (savedRange) {
+    if (savedRangeRef.current) {
       const sel = window.getSelection();
       if (sel) {
         sel.removeAllRanges();
-        sel.addRange(savedRange);
+        try { sel.addRange(savedRangeRef.current); } catch (_) {}
       }
     }
   };
 
-  const handleVisualEdit = () => {
-    const editorEl = document.getElementById("email-visual-editor");
-    if (editorEl) {
-      setEditBody(editorEl.innerHTML);
-    }
+  const getEditorHtml = () => {
+    return editorRef.current ? editorRef.current.innerHTML : editBody;
   };
 
   const execFormat = (command: string, value?: string) => {
+    if (editorRef.current) editorRef.current.focus();
     restoreSelection();
-    const editorEl = document.getElementById("email-visual-editor");
-    if (editorEl) editorEl.focus();
     document.execCommand(command, false, value);
     saveSelection();
-    handleVisualEdit();
   };
 
   const insertVariable = (variable: string) => {
-    const editorEl = document.getElementById("email-visual-editor");
-    if (editorEl) {
-      editorEl.focus();
+    if (editorRef.current) {
+      editorRef.current.focus();
       restoreSelection();
       document.execCommand("insertText", false, `{{${variable}}}`);
       saveSelection();
-      handleVisualEdit();
     }
   };
 
@@ -1256,7 +1255,8 @@ function EmailTemplatesEditor() {
               <label className="text-sm font-medium text-gray-700">Email Body</label>
               <button
                 onClick={() => {
-                  handleVisualEdit();
+                  const html = getEditorHtml();
+                  setEditBody(html);
                   setEditorMode("code");
                 }}
                 className="text-xs text-blue-600 hover:underline"
@@ -1292,14 +1292,11 @@ function EmailTemplatesEditor() {
                 <button onMouseDown={(e) => { e.preventDefault(); execFormat("removeFormat"); }} className="p-1.5 rounded hover:bg-gray-200 text-xs text-gray-500" title="Clear Formatting">✕</button>
               </div>
               <div
-                id="email-visual-editor"
+                ref={editorRef}
                 contentEditable
                 className="p-4 min-h-[400px] max-h-[500px] overflow-y-auto focus:outline-none text-sm"
-                dangerouslySetInnerHTML={{ __html: editBody }}
-                onInput={handleVisualEdit}
                 onMouseUp={saveSelection}
                 onKeyUp={saveSelection}
-                onBlur={() => { saveSelection(); handleVisualEdit(); }}
                 suppressContentEditableWarning
                 style={{ wordBreak: "break-word" }}
               />
@@ -1310,7 +1307,14 @@ function EmailTemplatesEditor() {
             <div className="flex items-center justify-between">
               <label className="text-sm font-medium text-gray-700">HTML Code</label>
               <button
-                onClick={() => setEditorMode("visual")}
+                onClick={() => {
+                  setEditorMode("visual");
+                  setTimeout(() => {
+                    if (editorRef.current) {
+                      editorRef.current.innerHTML = editBody;
+                    }
+                  }, 0);
+                }}
                 className="text-xs text-blue-600 hover:underline"
               >
                 Switch to visual editor
@@ -1341,8 +1345,8 @@ function EmailTemplatesEditor() {
           </Button>
           <Button
             onClick={() => {
-              handleVisualEdit();
-              saveMutation.mutate({ key: editingTemplate.templateKey, subject: editSubject, htmlBody: editBody });
+              const html = editorMode === "visual" ? getEditorHtml() : editBody;
+              saveMutation.mutate({ key: editingTemplate.templateKey, subject: editSubject, htmlBody: html });
             }}
             disabled={saveMutation.isPending}
             className="bg-blue-600 hover:bg-blue-700"
