@@ -242,6 +242,12 @@ function getDeliveryWeekText(deliveryDueDate: Date): string {
   return `Week of ${weekStart.toLocaleDateString('en-ZA', options)}`;
 }
 
+function getFirstName(fullName: string): string {
+  const cleaned = fullName.trim();
+  const firstWord = cleaned.split(/\s+/)[0];
+  return firstWord || cleaned;
+}
+
 // Email 1: Delivery Estimate Email
 // Sent when calendar event is synced - lets client know expected delivery week
 export async function sendDeliveryEstimateEmail(
@@ -255,20 +261,21 @@ export async function sendDeliveryEstimateEmail(
     const { client, fromEmail } = await getResendClient();
     
     const deliveryWeek = getDeliveryWeekText(deliveryDueDate);
+    const firstName = getFirstName(clientName);
     const variables: Record<string, string> = {
-      clientName,
+      clientName: firstName,
       shootDate: formatDateForEmail(shootDate),
       deliveryWeek,
       emailHeader: getEmailHeader('Photo Delivery Estimate'),
     };
 
-    let subject = `Your Photo Delivery Estimate - ${clientName}`;
+    let subject = `Your Photo Delivery Estimate - ${firstName}`;
     let htmlContent = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
         ${variables.emailHeader}
         
         <p style="color: #333; font-size: 16px; line-height: 1.6;">
-          Dear ${clientName},
+          Dear ${firstName},
         </p>
         
         <p style="color: #333; font-size: 16px; line-height: 1.6;">
@@ -356,7 +363,8 @@ export async function sendProjectAddedEmail(
   projectId: string,
   approvalToken: string
 ): Promise<EmailResult> {
-  let subject = `Your Photo Selection Confirmation - ${clientName}`;
+  const firstName = getFirstName(clientName);
+  let subject = `Your Photo Selection Confirmation - ${firstName}`;
   
   try {
     const { client, fromEmail } = await getResendClient();
@@ -382,7 +390,7 @@ export async function sendProjectAddedEmail(
     }
 
     const variables: Record<string, string> = {
-      clientName,
+      clientName: firstName,
       packageCount: String(packageCount),
       selectedCount: String(selectedCount),
       extras: String(extras),
@@ -395,7 +403,7 @@ export async function sendProjectAddedEmail(
         ${variables.emailHeader}
         
         <p style="color: #333; font-size: 16px; line-height: 1.6;">
-          Dear ${clientName},
+          Dear ${firstName},
         </p>
         
         <p style="color: #333; font-size: 16px; line-height: 1.6;">
@@ -486,7 +494,8 @@ export async function sendChatLinkEmail(
   projectId: string,
   chatToken: string
 ): Promise<EmailResult> {
-  let subject = `Connect with Your Retoucher - ${clientName}`;
+  const firstName = getFirstName(clientName);
+  let subject = `Connect with Your Retoucher - ${firstName}`;
   
   try {
     const { client, fromEmail } = await getResendClient();
@@ -496,7 +505,7 @@ export async function sendChatLinkEmail(
     const chatUrl = `${baseUrl}/client-chat/${chatToken}`;
 
     const variables: Record<string, string> = {
-      clientName,
+      clientName: firstName,
       retoucherName,
       chatUrl,
       clientEmail,
@@ -508,7 +517,7 @@ export async function sendChatLinkEmail(
         ${variables.emailHeader}
         
         <p style="color: #333; font-size: 16px; line-height: 1.6;">
-          Dear ${clientName},
+          Dear ${firstName},
         </p>
         
         <p style="color: #333; font-size: 16px; line-height: 1.6;">
@@ -600,6 +609,7 @@ export async function sendMessageNotificationEmail(
   chatToken: string,
   conversationThread: ThreadMessage[] = []
 ): Promise<EmailResult> {
+  const firstName = getFirstName(clientName);
   let subject = `New Message from ${retoucherName} - Jepson Myles Studio`;
   
   try {
@@ -631,7 +641,7 @@ export async function sendMessageNotificationEmail(
             <p style="color: #666; font-size: 12px; margin: 0 0 15px 0; text-transform: uppercase; letter-spacing: 1px;">Previous Messages</p>
             ${previousMessages.map(msg => {
               const isEditor = msg.senderType === 'editor';
-              const senderLabel = isEditor ? (msg.senderName || retoucherName) : clientName;
+              const senderLabel = isEditor ? (msg.senderName || retoucherName) : firstName;
               const bgColor = isEditor ? '#e8f5e9' : '#e3f2fd';
               const borderColor = isEditor ? '#4caf50' : '#2196f3';
               
@@ -651,7 +661,7 @@ export async function sendMessageNotificationEmail(
     }
     
     const variables: Record<string, string> = {
-      clientName,
+      clientName: firstName,
       retoucherName,
       newMessage,
       chatUrl,
@@ -664,7 +674,7 @@ export async function sendMessageNotificationEmail(
         ${variables.emailHeader}
         
         <p style="color: #333; font-size: 16px; line-height: 1.6;">
-          Hi ${clientName},
+          Hi ${firstName},
         </p>
         
         <p style="color: #333; font-size: 16px; line-height: 1.6;">
@@ -766,7 +776,8 @@ export async function sendAssignmentWelcomeEmail(
   projectId: string,
   chatToken: string
 ): Promise<EmailResult> {
-  let subject = `Your Photo Project is Now in Progress! - ${clientName}`;
+  const firstName = getFirstName(clientName);
+  let subject = `Your Photo Project is Now in Progress! - ${firstName}`;
   
   try {
     const { client, fromEmail } = await getResendClient();
@@ -778,7 +789,7 @@ export async function sendAssignmentWelcomeEmail(
     const hasExtras = extras > 0;
 
     const variables: Record<string, string> = {
-      clientName,
+      clientName: firstName,
       retoucherName,
       emailHeader: getEmailHeader('Your Project is In Progress'),
     };
@@ -788,7 +799,7 @@ export async function sendAssignmentWelcomeEmail(
         ${getEmailHeader('Your Project is In Progress')}
         
         <p style="color: #333; font-size: 16px; line-height: 1.6;">
-          Hi ${clientName}!
+          Hi ${firstName}!
         </p>
         
         <div style="background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%); border-radius: 12px; padding: 25px; margin: 25px 0;">
@@ -882,7 +893,7 @@ export async function sendAssignmentWelcomeEmail(
 
   } catch (error: any) {
     console.error(`[Email] Failed to send assignment welcome email:`, error);
-    const fallbackSubject = `Your Photo Project is Now in Progress! - ${clientName}`;
+    const fallbackSubject = `Your Photo Project is Now in Progress! - ${firstName}`;
     await logEmail(projectId, EmailType.PROJECT_ASSIGNED, clientEmail, fallbackSubject, 'failed', undefined, error.message);
     return { success: false, error: error.message };
   }
@@ -898,15 +909,16 @@ export async function sendDelayNotificationEmail(
   delayDays: number,
   projectId: string
 ): Promise<EmailResult> {
+  const firstName = getFirstName(clientName);
   try {
     const { client, fromEmail } = await getResendClient();
     
-    let subject = `Update on Your Photo Delivery - ${clientName}`;
+    let subject = `Update on Your Photo Delivery - ${firstName}`;
     const originalWeekText = getDeliveryWeekText(originalDeliveryWeek);
     const newWeekText = getDeliveryWeekText(newDeliveryWeek);
 
     const variables: Record<string, string> = {
-      clientName,
+      clientName: firstName,
       emailHeader: getEmailHeader('Delivery Update'),
     };
     
@@ -915,7 +927,7 @@ export async function sendDelayNotificationEmail(
         ${variables.emailHeader}
         
         <p style="color: #333; font-size: 16px; line-height: 1.6;">
-          Dear ${clientName},
+          Dear ${firstName},
         </p>
         
         <p style="color: #333; font-size: 16px; line-height: 1.6;">
@@ -986,7 +998,7 @@ export async function sendDelayNotificationEmail(
 
   } catch (error: any) {
     console.error(`[Email] Failed to send delay notification email:`, error);
-    const fallbackSubject = `Update on Your Photo Delivery - ${clientName}`;
+    const fallbackSubject = `Update on Your Photo Delivery - ${firstName}`;
     await logEmail(projectId, EmailType.DELAY_NOTIFICATION, clientEmail, fallbackSubject, 'failed', undefined, error.message);
     return { success: false, error: error.message };
   }
@@ -1001,6 +1013,7 @@ export async function sendSneakPeekEmail(
   caption: string | null,
   projectId: string
 ): Promise<EmailResult> {
+  const firstName = getFirstName(clientName);
   let subject = `A Special Preview of Your Photos! - Jepson Myles Studio`;
   
   try {
@@ -1020,7 +1033,7 @@ export async function sendSneakPeekEmail(
     `;
 
     const variables: Record<string, string> = {
-      clientName,
+      clientName: firstName,
       retoucherName: '',
       sneakPeekHtml,
       emailHeader: getEmailHeader('A Special Preview'),
@@ -1031,7 +1044,7 @@ export async function sendSneakPeekEmail(
         ${variables.emailHeader}
         
         <p style="color: #333; font-size: 16px; line-height: 1.6;">
-          Dear ${clientName},
+          Dear ${firstName},
         </p>
         
         <div style="background: linear-gradient(135deg, #fce4ec 0%, #f8bbd0 100%); border-radius: 12px; padding: 25px; margin: 25px 0; text-align: center;">
@@ -1107,6 +1120,7 @@ export async function sendGalleryDeliveryEmail(
   projectId: string,
   referralCode?: string
 ): Promise<EmailResult> {
+  const firstName = getFirstName(clientName);
   let subject = `Your Photos Are Ready! - Jepson Myles Studio`;
   
   try {
@@ -1135,7 +1149,7 @@ export async function sendGalleryDeliveryEmail(
     }
     
     const variables: Record<string, string> = {
-      clientName,
+      clientName: firstName,
       galleryLink,
       referralSection,
       emailHeader: getEmailHeader('Your Photos Are Ready!'),
@@ -1146,7 +1160,7 @@ export async function sendGalleryDeliveryEmail(
         ${variables.emailHeader}
         
         <p style="color: #333; font-size: 16px; line-height: 1.6;">
-          Dear ${clientName},
+          Dear ${firstName},
         </p>
         
         <div style="background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%); border-radius: 12px; padding: 25px; margin: 25px 0; text-align: center;">
@@ -1236,6 +1250,7 @@ export async function sendSchedulingNotificationEmail(
   weekEndDate: Date,
   projectId: string
 ): Promise<EmailResult> {
+  const firstName = getFirstName(clientName);
   let subject = `Your Photos Are Scheduled! - Jepson Myles Studio`;
 
   try {
@@ -1245,7 +1260,7 @@ export async function sendSchedulingNotificationEmail(
     const weekEndText = weekEndDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
 
     const variables: Record<string, string> = {
-      clientName,
+      clientName: firstName,
       weekStartText,
       weekEndText,
       emailHeader: getEmailHeader('Your Photos Are Scheduled!'),
@@ -1256,7 +1271,7 @@ export async function sendSchedulingNotificationEmail(
         ${variables.emailHeader}
 
         <p style="color: #333; font-size: 16px; line-height: 1.6;">
-          Dear ${clientName},
+          Dear ${firstName},
         </p>
 
         <div style="background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%); border-radius: 12px; padding: 25px; margin: 25px 0; text-align: center;">
@@ -1333,6 +1348,7 @@ export async function sendManualDelayNoticeEmail(
   targetWeekEnd: Date,
   projectId: string
 ): Promise<EmailResult> {
+  const firstName = getFirstName(clientName);
   let subject = `Update on Your Photos - Jepson Myles Studio`;
 
   try {
@@ -1342,7 +1358,7 @@ export async function sendManualDelayNoticeEmail(
     const weekEndText = targetWeekEnd.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
 
     const variables: Record<string, string> = {
-      clientName,
+      clientName: firstName,
       weekStartText,
       weekEndText,
       emailHeader: getEmailHeader('Update on Your Photos'),
@@ -1353,7 +1369,7 @@ export async function sendManualDelayNoticeEmail(
         ${variables.emailHeader}
 
         <p style="color: #333; font-size: 16px; line-height: 1.6;">
-          Dear ${clientName},
+          Dear ${firstName},
         </p>
 
         <p style="color: #333; font-size: 16px; line-height: 1.6;">
@@ -1427,6 +1443,7 @@ export async function sendSatisfactionSurveyEmail(
   surveyToken: string,
   projectId: string
 ): Promise<EmailResult> {
+  const firstName = getFirstName(clientName);
   let subject = `How Was Your Experience? - Jepson Myles Studio`;
   
   try {
@@ -1435,7 +1452,7 @@ export async function sendSatisfactionSurveyEmail(
     const surveyUrl = `${baseUrl}/survey/${surveyToken}`;
 
     const variables: Record<string, string> = {
-      clientName,
+      clientName: firstName,
       surveyUrl,
       emailHeader: getEmailHeader('We Value Your Feedback'),
     };
@@ -1445,7 +1462,7 @@ export async function sendSatisfactionSurveyEmail(
         ${variables.emailHeader}
         
         <p style="color: #333; font-size: 16px; line-height: 1.6;">
-          Dear ${clientName},
+          Dear ${firstName},
         </p>
         
         <p style="color: #333; font-size: 16px; line-height: 1.6;">

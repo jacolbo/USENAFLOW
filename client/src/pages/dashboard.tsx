@@ -1133,7 +1133,7 @@ function EmailTemplatesEditor() {
 
   const getPreviewHtml = () => {
     const sampleVars: Record<string, string> = {
-      clientName: "Jane Smith",
+      clientName: "Jane",
       shootDate: "Saturday, January 15, 2026",
       deliveryWeek: "Week of February 2, 2026",
       packageCount: "50",
@@ -1245,7 +1245,7 @@ function EmailTemplatesEditor() {
         {showPreview ? (
           <div className="border rounded-lg overflow-hidden">
             <div className="bg-gray-100 px-4 py-2 border-b">
-              <p className="text-sm font-medium text-gray-600">Subject: {editSubject.replace(/\{\{(\w+)\}\}/g, (_, k: string) => k === "clientName" ? "Jane Smith" : k === "retoucherName" ? "Alex Editor" : `[${k}]`)}</p>
+              <p className="text-sm font-medium text-gray-600">Subject: {editSubject.replace(/\{\{(\w+)\}\}/g, (_, k: string) => k === "clientName" ? "Jane" : k === "retoucherName" ? "Alex Editor" : `[${k}]`)}</p>
             </div>
             <div className="p-4 bg-white" dangerouslySetInnerHTML={{ __html: getPreviewHtml() }} />
           </div>
