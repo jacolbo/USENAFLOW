@@ -5,7 +5,7 @@ import { apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Star, ExternalLink, Loader2 } from "lucide-react";
+import { Star, ExternalLink, Loader2, Copy, Check } from "lucide-react";
 import logoImage from "@assets/USENA-FLOW_1754522507856.png";
 
 export default function SurveyPage() {
@@ -20,6 +20,7 @@ export default function SurveyPage() {
   const [wouldRecommend, setWouldRecommend] = useState<boolean | null>(null);
   const [submitted, setSubmitted] = useState(false);
   const [showGoogleReview, setShowGoogleReview] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   const { data: survey, isLoading, error } = useQuery({
     queryKey: ["/api/survey", token],
@@ -90,20 +91,53 @@ export default function SurveyPage() {
               We truly appreciate your feedback. It helps us continue delivering the best experience possible.
             </p>
             {showGoogleReview && (
-              <div className="mt-6 p-4 bg-pink-50 rounded-lg">
-                <p className="text-gray-700 mb-3">
+              <div className="mt-6 p-4 bg-pink-50 rounded-lg space-y-4">
+                <p className="text-gray-700">
                   We're thrilled you had a great experience! Would you mind sharing your thoughts on Google?
                 </p>
+                {feedback && (
+                  <div className="bg-white rounded-md p-3 border border-pink-200">
+                    <p className="text-xs text-gray-500 mb-1">Your review (tap to copy)</p>
+                    <p className="text-sm text-gray-700 italic">"{feedback}"</p>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="mt-2 text-xs"
+                      onClick={() => {
+                        navigator.clipboard.writeText(feedback);
+                        setCopied(true);
+                        setTimeout(() => setCopied(false), 2000);
+                      }}
+                    >
+                      {copied ? (
+                        <>
+                          <Check className="h-3 w-3 mr-1 text-green-600" />
+                          Copied!
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="h-3 w-3 mr-1" />
+                          Copy your review
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                )}
                 <a
-                  href="https://www.google.com/maps/place/Jepson+Myles+Studio"
+                  href="https://www.google.com/search?q=Jepson+Myles+Studio+reviews"
                   target="_blank"
                   rel="noopener noreferrer"
                 >
-                  <Button className="bg-pink-600 hover:bg-pink-700">
+                  <Button className="w-full bg-pink-600 hover:bg-pink-700">
                     <ExternalLink className="h-4 w-4 mr-2" />
-                    Leave a Google Review
+                    {feedback ? "Paste your review on Google" : "Leave a Google Review"}
                   </Button>
                 </a>
+                {feedback && (
+                  <p className="text-xs text-gray-500 text-center">
+                    Tap "Copy your review" above, then paste it on the Google page
+                  </p>
+                )}
               </div>
             )}
           </CardContent>
