@@ -67,6 +67,10 @@ export const DEFAULT_EMAIL_TEMPLATES: InsertEmailTemplate[] = [
   <div style="text-align: center; margin: 30px 0;">
     <a href="{{chatUrl}}" style="display: inline-block; background: #25d366; color: white; text-decoration: none; padding: 15px 40px; border-radius: 30px; font-weight: bold; font-size: 16px;">Chat with your retoucher</a>
   </div>
+  <div style="background: #e8f5e9; border-radius: 8px; padding: 15px 20px; margin: 25px 0; text-align: center;">
+    <p style="color: #333; font-size: 15px; font-weight: bold; margin: 0 0 5px 0;">Your direct line to the team editor for faster response</p>
+    <p style="color: #666; font-size: 14px; margin: 0;">Monday to Friday 9AM–4PM</p>
+  </div>
   <div style="background: #f0f0f0; border-radius: 8px; padding: 15px 20px; margin: 25px 0;">
     <p style="color: #666; font-size: 14px; margin: 0;"><strong>How it works:</strong><br>Simply enter your email address ({{clientEmail}}) to verify your identity and start chatting.</p>
   </div>

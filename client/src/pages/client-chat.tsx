@@ -356,6 +356,13 @@ export default function ClientChat() {
 
       <main className="flex-1 max-w-2xl w-full mx-auto p-4 overflow-y-auto">
         <div className="space-y-3">
+          <div className="bg-green-50 border border-green-200 rounded-xl px-4 py-3 text-center">
+            <p className="text-sm text-green-800 font-medium">
+              Welcome to your project chat! This is your direct line to the team editor for faster response.
+            </p>
+            <p className="text-xs text-green-600 mt-1">Monday to Friday 9AM–4PM</p>
+          </div>
+
           {messagesLoading ? (
             <div className="flex justify-center py-8">
               <Loader2 className="h-6 w-6 animate-spin text-green-500" />
