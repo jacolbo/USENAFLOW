@@ -710,6 +710,10 @@ function ReferralDashboard({ userRole }: { userRole: string }) {
 function RewardsDashboard({ userRole }: { userRole: string }) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const [selectedTier, setSelectedTier] = useState<string | null>(null);
+  const [showEmailDialog, setShowEmailDialog] = useState(false);
+  const [emailSubject, setEmailSubject] = useState("");
+  const [emailMessage, setEmailMessage] = useState("");
 
   const { data: rewardClients = [], isLoading } = useQuery<any[]>({
     queryKey: ["/api/rewards/clients"],
@@ -756,12 +760,44 @@ function RewardsDashboard({ userRole }: { userRole: string }) {
     },
   });
 
+  const emailMutation = useMutation({
+    mutationFn: async (payload: { tier?: string; subject: string; message: string; clientEmails?: string[] }) => {
+      const res = await fetch("/api/rewards/send-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-usena-role": userRole },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || "Failed to send");
+      }
+      return res.json();
+    },
+    onSuccess: (data: any) => {
+      toast({ title: "Emails Sent", description: `${data.sent} emails sent successfully${data.failed > 0 ? `, ${data.failed} failed` : ''}` });
+      setShowEmailDialog(false);
+      setEmailSubject("");
+      setEmailMessage("");
+    },
+    onError: (error: any) => {
+      toast({ title: "Send Failed", description: error.message, variant: "destructive" });
+    },
+  });
+
   const rewardTierColors: Record<string, string> = {
     Bronze: "bg-orange-100 text-orange-800 border-orange-300",
     Silver: "bg-gray-200 text-gray-800 border-gray-400",
     Gold: "bg-amber-100 text-amber-800 border-amber-400",
     Platinum: "bg-purple-100 text-purple-800 border-purple-400",
     Diamond: "bg-cyan-100 text-cyan-800 border-cyan-400",
+  };
+
+  const rewardTierHoverColors: Record<string, string> = {
+    Bronze: "hover:bg-orange-200 hover:border-orange-400 cursor-pointer",
+    Silver: "hover:bg-gray-300 hover:border-gray-500 cursor-pointer",
+    Gold: "hover:bg-amber-200 hover:border-amber-500 cursor-pointer",
+    Platinum: "hover:bg-purple-200 hover:border-purple-500 cursor-pointer",
+    Diamond: "hover:bg-cyan-200 hover:border-cyan-500 cursor-pointer",
   };
 
   const rewardTierIcons: Record<string, string> = {
@@ -772,6 +808,20 @@ function RewardsDashboard({ userRole }: { userRole: string }) {
     Diamond: "👑",
   };
 
+  const tierDescriptions: Record<string, string> = {
+    Bronze: "1 booking",
+    Silver: "2 bookings",
+    Gold: "3-5 bookings",
+    Platinum: "6-8 bookings",
+    Diamond: "9+ bookings",
+  };
+
+  const tierClients = selectedTier
+    ? rewardClients.filter((c: any) => c.rewardTier === selectedTier)
+    : [];
+
+  const tierEmailCount = tierClients.filter((c: any) => c.clientEmail && !c.clientEmail.includes('@unknown.pending')).length;
+
   return (
     <div className="space-y-4">
       <div className="bg-white rounded-lg shadow-sm p-6">
@@ -780,7 +830,7 @@ function RewardsDashboard({ userRole }: { userRole: string }) {
             <Trophy className="h-6 w-6 text-emerald-600" />
             <div>
               <h2 className="text-xl font-semibold text-gray-900">Client Rewards</h2>
-              <p className="text-sm text-gray-600">Rewards based on bookings and referral matches from the last 2 years</p>
+              <p className="text-sm text-gray-600">Tier levels based on number of bookings from the last 2 years</p>
             </div>
           </div>
           <Button
@@ -795,97 +845,226 @@ function RewardsDashboard({ userRole }: { userRole: string }) {
           </Button>
         </div>
 
+        <div className="mb-4 p-3 bg-gray-50 rounded-lg text-xs text-gray-600">
+          <div className="font-medium mb-1">Tier Levels (click a tier to view clients):</div>
+          <div className="flex flex-wrap gap-3">
+            <span>🥉 Bronze: 1 booking</span>
+            <span>🥈 Silver: 2 bookings</span>
+            <span>🥇 Gold: 3-5 bookings</span>
+            <span>💎 Platinum: 6-8 bookings</span>
+            <span>👑 Diamond: 9+ bookings</span>
+          </div>
+        </div>
+
         {summary && (
           <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
             {["Bronze", "Silver", "Gold", "Platinum", "Diamond"].map(tier => (
-              <div key={tier} className={`rounded-lg p-3 text-center border ${rewardTierColors[tier]}`}>
-                <div className="text-2xl">{rewardTierIcons[tier]}</div>
-                <div className="text-lg font-bold">{summary.tierBreakdown?.[tier] || 0}</div>
-                <div className="text-xs font-medium">{tier}</div>
+              <div
+                key={tier}
+                onClick={() => setSelectedTier(selectedTier === tier ? null : tier)}
+                className={`rounded-lg p-4 text-center border-2 transition-all ${rewardTierColors[tier]} ${rewardTierHoverColors[tier]} ${selectedTier === tier ? 'ring-2 ring-offset-2 ring-gray-400 scale-105' : ''}`}
+              >
+                <div className="text-3xl mb-1">{rewardTierIcons[tier]}</div>
+                <div className="text-2xl font-bold">{summary.tierBreakdown?.[tier] || 0}</div>
+                <div className="text-sm font-semibold">{tier}</div>
+                <div className="text-xs mt-1 opacity-75">{tierDescriptions[tier]}</div>
               </div>
             ))}
           </div>
         )}
 
-        <div className="mb-4 p-3 bg-gray-50 rounded-lg text-xs text-gray-600">
-          <div className="font-medium mb-1">How Reward Scores Work:</div>
-          <div className="flex flex-wrap gap-4">
-            <span>Each booking = <strong>1 point</strong></span>
-            <span>Each matched referral = <strong>2 points</strong></span>
-          </div>
-          <div className="flex flex-wrap gap-3 mt-1">
-            <span>🥉 Bronze: 0-4</span>
-            <span>🥈 Silver: 5-9</span>
-            <span>🥇 Gold: 10-14</span>
-            <span>💎 Platinum: 15-24</span>
-            <span>👑 Diamond: 25+</span>
-          </div>
-        </div>
+        {selectedTier && (
+          <div className="border rounded-lg overflow-hidden mb-4">
+            <div className={`p-4 flex items-center justify-between ${rewardTierColors[selectedTier]}`}>
+              <div className="flex items-center gap-2">
+                <span className="text-2xl">{rewardTierIcons[selectedTier]}</span>
+                <div>
+                  <h3 className="font-bold text-lg">{selectedTier} Tier Clients</h3>
+                  <p className="text-xs opacity-75">{tierDescriptions[selectedTier]} | {tierClients.length} client{tierClients.length !== 1 ? 's' : ''}</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                {tierEmailCount > 0 && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => { setShowEmailDialog(true); }}
+                    className="flex items-center gap-1 bg-white/80 hover:bg-white"
+                  >
+                    <Mail className="h-4 w-4" />
+                    Email {tierEmailCount} Client{tierEmailCount !== 1 ? 's' : ''}
+                  </Button>
+                )}
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => setSelectedTier(null)}
+                  className="hover:bg-white/50"
+                >
+                  Close
+                </Button>
+              </div>
+            </div>
 
-        {isLoading ? (
-          <div className="text-center py-8 text-gray-500">Loading rewards data...</div>
-        ) : rewardClients.length === 0 ? (
-          <div className="text-center py-8 text-gray-500">
-            No reward data yet. Click "Sync Rewards" to pull booking history from Google Calendar.
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-gray-200">
-                  <th className="text-left py-3 px-4 font-medium text-gray-600">Client</th>
-                  <th className="text-center py-3 px-4 font-medium text-gray-600">Reward Tier</th>
-                  <th className="text-center py-3 px-4 font-medium text-gray-600">Bookings</th>
-                  <th className="text-center py-3 px-4 font-medium text-gray-600">Referral Matches</th>
-                  <th className="text-center py-3 px-4 font-medium text-gray-600">Reward Score</th>
-                  <th className="text-center py-3 px-4 font-medium text-gray-600">Bonus Photos</th>
-                  <th className="text-left py-3 px-4 font-medium text-gray-600">Last Synced</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rewardClients.map((client: any) => (
-                  <tr key={client.id} className="border-b border-gray-100 hover:bg-gray-50">
-                    <td className="py-3 px-4">
-                      <div className="font-medium text-gray-900">{client.clientName}</div>
-                      <div className="text-xs text-gray-500">{client.clientEmail}</div>
-                    </td>
-                    <td className="py-3 px-4 text-center">
-                      <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold border ${rewardTierColors[client.rewardTier] || rewardTierColors.Bronze}`}>
-                        {rewardTierIcons[client.rewardTier] || "🥉"} {client.rewardTier}
-                      </span>
-                    </td>
-                    <td className="py-3 px-4 text-center">
-                      <span className="inline-flex items-center gap-1 text-blue-700 bg-blue-50 px-2 py-1 rounded-full text-xs font-medium">
-                        <Calendar className="h-3 w-3" /> {client.totalBookings}
-                      </span>
-                    </td>
-                    <td className="py-3 px-4 text-center">
-                      <span className="inline-flex items-center gap-1 text-pink-700 bg-pink-50 px-2 py-1 rounded-full text-xs font-medium">
-                        <Gift className="h-3 w-3" /> {client.referralMatchCount}
-                      </span>
-                    </td>
-                    <td className="py-3 px-4 text-center">
-                      <span className="inline-flex items-center gap-1 text-emerald-700 bg-emerald-50 px-2 py-1 rounded-full text-xs font-bold">
-                        <Star className="h-3 w-3" /> {client.rewardScore}
-                      </span>
-                    </td>
-                    <td className="py-3 px-4 text-center">
-                      <span className="text-xs text-gray-600">
-                        {client.bonusPhotos - client.bonusPhotosUsed} available
-                      </span>
-                    </td>
-                    <td className="py-3 px-4">
-                      <span className="text-xs text-gray-500">
-                        {client.lastRewardSyncAt ? new Date(client.lastRewardSyncAt).toLocaleDateString() : "Never"}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            {tierClients.length === 0 ? (
+              <div className="p-6 text-center text-gray-500">No clients in this tier yet</div>
+            ) : (
+              <div className="max-h-96 overflow-y-auto">
+                <table className="w-full text-sm">
+                  <thead className="sticky top-0 bg-white">
+                    <tr className="border-b border-gray-200">
+                      <th className="text-left py-2 px-4 font-medium text-gray-600">Client</th>
+                      <th className="text-center py-2 px-4 font-medium text-gray-600">Bookings</th>
+                      <th className="text-center py-2 px-4 font-medium text-gray-600">Referrals</th>
+                      <th className="text-left py-2 px-4 font-medium text-gray-600">First Visit</th>
+                      <th className="text-left py-2 px-4 font-medium text-gray-600">Last Visit</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {tierClients.map((client: any) => (
+                      <tr key={client.id} className="border-b border-gray-100 hover:bg-gray-50">
+                        <td className="py-2 px-4">
+                          <div className="font-medium text-gray-900">{client.clientName}</div>
+                          <div className="text-xs text-gray-500">
+                            {client.clientEmail && !client.clientEmail.includes('@unknown.pending') ? client.clientEmail : 'No email on file'}
+                          </div>
+                        </td>
+                        <td className="py-2 px-4 text-center">
+                          <span className="inline-flex items-center gap-1 text-blue-700 bg-blue-50 px-2 py-1 rounded-full text-xs font-medium">
+                            <Calendar className="h-3 w-3" /> {client.totalBookings}
+                          </span>
+                        </td>
+                        <td className="py-2 px-4 text-center">
+                          <span className="inline-flex items-center gap-1 text-pink-700 bg-pink-50 px-2 py-1 rounded-full text-xs font-medium">
+                            <Gift className="h-3 w-3" /> {client.referralMatchCount}
+                          </span>
+                        </td>
+                        <td className="py-2 px-4">
+                          <span className="text-xs text-gray-500">
+                            {client.firstProjectAt ? new Date(client.firstProjectAt).toLocaleDateString() : '-'}
+                          </span>
+                        </td>
+                        <td className="py-2 px-4">
+                          <span className="text-xs text-gray-500">
+                            {client.lastProjectAt ? new Date(client.lastProjectAt).toLocaleDateString() : '-'}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         )}
+
+        {!selectedTier && (
+          <>
+            {isLoading ? (
+              <div className="text-center py-8 text-gray-500">Loading rewards data...</div>
+            ) : rewardClients.length === 0 ? (
+              <div className="text-center py-8 text-gray-500">
+                No reward data yet. Click "Sync Rewards" to pull booking history from Google Calendar.
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-gray-200">
+                      <th className="text-left py-3 px-4 font-medium text-gray-600">Client</th>
+                      <th className="text-center py-3 px-4 font-medium text-gray-600">Tier</th>
+                      <th className="text-center py-3 px-4 font-medium text-gray-600">Bookings</th>
+                      <th className="text-center py-3 px-4 font-medium text-gray-600">Referrals</th>
+                      <th className="text-left py-3 px-4 font-medium text-gray-600">First Visit</th>
+                      <th className="text-left py-3 px-4 font-medium text-gray-600">Last Visit</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rewardClients.map((client: any) => (
+                      <tr key={client.id} className="border-b border-gray-100 hover:bg-gray-50">
+                        <td className="py-3 px-4">
+                          <div className="font-medium text-gray-900">{client.clientName}</div>
+                          <div className="text-xs text-gray-500">
+                            {client.clientEmail && !client.clientEmail.includes('@unknown.pending') ? client.clientEmail : 'No email on file'}
+                          </div>
+                        </td>
+                        <td className="py-3 px-4 text-center">
+                          <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold border ${rewardTierColors[client.rewardTier] || rewardTierColors.Bronze}`}>
+                            {rewardTierIcons[client.rewardTier] || "🥉"} {client.rewardTier}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 text-center">
+                          <span className="inline-flex items-center gap-1 text-blue-700 bg-blue-50 px-2 py-1 rounded-full text-xs font-medium">
+                            <Calendar className="h-3 w-3" /> {client.totalBookings}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 text-center">
+                          <span className="inline-flex items-center gap-1 text-pink-700 bg-pink-50 px-2 py-1 rounded-full text-xs font-medium">
+                            <Gift className="h-3 w-3" /> {client.referralMatchCount}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4">
+                          <span className="text-xs text-gray-500">
+                            {client.firstProjectAt ? new Date(client.firstProjectAt).toLocaleDateString() : '-'}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4">
+                          <span className="text-xs text-gray-500">
+                            {client.lastProjectAt ? new Date(client.lastProjectAt).toLocaleDateString() : '-'}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </>
+        )}
       </div>
+
+      <Dialog open={showEmailDialog} onOpenChange={setShowEmailDialog}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Mail className="h-5 w-5" />
+              Send Email to {selectedTier} Tier
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 mt-2">
+            <div className="p-3 bg-gray-50 rounded-lg text-sm text-gray-600">
+              This will send an email to <strong>{tierEmailCount}</strong> client{tierEmailCount !== 1 ? 's' : ''} with valid email addresses in the {selectedTier} tier.
+            </div>
+            <div>
+              <label className="text-sm font-medium text-gray-700 block mb-1">Subject</label>
+              <Input
+                placeholder="e.g., Special offer just for you!"
+                value={emailSubject}
+                onChange={(e) => setEmailSubject(e.target.value)}
+              />
+            </div>
+            <div>
+              <label className="text-sm font-medium text-gray-700 block mb-1">Message</label>
+              <textarea
+                className="w-full min-h-[120px] p-3 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent resize-y"
+                placeholder="Write your message here..."
+                value={emailMessage}
+                onChange={(e) => setEmailMessage(e.target.value)}
+              />
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setShowEmailDialog(false)}>Cancel</Button>
+              <Button
+                onClick={() => emailMutation.mutate({ tier: selectedTier!, subject: emailSubject, message: emailMessage })}
+                disabled={!emailSubject.trim() || !emailMessage.trim() || emailMutation.isPending}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white"
+              >
+                {emailMutation.isPending ? "Sending..." : `Send to ${tierEmailCount} Client${tierEmailCount !== 1 ? 's' : ''}`}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

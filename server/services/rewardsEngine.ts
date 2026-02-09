@@ -11,11 +11,11 @@ interface RewardCalculation {
   rewardTier: string;
 }
 
-function calculateRewardTier(rewardScore: number): string {
-  if (rewardScore >= 25) return RewardTier.DIAMOND;
-  if (rewardScore >= 15) return RewardTier.PLATINUM;
-  if (rewardScore >= 10) return RewardTier.GOLD;
-  if (rewardScore >= 5) return RewardTier.SILVER;
+function calculateRewardTier(totalBookings: number): string {
+  if (totalBookings >= 9) return RewardTier.DIAMOND;
+  if (totalBookings >= 6) return RewardTier.PLATINUM;
+  if (totalBookings >= 3) return RewardTier.GOLD;
+  if (totalBookings >= 2) return RewardTier.SILVER;
   return RewardTier.BRONZE;
 }
 
@@ -402,7 +402,7 @@ export async function syncRewards(yearsBack: number = 2): Promise<{
         }
 
         const rewardScore = calculateRewardScore(client.count, totalReferralMatches);
-        const rewardTier = calculateRewardTier(rewardScore);
+        const rewardTier = calculateRewardTier(client.count);
 
         const calculation: RewardCalculation = {
           clientName: primaryName,
@@ -440,7 +440,7 @@ export async function syncRewards(yearsBack: number = 2): Promise<{
       if (profile) {
         try {
           const rewardScore = calculateRewardScore(profile.totalBookings || 0, matchCount);
-          const rewardTier = calculateRewardTier(rewardScore);
+          const rewardTier = calculateRewardTier(profile.totalBookings || 0);
 
           await storage.upsertClientProfile({
             clientEmail: profile.clientEmail,

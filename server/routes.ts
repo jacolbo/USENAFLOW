@@ -1892,6 +1892,73 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.post("/api/rewards/send-email", async (req, res) => {
+    try {
+      const role = req.headers["x-usena-role"] as string;
+      if (!role || !["Admin", "Sales"].includes(role)) {
+        return res.status(403).json({ error: "Unauthorized" });
+      }
+
+      const { tier, subject, message, clientEmails } = req.body;
+      if (!subject || !message) {
+        return res.status(400).json({ error: "Subject and message are required" });
+      }
+
+      const { getResendClient } = await import('./services/emailService');
+      const { client, fromEmail } = await getResendClient();
+
+      let recipients: string[] = [];
+      if (clientEmails && Array.isArray(clientEmails) && clientEmails.length > 0) {
+        recipients = clientEmails.filter((e: string) => e && !e.includes('@unknown.pending'));
+      } else if (tier) {
+        const profiles = await storage.getAllClientProfiles();
+        recipients = profiles
+          .filter(p => p.rewardTier === tier && p.clientEmail && !p.clientEmail.includes('@unknown.pending'))
+          .map(p => p.clientEmail);
+      }
+
+      if (recipients.length === 0) {
+        return res.status(400).json({ error: "No valid email addresses found for the selected clients" });
+      }
+
+      let sent = 0;
+      let failed = 0;
+      const errors: string[] = [];
+
+      for (const email of recipients) {
+        try {
+          await client.emails.send({
+            from: fromEmail,
+            to: email,
+            subject,
+            html: `
+              <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+                <div style="text-align: center; margin-bottom: 20px;">
+                  <h1 style="color: #1a1a1a; font-size: 24px; margin: 0;">Jepson Myles Studio</h1>
+                </div>
+                <div style="background: #f8f9fa; border-radius: 12px; padding: 24px; margin-bottom: 20px;">
+                  ${message.replace(/\n/g, '<br>')}
+                </div>
+                <div style="text-align: center; color: #888; font-size: 12px; margin-top: 20px;">
+                  <p>Jepson Myles Studio | Photography Excellence</p>
+                </div>
+              </div>
+            `,
+          });
+          sent++;
+        } catch (err: any) {
+          failed++;
+          errors.push(`${email}: ${err.message}`);
+        }
+      }
+
+      res.json({ sent, failed, total: recipients.length, errors });
+    } catch (error: any) {
+      console.error("Error sending rewards email:", error);
+      res.status(500).json({ error: error.message || "Failed to send emails" });
+    }
+  });
+
   // Send delay notice endpoint for Data Wrangler
   app.post("/api/projects/:id/send-delay-notice", async (req, res) => {
     try {
