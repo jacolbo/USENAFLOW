@@ -73,7 +73,7 @@ function AIInsightsWidget() {
         </div>
       </div>
       <div className="px-6 py-4">
-        {isLoading || isFetching ? (
+        {isLoading ? (
           <div className="space-y-3">
             {[1, 2, 3, 4].map((i) => (
               <div key={i} className="flex items-start gap-3 animate-pulse">
