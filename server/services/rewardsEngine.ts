@@ -396,16 +396,27 @@ export async function syncRewards(yearsBack: number = 2): Promise<{
 
     const profilesByEmail = new Map(existingProfiles.map(p => [p.clientEmail.toLowerCase(), p]));
 
+    const processedEmails = new Set<string>();
+
     for (const client of mergedClients) {
       try {
         const primaryName = client.names[0].replace(/\s*\(.*$/, '').trim();
         const emailArray = Array.from(client.emails);
-        let clientEmail = emailArray.find(e => !e.includes('@unknown.pending')) || '';
+        const realEmail = emailArray.find(e => !e.includes('@unknown.pending')) || '';
+        const normName = normalizeClientName(primaryName);
+        const pendingEmail = `${normName.replace(/\s+/g, '.')}@unknown.pending`;
 
-        if (!clientEmail) {
-          const normName = normalizeClientName(primaryName);
-          clientEmail = `${normName.replace(/\s+/g, '.')}@unknown.pending`;
+        const clientEmail = realEmail || pendingEmail;
+
+        if (realEmail) {
+          const existingPending = profilesByEmail.get(pendingEmail);
+          if (existingPending) {
+            await storage.deleteClientProfileByEmail(pendingEmail);
+          }
         }
+
+        if (processedEmails.has(clientEmail.toLowerCase())) continue;
+        processedEmails.add(clientEmail.toLowerCase());
 
         let totalReferralMatches = 0;
         for (const email of emailArray) {

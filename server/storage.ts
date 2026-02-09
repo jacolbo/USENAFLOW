@@ -111,6 +111,7 @@ export interface IStorage {
   getAllClientProfiles(): Promise<ClientProfile[]>;
   upsertClientProfile(profile: Partial<InsertClientProfile> & { clientEmail: string; clientName: string }): Promise<ClientProfile>;
   updateClientProfile(id: string, updates: Partial<ClientProfile>): Promise<ClientProfile | undefined>;
+  deleteClientProfileByEmail(email: string): Promise<void>;
 
   createRewardClaim(claim: InsertRewardClaim): Promise<RewardClaim>;
   getRewardClaimsByProject(projectId: string): Promise<RewardClaim[]>;
@@ -1493,6 +1494,10 @@ export class DatabaseStorage implements IStorage {
       .where(eq(clientProfiles.id, id))
       .returning();
     return updated || undefined;
+  }
+
+  async deleteClientProfileByEmail(email: string): Promise<void> {
+    await db.delete(clientProfiles).where(eq(clientProfiles.clientEmail, email));
   }
 
   async createRewardClaim(claim: InsertRewardClaim): Promise<RewardClaim> {
