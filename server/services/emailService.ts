@@ -5,6 +5,7 @@ import { emailLogs, projects, EmailType, type EmailTypeValue } from '@shared/sch
 import { eq } from 'drizzle-orm';
 import { formatDateYMD } from './shoottrackerEngine';
 import { sendEmail as sendGmailEmail, getMyEmailAddress } from './gmailService';
+import { rephraseEmailHtml } from './aiService';
 
 let connectionSettings: any;
 
@@ -200,6 +201,14 @@ export function renderTemplate(template: string, variables: Record<string, strin
   });
 }
 
+async function aiRephrase(html: string, clientName: string): Promise<string> {
+  try {
+    return await rephraseEmailHtml(html, clientName);
+  } catch {
+    return html;
+  }
+}
+
 async function getTemplate(templateKey: string): Promise<{ subject: string; htmlBody: string } | null> {
   try {
     const { storage } = await import('../storage');
@@ -304,6 +313,7 @@ export async function sendDeliveryEstimateEmail(
       htmlContent = renderTemplate(dbTemplate.htmlBody, variables);
     }
 
+    htmlContent = await aiRephrase(htmlContent, firstName);
     const replyTo = getProjectReplyToEmail(projectId);
     const response = await client.emails.send({
       from: fromEmail,
@@ -438,6 +448,7 @@ export async function sendProjectAddedEmail(
       htmlContent = renderTemplate(dbTemplate.htmlBody, variables);
     }
 
+    htmlContent = await aiRephrase(htmlContent, firstName);
     const replyTo = getProjectReplyToEmail(projectId);
     const response = await client.emails.send({
       from: fromEmail,
@@ -548,6 +559,7 @@ export async function sendChatLinkEmail(
       htmlContent = renderTemplate(dbTemplate.htmlBody, variables);
     }
 
+    htmlContent = await aiRephrase(htmlContent, firstName);
     const replyTo = getProjectReplyToEmail(projectId);
     const response = await client.emails.send({
       from: fromEmail,
@@ -855,6 +867,7 @@ export async function sendAssignmentWelcomeEmail(
       htmlContent = renderTemplate(dbTemplate.htmlBody, variables);
     }
 
+    htmlContent = await aiRephrase(htmlContent, firstName);
     // Send via Resend API with project-specific reply-to for inbound email handling
     const replyTo = getProjectReplyToEmail(projectId);
     const response = await client.emails.send({
@@ -961,6 +974,7 @@ export async function sendDelayNotificationEmail(
       htmlContent = renderTemplate(dbTemplate.htmlBody, variables);
     }
 
+    htmlContent = await aiRephrase(htmlContent, firstName);
     const replyTo = getProjectReplyToEmail(projectId);
     const response = await client.emails.send({
       from: fromEmail,
@@ -1069,6 +1083,7 @@ export async function sendSneakPeekEmail(
       htmlContent = renderTemplate(dbTemplate.htmlBody, variables);
     }
 
+    htmlContent = await aiRephrase(htmlContent, firstName);
     const replyTo = getProjectReplyToEmail(projectId);
     const response = await client.emails.send({
       from: fromEmail,
@@ -1199,6 +1214,7 @@ export async function sendGalleryDeliveryEmail(
       htmlContent = renderTemplate(dbTemplate.htmlBody, variables);
     }
 
+    htmlContent = await aiRephrase(htmlContent, firstName);
     const replyTo = getProjectReplyToEmail(projectId);
     const response = await client.emails.send({
       from: fromEmail,
@@ -1297,6 +1313,7 @@ export async function sendSchedulingNotificationEmail(
       htmlContent = renderTemplate(dbTemplate.htmlBody, variables);
     }
 
+    htmlContent = await aiRephrase(htmlContent, firstName);
     const replyTo = getProjectReplyToEmail(projectId);
     const response = await client.emails.send({
       from: fromEmail,
@@ -1394,6 +1411,7 @@ export async function sendManualDelayNoticeEmail(
       htmlContent = renderTemplate(dbTemplate.htmlBody, variables);
     }
 
+    htmlContent = await aiRephrase(htmlContent, firstName);
     const replyTo = getProjectReplyToEmail(projectId);
     const response = await client.emails.send({
       from: fromEmail,
@@ -1486,6 +1504,7 @@ export async function sendSatisfactionSurveyEmail(
       htmlContent = renderTemplate(dbTemplate.htmlBody, variables);
     }
 
+    htmlContent = await aiRephrase(htmlContent, firstName);
     const replyTo = getProjectReplyToEmail(projectId);
     const response = await client.emails.send({
       from: fromEmail,

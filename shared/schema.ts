@@ -732,4 +732,5 @@ export const AVAILABLE_WIDGETS: WidgetConfig[] = [
   { id: "project_table", name: "Project Table", description: "All projects overview", icon: "Table", defaultEnabled: true, roles: ["Admin", "LeadRetoucher", "Retoucher1", "Retoucher2", "Retoucher3", "DataWrangler"] },
   { id: "pending_payments", name: "Pending Payments", description: "Projects awaiting payment", icon: "DollarSign", defaultEnabled: true, roles: ["Sales"] },
   { id: "ready_delivery", name: "Ready for Delivery", description: "Projects ready to deliver", icon: "Package", defaultEnabled: true, roles: ["Sales"] },
+  { id: "ai_insights", name: "AI Insights", description: "AI-powered project trends and recommendations", icon: "Sparkles", defaultEnabled: true, roles: ["Admin", "LeadRetoucher", "DataWrangler", "Sales"] },
 ];

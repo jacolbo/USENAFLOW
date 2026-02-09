@@ -282,6 +282,84 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json(diagnostics);
   });
 
+  app.get("/api/ai/insights", async (req, res) => {
+    try {
+      const allProjects = await storage.getAllProjects();
+      const now = new Date();
+      const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+      const twoWeeksAgo = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000);
+
+      const statusBreakdown: Record<string, number> = {};
+      let totalRating = 0;
+      let ratedCount = 0;
+      const retoucherStats: Record<string, { completed: number; totalRating: number; ratedCount: number }> = {};
+      let thisWeekProjects = 0;
+      let lastWeekProjects = 0;
+      let overdueCount = 0;
+      let recentDeliveries = 0;
+      const clientTierBreakdown: Record<string, number> = {};
+
+      for (const p of allProjects) {
+        statusBreakdown[p.status] = (statusBreakdown[p.status] || 0) + 1;
+
+        if (p.rating) {
+          totalRating += p.rating;
+          ratedCount++;
+        }
+
+        if (p.assignedTo) {
+          if (!retoucherStats[p.assignedTo]) {
+            retoucherStats[p.assignedTo] = { completed: 0, totalRating: 0, ratedCount: 0 };
+          }
+          if (p.status === "Delivered" || p.status === "Done") {
+            retoucherStats[p.assignedTo].completed++;
+          }
+          if (p.rating) {
+            retoucherStats[p.assignedTo].totalRating += p.rating;
+            retoucherStats[p.assignedTo].ratedCount++;
+          }
+        }
+
+        const created = new Date(p.createdAt);
+        if (created >= weekAgo) thisWeekProjects++;
+        if (created >= twoWeeksAgo && created < weekAgo) lastWeekProjects++;
+
+        if (p.riskLevel === "OVERDUE") overdueCount++;
+        if (p.deliveredAt && new Date(p.deliveredAt) >= weekAgo) recentDeliveries++;
+
+        const tier = (p as any).vipTier || "Standard";
+        clientTierBreakdown[tier] = (clientTierBreakdown[tier] || 0) + 1;
+      }
+
+      const topRetouchers = Object.entries(retoucherStats)
+        .map(([name, stats]) => ({
+          name,
+          completed: stats.completed,
+          avgRating: stats.ratedCount > 0 ? Math.round((stats.totalRating / stats.ratedCount) * 10) / 10 : 0,
+        }))
+        .sort((a, b) => b.completed - a.completed)
+        .slice(0, 5);
+
+      const { generateProjectInsights } = await import("./services/aiService");
+      const insights = await generateProjectInsights({
+        totalProjects: allProjects.length,
+        statusBreakdown,
+        thisWeekProjects,
+        lastWeekProjects,
+        overdueCount,
+        avgRating: ratedCount > 0 ? Math.round((totalRating / ratedCount) * 10) / 10 : null,
+        topRetouchers,
+        recentDeliveries,
+        clientTierBreakdown,
+      });
+
+      res.json({ insights, generatedAt: new Date().toISOString() });
+    } catch (error: any) {
+      console.error("Failed to generate insights:", error);
+      res.status(500).json({ error: "Failed to generate insights" });
+    }
+  });
+
   // Get all projects
   app.get("/api/projects", async (req, res) => {
     try {
