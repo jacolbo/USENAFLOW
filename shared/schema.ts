@@ -62,6 +62,22 @@ export const projects = pgTable("projects", {
   deliveryApprovedAt: timestamp("delivery_approved_at"),
   deliveryApprovedBy: text("delivery_approved_by"),
   deliveryEmailSentAt: timestamp("delivery_email_sent_at"),
+  // Google Drive integration fields
+  driveFolderId: text("drive_folder_id"),
+  driveFolderName: text("drive_folder_name"),
+  driveBwFolderId: text("drive_bw_folder_id"),
+  drivePhotoCount: integer("drive_photo_count").notNull().default(0),
+  driveBwPhotoCount: integer("drive_bw_photo_count").notNull().default(0),
+  driveStorageBytes: integer("drive_storage_bytes").notNull().default(0),
+  driveGalleryLink: text("drive_gallery_link"),
+  driveBwSent: boolean("drive_bw_sent").notNull().default(false),
+  driveBwSentAt: timestamp("drive_bw_sent_at"),
+  driveDeliveryComplete: boolean("drive_delivery_complete").notNull().default(false),
+  driveDeliveryCompletedAt: timestamp("drive_delivery_completed_at"),
+  driveDeliveryEmailSent: boolean("drive_delivery_email_sent").notNull().default(false),
+  driveDeliveryEmailSentAt: timestamp("drive_delivery_email_sent_at"),
+  driveLastCheckedAt: timestamp("drive_last_checked_at"),
+  driveClientAccessedAt: timestamp("drive_client_accessed_at"),
 });
 
 // ShootTracker metadata table (1:1 with projects)
