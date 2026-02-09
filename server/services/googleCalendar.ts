@@ -94,6 +94,7 @@ export interface CalendarEvent {
   start: Date;
   end: Date;
   location?: string;
+  attendeeEmails?: string[];
 }
 
 export async function fetchCalendarEvents(
@@ -147,6 +148,9 @@ export async function fetchCalendarEvents(
       start: new Date(event.start?.dateTime || event.start?.date || ''),
       end: new Date(event.end?.dateTime || event.end?.date || ''),
       location: event.location || undefined,
+      attendeeEmails: (event.attendees || [])
+        .map((a: any) => a.email?.toLowerCase())
+        .filter((e: string | undefined) => e && !e.includes('calendar.google.com') && !e.includes('group.calendar')),
     }));
   } catch (error: any) {
     console.error(`❌ Error fetching calendar ${calendarId}:`, error.message);

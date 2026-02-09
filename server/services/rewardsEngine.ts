@@ -139,6 +139,9 @@ async function fetchHistoricalCalendarBookings(yearsBack: number = 2): Promise<C
       start: new Date(event.start?.dateTime || event.start?.date || ''),
       end: new Date(event.end?.dateTime || event.end?.date || ''),
       location: event.location || undefined,
+      attendeeEmails: (event.attendees || [])
+        .map((a: any) => a.email?.toLowerCase())
+        .filter((e: string | undefined) => e && !e.includes('calendar.google.com') && !e.includes('group.calendar')),
     }));
   } catch (error: any) {
     console.error(`❌ [Rewards] Failed to fetch historical calendar data:`, error.message);
@@ -150,8 +153,64 @@ function normalizeClientName(name: string): string {
   return name.trim().toLowerCase().replace(/\s+/g, ' ');
 }
 
-function buildBookingCountsByClient(events: CalendarEvent[]): Map<string, { name: string; count: number; firstBooking: Date | null; lastBooking: Date | null }> {
-  const clientBookings = new Map<string, { name: string; count: number; firstBooking: Date | null; lastBooking: Date | null }>();
+function normalizePhone(phone: string): string {
+  return phone.replace(/[\s\-\(\)\+\.]/g, '').replace(/^0+/, '');
+}
+
+function extractPhoneNumbers(text: string): string[] {
+  if (!text) return [];
+  const phoneRegex = /(?:\+?\d{1,3}[\s\-\.]?)?\(?\d{2,4}\)?[\s\-\.]?\d{3,4}[\s\-\.]?\d{3,4}/g;
+  const matches = text.match(phoneRegex) || [];
+  return matches
+    .map(m => normalizePhone(m))
+    .filter(p => p.length >= 7 && p.length <= 15);
+}
+
+class UnionFind {
+  private parent: Map<string, string> = new Map();
+
+  find(x: string): string {
+    if (!this.parent.has(x)) this.parent.set(x, x);
+    let root = x;
+    while (this.parent.get(root) !== root) {
+      root = this.parent.get(root)!;
+    }
+    let curr = x;
+    while (curr !== root) {
+      const next = this.parent.get(curr)!;
+      this.parent.set(curr, root);
+      curr = next;
+    }
+    return root;
+  }
+
+  union(a: string, b: string): void {
+    const ra = this.find(a);
+    const rb = this.find(b);
+    if (ra !== rb) this.parent.set(rb, ra);
+  }
+
+  getGroups(): Map<string, string[]> {
+    const groups = new Map<string, string[]>();
+    const keys = Array.from(this.parent.keys());
+    for (const key of keys) {
+      const root = this.find(key);
+      if (!groups.has(root)) groups.set(root, []);
+      groups.get(root)!.push(key);
+    }
+    return groups;
+  }
+}
+
+interface EventBooking {
+  name: string;
+  emails: string[];
+  phones: string[];
+  start: Date;
+}
+
+function extractBookingsFromEvents(events: CalendarEvent[]): EventBooking[] {
+  const bookings: EventBooking[] = [];
 
   for (const event of events) {
     if (!event.start || isNaN(event.start.getTime())) continue;
@@ -159,28 +218,112 @@ function buildBookingCountsByClient(events: CalendarEvent[]): Map<string, { name
     const clientName = parseClientNameFromEvent(event);
     if (!clientName) continue;
 
-    const normalizedName = normalizeClientName(clientName);
-    const existing = clientBookings.get(normalizedName);
+    const emails = (event.attendeeEmails || []).filter(Boolean);
 
-    if (existing) {
-      existing.count++;
-      if (event.start && (!existing.firstBooking || event.start < existing.firstBooking)) {
-        existing.firstBooking = event.start;
+    const phones: string[] = [];
+    if (event.description) phones.push(...extractPhoneNumbers(event.description));
+    if (event.location) phones.push(...extractPhoneNumbers(event.location));
+    if (event.summary) phones.push(...extractPhoneNumbers(event.summary));
+
+    const uniquePhones = Array.from(new Set(phones));
+
+    bookings.push({
+      name: clientName,
+      emails,
+      phones: uniquePhones,
+      start: event.start,
+    });
+  }
+
+  return bookings;
+}
+
+interface MergedClient {
+  names: string[];
+  emails: Set<string>;
+  phones: Set<string>;
+  count: number;
+  firstBooking: Date | null;
+  lastBooking: Date | null;
+}
+
+function buildMergedClients(
+  bookings: EventBooking[],
+  projectEmailMap: Map<string, string>,
+): MergedClient[] {
+  const uf = new UnionFind();
+  const nameToKey = new Map<string, string>();
+  const emailToKey = new Map<string, string>();
+  const phoneToKey = new Map<string, string>();
+
+  for (const booking of bookings) {
+    const normName = normalizeClientName(booking.name);
+    const nameKey = `name:${normName}`;
+
+    if (!nameToKey.has(normName)) {
+      nameToKey.set(normName, nameKey);
+    }
+    uf.find(nameKey);
+
+    const projectEmail = projectEmailMap.get(normName);
+    const allEmails = [...booking.emails];
+    if (projectEmail) allEmails.push(projectEmail.toLowerCase());
+
+    for (const email of allEmails) {
+      const emailKey = `email:${email}`;
+      if (!emailToKey.has(email)) {
+        emailToKey.set(email, emailKey);
       }
-      if (event.start && (!existing.lastBooking || event.start > existing.lastBooking)) {
-        existing.lastBooking = event.start;
+      uf.find(emailKey);
+      uf.union(nameKey, emailKey);
+    }
+
+    for (const phone of booking.phones) {
+      if (!phone) continue;
+      const phoneKey = `phone:${phone}`;
+      if (!phoneToKey.has(phone)) {
+        phoneToKey.set(phone, phoneKey);
       }
-    } else {
-      clientBookings.set(normalizedName, {
-        name: clientName,
-        count: 1,
-        firstBooking: event.start || null,
-        lastBooking: event.start || null,
-      });
+      uf.find(phoneKey);
+      uf.union(nameKey, phoneKey);
     }
   }
 
-  return clientBookings;
+  const groups = uf.getGroups();
+
+  const clientGroups = new Map<string, MergedClient>();
+  for (const booking of bookings) {
+    const normName = normalizeClientName(booking.name);
+    const nameKey = `name:${normName}`;
+    const root = uf.find(nameKey);
+
+    if (!clientGroups.has(root)) {
+      clientGroups.set(root, {
+        names: [],
+        emails: new Set(),
+        phones: new Set(),
+        count: 0,
+        firstBooking: null,
+        lastBooking: null,
+      });
+    }
+
+    const group = clientGroups.get(root)!;
+    group.count++;
+    if (!group.names.includes(booking.name)) group.names.push(booking.name);
+    booking.emails.forEach(e => group.emails.add(e));
+    booking.phones.forEach(p => group.phones.add(p));
+
+    const projectEmail = projectEmailMap.get(normName);
+    if (projectEmail) group.emails.add(projectEmail.toLowerCase());
+
+    if (booking.start) {
+      if (!group.firstBooking || booking.start < group.firstBooking) group.firstBooking = booking.start;
+      if (!group.lastBooking || booking.start > group.lastBooking) group.lastBooking = booking.start;
+    }
+  }
+
+  return Array.from(clientGroups.values());
 }
 
 function countReferralMatchesByClient(allReferrals: Array<{ referrerEmail: string; referrerName: string; status: string }>): Map<string, number> {
@@ -213,62 +356,74 @@ export async function syncRewards(yearsBack: number = 2): Promise<{
       storage.getAllProjects(),
     ]);
 
-    const bookingsByClient = buildBookingCountsByClient(events);
+    const bookings = extractBookingsFromEvents(events);
     const referralsByEmail = countReferralMatchesByClient(allReferrals);
 
-    console.log(`🎁 [Rewards] Found ${bookingsByClient.size} unique clients from calendar`);
-    console.log(`🎁 [Rewards] Found ${referralsByEmail.size} clients with matched referrals`);
-
-    const profilesByEmail = new Map(existingProfiles.map(p => [p.clientEmail.toLowerCase(), p]));
-    const profilesByName = new Map(existingProfiles.map(p => [normalizeClientName(p.clientName), p]));
-
-    const projectsByNormalizedName = new Map<string, string>();
+    const projectEmailMap = new Map<string, string>();
     for (const proj of allProjects) {
+      const normName = normalizeClientName(proj.clientName);
       if (proj.clientEmail) {
-        projectsByNormalizedName.set(normalizeClientName(proj.clientName), proj.clientEmail);
+        projectEmailMap.set(normName, proj.clientEmail);
       }
     }
 
-    for (const [normalizedName, booking] of Array.from(bookingsByClient.entries())) {
-      try {
-        let profile = profilesByName.get(normalizedName);
+    console.log(`🎁 [Rewards] Extracted ${bookings.length} bookings from ${events.length} events`);
+    console.log(`🎁 [Rewards] Found ${referralsByEmail.size} clients with matched referrals`);
 
-        let clientEmail = profile?.clientEmail || '';
-        const clientName = profile?.clientName || booking.name;
+    const mergedClients = buildMergedClients(bookings, projectEmailMap);
+
+    console.log(`🎁 [Rewards] Merged into ${mergedClients.length} unique clients (from ${bookings.length} bookings)`);
+    const mergesSaved = bookings.length - mergedClients.length;
+    if (mergesSaved > 0) {
+      console.log(`🎁 [Rewards] Client merging identified ${mergesSaved} duplicate bookings across name/email/phone matches`);
+    }
+
+    const profilesByEmail = new Map(existingProfiles.map(p => [p.clientEmail.toLowerCase(), p]));
+
+    for (const client of mergedClients) {
+      try {
+        const primaryName = client.names[0];
+        const emailArray = Array.from(client.emails);
+        let clientEmail = emailArray.find(e => !e.includes('@unknown.pending')) || '';
 
         if (!clientEmail) {
-          clientEmail = projectsByNormalizedName.get(normalizedName) || `${normalizedName.replace(/\s+/g, '.')}@unknown.pending`;
+          const normName = normalizeClientName(primaryName);
+          clientEmail = `${normName.replace(/\s+/g, '.')}@unknown.pending`;
         }
 
-        const referralMatches = referralsByEmail.get(clientEmail.toLowerCase()) || 0;
-        const rewardScore = calculateRewardScore(booking.count, referralMatches);
+        let totalReferralMatches = 0;
+        for (const email of emailArray) {
+          totalReferralMatches += referralsByEmail.get(email) || 0;
+        }
+
+        const rewardScore = calculateRewardScore(client.count, totalReferralMatches);
         const rewardTier = calculateRewardTier(rewardScore);
 
         const calculation: RewardCalculation = {
-          clientName,
+          clientName: primaryName,
           clientEmail,
-          totalBookings: booking.count,
-          referralMatchCount: referralMatches,
+          totalBookings: client.count,
+          referralMatchCount: totalReferralMatches,
           rewardScore,
           rewardTier,
         };
 
         await storage.upsertClientProfile({
           clientEmail,
-          clientName,
-          totalBookings: booking.count,
-          referralMatchCount: referralMatches,
+          clientName: primaryName,
+          totalBookings: client.count,
+          referralMatchCount: totalReferralMatches,
           rewardScore,
           rewardTier,
           lastRewardSyncAt: new Date(),
-          firstProjectAt: booking.firstBooking || undefined,
-          lastProjectAt: booking.lastBooking || undefined,
+          firstProjectAt: client.firstBooking || undefined,
+          lastProjectAt: client.lastBooking || undefined,
         });
 
         result.results.push(calculation);
         result.synced++;
       } catch (err: any) {
-        result.errors.push(`Client ${booking.name}: ${err.message}`);
+        result.errors.push(`Client ${client.names[0]}: ${err.message}`);
       }
     }
 
