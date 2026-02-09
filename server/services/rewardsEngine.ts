@@ -1,6 +1,6 @@
 import { storage } from '../storage';
-import { RewardTier } from '@shared/schema';
-import { getGoogleCalendarClient, parseClientNameFromEvent, type CalendarEvent } from './googleCalendar';
+import { RewardTier, DEFAULT_SHOOTTRACKER_SETTINGS, shoottrackerSettingsSchema } from '@shared/schema';
+import { getGoogleCalendarClient, parseClientNameFromEvent, listCalendars, type CalendarEvent } from './googleCalendar';
 
 interface RewardCalculation {
   clientName: string;
@@ -23,40 +23,114 @@ function calculateRewardScore(totalBookings: number, referralMatchCount: number)
   return totalBookings + (referralMatchCount * 2);
 }
 
+async function getCalendarIds(): Promise<string[]> {
+  try {
+    const setting = await storage.getAppSetting("shoottracker_settings");
+    if (setting && typeof setting.value === 'object') {
+      const merged = { ...DEFAULT_SHOOTTRACKER_SETTINGS, ...setting.value };
+      const parsed = shoottrackerSettingsSchema.parse(merged);
+      if (parsed.selected_calendar_ids && parsed.selected_calendar_ids.length > 0) {
+        console.log(`🎁 [Rewards] Using ${parsed.selected_calendar_ids.length} calendar(s) from ShootTracker settings`);
+        return parsed.selected_calendar_ids;
+      }
+    }
+  } catch (e) {
+    console.log(`🎁 [Rewards] Could not read ShootTracker settings, will discover calendars`);
+  }
+
+  try {
+    const calendars = await listCalendars();
+    if (calendars.length > 0) {
+      const ids = calendars.map(c => c.id);
+      console.log(`🎁 [Rewards] Discovered ${ids.length} calendar(s): ${calendars.map(c => c.summary).join(', ')}`);
+      return ids;
+    }
+  } catch (e) {
+    console.log(`🎁 [Rewards] Could not list calendars, falling back to 'primary'`);
+  }
+
+  return ['primary'];
+}
+
+async function fetchMonthChunk(
+  calendar: any,
+  calendarId: string,
+  chunkStart: Date,
+  chunkEnd: Date
+): Promise<any[]> {
+  const events: any[] = [];
+  let pageToken: string | undefined = undefined;
+
+  do {
+    const response: any = await calendar.events.list({
+      calendarId,
+      timeMin: chunkStart.toISOString(),
+      timeMax: chunkEnd.toISOString(),
+      singleEvents: true,
+      orderBy: 'startTime',
+      maxResults: 250,
+      pageToken: pageToken,
+    });
+
+    const items = response.data.items || [];
+    events.push(...items);
+    pageToken = response.data.nextPageToken || undefined;
+  } while (pageToken);
+
+  return events;
+}
+
 async function fetchHistoricalCalendarBookings(yearsBack: number = 2): Promise<CalendarEvent[]> {
   try {
     const calendar = await getGoogleCalendarClient();
+    const calendarIds = await getCalendarIds();
 
     const now = new Date();
-    const timeMin = new Date(now);
-    timeMin.setFullYear(timeMin.getFullYear() - yearsBack);
+    const startDate = new Date(now);
+    startDate.setFullYear(startDate.getFullYear() - yearsBack);
 
-    console.log(`🎁 [Rewards] Fetching calendar events from ${timeMin.toISOString()} to ${now.toISOString()}`);
+    const months: { start: Date; end: Date }[] = [];
+    let cursor = new Date(startDate);
+    while (cursor < now) {
+      const chunkEnd = new Date(cursor);
+      chunkEnd.setMonth(chunkEnd.getMonth() + 1);
+      if (chunkEnd > now) chunkEnd.setTime(now.getTime());
+      months.push({ start: new Date(cursor), end: new Date(chunkEnd) });
+      cursor = new Date(chunkEnd);
+    }
+
+    console.log(`🎁 [Rewards] Fetching events from ${calendarIds.length} calendar(s) across ${months.length} month chunks`);
+    console.log(`🎁 [Rewards] Date range: ${startDate.toISOString()} to ${now.toISOString()}`);
 
     const allEvents: any[] = [];
-    let pageToken: string | undefined = undefined;
-    let pageCount = 0;
+    const seenEventIds = new Set<string>();
 
-    do {
-      pageCount++;
-      const response: any = await calendar.events.list({
-        calendarId: 'primary',
-        timeMin: timeMin.toISOString(),
-        timeMax: now.toISOString(),
-        singleEvents: true,
-        orderBy: 'startTime',
-        maxResults: 2500,
-        pageToken: pageToken,
-      });
+    for (const calId of calendarIds) {
+      let calendarTotal = 0;
+      console.log(`🎁 [Rewards] Fetching from calendar: ${calId}`);
 
-      const events = response.data.items || [];
-      allEvents.push(...events);
-      pageToken = response.data.nextPageToken || undefined;
+      for (let i = 0; i < months.length; i++) {
+        const { start, end } = months[i];
+        try {
+          const events = await fetchMonthChunk(calendar, calId, start, end);
+          for (const evt of events) {
+            if (evt.id && !seenEventIds.has(evt.id)) {
+              seenEventIds.add(evt.id);
+              allEvents.push(evt);
+              calendarTotal++;
+            }
+          }
+          if (events.length > 0) {
+            console.log(`   🎁 Month ${i + 1}/${months.length} (${start.toISOString().slice(0, 7)}): ${events.length} events`);
+          }
+        } catch (error: any) {
+          console.warn(`   ⚠️ [Rewards] Error fetching month ${start.toISOString().slice(0, 7)} from ${calId}: ${error.message}`);
+        }
+      }
+      console.log(`🎁 [Rewards] Calendar ${calId}: ${calendarTotal} unique events`);
+    }
 
-      console.log(`   🎁 Page ${pageCount}: fetched ${events.length} events (total: ${allEvents.length})`);
-    } while (pageToken);
-
-    console.log(`🎁 [Rewards] Total historical events fetched: ${allEvents.length}`);
+    console.log(`🎁 [Rewards] Total historical events fetched: ${allEvents.length} (from ${calendarIds.length} calendar(s))`);
 
     return allEvents.map((event: any) => ({
       id: event.id || '',
