@@ -96,25 +96,44 @@ export async function scanProjectFolder(project: any): Promise<DriveMonitorResul
   if (result.status === 'complete' && !project.driveDeliveryComplete) {
     console.log(`✅ Drive Monitor: ${project.clientName} delivery complete! (${result.drivePhotoCount}/${project.selectedCount})`);
 
+    let shareLink: string | null = null;
     try {
-      const shareLink = await driveService.generateShareLink(project.driveFolderId);
+      shareLink = await driveService.generateShareLink(project.driveFolderId, project.clientEmail || undefined);
       updateData.driveGalleryLink = shareLink;
       updateData.galleryLink = shareLink;
       updateData.galleryLinkAddedAt = new Date();
       updateData.galleryLinkAddedBy = 'Drive Auto-Detection';
     } catch (err: any) {
-      console.error(`📂 Drive Monitor: Failed to generate share link for ${project.clientName}: ${err.message}`);
+      console.error(`📂 Drive Monitor: Failed to generate share link for ${project.clientName}: ${err.message} — will retry next scan`);
     }
 
-    updateData.driveDeliveryComplete = true;
-    updateData.driveDeliveryCompletedAt = new Date();
-    updateData.status = 'Done';
-    updateData.deliveredAt = new Date();
-    result.deliveryTriggered = true;
+    if (!shareLink) {
+      console.log(`📂 Drive Monitor: Skipping delivery for ${project.clientName} — share link not ready, will retry`);
+    } else {
+      updateData.driveDeliveryComplete = true;
+      updateData.driveDeliveryCompletedAt = new Date();
+      updateData.status = 'Done';
+      updateData.deliveredAt = new Date();
+      result.deliveryTriggered = true;
 
-    // Delivery email disabled — link is generated but client access is not granted.
-    // Admin must manually enable sharing and send the link when ready.
-    console.log(`📂 Drive Monitor: Delivery complete for ${project.clientName} — link saved but email not sent (access disabled)`);
+      if (project.clientEmail) {
+        try {
+          const { sendGalleryDeliveryEmail } = await import('./emailService');
+          await sendGalleryDeliveryEmail(
+            project.clientEmail,
+            project.clientName,
+            shareLink,
+            project.id
+          );
+          updateData.driveDeliveryEmailSent = true;
+          updateData.driveDeliveryEmailSentAt = new Date();
+          updateData.deliveryEmailSentAt = new Date();
+          console.log(`📧 Drive Monitor: Sent branded delivery email to ${project.clientEmail} for ${project.clientName}`);
+        } catch (err: any) {
+          console.error(`📂 Drive Monitor: Failed to send delivery email for ${project.clientName}: ${err.message}`);
+        }
+      }
+    }
     
   }
 
