@@ -176,34 +176,19 @@ function formatDateForEmail(date: Date): string {
   return date.toLocaleDateString('en-ZA', options);
 }
 
-// Get the logo URL for emails (served from object storage)
+// Get the logo URL for emails (served via public route, no auth required)
 function getLogoUrl(): string {
-  const bucketId = process.env.DEFAULT_OBJECT_STORAGE_BUCKET_ID || 'replit-objstore-36146d31-ae4d-40c1-b92e-b20750c78157';
-  return `https://storage.googleapis.com/${bucketId}/public/jepson-myles-logo.png`;
+  const baseUrl = getAppBaseUrl();
+  return `${baseUrl}/public/email-logo.png`;
 }
 
-// Generate email header with logo
+// Generate email header with logo (no link wrapper - just the logo image)
 function getEmailHeader(subtitle: string = ''): string {
   const logoUrl = getLogoUrl();
-  const baseUrl = getAppBaseUrl();
   
-  if (logoUrl) {
-    return `
-      <div style="text-align: center; margin-bottom: 30px;">
-        <a href="${baseUrl}" style="text-decoration: none;">
-          <img src="${logoUrl}" alt="Jepson Myles Studio" style="max-width: 200px; height: auto; margin-bottom: 10px;" />
-        </a>
-        ${subtitle ? `<p style="color: #666; margin: 5px 0 0 0; font-size: 14px;">${subtitle}</p>` : ''}
-      </div>
-    `;
-  }
-  
-  // Fallback to text header if no logo
   return `
-    <div style="text-align: center; margin-bottom: 30px;">
-      <a href="${baseUrl}" style="text-decoration: none;">
-        <h1 style="color: #1a1a1a; margin: 0; font-size: 28px;">Jepson Myles Studio</h1>
-      </a>
+    <div style="text-align: center; margin-bottom: 30px; padding: 20px 0;">
+      <img src="${logoUrl}" alt="Jepson Myles Studio" style="max-width: 280px; height: auto; margin-bottom: 10px;" />
       ${subtitle ? `<p style="color: #666; margin: 5px 0 0 0; font-size: 14px;">${subtitle}</p>` : ''}
     </div>
   `;

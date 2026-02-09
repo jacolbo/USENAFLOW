@@ -138,6 +138,19 @@ async function seedDefaultUsers() {
 export async function registerRoutes(app: Express): Promise<Server> {
   await seedDefaultUsers();
 
+  app.get("/public/email-logo.png", async (req, res) => {
+    try {
+      const objectStorageService = new ObjectStorageService();
+      const file = await objectStorageService.searchPublicObject("jepson-myles-logo.png");
+      if (!file) {
+        return res.status(404).send("Logo not found");
+      }
+      await objectStorageService.downloadObject(file, res, 86400);
+    } catch (error) {
+      res.status(500).send("Error serving logo");
+    }
+  });
+
   app.post("/api/auth/login", async (req, res) => {
     try {
       const { username, password } = loginUserSchema.parse(req.body);
