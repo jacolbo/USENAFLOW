@@ -176,11 +176,10 @@ function formatDateForEmail(date: Date): string {
   return date.toLocaleDateString('en-ZA', options);
 }
 
-// Get the logo URL for emails
+// Get the logo URL for emails (served from object storage)
 function getLogoUrl(): string {
-  // Use the app's public route to serve the logo (handles auth properly)
-  const baseUrl = getAppBaseUrl();
-  return `${baseUrl}/public/jepson-myles-logo.png`;
+  const bucketId = process.env.DEFAULT_OBJECT_STORAGE_BUCKET_ID || 'replit-objstore-36146d31-ae4d-40c1-b92e-b20750c78157';
+  return `https://storage.googleapis.com/${bucketId}/public/jepson-myles-logo.png`;
 }
 
 // Generate email header with logo

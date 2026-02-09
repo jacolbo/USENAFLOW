@@ -2260,7 +2260,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Upload logo to public storage (Admin only)
   app.post("/api/admin/upload-logo", async (req, res) => {
     try {
-      const logoPath = "attached_assets/USENA-FLOW_1754522507856.png";
+      const logoPath = "attached_assets/image_1770646812353.png";
       const fs = await import("fs");
       
       if (!fs.existsSync(logoPath)) {
