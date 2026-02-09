@@ -176,20 +176,12 @@ export async function getFolderStats(folderId: string): Promise<DriveFolderStats
 export async function generateShareLink(folderId: string): Promise<string> {
   const drive = await getDriveClient();
 
-  await drive.permissions.create({
-    fileId: folderId,
-    requestBody: {
-      role: 'reader',
-      type: 'anyone',
-    },
-  });
-
   const file = await drive.files.get({
     fileId: folderId,
     fields: 'webViewLink',
   });
 
-  console.log(`🔗 Generated share link for folder ${folderId}: ${file.data.webViewLink}`);
+  console.log(`🔗 Generated link for folder ${folderId}: ${file.data.webViewLink} (access not granted — admin must enable sharing manually)`);
   return file.data.webViewLink!;
 }
 

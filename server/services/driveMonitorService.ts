@@ -112,54 +112,19 @@ export async function scanProjectFolder(project: any): Promise<DriveMonitorResul
     updateData.deliveredAt = new Date();
     result.deliveryTriggered = true;
 
-    if (project.clientEmail && !project.driveDeliveryEmailSent) {
-      try {
-        const galleryLink = updateData.driveGalleryLink || updateData.galleryLink;
-        if (galleryLink) {
-          await sendGalleryDeliveryEmail(
-            project.clientEmail,
-            project.clientName,
-            galleryLink,
-            project.id
-          );
-          updateData.driveDeliveryEmailSent = true;
-          updateData.driveDeliveryEmailSentAt = new Date();
-          updateData.deliveryEmailSentAt = new Date();
-          console.log(`📧 Drive Monitor: Sent delivery email to ${project.clientEmail} for ${project.clientName}`);
-        }
-      } catch (err: any) {
-        console.error(`📂 Drive Monitor: Failed to send delivery email for ${project.clientName}: ${err.message}`);
-      }
-    }
+    // Delivery email disabled — link is generated but client access is not granted.
+    // Admin must manually enable sharing and send the link when ready.
+    console.log(`📂 Drive Monitor: Delivery complete for ${project.clientName} — link saved but email not sent (access disabled)`);
+    
   }
 
-  if (result.driveBwPhotoCount > 0 && !project.driveBwSent && project.clientEmail) {
-    try {
-      const bwImages = await driveService.getImageThumbnails(project.driveBwFolderId, 3);
-      if (bwImages.length > 0) {
-        let bwShareLink: string;
-        try {
-          bwShareLink = await driveService.generateShareLink(project.driveBwFolderId);
-        } catch {
-          bwShareLink = bwImages[0].webViewLink;
-        }
-
-        await sendSneakPeekEmail(
-          project.clientEmail,
-          project.clientName,
-          bwShareLink,
-          `Here's a preview of your Black & White photos! ${result.driveBwPhotoCount} photo${result.driveBwPhotoCount > 1 ? 's' : ''} ready to view.`,
-          project.id
-        );
-
-        updateData.driveBwSent = true;
-        updateData.driveBwSentAt = new Date();
-        result.bwEmailTriggered = true;
-        console.log(`📧 Drive Monitor: Sent B&W preview email to ${project.clientEmail} for ${project.clientName}`);
-      }
-    } catch (err: any) {
-      console.error(`📂 Drive Monitor: Failed to send B&W email for ${project.clientName}: ${err.message}`);
-    }
+  // B&W preview email disabled — client access is not granted.
+  // Admin must manually enable sharing and send preview when ready.
+  if (result.driveBwPhotoCount > 0 && !project.driveBwSent) {
+    updateData.driveBwSent = true;
+    updateData.driveBwSentAt = new Date();
+    result.bwEmailTriggered = false;
+    console.log(`📂 Drive Monitor: B&W photos detected for ${project.clientName} (${result.driveBwPhotoCount}) — email not sent (access disabled)`);
   }
 
   await db.update(projects).set(updateData).where(eq(projects.id, project.id));
