@@ -2228,12 +2228,13 @@ export default function Dashboard() {
           {/* Widgets rendered in user's preferred order */}
           {widgetOrder.map((widgetId) => {
             // Daily Quote Widget
-            if (widgetId === "daily_quote" && isWidgetVisible("daily_quote")) {
+            if (widgetId === "daily_quote" && isWidgetVisible("daily_quote") && !showRewards && !showReferrals && !showVipClients) {
               return <DailyQuote key={widgetId} userId={user.value} />;
             }
             
             // My Tasks Widget - for Admin and retouchers
             if (widgetId === "my_tasks" && isWidgetVisible("my_tasks") && !showArchive && 
+                !showRewards && !showReferrals && !showVipClients &&
                 (user.role === "Admin" || ["Retoucher1", "Retoucher2", "Retoucher3"].includes(user.role))) {
               const myTasks = projects.filter(p => 
                 p.assignedTo && 
@@ -2277,7 +2278,7 @@ export default function Dashboard() {
             
             // ShootTracker Widget
             if (widgetId === "shoottracker" && isWidgetVisible("shoottracker") && !showArchive && 
-                !showCommissions && !showExtraPhotosSales && !showComplaints) {
+                !showCommissions && !showExtraPhotosSales && !showComplaints && !showRewards && !showReferrals && !showVipClients) {
               return (
                 <div key={widgetId} className="mb-6">
                   <ShootTrackerWidget />
@@ -2287,20 +2288,20 @@ export default function Dashboard() {
             
             // Team Analytics Widget
             if (widgetId === "team_analytics" && isWidgetVisible("team_analytics") && !showArchive && 
-                !showCommissions && !showExtraPhotosSales && !showComplaints) {
+                !showCommissions && !showExtraPhotosSales && !showComplaints && !showRewards && !showReferrals && !showVipClients) {
               return <TeamAnalytics key={widgetId} user={user} />;
             }
             
             // Project Table Widget
             if (widgetId === "project_table" && isWidgetVisible("project_table") && 
                 user.role !== "Sales" && user.role !== "Evans" && 
-                !showCommissions && !showExtraPhotosSales && !showComplaints) {
+                !showCommissions && !showExtraPhotosSales && !showComplaints && !showRewards && !showReferrals && !showVipClients) {
               return <TaskTable key={widgetId} projects={projects} user={user} allUsers={users} />;
             }
             
             // Pending Payments Widget (Sales only)
             if (widgetId === "pending_payments" && isWidgetVisible("pending_payments") && 
-                user.role === "Sales" && !showExtraPhotosSales) {
+                user.role === "Sales" && !showExtraPhotosSales && !showRewards && !showReferrals && !showVipClients) {
               const pendingPaymentProjects = projects.filter(p => p.status === "Awaiting Payment");
               return (
                 <div key={widgetId} className="bg-white rounded-lg shadow-sm">
@@ -2330,7 +2331,7 @@ export default function Dashboard() {
             
             // Ready for Delivery Widget (Sales only)
             if (widgetId === "ready_delivery" && isWidgetVisible("ready_delivery") && 
-                user.role === "Sales" && !showExtraPhotosSales) {
+                user.role === "Sales" && !showExtraPhotosSales && !showRewards && !showReferrals && !showVipClients) {
               const reviewProjects = projects.filter(p => p.status === "Review");
               const readyForDelivery = reviewProjects.filter(p => p.galleryLink && !p.deliveryApproved);
               const awaitingGallery = reviewProjects.filter(p => !p.galleryLink);
@@ -2448,7 +2449,7 @@ export default function Dashboard() {
           )}
           
           {/* Archive Status Header and Add Project Form for non-Sales, non-Evans roles */}
-          {user.role !== "Sales" && user.role !== "Evans" && !showCommissions && (
+          {user.role !== "Sales" && user.role !== "Evans" && !showCommissions && !showRewards && !showReferrals && !showVipClients && (
             <>
               <div className="bg-white rounded-lg shadow-sm p-4">
                 <div className="flex items-center justify-between">
