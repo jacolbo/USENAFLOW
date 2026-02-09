@@ -1276,8 +1276,8 @@ export class DatabaseStorage implements IStorage {
 
   async markMessagesAsRead(projectId: string, senderType: string): Promise<number> {
     const result = await db.update(clientMessages)
-      .set({ isRead: true })
-      .where(sql`${clientMessages.projectId} = ${projectId} AND ${clientMessages.senderType} = ${senderType}`);
+      .set({ isRead: true, readAt: new Date() })
+      .where(sql`${clientMessages.projectId} = ${projectId} AND ${clientMessages.senderType} = ${senderType} AND ${clientMessages.isRead} = false`);
     return result.rowCount || 0;
   }
   

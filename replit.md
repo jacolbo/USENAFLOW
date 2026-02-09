@@ -22,7 +22,7 @@ Key features include:
 - **Notes System**: Supports text and image notes with role-based access.
 - **Automated Calculations**: Calculates "extras" based on photo count.
 - **ShootTracker Engine**: Integrates Google Calendar for automated project creation, delivery due date calculation, risk assessment, and idempotent sync. It includes configurable settings for turnaround times, working days, and daily capacity, with automatic sync capabilities.
-- **Client-Editor Communication**: A WhatsApp-style messaging interface allows direct communication between editors and clients, featuring threading, unread message counters, email notifications, and token-based client authentication.
+- **Client-Editor Communication**: A WhatsApp-style messaging interface allows direct communication between editors and clients, featuring threading, unread message counters, email notifications, and token-based client authentication. Includes automated comfort features: after-hours auto-reply (outside Mon-Fri 9AM-4PM), 30-minute delayed acknowledgment for unanswered messages, seen/read indicators, project status auto-messages in chat, and estimated response time display.
 - **Customizable Dashboard**: A widget system allows users to configure and reorder dashboard elements with persistent preferences stored per user.
 - **Persistent User Management**: User accounts and roles are stored in the database, including admin-controlled user creation and management.
 - **Gallery Link Delivery**: Facilitates retouchers adding gallery links and Sales approving delivery, triggering branded client emails and updating project status.

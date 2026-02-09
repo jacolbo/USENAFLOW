@@ -5,17 +5,18 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { useUpload } from "@/hooks/use-upload";
-import { Send, Loader2, MessageCircle, User, Camera, AlertCircle, Paperclip, Mic, FileText, Play, Pause, Download, X, Image, Video } from "lucide-react";
+import { Send, Loader2, MessageCircle, User, Camera, AlertCircle, Paperclip, Mic, FileText, Play, Pause, Download, X, Image, Video, Clock, CheckCheck, Bot } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 
 interface Message {
   id: string;
   projectId: string;
-  senderType: 'client' | 'retoucher';
+  senderType: 'client' | 'retoucher' | 'system';
   senderEmail: string;
   message: string;
   isRead: boolean;
   createdAt: string;
+  readAt?: string | null;
   attachmentUrl?: string;
   attachmentType?: 'image' | 'video' | 'audio' | 'file';
   attachmentName?: string;
@@ -345,11 +346,15 @@ export default function ClientChat() {
           <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center">
             <Camera className="h-5 w-5" />
           </div>
-          <div>
+          <div className="flex-1">
             <h1 className="font-semibold">{authData.project.clientName}</h1>
             <p className="text-sm text-green-100">
               Chatting with {authData.project.assignedTo}
             </p>
+          </div>
+          <div className="flex items-center gap-1.5 bg-white/15 rounded-full px-3 py-1.5">
+            <Clock className="h-3.5 w-3.5 text-green-200" />
+            <span className="text-xs text-green-100">Usually replies within 30 min</span>
           </div>
         </div>
       </header>
@@ -368,35 +373,67 @@ export default function ClientChat() {
               <Loader2 className="h-6 w-6 animate-spin text-green-500" />
             </div>
           ) : messages && messages.length > 0 ? (
-            messages.map((msg) => (
-              <div
-                key={msg.id}
-                className={`flex ${msg.senderType === 'client' ? 'justify-end' : 'justify-start'}`}
-              >
+            messages.map((msg, index) => {
+              if (msg.senderType === 'system') {
+                return (
+                  <div key={msg.id} className="flex justify-center my-2">
+                    <div className="bg-blue-50 border border-blue-100 rounded-xl px-4 py-2.5 max-w-[85%]">
+                      <div className="flex items-center gap-2 mb-1">
+                        <Bot className="h-3.5 w-3.5 text-blue-500" />
+                        <span className="text-xs font-medium text-blue-500">Automated Message</span>
+                      </div>
+                      <p className="text-sm text-blue-800">{msg.message}</p>
+                      <p className="text-xs text-blue-400 mt-1">
+                        {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </p>
+                    </div>
+                  </div>
+                );
+              }
+
+              const isLastClientMsg = msg.senderType === 'client' && 
+                !messages.slice(index + 1).some(m => m.senderType === 'client');
+
+              return (
                 <div
-                  className={`max-w-[80%] rounded-2xl px-4 py-2 ${
-                    msg.senderType === 'client'
-                      ? 'bg-green-600 text-white rounded-br-md'
-                      : 'bg-white text-gray-800 rounded-bl-md shadow'
-                  }`}
+                  key={msg.id}
+                  className={`flex ${msg.senderType === 'client' ? 'justify-end' : 'justify-start'}`}
                 >
-                  {msg.message && <p className="text-sm">{msg.message}</p>}
-                  {msg.attachmentUrl && msg.attachmentType && (
-                    <AttachmentPreview 
-                      url={msg.attachmentUrl} 
-                      type={msg.attachmentType} 
-                      name={msg.attachmentName}
-                      isClient={msg.senderType === 'client'}
-                    />
-                  )}
-                  <p className={`text-xs mt-1 ${
-                    msg.senderType === 'client' ? 'text-green-100' : 'text-gray-400'
-                  }`}>
-                    {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                  </p>
+                  <div
+                    className={`max-w-[80%] rounded-2xl px-4 py-2 ${
+                      msg.senderType === 'client'
+                        ? 'bg-green-600 text-white rounded-br-md'
+                        : 'bg-white text-gray-800 rounded-bl-md shadow'
+                    }`}
+                  >
+                    {msg.message && <p className="text-sm">{msg.message}</p>}
+                    {msg.attachmentUrl && msg.attachmentType && (
+                      <AttachmentPreview 
+                        url={msg.attachmentUrl} 
+                        type={msg.attachmentType} 
+                        name={msg.attachmentName}
+                        isClient={msg.senderType === 'client'}
+                      />
+                    )}
+                    <div className={`flex items-center gap-1 mt-1 ${
+                      msg.senderType === 'client' ? 'justify-end' : ''
+                    }`}>
+                      <p className={`text-xs ${
+                        msg.senderType === 'client' ? 'text-green-100' : 'text-gray-400'
+                      }`}>
+                        {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </p>
+                      {msg.senderType === 'client' && msg.isRead && isLastClientMsg && (
+                        <span className="flex items-center gap-0.5 text-green-200">
+                          <CheckCheck className="h-3.5 w-3.5" />
+                          <span className="text-[10px]">Seen</span>
+                        </span>
+                      )}
+                    </div>
+                  </div>
                 </div>
-              </div>
-            ))
+              );
+            })
           ) : (
             <div className="text-center py-12">
               <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">

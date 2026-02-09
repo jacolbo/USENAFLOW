@@ -11,13 +11,13 @@ import { useUpload } from "@/hooks/use-upload";
 import { queryClient } from "@/lib/queryClient";
 import { getAdminHeaders } from "@/lib/adminAuth";
 import { UserRoles, type Project } from "@shared/schema";
-import { ArrowLeft, Send, MessageCircle, User, Clock, Loader2, Search, X, Paperclip, Mic, Video, Image, FileText, Play, Pause, Download } from "lucide-react";
+import { ArrowLeft, Send, MessageCircle, User, Clock, Loader2, Search, X, Paperclip, Mic, Video, Image, FileText, Play, Pause, Download, Bot } from "lucide-react";
 import { format, formatDistanceToNow } from "date-fns";
 
 interface Message {
   id: string;
   projectId: string;
-  senderType: "client" | "retoucher";
+  senderType: "client" | "retoucher" | "system";
   senderEmail: string;
   message: string;
   channel?: string;
@@ -427,37 +427,54 @@ export default function EditorChat() {
                   </div>
                 ) : (
                   <div className="space-y-3">
-                    {messagesQuery.data?.map((msg) => (
-                      <div
-                        key={msg.id}
-                        className={`flex ${msg.senderType === "retoucher" ? "justify-end" : "justify-start"}`}
-                      >
+                    {messagesQuery.data?.map((msg) => {
+                      if (msg.senderType === "system") {
+                        return (
+                          <div key={msg.id} className="flex justify-center my-1">
+                            <div className="bg-blue-50 dark:bg-blue-950/30 border border-blue-100 dark:border-blue-900 rounded-lg px-3 py-1.5 max-w-[80%]">
+                              <div className="flex items-center gap-1.5">
+                                <Bot className="h-3 w-3 text-blue-500" />
+                                <span className="text-xs text-blue-600 dark:text-blue-400">{msg.message}</span>
+                              </div>
+                              <p className="text-[10px] text-blue-400 mt-0.5">
+                                {format(new Date(msg.createdAt), "h:mm a")}
+                              </p>
+                            </div>
+                          </div>
+                        );
+                      }
+                      return (
                         <div
-                          className={`max-w-[70%] rounded-2xl px-4 py-2 ${
-                            msg.senderType === "retoucher"
-                              ? "bg-primary text-primary-foreground rounded-br-md"
-                              : "bg-muted rounded-bl-md"
-                          }`}
+                          key={msg.id}
+                          className={`flex ${msg.senderType === "retoucher" ? "justify-end" : "justify-start"}`}
                         >
-                          {msg.message && <p className="text-sm whitespace-pre-wrap">{msg.message}</p>}
-                          {msg.attachmentUrl && msg.attachmentType && (
-                            <AttachmentPreview 
-                              url={msg.attachmentUrl} 
-                              type={msg.attachmentType} 
-                              name={msg.attachmentName}
-                            />
-                          )}
-                          <div className={`text-xs mt-1 flex items-center gap-1 ${
-                            msg.senderType === "retoucher" ? "text-primary-foreground/70" : "text-muted-foreground"
-                          }`}>
-                            {format(new Date(msg.createdAt), "h:mm a")}
-                            {msg.channel && msg.channel !== "web" && (
-                              <span className="ml-1">via {msg.channel}</span>
+                          <div
+                            className={`max-w-[70%] rounded-2xl px-4 py-2 ${
+                              msg.senderType === "retoucher"
+                                ? "bg-primary text-primary-foreground rounded-br-md"
+                                : "bg-muted rounded-bl-md"
+                            }`}
+                          >
+                            {msg.message && <p className="text-sm whitespace-pre-wrap">{msg.message}</p>}
+                            {msg.attachmentUrl && msg.attachmentType && (
+                              <AttachmentPreview 
+                                url={msg.attachmentUrl} 
+                                type={msg.attachmentType} 
+                                name={msg.attachmentName}
+                              />
                             )}
+                            <div className={`text-xs mt-1 flex items-center gap-1 ${
+                              msg.senderType === "retoucher" ? "text-primary-foreground/70" : "text-muted-foreground"
+                            }`}>
+                              {format(new Date(msg.createdAt), "h:mm a")}
+                              {msg.channel && msg.channel !== "web" && (
+                                <span className="ml-1">via {msg.channel}</span>
+                              )}
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                     <div ref={messagesEndRef} />
                   </div>
                 )}

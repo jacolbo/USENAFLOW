@@ -138,7 +138,7 @@ export const appSettings = pgTable("app_settings", {
 export const clientMessages = pgTable("client_messages", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   projectId: varchar("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
-  senderType: text("sender_type").notNull(), // 'client' or 'retoucher'
+  senderType: text("sender_type").notNull(), // 'client', 'retoucher', or 'system'
   senderEmail: text("sender_email").notNull(), // client email or retoucher username
   message: text("message").notNull(),
   isRead: boolean("is_read").notNull().default(false),
@@ -146,6 +146,7 @@ export const clientMessages = pgTable("client_messages", {
   attachmentUrl: text("attachment_url"),
   attachmentType: text("attachment_type"), // 'image', 'video', 'audio', 'file'
   attachmentName: text("attachment_name"),
+  readAt: timestamp("read_at"),
 });
 
 // Client authentication tokens for chat access
@@ -474,6 +475,7 @@ export type UpdateCalendarEventStaging = z.infer<typeof updateCalendarEventStagi
 export const insertClientMessageSchema = createInsertSchema(clientMessages).omit({
   id: true,
   createdAt: true,
+  readAt: true,
 });
 
 export type ClientMessage = typeof clientMessages.$inferSelect;

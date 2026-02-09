@@ -12,6 +12,7 @@ import {
   type CalendarEventStaging,
 } from "@shared/schema";
 import { verifyAdminRequest, verifyChatRequest } from "./middleware/adminAuth";
+import { handleClientMessageAutoResponse, clearPendingAutoResponse } from './services/chatAutoResponder';
 import { 
   normalizeEvent, 
   NormalizedEvent,
@@ -965,6 +966,8 @@ export function registerShoottrackerRoutes(app: Express): void {
         attachmentName: attachmentName || null,
       });
       
+      handleClientMessageAutoResponse(authToken.projectId);
+
       res.json({ success: true, message: newMessage });
     } catch (error: any) {
       console.error("Error sending chat message:", error);
@@ -1061,6 +1064,8 @@ export function registerShoottrackerRoutes(app: Express): void {
         attachmentType: attachmentType || null,
         attachmentName: attachmentName || null,
       });
+      
+      clearPendingAutoResponse(projectId);
       
       // Send email notification to client if they have an email
       if (project.clientEmail) {

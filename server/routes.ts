@@ -13,6 +13,7 @@ import { registerShoottrackerRoutes } from "./shoottrackerRoutes";
 import { sendAssignmentWelcomeEmail, sendGalleryDeliveryEmail, sendSneakPeekEmail, sendSatisfactionSurveyEmail, sendSchedulingNotificationEmail, sendManualDelayNoticeEmail, generateToken } from "./services/emailService";
 import { seedDefaultTemplates } from "./services/defaultEmailTemplates";
 import { VipTier } from "@shared/schema";
+import { sendStatusUpdateMessage } from './services/chatAutoResponder';
 
 // Global WebSocket connections store
 const wsConnections = new Map<string, { ws: WebSocket, userId?: string }>();
@@ -316,6 +317,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         if (notification) {
           broadcastNotification(notification);
         }
+
+        sendStatusUpdateMessage(project.id, oldProject.status, project.status);
       }
 
       // Check if project was just assigned to a retoucher (assignedTo changed from null/different to a new value)
