@@ -592,6 +592,8 @@ export const clientProfiles = pgTable("client_profiles", {
   rewardScore: integer("reward_score").notNull().default(0),
   rewardTier: text("reward_tier").notNull().default("Bronze"),
   lastRewardSyncAt: timestamp("last_reward_sync_at"),
+  unsubscribed: boolean("unsubscribed").notNull().default(false),
+  unsubscribedAt: timestamp("unsubscribed_at"),
   createdAt: timestamp("created_at").notNull().default(sql`now()`),
   updatedAt: timestamp("updated_at").notNull().default(sql`now()`),
 });

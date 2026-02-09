@@ -396,6 +396,17 @@ export async function syncRewards(yearsBack: number = 2): Promise<{
 
     const profilesByEmail = new Map(existingProfiles.map(p => [p.clientEmail.toLowerCase(), p]));
 
+    const unsubscribedEmails = new Set<string>();
+    for (const p of existingProfiles) {
+      if (p.unsubscribed && p.clientEmail) {
+        const originalEmail = p.clientEmail.replace(/^unsubscribed_\d+_/, '');
+        unsubscribedEmails.add(originalEmail.toLowerCase());
+      }
+    }
+    if (unsubscribedEmails.size > 0) {
+      console.log(`🎁 [Rewards] Skipping ${unsubscribedEmails.size} unsubscribed email(s)`);
+    }
+
     const processedEmails = new Set<string>();
 
     for (const client of mergedClients) {
@@ -406,7 +417,11 @@ export async function syncRewards(yearsBack: number = 2): Promise<{
         const normName = normalizeClientName(primaryName);
         const pendingEmail = `${normName.replace(/\s+/g, '.')}@unknown.pending`;
 
-        const clientEmail = realEmail || pendingEmail;
+        let clientEmail = realEmail || pendingEmail;
+
+        if (realEmail && unsubscribedEmails.has(realEmail.toLowerCase())) {
+          clientEmail = pendingEmail;
+        }
 
         if (realEmail) {
           const existingPending = profilesByEmail.get(pendingEmail);

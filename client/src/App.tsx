@@ -10,6 +10,7 @@ import ClientChat from "@/pages/client-chat";
 import EditorChat from "@/pages/editor-chat";
 import SurveyPage from "@/pages/survey";
 import ReferralPage from "@/pages/referral";
+import UnsubscribePage from "@/pages/unsubscribe";
 import NotFound from "@/pages/not-found";
 
 function Router() {
@@ -22,6 +23,7 @@ function Router() {
       <Route path="/editor-chat" component={EditorChat} />
       <Route path="/survey/:token" component={SurveyPage} />
       <Route path="/refer/:code" component={ReferralPage} />
+      <Route path="/unsubscribe/:token" component={UnsubscribePage} />
       <Route component={NotFound} />
     </Switch>
   );

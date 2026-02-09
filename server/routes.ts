@@ -1913,7 +1913,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       } else if (tier) {
         const profiles = await storage.getAllClientProfiles();
         recipients = profiles
-          .filter(p => p.rewardTier === tier && p.clientEmail && !p.clientEmail.includes('@unknown.pending'))
+          .filter(p => p.rewardTier === tier && p.clientEmail && !p.clientEmail.includes('@unknown.pending') && !p.unsubscribed && !p.clientEmail.startsWith('unsubscribed_'))
           .map(p => p.clientEmail);
       }
 
@@ -1927,6 +1927,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       for (const email of recipients) {
         try {
+          const unsubToken = Buffer.from(email).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+          const baseUrl = `${req.protocol}://${req.get('host')}`;
+          const unsubLink = `${baseUrl}/unsubscribe/${unsubToken}`;
+
           await client.emails.send({
             from: fromEmail,
             to: email,
@@ -1941,6 +1945,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 </div>
                 <div style="text-align: center; color: #888; font-size: 12px; margin-top: 20px;">
                   <p>Jepson Myles Studio | Photography Excellence</p>
+                  <p style="margin-top: 8px;"><a href="${unsubLink}" style="color: #888; text-decoration: underline;">Unsubscribe</a></p>
                 </div>
               </div>
             `,
@@ -1956,6 +1961,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error: any) {
       console.error("Error sending rewards email:", error);
       res.status(500).json({ error: error.message || "Failed to send emails" });
+    }
+  });
+
+  app.get("/api/rewards/unsubscribe", async (req, res) => {
+    try {
+      const token = req.query.token as string;
+      if (!token) {
+        return res.status(400).json({ error: "Invalid unsubscribe link" });
+      }
+
+      const paddedToken = token.replace(/-/g, '+').replace(/_/g, '/');
+      const email = Buffer.from(paddedToken, 'base64').toString('utf-8').toLowerCase();
+      if (!email || !email.includes('@')) {
+        return res.status(400).json({ error: "Invalid unsubscribe link" });
+      }
+
+      const profile = await storage.getClientProfile(email);
+      if (profile) {
+        await storage.updateClientProfile(profile.id, {
+          unsubscribed: true,
+          unsubscribedAt: new Date(),
+          clientEmail: `unsubscribed_${Date.now()}_${email}`,
+        });
+      }
+
+      res.json({ success: true, message: "You have been unsubscribed successfully" });
+    } catch (error: any) {
+      console.error("Error processing unsubscribe:", error);
+      res.status(500).json({ error: "Failed to process unsubscribe request" });
     }
   });
 
