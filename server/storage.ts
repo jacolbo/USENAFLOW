@@ -1,4 +1,4 @@
-import { type User, type InsertUser, type Project, type InsertProject, type UpdateProject, type ProjectNote, type InsertProjectNote, type UpdateProjectNote, type TradeOffer, type InsertTradeOffer, type UpdateTradeOffer, type WranglerCommission, type InsertWranglerCommission, type ProjectEvent, type InsertProjectEvent, type Complaint, type InsertComplaint, type ShoottrackerMeta, type InsertShoottrackerMeta, type UpdateShoottrackerMeta, type AppSetting, type CalendarEventStaging, type InsertCalendarEventStaging, type UpdateCalendarEventStaging, type ClientAuthToken, type InsertClientAuthToken, type ClientMessage, type InsertClientMessage, type DashboardPreferences, type InsertDashboardPreferences, type SneakPeek, type InsertSneakPeek, type Survey, type InsertSurvey, type Referral, type InsertReferral, type ClientProfile, type InsertClientProfile, type RewardClaim, type InsertRewardClaim, type EmailTemplate, type InsertEmailTemplate, type PushSubscription, type InsertPushSubscription, ProjectStatus, TradeOfferStatus, StagingStatus, users, projects, projectNotes, tradeOffers, wranglerCommissions, projectEvents, complaints, shoottrackerMeta, appSettings, calendarEventsStaging, clientAuthTokens, clientMessages, dashboardPreferences, sneakPeeks, clientSurveys, referrals, clientProfiles, referralRewardClaims, emailTemplates, pushSubscriptions } from "@shared/schema";
+import { type User, type InsertUser, type Project, type InsertProject, type UpdateProject, type ProjectNote, type InsertProjectNote, type UpdateProjectNote, type TradeOffer, type InsertTradeOffer, type UpdateTradeOffer, type WranglerCommission, type InsertWranglerCommission, type ProjectEvent, type InsertProjectEvent, type Complaint, type InsertComplaint, type ShoottrackerMeta, type InsertShoottrackerMeta, type UpdateShoottrackerMeta, type AppSetting, type CalendarEventStaging, type InsertCalendarEventStaging, type UpdateCalendarEventStaging, type ClientAuthToken, type InsertClientAuthToken, type ClientMessage, type InsertClientMessage, type DashboardPreferences, type InsertDashboardPreferences, type SneakPeek, type InsertSneakPeek, type Survey, type InsertSurvey, type Referral, type InsertReferral, type ClientProfile, type InsertClientProfile, type RewardClaim, type InsertRewardClaim, type EmailTemplate, type InsertEmailTemplate, type PushSubscription, type InsertPushSubscription, ProjectStatus, TradeOfferStatus, StagingStatus, users, projects, projectNotes, tradeOffers, wranglerCommissions, projectEvents, complaints, shoottrackerMeta, appSettings, calendarEventsStaging, clientAuthTokens, clientMessages, dashboardPreferences, sneakPeeks, clientSurveys, referrals, clientProfiles, referralRewardClaims, emailTemplates, pushSubscriptions, chatEncryptionKeys } from "@shared/schema";
 import { db } from "./db";
 import { eq, sql, asc, and, ilike } from "drizzle-orm";
 import { randomUUID } from "crypto";
@@ -810,6 +810,13 @@ export class MemStorage implements IStorage {
     return [];
   }
   async deletePushSubscription(endpoint: string): Promise<void> {}
+
+  async getChatEncryptionKey(projectId: string): Promise<{ encryptionKey: string; createdBy: string } | undefined> {
+    throw new Error("Not implemented in MemStorage");
+  }
+  async setChatEncryptionKey(projectId: string, encryptionKey: string, createdBy: string): Promise<void> {
+    throw new Error("Not implemented in MemStorage");
+  }
 }
 
 // Database Storage Implementation
@@ -1621,6 +1628,23 @@ export class DatabaseStorage implements IStorage {
 
   async deletePushSubscription(endpoint: string): Promise<void> {
     await db.delete(pushSubscriptions).where(eq(pushSubscriptions.endpoint, endpoint));
+  }
+
+  async getChatEncryptionKey(projectId: string): Promise<{ encryptionKey: string; createdBy: string } | undefined> {
+    const [result] = await db.select().from(chatEncryptionKeys).where(eq(chatEncryptionKeys.projectId, projectId));
+    if (!result) return undefined;
+    return { encryptionKey: result.encryptionKey, createdBy: result.createdBy };
+  }
+
+  async setChatEncryptionKey(projectId: string, encryptionKey: string, createdBy: string): Promise<void> {
+    const existing = await db.select().from(chatEncryptionKeys).where(eq(chatEncryptionKeys.projectId, projectId));
+    if (existing.length > 0) {
+      await db.update(chatEncryptionKeys)
+        .set({ encryptionKey, createdBy })
+        .where(eq(chatEncryptionKeys.projectId, projectId));
+    } else {
+      await db.insert(chatEncryptionKeys).values({ projectId, encryptionKey, createdBy });
+    }
   }
 }
 

@@ -3064,6 +3064,175 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ============================================
+  // E2EE Key Exchange Routes
+  // ============================================
+  app.get("/api/chat/encryption-key/:projectId", async (req, res) => {
+    try {
+      const { projectId } = req.params;
+      const result = await storage.getChatEncryptionKey(projectId);
+      if (!result) {
+        return res.status(404).json({ error: "No encryption key found" });
+      }
+      res.json(result);
+    } catch (error: any) {
+      console.error("Error fetching encryption key:", error);
+      res.status(500).json({ error: "Failed to fetch encryption key" });
+    }
+  });
+
+  app.post("/api/chat/encryption-key/:projectId", async (req, res) => {
+    try {
+      const { projectId } = req.params;
+      const { encryptionKey, createdBy } = req.body;
+      if (!encryptionKey || !createdBy) {
+        return res.status(400).json({ error: "encryptionKey and createdBy are required" });
+      }
+      await storage.setChatEncryptionKey(projectId, encryptionKey, createdBy);
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error("Error storing encryption key:", error);
+      res.status(500).json({ error: "Failed to store encryption key" });
+    }
+  });
+
+  // ============================================
+  // WebRTC Voice Call Signaling Routes
+  // ============================================
+  const activeCalls = new Map<string, {
+    offer?: any;
+    answer?: any;
+    callerType: string;
+    iceCandidates: { client: any[]; retoucher: any[] };
+    status: 'ringing' | 'connected' | 'ended';
+    createdAt: number;
+  }>();
+
+  function cleanupOldCalls() {
+    const fiveMinutesAgo = Date.now() - 5 * 60 * 1000;
+    for (const [key, call] of activeCalls) {
+      if (call.createdAt < fiveMinutesAgo) {
+        activeCalls.delete(key);
+      }
+    }
+  }
+
+  app.post("/api/chat/call/initiate/:projectId", async (req, res) => {
+    try {
+      cleanupOldCalls();
+      const { projectId } = req.params;
+      const { callerType, offer } = req.body;
+      if (!callerType || !offer) {
+        return res.status(400).json({ error: "callerType and offer are required" });
+      }
+      activeCalls.set(projectId, {
+        offer,
+        callerType,
+        iceCandidates: { client: [], retoucher: [] },
+        status: 'ringing',
+        createdAt: Date.now(),
+      });
+      res.json({ success: true });
+    } catch (error: any) {
+      res.status(500).json({ error: "Failed to initiate call" });
+    }
+  });
+
+  app.get("/api/chat/call/status/:projectId", async (req, res) => {
+    try {
+      cleanupOldCalls();
+      const { projectId } = req.params;
+      const call = activeCalls.get(projectId);
+      if (!call || call.status === 'ended') {
+        return res.json({ active: false });
+      }
+      res.json({
+        active: true,
+        status: call.status,
+        callerType: call.callerType,
+        offer: call.offer,
+      });
+    } catch (error: any) {
+      res.status(500).json({ error: "Failed to get call status" });
+    }
+  });
+
+  app.post("/api/chat/call/answer/:projectId", async (req, res) => {
+    try {
+      const { projectId } = req.params;
+      const { answer } = req.body;
+      const call = activeCalls.get(projectId);
+      if (!call) {
+        return res.status(404).json({ error: "No active call" });
+      }
+      call.answer = answer;
+      call.status = 'connected';
+      res.json({ success: true });
+    } catch (error: any) {
+      res.status(500).json({ error: "Failed to answer call" });
+    }
+  });
+
+  app.get("/api/chat/call/answer/:projectId", async (req, res) => {
+    try {
+      const { projectId } = req.params;
+      const call = activeCalls.get(projectId);
+      if (!call || !call.answer) {
+        return res.json({ answered: false });
+      }
+      res.json({ answered: true, answer: call.answer });
+    } catch (error: any) {
+      res.status(500).json({ error: "Failed to get answer" });
+    }
+  });
+
+  app.post("/api/chat/call/ice/:projectId", async (req, res) => {
+    try {
+      const { projectId } = req.params;
+      const { candidate, from } = req.body;
+      const call = activeCalls.get(projectId);
+      if (!call) {
+        return res.status(404).json({ error: "No active call" });
+      }
+      if (from === 'client') {
+        call.iceCandidates.client.push(candidate);
+      } else {
+        call.iceCandidates.retoucher.push(candidate);
+      }
+      res.json({ success: true });
+    } catch (error: any) {
+      res.status(500).json({ error: "Failed to send ICE candidate" });
+    }
+  });
+
+  app.get("/api/chat/call/ice/:projectId/:role", async (req, res) => {
+    try {
+      const { projectId, role } = req.params;
+      const call = activeCalls.get(projectId);
+      if (!call) {
+        return res.json({ candidates: [] });
+      }
+      const candidates = role === 'client' ? call.iceCandidates.retoucher : call.iceCandidates.client;
+      res.json({ candidates });
+    } catch (error: any) {
+      res.status(500).json({ error: "Failed to get ICE candidates" });
+    }
+  });
+
+  app.post("/api/chat/call/end/:projectId", async (req, res) => {
+    try {
+      const { projectId } = req.params;
+      const call = activeCalls.get(projectId);
+      if (call) {
+        call.status = 'ended';
+      }
+      activeCalls.delete(projectId);
+      res.json({ success: true });
+    } catch (error: any) {
+      res.status(500).json({ error: "Failed to end call" });
+    }
+  });
+
   // Start Drive monitor automatically
   try {
     const { startDriveMonitor } = await import('./services/driveMonitorService');

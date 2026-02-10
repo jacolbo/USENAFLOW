@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -7,6 +7,8 @@ import { Input } from "@/components/ui/input";
 import { useUpload } from "@/hooks/use-upload";
 import { Send, Loader2, MessageCircle, User, Camera, AlertCircle, Paperclip, Mic, FileText, Play, Pause, Download, X, Image, Video, Clock, CheckCheck, Bot, Bell, Phone, Lock, ShieldCheck } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
+import { getOrCreateKey, storeKeyFromRemote, getExportedKey, encryptMessage, decryptMessage, isEncrypted } from "@/lib/e2ee";
+import VoiceCall from "@/components/voice-call";
 
 interface Message {
   id: string;
@@ -183,6 +185,9 @@ export default function ClientChat() {
   const [email, setEmail] = useState("");
   const [authError, setAuthError] = useState("");
   const [isRecording, setIsRecording] = useState(false);
+  const [showCall, setShowCall] = useState(false);
+  const [incomingCallOffer, setIncomingCallOffer] = useState<any>(null);
+  const [decryptedMessages, setDecryptedMessages] = useState<Map<string, string>>(new Map());
   const [pendingAttachment, setPendingAttachment] = useState<{
     url: string;
     type: "image" | "video" | "audio" | "file";
@@ -192,6 +197,7 @@ export default function ClientChat() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
+  const [encryptionKey, setEncryptionKey] = useState<CryptoKey | null>(null);
   const queryClient = useQueryClient();
 
   const { uploadFile, isUploading, progress } = useUpload({
@@ -287,12 +293,21 @@ export default function ClientChat() {
     setIsAuthenticated(true);
   };
 
-  const handleSendMessage = (e: React.FormEvent) => {
+  const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     if ((!message.trim() && !pendingAttachment)) return;
     
+    let messageText = message.trim() || (pendingAttachment ? `Sent ${pendingAttachment.type}` : "");
+    if (encryptionKey && messageText) {
+      try {
+        messageText = await encryptMessage(messageText, encryptionKey);
+      } catch (err) {
+        console.error('Encryption failed, sending unencrypted:', err);
+      }
+    }
+    
     sendMessageMutation.mutate({ 
-      messageText: message.trim() || (pendingAttachment ? `Sent ${pendingAttachment.type}` : ""),
+      messageText,
       attachmentUrl: pendingAttachment?.url,
       attachmentType: pendingAttachment?.type,
       attachmentName: pendingAttachment?.name,
@@ -342,6 +357,81 @@ export default function ClientChat() {
       setIsRecording(false);
     }
   };
+
+  useEffect(() => {
+    if (!isAuthenticated || !authData?.projectId) return;
+    const projectId = authData.projectId;
+
+    async function initE2EE() {
+      if (!window.crypto?.subtle) return;
+      try {
+        const res = await fetch(`/api/chat/encryption-key/${projectId}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.encryptionKey) {
+            const key = await storeKeyFromRemote(projectId, 'client', data.encryptionKey);
+            setEncryptionKey(key);
+            return;
+          }
+        }
+        const key = await getOrCreateKey(projectId, 'client');
+        const exported = await getExportedKey(projectId, 'client');
+        if (exported) {
+          await fetch(`/api/chat/encryption-key/${projectId}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ encryptionKey: exported, createdBy: 'client' }),
+          });
+        }
+        setEncryptionKey(key);
+      } catch (err) {
+        console.error('E2EE init failed:', err);
+      }
+    }
+
+    initE2EE();
+  }, [isAuthenticated, authData?.projectId]);
+
+  useEffect(() => {
+    if (!isAuthenticated || !authData?.projectId || !encryptionKey) return;
+    if (!messages || messages.length === 0) return;
+
+    async function decryptAll() {
+      if (!encryptionKey) return;
+      const newMap = new Map<string, string>();
+      for (const msg of messages!) {
+        if (isEncrypted(msg.message)) {
+          try {
+            const decrypted = await decryptMessage(msg.message, encryptionKey);
+            newMap.set(msg.id, decrypted);
+          } catch {
+            newMap.set(msg.id, '[Unable to decrypt]');
+          }
+        }
+      }
+      setDecryptedMessages(newMap);
+    }
+
+    decryptAll();
+  }, [messages, isAuthenticated, authData?.projectId, encryptionKey]);
+
+  useEffect(() => {
+    if (!isAuthenticated || !authData?.projectId || showCall) return;
+    const projectId = authData.projectId;
+
+    const interval = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/chat/call/status/${projectId}`);
+        const data = await res.json();
+        if (data.active && data.status === 'ringing' && data.callerType !== 'client') {
+          setIncomingCallOffer(data.offer);
+          setShowCall(true);
+        }
+      } catch {}
+    }, 3000);
+
+    return () => clearInterval(interval);
+  }, [isAuthenticated, authData?.projectId, showCall]);
 
   useEffect(() => {
     if (messagesEndRef.current) {
@@ -520,13 +610,13 @@ export default function ClientChat() {
                 Chatting with {authData.project.assignedTo}
               </p>
             </div>
-            <a
-              href="tel:+27612345678"
+            <button
+              onClick={() => { setIncomingCallOffer(null); setShowCall(true); }}
               className="p-2 rounded-full hover:bg-green-700 transition-colors flex-shrink-0"
-              title="Call studio"
+              title="Voice call"
             >
               <Phone className="h-4 w-4" />
-            </a>
+            </button>
             <button 
               onClick={async () => {
                 if ('Notification' in window && Notification.permission === 'default') {
@@ -575,7 +665,7 @@ export default function ClientChat() {
                         <Bot className="h-3.5 w-3.5 text-blue-500" />
                         <span className="text-xs font-medium text-blue-500">Automated Message</span>
                       </div>
-                      <p className="text-sm text-blue-800">{msg.message}</p>
+                      <p className="text-sm text-blue-800">{decryptedMessages.get(msg.id) || msg.message}</p>
                       <p className="text-xs text-blue-400 mt-1">
                         {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                       </p>
@@ -599,7 +689,7 @@ export default function ClientChat() {
                         : 'bg-white text-gray-800 rounded-bl-md shadow'
                     }`}
                   >
-                    {msg.message && <p className="text-sm">{msg.message}</p>}
+                    {msg.message && <p className="text-sm">{decryptedMessages.get(msg.id) || msg.message}</p>}
                     {msg.attachmentUrl && msg.attachmentType && (
                       <AttachmentPreview 
                         url={msg.attachmentUrl} 
@@ -726,6 +816,14 @@ export default function ClientChat() {
           </form>
         </div>
       </footer>
+      {showCall && authData?.projectId && (
+        <VoiceCall
+          projectId={authData.projectId}
+          callerType="client"
+          onClose={() => { setShowCall(false); setIncomingCallOffer(null); }}
+          incomingOffer={incomingCallOffer}
+        />
+      )}
     </div>
   );
 }

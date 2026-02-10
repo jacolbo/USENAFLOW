@@ -11,8 +11,10 @@ import { useUpload } from "@/hooks/use-upload";
 import { queryClient } from "@/lib/queryClient";
 import { getAdminHeaders } from "@/lib/adminAuth";
 import { UserRoles, type Project } from "@shared/schema";
-import { ArrowLeft, Send, MessageCircle, User, Clock, Loader2, Search, X, Paperclip, Mic, Video, Image, FileText, Play, Pause, Download, Bot, Wand2 } from "lucide-react";
+import { ArrowLeft, Send, MessageCircle, User, Clock, Loader2, Search, X, Paperclip, Mic, Video, Image, FileText, Play, Pause, Download, Bot, Wand2, Phone } from "lucide-react";
 import { format, formatDistanceToNow } from "date-fns";
+import { getOrCreateKey, storeKeyFromRemote, getExportedKey, encryptMessage, decryptMessage, isEncrypted } from "@/lib/e2ee";
+import VoiceCall from "@/components/voice-call";
 
 interface Message {
   id: string;
@@ -109,6 +111,10 @@ export default function EditorChat() {
   const [isRecording, setIsRecording] = useState(false);
   const [showSuggestion, setShowSuggestion] = useState(false);
   const [suggestedText, setSuggestedText] = useState("");
+  const [showCall, setShowCall] = useState(false);
+  const [incomingCallOffer, setIncomingCallOffer] = useState<any>(null);
+  const [decryptedMessages, setDecryptedMessages] = useState<Map<string, string>>(new Map());
+  const [encryptionKey, setEncryptionKey] = useState<CryptoKey | null>(null);
   const [pendingAttachment, setPendingAttachment] = useState<{
     url: string;
     type: "image" | "video" | "audio" | "file";
@@ -266,13 +272,99 @@ export default function EditorChat() {
     }
   }, [messagesQuery.data]);
 
-  const handleSendMessage = (e: React.FormEvent) => {
+  useEffect(() => {
+    if (!selectedProjectId) {
+      setEncryptionKey(null);
+      return;
+    }
+
+    async function initE2EE() {
+      if (!window.crypto?.subtle) return;
+      try {
+        const res = await fetch(`/api/chat/encryption-key/${selectedProjectId}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.encryptionKey) {
+            const key = await storeKeyFromRemote(selectedProjectId!, 'retoucher', data.encryptionKey);
+            setEncryptionKey(key);
+            return;
+          }
+        }
+        const key = await getOrCreateKey(selectedProjectId!, 'retoucher');
+        const exported = await getExportedKey(selectedProjectId!, 'retoucher');
+        if (exported) {
+          await fetch(`/api/chat/encryption-key/${selectedProjectId}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ encryptionKey: exported, createdBy: 'retoucher' }),
+          });
+        }
+        setEncryptionKey(key);
+      } catch (err) {
+        console.error('E2EE init failed:', err);
+      }
+    }
+
+    initE2EE();
+  }, [selectedProjectId]);
+
+  useEffect(() => {
+    if (!selectedProjectId || !encryptionKey) return;
+    const msgs = messagesQuery.data;
+    if (!msgs || msgs.length === 0) return;
+
+    async function decryptAll() {
+      if (!encryptionKey) return;
+      const newMap = new Map<string, string>();
+      for (const msg of msgs!) {
+        if (isEncrypted(msg.message)) {
+          try {
+            const decrypted = await decryptMessage(msg.message, encryptionKey);
+            newMap.set(msg.id, decrypted);
+          } catch {
+            newMap.set(msg.id, '[Unable to decrypt]');
+          }
+        }
+      }
+      setDecryptedMessages(newMap);
+    }
+
+    decryptAll();
+  }, [messagesQuery.data, selectedProjectId, encryptionKey]);
+
+  useEffect(() => {
+    if (!selectedProjectId || showCall) return;
+
+    const interval = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/chat/call/status/${selectedProjectId}`);
+        const data = await res.json();
+        if (data.active && data.status === 'ringing' && data.callerType !== 'retoucher') {
+          setIncomingCallOffer(data.offer);
+          setShowCall(true);
+        }
+      } catch {}
+    }, 3000);
+
+    return () => clearInterval(interval);
+  }, [selectedProjectId, showCall]);
+
+  const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     if ((!messageText.trim() && !pendingAttachment) || !selectedProjectId) return;
     
+    let msgContent = messageText.trim() || (pendingAttachment ? `Sent ${pendingAttachment.type}` : "");
+    if (encryptionKey && msgContent) {
+      try {
+        msgContent = await encryptMessage(msgContent, encryptionKey);
+      } catch (err) {
+        console.error('Encryption failed, sending unencrypted:', err);
+      }
+    }
+    
     sendMessageMutation.mutate({ 
       projectId: selectedProjectId, 
-      message: messageText.trim() || (pendingAttachment ? `Sent ${pendingAttachment.type}` : ""),
+      message: msgContent,
       attachmentUrl: pendingAttachment?.url,
       attachmentType: pendingAttachment?.type,
       attachmentName: pendingAttachment?.name,
@@ -445,10 +537,19 @@ export default function EditorChat() {
                   <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
                     <User className="h-5 w-5 text-primary" />
                   </div>
-                  <div>
+                  <div className="flex-1">
                     <div className="font-medium">{selectedProject.project.clientName}</div>
                     <div className="text-sm text-muted-foreground">{selectedProject.project.clientEmail}</div>
                   </div>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => { setIncomingCallOffer(null); setShowCall(true); }}
+                    title="Voice call"
+                    className="text-green-600 hover:text-green-700 hover:bg-green-50"
+                  >
+                    <Phone className="h-5 w-5" />
+                  </Button>
                 </div>
               </div>
 
@@ -472,7 +573,7 @@ export default function EditorChat() {
                             <div className="bg-blue-50 dark:bg-blue-950/30 border border-blue-100 dark:border-blue-900 rounded-lg px-3 py-1.5 max-w-[80%]">
                               <div className="flex items-center gap-1.5">
                                 <Bot className="h-3 w-3 text-blue-500" />
-                                <span className="text-xs text-blue-600 dark:text-blue-400">{msg.message}</span>
+                                <span className="text-xs text-blue-600 dark:text-blue-400">{decryptedMessages.get(msg.id) || msg.message}</span>
                               </div>
                               <p className="text-[10px] text-blue-400 mt-0.5">
                                 {format(new Date(msg.createdAt), "h:mm a")}
@@ -493,7 +594,7 @@ export default function EditorChat() {
                                 : "bg-muted rounded-bl-md"
                             }`}
                           >
-                            {msg.message && <p className="text-sm whitespace-pre-wrap">{msg.message}</p>}
+                            {msg.message && <p className="text-sm whitespace-pre-wrap">{decryptedMessages.get(msg.id) || msg.message}</p>}
                             {msg.attachmentUrl && msg.attachmentType && (
                               <AttachmentPreview 
                                 url={msg.attachmentUrl} 
@@ -667,6 +768,14 @@ export default function EditorChat() {
           )}
         </div>
       </div>
+      {showCall && selectedProjectId && (
+        <VoiceCall
+          projectId={selectedProjectId}
+          callerType="retoucher"
+          onClose={() => { setShowCall(false); setIncomingCallOffer(null); }}
+          incomingOffer={incomingCallOffer}
+        />
+      )}
     </div>
   );
 }
