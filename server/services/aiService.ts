@@ -7,6 +7,27 @@ const openai = new OpenAI({
 
 export async function rephraseEmailHtml(htmlContent: string, clientName: string): Promise<string> {
   try {
+    const protectedBlocks: Map<string, string> = new Map();
+    let counter = 0;
+
+    let processedHtml = htmlContent;
+
+    const protectPattern = (regex: RegExp) => {
+      processedHtml = processedHtml.replace(regex, (match) => {
+        const placeholder = `<!--PROTECTED_BLOCK_${counter}-->`;
+        protectedBlocks.set(placeholder, match);
+        counter++;
+        return placeholder;
+      });
+    };
+
+    protectPattern(/<a\s[^>]*href[^>]*>[\s\S]*?<\/a>/gi);
+    protectPattern(/<div[^>]*>[\s\S]*?<a\s[^>]*href[^>]*>[\s\S]*?<\/a>[\s\S]*?<\/div>/gi);
+    protectPattern(/<div[^>]*>[\s\S]*?(?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)[\s\S]*?<\/div>/gi);
+    protectPattern(/<div[^>]*>[\s\S]*?(?:How it works|Tip:|How to reply)[\s\S]*?<\/div>/gi);
+    protectPattern(/<div[^>]*>[\s\S]*?(?:verify your identity|enter your email)[\s\S]*?<\/div>/gi);
+    protectPattern(/<table[\s\S]*?<\/table>/gi);
+
     const response = await openai.chat.completions.create({
       model: "gpt-4o-mini",
       messages: [
@@ -21,6 +42,7 @@ RULES:
 - Do NOT change any HTML tags, attributes, inline styles, URLs, href values, src values, or any HTML structure.
 - Do NOT change the client's name, studio name, retoucher name, or any proper nouns.
 - Do NOT change any {{variable}} placeholders.
+- Do NOT change or remove any <!--PROTECTED_BLOCK_*--> comments — these MUST remain exactly as they are.
 - Do NOT add or remove any content — only rephrase existing text naturally.
 - Keep the same professional, warm, and friendly tone.
 - Make the changes subtle — it should read naturally, not like it was rewritten by a machine.
@@ -29,7 +51,7 @@ RULES:
         },
         {
           role: "user",
-          content: `Rephrase the body text in this email HTML for client "${clientName}". Return only the modified HTML:\n\n${htmlContent}`
+          content: `Rephrase the body text in this email HTML for client "${clientName}". Return only the modified HTML:\n\n${processedHtml}`
         }
       ],
       temperature: 0.8,
@@ -50,7 +72,22 @@ RULES:
       cleaned = cleaned.replace(/^```\s*/, "").replace(/\s*```$/, "");
     }
 
-    console.log(`[AI] Email rephrased for ${clientName} (${cleaned.length} chars)`);
+    for (const [placeholder, original] of protectedBlocks) {
+      cleaned = cleaned.replace(placeholder, original);
+    }
+
+    const missingBlocks: string[] = [];
+    for (const [placeholder, original] of protectedBlocks) {
+      if (!cleaned.includes(original.substring(0, 50))) {
+        missingBlocks.push(placeholder);
+      }
+    }
+    if (missingBlocks.length > 0) {
+      console.log(`[AI] Warning: ${missingBlocks.length} protected blocks may be missing after rephrase, using original`);
+      return htmlContent;
+    }
+
+    console.log(`[AI] Email rephrased for ${clientName} (${cleaned.length} chars, ${protectedBlocks.size} blocks protected)`);
     return cleaned;
   } catch (error: any) {
     console.error(`[AI] Rephrasing failed, using original:`, error.message);

@@ -113,26 +113,6 @@ export const DEFAULT_EMAIL_TEMPLATES: InsertEmailTemplate[] = [
     isCustomized: false,
   },
   {
-    templateKey: "project_assigned",
-    name: "Assignment Welcome",
-    subject: "Your Photo Project is Now in Progress! - {{clientName}}",
-    htmlBody: `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-  {{emailHeader}}
-  <p style="color: #333; font-size: 16px; line-height: 1.6;">Hi {{clientName}}!</p>
-  <div style="background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%); border-radius: 12px; padding: 25px; margin: 25px 0;">
-    <p style="color: #2e7d32; font-size: 18px; line-height: 1.6; margin: 0;">I'm <strong>{{retoucherName}}</strong> and I'll be handling your photo project!</p>
-  </div>
-  <p style="color: #333; font-size: 16px; line-height: 1.6;">Your project has been assigned and I'm excited to start working on your photos.</p>
-  <p style="color: #333; font-size: 16px; line-height: 1.6;">If you have any questions, want to provide additional notes, or need to share reference images, you can chat with me directly.</p>
-  <p style="color: #333; font-size: 16px; line-height: 1.6;">Looking forward to delivering beautiful photos for you!</p>
-  <p style="color: #333; font-size: 16px; line-height: 1.6;">Best regards,<br><strong>{{retoucherName}}</strong><br><span style="color: #666;">Jepson Myles Studio</span></p>
-  <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;">
-  <p style="color: #999; font-size: 12px; text-align: center;">This is an automated message from Jepson Myles Studio.</p>
-</div>`,
-    availableVariables: ["clientName", "retoucherName", "emailHeader"],
-    isCustomized: false,
-  },
-  {
     templateKey: "delay_notification",
     name: "Delay Notification",
     subject: "Update on Your Photo Delivery - {{clientName}}",

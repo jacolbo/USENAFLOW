@@ -10,7 +10,7 @@ import { registerObjectStorageRoutes } from "./replit_integrations/object_storag
 import type { Notification, WebSocketMessage } from "@shared/schema";
 import { triggerManualRollover, performManualRolloverToNextWeek, performManualRollbackFromNextWeek } from "./rolloverScheduler";
 import { registerShoottrackerRoutes } from "./shoottrackerRoutes";
-import { sendAssignmentWelcomeEmail, sendGalleryDeliveryEmail, sendSneakPeekEmail, sendSatisfactionSurveyEmail, sendSchedulingNotificationEmail, sendManualDelayNoticeEmail, generateToken } from "./services/emailService";
+import { sendChatLinkEmail, sendGalleryDeliveryEmail, sendSneakPeekEmail, sendSatisfactionSurveyEmail, sendSchedulingNotificationEmail, sendManualDelayNoticeEmail, generateToken } from "./services/emailService";
 import { seedDefaultTemplates } from "./services/defaultEmailTemplates";
 import { VipTier } from "@shared/schema";
 import { sendStatusUpdateMessage } from './services/chatAutoResponder';
@@ -634,29 +634,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
             console.log(`[Email] Created new chat token for project ${project.id}`);
           }
           
-          // Send the assignment welcome email
-          const photosSelected = project.selectedCount || 0;
-          const extras = project.extras || 0;
+          console.log(`[Email] Sending chat link email: client=${project.clientName}, retoucher=${retoucherDisplayName}`);
           
-          console.log(`[Email] Sending assignment email: client=${project.clientName}, retoucher=${retoucherDisplayName}, photos=${photosSelected}, extras=${extras}`);
-          
-          const emailResult = await sendAssignmentWelcomeEmail(
+          const emailResult = await sendChatLinkEmail(
             oldProject.clientEmail,
             project.clientName,
             retoucherDisplayName,
-            photosSelected,
-            extras,
             project.id,
             chatToken
           );
           
           if (emailResult.success) {
-            console.log(`[Email] Successfully sent assignment welcome email to ${oldProject.clientEmail}`);
+            console.log(`[Email] Successfully sent chat link email to ${oldProject.clientEmail}`);
           } else {
-            console.error(`[Email] Failed to send assignment welcome email: ${emailResult.error}`);
+            console.error(`[Email] Failed to send chat link email: ${emailResult.error}`);
           }
         } catch (emailError) {
-          console.error('[Email] Error sending assignment welcome email:', emailError);
+          console.error('[Email] Error sending chat link email:', emailError);
         }
       }
 
@@ -764,32 +758,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
               });
             }
             
-            // Send the assignment welcome email
-            const photosSelected = updatedProject.selectedCount || 0;
-            const extras = updatedProject.extras || 0;
+            console.log(`[Email Debug] Calling sendChatLinkEmail with: email=${project.clientEmail}, client=${project.clientName}, retoucher=${retoucherDisplayName}`);
             
-            console.log(`[Email Debug] Calling sendAssignmentWelcomeEmail with: email=${project.clientEmail}, client=${project.clientName}, retoucher=${retoucherDisplayName}, photos=${photosSelected}, extras=${extras}`);
-            
-            const emailResult = await sendAssignmentWelcomeEmail(
+            const emailResult = await sendChatLinkEmail(
               project.clientEmail,
               project.clientName,
               retoucherDisplayName,
-              photosSelected,
-              extras,
               project.id,
               chatToken
             );
             
-            console.log(`[Email Debug] sendAssignmentWelcomeEmail result:`, JSON.stringify(emailResult));
+            console.log(`[Email Debug] sendChatLinkEmail result:`, JSON.stringify(emailResult));
             
             if (emailResult.success) {
-              console.log(`[Email] Sent assignment welcome email to ${project.clientEmail} for project ${project.clientName} (retoucher: ${retoucherDisplayName})`);
+              console.log(`[Email] Sent chat link email to ${project.clientEmail} for project ${project.clientName} (retoucher: ${retoucherDisplayName})`);
             } else {
-              console.error(`[Email] Failed to send assignment welcome email: ${emailResult.error}`);
+              console.error(`[Email] Failed to send chat link email: ${emailResult.error}`);
             }
           } catch (emailError) {
-            console.error('[Email] Failed to send assignment welcome email:', emailError);
-            // Don't fail the assignment if email fails
+            console.error('[Email] Failed to send chat link email:', emailError);
           }
         }
       }
