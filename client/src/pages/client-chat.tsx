@@ -101,27 +101,38 @@ function PwaInstallBanner() {
     try { return localStorage.getItem('pwa-install-dismissed') === 'true'; } catch { return false; }
   });
   const [isInstalled, setIsInstalled] = useState(false);
+  const [isIos, setIsIos] = useState(false);
 
   useEffect(() => {
-    if (window.matchMedia('(display-mode: standalone)').matches) {
+    if (window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone === true) {
       setIsInstalled(true);
       return;
     }
-    const handler = (e: any) => {
-      e.preventDefault();
-      setInstallPrompt(e);
-    };
-    window.addEventListener('beforeinstallprompt', handler);
-    return () => window.removeEventListener('beforeinstallprompt', handler);
+
+    const ua = window.navigator.userAgent.toLowerCase();
+    const iosDevice = /iphone|ipad|ipod/.test(ua);
+    setIsIos(iosDevice);
+
+    if (!iosDevice) {
+      const handler = (e: any) => {
+        e.preventDefault();
+        setInstallPrompt(e);
+      };
+      window.addEventListener('beforeinstallprompt', handler);
+      return () => window.removeEventListener('beforeinstallprompt', handler);
+    }
   }, []);
 
-  if (isInstalled || dismissed || !installPrompt) return null;
+  if (isInstalled || dismissed) return null;
+  if (!isIos && !installPrompt) return null;
 
   const handleInstall = async () => {
-    installPrompt.prompt();
-    const result = await installPrompt.userChoice;
-    if (result.outcome === 'accepted') setIsInstalled(true);
-    setInstallPrompt(null);
+    if (installPrompt) {
+      installPrompt.prompt();
+      const result = await installPrompt.userChoice;
+      if (result.outcome === 'accepted') setIsInstalled(true);
+      setInstallPrompt(null);
+    }
   };
 
   const handleDismiss = () => {
@@ -129,11 +140,29 @@ function PwaInstallBanner() {
     try { localStorage.setItem('pwa-install-dismissed', 'true'); } catch {}
   };
 
+  if (isIos) {
+    return (
+      <div className="bg-green-50 border-b border-green-200 px-4 py-3">
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex-1">
+            <p className="text-sm font-medium text-green-800">Add to Home Screen</p>
+            <p className="text-xs text-green-600 mt-1">
+              Tap the <span className="inline-flex items-center"><svg className="inline h-3.5 w-3.5 mx-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 12v8a2 2 0 002 2h12a2 2 0 002-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg> Share</span> button below, then select <strong>"Add to Home Screen"</strong>
+            </p>
+          </div>
+          <button onClick={handleDismiss} className="text-green-400 hover:text-green-600 p-1 -mt-1 -mr-1">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="bg-green-50 border-b border-green-200 px-4 py-3 flex items-center justify-between">
       <div className="flex items-center gap-2">
         <Download className="h-4 w-4 text-green-600" />
-        <span className="text-sm text-green-800">Add to your home screen for quick access</span>
+        <span className="text-sm text-green-800">Add to home screen for quick access</span>
       </div>
       <div className="flex items-center gap-2">
         <Button size="sm" variant="outline" onClick={handleDismiss} className="text-xs">
@@ -477,31 +506,35 @@ export default function ClientChat() {
   return (
     <div className="min-h-screen bg-gradient-to-b from-green-50 to-gray-100 flex flex-col">
       <PwaInstallBanner />
-      <header className="bg-green-600 text-white p-4 shadow-lg">
-        <div className="max-w-2xl mx-auto flex items-center gap-3">
-          <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center">
-            <Camera className="h-5 w-5" />
+      <header className="bg-green-600 text-white shadow-lg">
+        <div className="max-w-2xl mx-auto px-4 py-3">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 bg-white/20 rounded-full flex items-center justify-center flex-shrink-0">
+              <Camera className="h-4 w-4" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <h1 className="font-semibold text-sm truncate">
+                {authData.project.clientName.split('(')[0].trim()}
+              </h1>
+              <p className="text-xs text-green-100">
+                Chatting with {authData.project.assignedTo}
+              </p>
+            </div>
+            <button 
+              onClick={async () => {
+                if ('Notification' in window && Notification.permission === 'default') {
+                  await Notification.requestPermission();
+                }
+              }}
+              className="p-2 rounded-full hover:bg-green-700 transition-colors flex-shrink-0"
+              title="Enable notifications"
+            >
+              <Bell className="h-4 w-4" />
+            </button>
           </div>
-          <div className="flex-1">
-            <h1 className="font-semibold">{authData.project.clientName}</h1>
-            <p className="text-sm text-green-100">
-              Chatting with {authData.project.assignedTo}
-            </p>
-          </div>
-          <button 
-            onClick={async () => {
-              if ('Notification' in window && Notification.permission === 'default') {
-                await Notification.requestPermission();
-              }
-            }}
-            className="p-2 rounded-full hover:bg-green-700 transition-colors"
-            title="Enable notifications"
-          >
-            <Bell className="h-4 w-4" />
-          </button>
-          <div className="flex items-center gap-1.5 bg-white/15 rounded-full px-3 py-1.5">
-            <Clock className="h-3.5 w-3.5 text-green-200" />
-            <span className="text-xs text-green-100">Usually replies within 30 min</span>
+          <div className="flex items-center justify-center gap-1.5 mt-2 bg-white/10 rounded-full px-3 py-1">
+            <Clock className="h-3 w-3 text-green-200" />
+            <span className="text-xs text-green-200">Usually replies within 30 min</span>
           </div>
         </div>
       </header>
