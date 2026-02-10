@@ -2,8 +2,9 @@ import { storage } from '../storage';
 
 function isBusinessHours(): boolean {
   const now = new Date();
-  const day = now.getDay();
-  const hour = now.getHours();
+  const saTime = new Date(now.toLocaleString('en-US', { timeZone: 'Africa/Johannesburg' }));
+  const day = saTime.getDay();
+  const hour = saTime.getHours();
   return day >= 1 && day <= 5 && hour >= 9 && hour < 16;
 }
 
