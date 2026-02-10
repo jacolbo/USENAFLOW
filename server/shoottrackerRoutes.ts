@@ -891,24 +891,28 @@ export function registerShoottrackerRoutes(app: Express): void {
   app.get("/api/client-chat/verify/:token", async (req: Request, res: Response) => {
     try {
       const { token } = req.params;
+      console.log(`[ChatVerify] Verifying token: ${token.substring(0, 8)}...`);
       
       const authToken = await storage.getClientAuthTokenByToken(token);
       
       if (!authToken) {
-        return res.json({ valid: false });
+        console.log(`[ChatVerify] Token not found in database: ${token.substring(0, 8)}...`);
+        return res.json({ valid: false, reason: "not_found" });
       }
       
       if (new Date(authToken.expiresAt) < new Date()) {
-        return res.json({ valid: false, error: "Token expired" });
+        console.log(`[ChatVerify] Token expired: ${token.substring(0, 8)}... (expired ${authToken.expiresAt})`);
+        return res.json({ valid: false, reason: "expired" });
       }
       
-      // Get project by the projectId stored in the token (not by email search)
       const project = await storage.getProject(authToken.projectId);
       
       if (!project) {
-        return res.json({ valid: false, error: "Project not found" });
+        console.log(`[ChatVerify] Project not found for token: ${token.substring(0, 8)}... (projectId: ${authToken.projectId})`);
+        return res.json({ valid: false, reason: "project_not_found" });
       }
       
+      console.log(`[ChatVerify] Token valid for project: ${project.clientName} (${project.id})`);
       res.json({
         valid: true,
         email: authToken.email,
@@ -921,7 +925,7 @@ export function registerShoottrackerRoutes(app: Express): void {
         },
       });
     } catch (error: any) {
-      console.error("Error verifying chat token:", error);
+      console.error("[ChatVerify] Error verifying chat token:", error);
       res.status(500).json({ error: "Failed to verify token" });
     }
   });

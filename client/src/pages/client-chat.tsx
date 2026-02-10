@@ -186,14 +186,17 @@ export default function ClientChat() {
     },
   });
 
-  const { data: authData, isLoading: authLoading } = useQuery<{
+  const { data: authData, isLoading: authLoading, isError: authIsError } = useQuery<{
     valid: boolean;
+    reason?: string;
     email: string;
     projectId: string;
     project: ProjectInfo;
   }>({
     queryKey: ['/api/client-chat/verify', token],
     enabled: !!token && !isAuthenticated,
+    retry: 3,
+    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 5000),
   });
 
   const { data: messages, isLoading: messagesLoading } = useQuery<Message[]>({
@@ -365,12 +368,43 @@ export default function ClientChat() {
   if (authLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-100">
-        <Loader2 className="h-8 w-8 animate-spin text-green-500" />
+        <div className="text-center">
+          <Loader2 className="h-8 w-8 animate-spin text-green-500 mx-auto mb-3" />
+          <p className="text-sm text-gray-500">Verifying your chat link...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (authIsError) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-100 p-4">
+        <Card className="max-w-md w-full">
+          <CardHeader className="text-center">
+            <div className="mx-auto mb-4 w-12 h-12 bg-yellow-100 rounded-full flex items-center justify-center">
+              <AlertCircle className="h-6 w-6 text-yellow-600" />
+            </div>
+            <CardTitle className="text-yellow-700">Connection Issue</CardTitle>
+          </CardHeader>
+          <CardContent className="text-center">
+            <p className="text-gray-600 mb-4">
+              We couldn't connect to the server. Please check your internet connection and try again.
+            </p>
+            <button
+              onClick={() => window.location.reload()}
+              className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+            >
+              Try Again
+            </button>
+          </CardContent>
+        </Card>
       </div>
     );
   }
 
   if (!authData?.valid) {
+    const reason = authData?.reason;
+    const isExpired = reason === "expired";
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-100 p-4">
         <Card className="max-w-md w-full">
@@ -378,11 +412,15 @@ export default function ClientChat() {
             <div className="mx-auto mb-4 w-12 h-12 bg-red-100 rounded-full flex items-center justify-center">
               <AlertCircle className="h-6 w-6 text-red-600" />
             </div>
-            <CardTitle className="text-red-600">Invalid Chat Link</CardTitle>
+            <CardTitle className="text-red-600">
+              {isExpired ? "Chat Link Expired" : "Invalid Chat Link"}
+            </CardTitle>
           </CardHeader>
           <CardContent>
             <p className="text-center text-gray-600">
-              This chat link is invalid or has expired. Please contact Jepson Myles Studio for a new link.
+              {isExpired
+                ? "This chat link has expired. Please contact Jepson Myles Studio for a new link."
+                : "This chat link is invalid. Please contact Jepson Myles Studio for a new link."}
             </p>
           </CardContent>
         </Card>
