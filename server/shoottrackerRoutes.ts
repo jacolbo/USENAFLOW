@@ -1,5 +1,6 @@
 import type { Express, Request, Response } from "express";
 import crypto from "crypto";
+import webpush from 'web-push';
 import { storage } from "./storage";
 import { 
   DEFAULT_SHOOTTRACKER_SETTINGS, 
@@ -73,6 +74,14 @@ function verifyResendWebhookSignature(payload: string, signature: string, secret
     console.error("[Webhook] Signature verification error:", error);
     return false;
   }
+}
+
+if (process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY) {
+  webpush.setVapidDetails(
+    'mailto:hello@jepsonmyles.com',
+    process.env.VAPID_PUBLIC_KEY,
+    process.env.VAPID_PRIVATE_KEY
+  );
 }
 
 const SETTINGS_KEY = "shoottracker_settings";
@@ -1122,10 +1131,75 @@ export function registerShoottrackerRoutes(app: Express): void {
         }
       }
       
+      // Send push notification to client
+      try {
+        const subscriptions = await storage.getPushSubscriptionsByProject(projectId);
+        let chatToken = await storage.getClientAuthTokenByProjectId(projectId);
+        if (!chatToken && project.clientEmail) {
+          const newToken = generateToken();
+          await storage.createClientAuthToken({
+            email: project.clientEmail,
+            projectId: projectId,
+            token: newToken,
+            expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+          });
+          chatToken = await storage.getClientAuthTokenByProjectId(projectId);
+        }
+        const pushPayload = JSON.stringify({
+          title: 'Jepson Myles Studio',
+          body: message?.trim() ? `New message from your retoucher: ${message.trim().substring(0, 100)}` : 'Your retoucher sent you a file',
+          url: chatToken ? `/client-chat/${chatToken.token}` : '/',
+        });
+        
+        for (const sub of subscriptions) {
+          try {
+            await webpush.sendNotification({
+              endpoint: sub.endpoint,
+              keys: { p256dh: sub.p256dh, auth: sub.auth },
+            }, pushPayload);
+          } catch (pushError: any) {
+            if (pushError.statusCode === 410 || pushError.statusCode === 404) {
+              await storage.deletePushSubscription(sub.endpoint);
+            }
+            console.error('[Push] Failed to send notification:', pushError.message);
+          }
+        }
+      } catch (pushErr) {
+        console.error('[Push] Error sending push notifications:', pushErr);
+      }
+
       res.json({ success: true, message: newMessage });
     } catch (error: any) {
       console.error("Error sending chat message:", error);
       res.status(500).json({ error: "Failed to send message" });
+    }
+  });
+
+  // Push subscription route
+  app.post("/api/push/subscribe", async (req: Request, res: Response) => {
+    try {
+      const { token, endpoint, p256dh, auth } = req.body;
+      
+      if (!token || !endpoint || !p256dh || !auth) {
+        return res.status(400).json({ error: "Missing required fields" });
+      }
+      
+      const authToken = await storage.getClientAuthTokenByToken(token);
+      if (!authToken || new Date(authToken.expiresAt) < new Date()) {
+        return res.status(401).json({ error: "Invalid or expired token" });
+      }
+      
+      await storage.savePushSubscription({
+        projectId: authToken.projectId,
+        endpoint,
+        p256dh,
+        auth,
+      });
+      
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error saving push subscription:", error);
+      res.status(500).json({ error: "Failed to save subscription" });
     }
   });
 

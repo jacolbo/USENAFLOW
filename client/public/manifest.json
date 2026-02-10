@@ -1,0 +1,18 @@
+{
+  "name": "Jepson Myles Studio Chat",
+  "short_name": "JM Chat",
+  "description": "Chat with your photo retoucher",
+  "start_url": "/client-chat/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#16a34a",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/pwa-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

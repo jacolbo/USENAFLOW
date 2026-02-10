@@ -45,3 +45,6 @@ integrations = ["google-calendar:1.0.0", "resend:1.0.0", "google-mail:1.0.0", "j
 
 [userenv.shared]
 APP_URL = "https://Usenaflow.replit.app"
+VAPID_PUBLIC_KEY = "BKrMja12uzeSN_ukFSthpmn1pkYikyYUicDi5AIo0za3J14dhvpEwjoj-z_HV_VcrxHcu5XTW0C9dAVS7rjwS64"
+VAPID_PRIVATE_KEY = "SET_VIA_REPLIT_SECRETS"
+VITE_VAPID_PUBLIC_KEY = "BKrMja12uzeSN_ukFSthpmn1pkYikyYUicDi5AIo0za3J14dhvpEwjoj-z_HV_VcrxHcu5XTW0C9dAVS7rjwS64"

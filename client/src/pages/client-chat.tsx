@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { useUpload } from "@/hooks/use-upload";
-import { Send, Loader2, MessageCircle, User, Camera, AlertCircle, Paperclip, Mic, FileText, Play, Pause, Download, X, Image, Video, Clock, CheckCheck, Bot } from "lucide-react";
+import { Send, Loader2, MessageCircle, User, Camera, AlertCircle, Paperclip, Mic, FileText, Play, Pause, Download, X, Image, Video, Clock, CheckCheck, Bot, Bell } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 
 interface Message {
@@ -92,6 +92,58 @@ function AttachmentPreview({ url, type, name, isClient }: { url: string; type: s
       <span className="text-sm truncate">{name || "File"}</span>
       <Download className="h-4 w-4 ml-auto" />
     </a>
+  );
+}
+
+function PwaInstallBanner() {
+  const [installPrompt, setInstallPrompt] = useState<any>(null);
+  const [dismissed, setDismissed] = useState(() => {
+    try { return localStorage.getItem('pwa-install-dismissed') === 'true'; } catch { return false; }
+  });
+  const [isInstalled, setIsInstalled] = useState(false);
+
+  useEffect(() => {
+    if (window.matchMedia('(display-mode: standalone)').matches) {
+      setIsInstalled(true);
+      return;
+    }
+    const handler = (e: any) => {
+      e.preventDefault();
+      setInstallPrompt(e);
+    };
+    window.addEventListener('beforeinstallprompt', handler);
+    return () => window.removeEventListener('beforeinstallprompt', handler);
+  }, []);
+
+  if (isInstalled || dismissed || !installPrompt) return null;
+
+  const handleInstall = async () => {
+    installPrompt.prompt();
+    const result = await installPrompt.userChoice;
+    if (result.outcome === 'accepted') setIsInstalled(true);
+    setInstallPrompt(null);
+  };
+
+  const handleDismiss = () => {
+    setDismissed(true);
+    try { localStorage.setItem('pwa-install-dismissed', 'true'); } catch {}
+  };
+
+  return (
+    <div className="bg-green-50 border-b border-green-200 px-4 py-3 flex items-center justify-between">
+      <div className="flex items-center gap-2">
+        <Download className="h-4 w-4 text-green-600" />
+        <span className="text-sm text-green-800">Add to your home screen for quick access</span>
+      </div>
+      <div className="flex items-center gap-2">
+        <Button size="sm" variant="outline" onClick={handleDismiss} className="text-xs">
+          Not now
+        </Button>
+        <Button size="sm" onClick={handleInstall} className="bg-green-600 hover:bg-green-700 text-white text-xs">
+          Install
+        </Button>
+      </div>
+    </div>
   );
 }
 
@@ -265,6 +317,51 @@ export default function ClientChat() {
     }
   }, [messages]);
 
+  useEffect(() => {
+    if (!isAuthenticated || !token) return;
+    
+    async function registerPushNotifications() {
+      try {
+        if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
+        
+        const registration = await navigator.serviceWorker.register('/sw.js');
+        await navigator.serviceWorker.ready;
+        
+        const permission = await Notification.requestPermission();
+        if (permission !== 'granted') return;
+        
+        const vapidKey = import.meta.env.VITE_VAPID_PUBLIC_KEY;
+        if (!vapidKey) return;
+        
+        const existingSub = await registration.pushManager.getSubscription();
+        let subscription = existingSub;
+        
+        if (!subscription) {
+          subscription = await registration.pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey: vapidKey,
+          });
+        }
+        
+        const subJson = subscription.toJSON();
+        await fetch(`/api/push/subscribe`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            token: token,
+            endpoint: subJson.endpoint,
+            p256dh: subJson.keys?.p256dh,
+            auth: subJson.keys?.auth,
+          }),
+        });
+      } catch (err) {
+        console.error('Push notification registration failed:', err);
+      }
+    }
+    
+    registerPushNotifications();
+  }, [isAuthenticated, token]);
+
   if (authLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-100">
@@ -341,6 +438,7 @@ export default function ClientChat() {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-green-50 to-gray-100 flex flex-col">
+      <PwaInstallBanner />
       <header className="bg-green-600 text-white p-4 shadow-lg">
         <div className="max-w-2xl mx-auto flex items-center gap-3">
           <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center">
@@ -352,6 +450,17 @@ export default function ClientChat() {
               Chatting with {authData.project.assignedTo}
             </p>
           </div>
+          <button 
+            onClick={async () => {
+              if ('Notification' in window && Notification.permission === 'default') {
+                await Notification.requestPermission();
+              }
+            }}
+            className="p-2 rounded-full hover:bg-green-700 transition-colors"
+            title="Enable notifications"
+          >
+            <Bell className="h-4 w-4" />
+          </button>
           <div className="flex items-center gap-1.5 bg-white/15 rounded-full px-3 py-1.5">
             <Clock className="h-3.5 w-3.5 text-green-200" />
             <span className="text-xs text-green-100">Usually replies within 30 min</span>

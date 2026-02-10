@@ -41,6 +41,11 @@ Key features include:
   - **AI Retoucher Coach** (`retoucher_coach`): Dashboard widget for Retoucher1/2/3 roles. Analyzes individual performance (completed projects, ratings, turnaround times, overdue count) and generates personalized tips and encouragement via `/api/ai/retoucher-advice/:name`. 10-minute cache.
   - **AI Photo Review**: In Drive Manager, admins can trigger AI vision analysis (gpt-4o) on project photos. Samples up to 6 thumbnails from the Drive folder and evaluates skin retouching, hair detail, color correction, exposure, and composition. Returns per-photo scores and feedback via `/api/ai/review-photos`.
   - **Chat Reply Assistant**: In the editor chat interface, a magic wand button lets users get AI-suggested replies or polish their draft messages before sending. Uses conversation context (last 5 messages) via `/api/ai/suggest-reply`.
+- **Client Chat PWA**: The client chat page (`/client-chat/:token`) is a Progressive Web App with:
+  - **Install Prompt**: Optional, dismissible "Add to Home Screen" banner. Clients can install the chat as a standalone app on their phone or ignore it.
+  - **Push Notifications**: When a retoucher sends a message, the client receives a phone notification (if they granted permission). Uses Web Push API with VAPID keys. Subscriptions stored in `push_subscriptions` table. Expired subscriptions auto-cleaned.
+  - **Service Worker**: `client/public/sw.js` handles push events and notification clicks, opening the chat directly.
+  - **Manifest**: `client/public/manifest.json` with Jepson Myles branding, standalone display mode.
 
 ## External Dependencies
 
