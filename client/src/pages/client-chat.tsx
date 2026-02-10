@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { useUpload } from "@/hooks/use-upload";
-import { Send, Loader2, MessageCircle, User, Camera, AlertCircle, Paperclip, Mic, FileText, Play, Pause, Download, X, Image, Video, Clock, CheckCheck, Bot, Bell } from "lucide-react";
+import { Send, Loader2, MessageCircle, User, Camera, AlertCircle, Paperclip, Mic, FileText, Play, Pause, Download, X, Image, Video, Clock, CheckCheck, Bot, Bell, Phone, Lock, ShieldCheck } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 
 interface Message {
@@ -506,7 +506,7 @@ export default function ClientChat() {
   return (
     <div className="min-h-screen bg-gradient-to-b from-green-50 to-gray-100 flex flex-col">
       <PwaInstallBanner />
-      <header className="bg-green-600 text-white shadow-lg">
+      <header className="bg-green-600 text-white shadow-lg sticky top-0 z-50">
         <div className="max-w-2xl mx-auto px-4 py-3">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 bg-white/20 rounded-full flex items-center justify-center flex-shrink-0">
@@ -520,6 +520,13 @@ export default function ClientChat() {
                 Chatting with {authData.project.assignedTo}
               </p>
             </div>
+            <a
+              href="tel:+27612345678"
+              className="p-2 rounded-full hover:bg-green-700 transition-colors flex-shrink-0"
+              title="Call studio"
+            >
+              <Phone className="h-4 w-4" />
+            </a>
             <button 
               onClick={async () => {
                 if ('Notification' in window && Notification.permission === 'default') {
@@ -532,9 +539,15 @@ export default function ClientChat() {
               <Bell className="h-4 w-4" />
             </button>
           </div>
-          <div className="flex items-center justify-center gap-1.5 mt-2 bg-white/10 rounded-full px-3 py-1">
-            <Clock className="h-3 w-3 text-green-200" />
-            <span className="text-xs text-green-200">Usually replies within 30 min</span>
+          <div className="flex items-center justify-center gap-1.5 mt-2">
+            <div className="flex items-center gap-1.5 bg-white/10 rounded-full px-3 py-1">
+              <Clock className="h-3 w-3 text-green-200" />
+              <span className="text-xs text-green-200">Usually replies within 30 min</span>
+            </div>
+            <div className="flex items-center gap-1 bg-white/10 rounded-full px-2.5 py-1">
+              <Lock className="h-3 w-3 text-green-200" />
+              <span className="text-xs text-green-200">Encrypted</span>
+            </div>
           </div>
         </div>
       </header>

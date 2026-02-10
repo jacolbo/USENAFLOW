@@ -76,6 +76,10 @@ export interface IStorage {
   getClientAuthTokenByProjectId(projectId: string): Promise<ClientAuthToken | undefined>;
   deleteClientAuthToken(id: string): Promise<boolean>;
   
+  // Chat encryption key methods
+  getChatEncryptionKey(projectId: string): Promise<{ encryptionKey: string; createdBy: string } | undefined>;
+  setChatEncryptionKey(projectId: string, encryptionKey: string, createdBy: string): Promise<void>;
+
   // Client messages methods
   getMessagesByProject(projectId: string): Promise<ClientMessage[]>;
   createClientMessage(message: InsertClientMessage): Promise<ClientMessage>;

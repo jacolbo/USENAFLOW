@@ -175,6 +175,14 @@ export const clientAuthTokens = pgTable("client_auth_tokens", {
   createdAt: timestamp("created_at").notNull().default(sql`now()`),
 });
 
+export const chatEncryptionKeys = pgTable("chat_encryption_keys", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  projectId: varchar("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
+  encryptionKey: text("encryption_key").notNull(),
+  createdBy: text("created_by").notNull(),
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+});
+
 // Email logs for tracking sent emails
 export const emailLogs = pgTable("email_logs", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
