@@ -44,6 +44,10 @@ RULES:
 - Do NOT change any {{variable}} placeholders.
 - Do NOT change or remove any <!--PROTECTED_BLOCK_*--> comments — these MUST remain exactly as they are.
 - Do NOT add or remove any content — only rephrase existing text naturally.
+- NEVER invent or add offers, discounts, promotions, deals, free extras, bonuses, special packages, or any incentive that is not in the original email.
+- NEVER add new promises, commitments, services, or anything that creates extra work or expectations beyond the original email.
+- NEVER remove or water down any existing content, instructions, or information from the original email.
+- The rephrased email must contain exactly the same information and promises as the original — nothing more, nothing less.
 - Keep the same professional, warm, and friendly tone.
 - Make the changes subtle — it should read naturally, not like it was rewritten by a machine.
 - The greeting and sign-off style should vary slightly (e.g. "Dear" vs "Hi" vs "Hello", "Warm regards" vs "Best wishes" vs "With love").
