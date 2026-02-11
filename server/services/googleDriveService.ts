@@ -173,28 +173,15 @@ export async function getFolderStats(folderId: string): Promise<DriveFolderStats
   };
 }
 
-export async function generateShareLink(folderId: string, clientEmail?: string): Promise<string> {
+export async function generateShareLink(folderId: string): Promise<string> {
   const drive = await getDriveClient();
-
-  if (clientEmail) {
-    await drive.permissions.create({
-      fileId: folderId,
-      requestBody: {
-        role: 'reader',
-        type: 'user',
-        emailAddress: clientEmail,
-      },
-      sendNotificationEmail: false,
-    });
-    console.log(`🔗 Granted reader access to ${clientEmail} for folder ${folderId} (no Google notification)`);
-  }
 
   const file = await drive.files.get({
     fileId: folderId,
     fields: 'webViewLink',
   });
 
-  console.log(`🔗 Generated link for folder ${folderId}: ${file.data.webViewLink}`);
+  console.log(`🔗 Generated link for folder ${folderId}: ${file.data.webViewLink} (no access granted — folder stays private)`);
   return file.data.webViewLink!;
 }
 

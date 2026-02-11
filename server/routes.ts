@@ -2790,8 +2790,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const folder = await driveService.createFolder("USENA Test Delivery Folder");
       console.log(`📁 Test folder created: ${folder.id}`);
 
-      const shareLink = await driveService.generateShareLink(folder.id, testEmail);
-      console.log(`🔗 Shared test folder with ${testEmail} (no Google notification)`);
+      const shareLink = await driveService.generateShareLink(folder.id);
+      console.log(`🔗 Generated link for test folder (no access granted)`);
 
       const emailResult = await sendGalleryDeliveryEmail(
         testEmail,
@@ -2803,7 +2803,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.json({
         success: true,
-        message: `Test folder created, shared with ${testEmail} (reader-only, no Google email), and branded delivery email sent via Resend`,
+        message: `Test folder created (private, no access granted) and branded delivery email sent via Resend`,
         folder: {
           id: folder.id,
           name: folder.name,

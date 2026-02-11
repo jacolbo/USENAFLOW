@@ -98,7 +98,7 @@ export async function scanProjectFolder(project: any): Promise<DriveMonitorResul
 
     let shareLink: string | null = null;
     try {
-      shareLink = await driveService.generateShareLink(project.driveFolderId, project.clientEmail || undefined);
+      shareLink = await driveService.generateShareLink(project.driveFolderId);
       updateData.driveGalleryLink = shareLink;
       updateData.galleryLink = shareLink;
       updateData.galleryLinkAddedAt = new Date();
