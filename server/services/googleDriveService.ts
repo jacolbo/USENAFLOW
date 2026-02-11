@@ -185,6 +185,25 @@ export async function generateShareLink(folderId: string): Promise<string> {
   return file.data.webViewLink!;
 }
 
+export async function checkClientHasAccess(folderId: string, clientEmail: string): Promise<boolean> {
+  try {
+    const drive = await getDriveClient();
+    const permissions = await drive.permissions.list({
+      fileId: folderId,
+      fields: 'permissions(id, emailAddress, role, type)',
+    });
+
+    const clientPermission = permissions.data.permissions?.find(
+      (p) => p.type === 'user' && p.emailAddress?.toLowerCase() === clientEmail.toLowerCase()
+    );
+
+    return !!clientPermission;
+  } catch (error: any) {
+    console.error(`🔒 Drive: Failed to check permissions for folder ${folderId}: ${error.message}`);
+    return false;
+  }
+}
+
 export async function getFolderSize(folderId: string): Promise<number> {
   const files = await listFilesInFolder(folderId);
   return files.reduce((sum, f) => sum + f.size, 0);

@@ -93,48 +93,65 @@ export async function scanProjectFolder(project: any): Promise<DriveMonitorResul
     result.status = 'incomplete';
   }
 
-  if (result.status === 'complete' && !project.driveDeliveryComplete) {
-    console.log(`✅ Drive Monitor: ${project.clientName} delivery complete! (${result.drivePhotoCount}/${project.selectedCount})`);
+  const photosReady = project.selectedCount > 0 && result.drivePhotoCount >= project.selectedCount;
 
-    let shareLink: string | null = null;
+  if (photosReady && !project.driveGalleryLink && !updateData.driveGalleryLink) {
+    console.log(`✅ Drive Monitor: ${project.clientName} photos complete! (${result.drivePhotoCount}/${project.selectedCount}) — generating gallery link`);
     try {
-      shareLink = await driveService.generateShareLink(project.driveFolderId);
+      const shareLink = await driveService.generateShareLink(project.driveFolderId);
       updateData.driveGalleryLink = shareLink;
       updateData.galleryLink = shareLink;
       updateData.galleryLinkAddedAt = new Date();
       updateData.galleryLinkAddedBy = 'Drive Auto-Detection';
+      console.log(`🔗 Drive Monitor: Gallery link saved for ${project.clientName} (folder stays private)`);
     } catch (err: any) {
       console.error(`📂 Drive Monitor: Failed to generate share link for ${project.clientName}: ${err.message} — will retry next scan`);
     }
+  }
 
-    if (!shareLink) {
-      console.log(`📂 Drive Monitor: Skipping delivery for ${project.clientName} — share link not ready, will retry`);
-    } else {
-      updateData.driveDeliveryComplete = true;
-      updateData.driveDeliveryCompletedAt = new Date();
-      updateData.status = 'Done';
-      updateData.deliveredAt = new Date();
-      result.deliveryTriggered = true;
+  if (project.status === 'Delivered' || project.status === 'Done') {
+    if (!project.driveAccessGranted) {
+      updateData.driveAccessGranted = true;
+      console.log(`📂 Drive Monitor: Auto-marking ${project.clientName} as access-granted (already ${project.status})`);
+    }
+  }
 
-      if (project.clientEmail) {
+  const galleryLink = project.driveGalleryLink || updateData.driveGalleryLink;
+  const alreadyDelivered = project.status === 'Delivered' || project.status === 'Done' || project.driveDeliveryEmailSent;
+
+  if (photosReady && galleryLink && project.clientEmail && project.driveFolderId && !project.driveAccessGranted && !alreadyDelivered) {
+    try {
+      const hasAccess = await driveService.checkClientHasAccess(project.driveFolderId, project.clientEmail);
+      if (hasAccess) {
+        console.log(`🔓 Drive Monitor: Access granted detected for ${project.clientName} (${project.clientEmail})`);
+
+        updateData.driveAccessGranted = true;
+        updateData.driveAccessGrantedAt = new Date();
+        updateData.driveDeliveryComplete = true;
+        updateData.driveDeliveryCompletedAt = new Date();
+        updateData.status = 'Delivered';
+        updateData.deliveredAt = new Date();
+        result.deliveryTriggered = true;
+
         try {
           const { sendGalleryDeliveryEmail } = await import('./emailService');
           await sendGalleryDeliveryEmail(
             project.clientEmail,
             project.clientName,
-            shareLink,
+            galleryLink,
             project.id
           );
           updateData.driveDeliveryEmailSent = true;
           updateData.driveDeliveryEmailSentAt = new Date();
           updateData.deliveryEmailSentAt = new Date();
-          console.log(`📧 Drive Monitor: Sent branded delivery email to ${project.clientEmail} for ${project.clientName}`);
+          console.log(`📧 Drive Monitor: Sent delivery email to ${project.clientEmail} for ${project.clientName} (access granted trigger)`);
         } catch (err: any) {
           console.error(`📂 Drive Monitor: Failed to send delivery email for ${project.clientName}: ${err.message}`);
         }
       }
+    } catch (err: any) {
+      console.error(`📂 Drive Monitor: Failed to check permissions for ${project.clientName}: ${err.message}`);
     }
-    
   }
 
   // B&W preview email disabled — client access is not granted.

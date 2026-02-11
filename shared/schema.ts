@@ -76,6 +76,8 @@ export const projects = pgTable("projects", {
   driveDeliveryCompletedAt: timestamp("drive_delivery_completed_at"),
   driveDeliveryEmailSent: boolean("drive_delivery_email_sent").notNull().default(false),
   driveDeliveryEmailSentAt: timestamp("drive_delivery_email_sent_at"),
+  driveAccessGranted: boolean("drive_access_granted").notNull().default(false),
+  driveAccessGrantedAt: timestamp("drive_access_granted_at"),
   driveLastCheckedAt: timestamp("drive_last_checked_at"),
   driveClientAccessedAt: timestamp("drive_client_accessed_at"),
 });
