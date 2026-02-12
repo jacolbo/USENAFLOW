@@ -3411,6 +3411,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const overdueProjects = allProjects
         .filter((p: any) => p.status !== "Delivered" && p.dueDate && new Date(p.dueDate) < now)
         .map((p: any) => ({
+          id: p.id,
           clientName: p.clientName,
           assignedTo: p.assignedTo || "Unassigned",
           dueDate: p.dueDate,
@@ -3424,6 +3425,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           return due >= yesterday && due <= yesterdayEnd;
         })
         .map((p: any) => ({
+          id: p.id,
           clientName: p.clientName,
           assignedTo: p.assignedTo || "Unassigned",
           dueDate: p.dueDate,
@@ -3477,7 +3479,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         metadata: metadata || undefined,
       });
 
-      const aiResponse = await aiTeamChat({
+      const activeProjects = allProjects
+        .filter((p: any) => p.status !== "Delivered" && p.status !== "Cancelled")
+        .map((p: any) => ({
+          id: p.id,
+          clientName: p.clientName,
+          assignedTo: p.assignedTo || "Unassigned",
+          dueDate: p.dueDate,
+          status: p.status,
+        }));
+
+      const aiResult = await aiTeamChat({
         username: userId,
         role,
         message,
@@ -3486,6 +3498,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           totalProjects: allProjects.length,
           overdueProjects,
           yesterdayIncomplete,
+          activeProjects,
           retoucherStats,
           speedStats,
           teamOnLeave,
@@ -3493,14 +3506,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
         retouchingGuidelines,
       });
 
+      const executedActions: string[] = [];
+      if (aiResult.actions.length > 0 && (role === "Admin" || role === "LeadRetoucher")) {
+        for (const action of aiResult.actions) {
+          if (action.type === "MARK_DONE") {
+            try {
+              await storage.updateProject(action.projectId, { status: "Delivered" });
+              executedActions.push(`Marked "${action.projectName}" as Delivered`);
+              console.log(`[AI Action] Marked project ${action.projectId} (${action.projectName}) as Delivered by ${userId}`);
+            } catch (err: any) {
+              console.error(`[AI Action] Failed to mark project ${action.projectId}:`, err.message);
+              executedActions.push(`Failed to mark "${action.projectName}" — project not found`);
+            }
+          }
+        }
+      }
+
+      const responseText = executedActions.length > 0
+        ? `${aiResult.text}\n\n✅ **Actions completed:**\n${executedActions.map(a => `- ${a}`).join("\n")}`
+        : aiResult.text;
+
       await storage.createAiTeamMessage({
         username: userId,
         role,
         senderType: "ai",
-        message: aiResponse,
+        message: responseText,
       });
 
-      res.json({ response: aiResponse });
+      res.json({ response: responseText });
     } catch (error: any) {
       console.error("[AI Chat] Error:", error.message);
       res.status(500).json({ error: "Failed to process message" });

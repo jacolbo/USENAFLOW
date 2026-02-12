@@ -347,19 +347,27 @@ export async function aiTeamChat(context: {
   conversationHistory: { sender: string; message: string }[];
   projectData: {
     totalProjects: number;
-    overdueProjects: { clientName: string; assignedTo: string; dueDate: string; status: string }[];
-    yesterdayIncomplete: { clientName: string; assignedTo: string; dueDate: string; status: string }[];
+    overdueProjects: { id: string; clientName: string; assignedTo: string; dueDate: string; status: string }[];
+    yesterdayIncomplete: { id: string; clientName: string; assignedTo: string; dueDate: string; status: string }[];
+    activeProjects: { id: string; clientName: string; assignedTo: string; dueDate: string; status: string }[];
     retoucherStats: { name: string; completed: number; active: number; overdue: number; avgRating: number | null }[];
     speedStats: { name: string; avgMinutes: number }[];
     teamOnLeave: { username: string; startDate: string; endDate: string }[];
   };
   retouchingGuidelines: string;
-}): Promise<string> {
+}): Promise<{ text: string; actions: { type: string; projectId: string; projectName: string }[] }> {
   try {
     const isAdmin = context.role === "Admin" || context.role === "LeadRetoucher";
 
+    const actionInstructions = isAdmin
+      ? `\n\nACTION CAPABILITY:
+You can mark projects as done/delivered when admin instructs you to. When the admin says something like "mark X as done", "X is delivered", "complete project X", find the matching project from the active/overdue lists and include this exact tag in your response (on its own line):
+[ACTION:MARK_DONE:projectId:clientName]
+Replace projectId with the actual project ID and clientName with the client name. You can mark multiple projects at once by including multiple action tags. Always confirm what you're doing in your text response. Only mark projects that actually exist in the data — if you can't find a match, tell the admin you couldn't find that project.`
+      : "";
+
     const systemPrompt = isAdmin
-      ? `You are the AI Studio Manager at Jepson Myles Studio. Admin is asking you about team performance. You have access to project data, retoucher stats, speed metrics, and team availability. Answer questions about who hasn't done their work, suggest follow-ups, identify patterns. When admin asks who hasn't completed work, check the overdue and yesterday's incomplete data. Reference the retouching guidelines when relevant. Be direct and helpful.
+      ? `You are the AI Studio Manager at Jepson Myles Studio. Admin is asking you about team performance. You have access to project data, retoucher stats, speed metrics, and team availability. Answer questions about who hasn't done their work, suggest follow-ups, identify patterns. When admin asks who hasn't completed work, check the overdue and yesterday's incomplete data. Reference the retouching guidelines when relevant. Be direct and helpful.${actionInstructions}
 
 PROJECT DATA:
 ${JSON.stringify(context.projectData, null, 2)}
@@ -394,10 +402,21 @@ ${context.retouchingGuidelines || "No guidelines set."}`;
       max_tokens: 1500,
     });
 
-    return response.choices[0]?.message?.content?.trim() || "I'm sorry, I couldn't generate a response. Please try again.";
+    const rawResponse = response.choices[0]?.message?.content?.trim() || "I'm sorry, I couldn't generate a response. Please try again.";
+
+    const actions: { type: string; projectId: string; projectName: string }[] = [];
+    const actionRegex = /\[ACTION:MARK_DONE:([^:\]]+):([^\]]+)\]/g;
+    let match;
+    while ((match = actionRegex.exec(rawResponse)) !== null) {
+      actions.push({ type: "MARK_DONE", projectId: match[1], projectName: match[2] });
+    }
+
+    const cleanText = rawResponse.replace(/\[ACTION:MARK_DONE:[^\]]+\]\n?/g, "").trim();
+
+    return { text: cleanText, actions };
   } catch (error: any) {
     console.error(`[AI] Team chat failed:`, error.message);
-    return "I'm temporarily unavailable. Please try again in a moment.";
+    return { text: "I'm temporarily unavailable. Please try again in a moment.", actions: [] };
   }
 }
 
