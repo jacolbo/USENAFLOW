@@ -3,7 +3,7 @@ import { db } from '../db';
 import { projects, aiTeamMessages } from '@shared/schema';
 import { eq, isNotNull, and, sql } from 'drizzle-orm';
 import * as driveService from './googleDriveService';
-import { sendGalleryPreviewEmail } from './emailService';
+import { sendGalleryPreviewEmail, sendGalleryDeliveryEmail, sendSatisfactionSurveyEmail, generateToken } from './emailService';
 
 let monitorInterval: NodeJS.Timeout | null = null;
 const MONITOR_INTERVAL_MS = 2 * 60 * 1000; // Check every 2 minutes
@@ -153,6 +153,18 @@ export async function scanProjectFolder(project: any): Promise<DriveMonitorResul
     }
   }
 
+  if (photosReady && !alreadyDelivered && project.drivePreviewEmailSent && !project.driveDeliveryEmailSent) {
+    try {
+      const isPublic = await driveService.checkFolderIsPublicLink(project.driveFolderId);
+      if (isPublic) {
+        console.log(`🔓 Drive Monitor: Folder for ${project.clientName} is now public — triggering delivery`);
+        await executeDeliveryOnPublic(project, updateData, result);
+      }
+    } catch (err: any) {
+      console.error(`📂 Drive Monitor: Failed to check public status for ${project.clientName}: ${err.message}`);
+    }
+  }
+
   if (project.status === 'Delivered' || project.status === 'Done') {
     if (!project.driveAccessGranted) {
       updateData.driveAccessGranted = true;
@@ -281,6 +293,84 @@ async function notifyRetoucherQualityFailed(project: any, qualityResult: any) {
       });
     } catch (e) {}
   }
+}
+
+async function executeDeliveryOnPublic(project: any, updateData: any, result: DriveMonitorResult) {
+  const galleryLink = updateData.driveGalleryLink || project.driveGalleryLink || project.galleryLink;
+
+  if (!galleryLink) {
+    console.log(`📂 Drive Monitor: No gallery link for ${project.clientName} — cannot deliver`);
+    return;
+  }
+
+  updateData.driveAccessGranted = true;
+  updateData.driveAccessGrantedAt = new Date();
+  updateData.driveDeliveryComplete = true;
+  updateData.driveDeliveryCompletedAt = new Date();
+  updateData.status = 'Delivered';
+  updateData.deliveredAt = new Date();
+  updateData.deliveryApproved = true;
+  updateData.deliveryApprovedAt = new Date();
+  updateData.deliveryApprovedBy = 'Drive Auto-Detection';
+  result.deliveryTriggered = true;
+
+  if (project.clientEmail) {
+    let referralCode: string | undefined;
+    try {
+      referralCode = generateToken();
+      await storage.createReferral({
+        referrerEmail: project.clientEmail,
+        referrerName: project.clientName,
+        referralCode,
+        status: "pending",
+      });
+    } catch (refError) {
+      console.error(`[Referral] Error creating referral for ${project.clientName}:`, refError);
+    }
+
+    try {
+      const emailResult = await sendGalleryDeliveryEmail(
+        project.clientEmail,
+        project.clientName,
+        galleryLink,
+        project.id,
+        referralCode
+      );
+      if (emailResult.success) {
+        updateData.driveDeliveryEmailSent = true;
+        updateData.driveDeliveryEmailSentAt = new Date();
+        updateData.deliveryEmailSentAt = new Date();
+        console.log(`📧 Drive Monitor: Delivery email (with access) sent to ${project.clientEmail} for ${project.clientName}`);
+      }
+    } catch (emailError) {
+      console.error(`[Email] Error sending delivery email for ${project.clientName}:`, emailError);
+    }
+
+    try {
+      const surveyToken = generateToken();
+      await storage.createSurvey({
+        projectId: project.id,
+        clientEmail: project.clientEmail,
+        clientName: project.clientName,
+        surveyToken,
+      });
+      await sendSatisfactionSurveyEmail(
+        project.clientEmail,
+        project.clientName,
+        surveyToken,
+        project.id
+      );
+      console.log(`📧 Drive Monitor: Survey sent to ${project.clientEmail} for ${project.clientName}`);
+    } catch (surveyError) {
+      console.error(`[Survey] Error creating survey for ${project.clientName}:`, surveyError);
+    }
+  }
+
+  try {
+    await storage.recordStatusTransition(project.id, project.status || 'Review', 'Delivered', 'Drive Auto-Detection');
+  } catch (e) {}
+
+  console.log(`✅ Drive Monitor: Full delivery completed for ${project.clientName}`);
 }
 
 export function startDriveMonitor() {
