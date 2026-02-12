@@ -4,7 +4,7 @@ import { WebSocketServer, WebSocket } from "ws";
 import { storage } from "./storage";
 import { insertProjectSchema, updateProjectSchema, insertProjectNoteSchema, updateProjectNoteSchema, insertTradeOfferSchema, updateTradeOfferSchema, ProjectStatus, TradeOfferStatus, insertUserSchema, loginUserSchema, insertSneakPeekSchema, sneakPeeks as sneakPeeksTable } from "@shared/schema";
 import { db } from "./db";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { ObjectStorageService, ObjectNotFoundError } from "./objectStorage";
 import { registerObjectStorageRoutes } from "./replit_integrations/object_storage";
 import type { Notification, WebSocketMessage } from "@shared/schema";
@@ -3884,6 +3884,42 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // AI Chat unread count (x-usena-user-id stores the user's name, not UUID)
+  app.get("/api/ai-chat/unread-count", async (req, res) => {
+    try {
+      const username = req.headers["x-usena-user-id"] as string;
+      if (!username) return res.json({ count: 0 });
+
+      const lastSeenSetting = await storage.getAppSetting(`ai_chat_last_seen_${username}`) as any;
+      const lastSeenValue = lastSeenSetting?.value || lastSeenSetting;
+      const lastSeen = lastSeenValue && typeof lastSeenValue === 'string' ? new Date(lastSeenValue) : new Date(0);
+
+      const result = await db.execute(sql`
+        SELECT COUNT(*) as count FROM ai_team_messages
+        WHERE username = ${username} AND sender_type = 'ai' AND created_at > ${lastSeen}
+      `);
+      const count = Number((result.rows[0] as any)?.count || 0);
+      res.json({ count });
+    } catch (error: any) {
+      console.error("[AI Chat] Error fetching unread count:", error.message);
+      res.json({ count: 0 });
+    }
+  });
+
+  // AI Chat mark as seen
+  app.post("/api/ai-chat/mark-seen", async (req, res) => {
+    try {
+      const username = req.headers["x-usena-user-id"] as string;
+      if (!username) return res.status(400).json({ error: "Missing user ID" });
+
+      await storage.setAppSetting(`ai_chat_last_seen_${username}`, new Date().toISOString());
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error("[AI Chat] Error marking seen:", error.message);
+      res.status(500).json({ error: "Failed to mark seen" });
+    }
+  });
+
   // Start Drive monitor automatically
   try {
     const { startDriveMonitor } = await import('./services/driveMonitorService');
@@ -3891,6 +3927,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
     console.log('✅ Drive monitor started');
   } catch (err: any) {
     console.error('Failed to start Drive monitor:', err.message);
+  }
+
+  // Start 9 AM morning check scheduler
+  try {
+    const { startMorningCheckScheduler } = await import('./services/morningCheckScheduler');
+    startMorningCheckScheduler();
+    console.log('✅ Morning AI check scheduler started');
+  } catch (err: any) {
+    console.error('Failed to start morning check scheduler:', err.message);
   }
 
   return httpServer;

@@ -3,6 +3,7 @@ import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import AiChatBubble from "@/components/ai-chat-bubble";
 import Dashboard from "@/pages/dashboard";
 import ShootTrackerSettings from "@/pages/shoottracker-settings";
 import ApproveExtras from "@/pages/approve-extras";
@@ -39,6 +40,7 @@ function App() {
       <TooltipProvider>
         <Toaster />
         <Router />
+        <AiChatBubble />
       </TooltipProvider>
     </QueryClientProvider>
   );

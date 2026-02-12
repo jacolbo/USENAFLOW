@@ -95,17 +95,56 @@ export async function scanProjectFolder(project: any): Promise<DriveMonitorResul
 
   const photosReady = project.selectedCount > 0 && result.drivePhotoCount >= project.selectedCount;
 
-  if (photosReady && !project.driveGalleryLink && !updateData.driveGalleryLink) {
-    console.log(`✅ Drive Monitor: ${project.clientName} photos complete! (${result.drivePhotoCount}/${project.selectedCount}) — generating gallery link`);
+  const alreadyDelivered = project.status === 'Delivered' || project.status === 'Done' || project.driveDeliveryEmailSent;
+
+  if (photosReady && !alreadyDelivered && project.deliveryApproved) {
+    console.log(`✅ Drive Monitor: ${project.clientName} photos complete & delivery approved! (${result.drivePhotoCount}/${project.selectedCount}) — auto-sharing folder and delivering`);
+    try {
+      const shareLink = await driveService.makeFolderPublic(project.driveFolderId);
+      updateData.driveGalleryLink = shareLink;
+      updateData.galleryLink = shareLink;
+      updateData.galleryLinkAddedAt = new Date();
+      updateData.galleryLinkAddedBy = 'Drive Auto-Detection';
+      updateData.driveAccessGranted = true;
+      updateData.driveAccessGrantedAt = new Date();
+      updateData.driveDeliveryComplete = true;
+      updateData.driveDeliveryCompletedAt = new Date();
+      updateData.status = 'Delivered';
+      updateData.deliveredAt = new Date();
+      result.deliveryTriggered = true;
+
+      if (project.clientEmail) {
+        try {
+          const { sendGalleryDeliveryEmail } = await import('./emailService');
+          await sendGalleryDeliveryEmail(
+            project.clientEmail,
+            project.clientName,
+            shareLink,
+            project.id
+          );
+          updateData.driveDeliveryEmailSent = true;
+          updateData.driveDeliveryEmailSentAt = new Date();
+          updateData.deliveryEmailSentAt = new Date();
+          console.log(`📧 Drive Monitor: Sent delivery email to ${project.clientEmail} for ${project.clientName}`);
+        } catch (err: any) {
+          console.error(`📂 Drive Monitor: Failed to send delivery email for ${project.clientName}: ${err.message}`);
+        }
+      } else {
+        console.log(`📂 Drive Monitor: No client email for ${project.clientName} — skipping delivery email`);
+      }
+    } catch (err: any) {
+      console.error(`📂 Drive Monitor: Failed to auto-share folder for ${project.clientName}: ${err.message} — will retry next scan`);
+    }
+  } else if (photosReady && !project.driveGalleryLink && !updateData.driveGalleryLink) {
     try {
       const shareLink = await driveService.generateShareLink(project.driveFolderId);
       updateData.driveGalleryLink = shareLink;
       updateData.galleryLink = shareLink;
       updateData.galleryLinkAddedAt = new Date();
       updateData.galleryLinkAddedBy = 'Drive Auto-Detection';
-      console.log(`🔗 Drive Monitor: Gallery link saved for ${project.clientName} (folder stays private)`);
+      console.log(`🔗 Drive Monitor: Gallery link saved for ${project.clientName} (awaiting delivery approval)`);
     } catch (err: any) {
-      console.error(`📂 Drive Monitor: Failed to generate share link for ${project.clientName}: ${err.message} — will retry next scan`);
+      console.error(`📂 Drive Monitor: Failed to generate share link for ${project.clientName}: ${err.message}`);
     }
   }
 
@@ -113,48 +152,6 @@ export async function scanProjectFolder(project: any): Promise<DriveMonitorResul
     if (!project.driveAccessGranted) {
       updateData.driveAccessGranted = true;
       console.log(`📂 Drive Monitor: Auto-marking ${project.clientName} as access-granted (already ${project.status})`);
-    }
-  }
-
-  const galleryLink = project.driveGalleryLink || updateData.driveGalleryLink;
-  const alreadyDelivered = project.status === 'Delivered' || project.status === 'Done' || project.driveDeliveryEmailSent;
-
-  if (photosReady && galleryLink && project.driveFolderId && !project.driveAccessGranted && !alreadyDelivered) {
-    try {
-      const isPublic = await driveService.checkFolderIsPublicLink(project.driveFolderId);
-      if (isPublic) {
-        console.log(`🔓 Drive Monitor: "Anyone with link" detected for ${project.clientName}`);
-
-        updateData.driveAccessGranted = true;
-        updateData.driveAccessGrantedAt = new Date();
-        updateData.driveDeliveryComplete = true;
-        updateData.driveDeliveryCompletedAt = new Date();
-        updateData.status = 'Delivered';
-        updateData.deliveredAt = new Date();
-        result.deliveryTriggered = true;
-
-        if (project.clientEmail) {
-          try {
-            const { sendGalleryDeliveryEmail } = await import('./emailService');
-            await sendGalleryDeliveryEmail(
-              project.clientEmail,
-              project.clientName,
-              galleryLink,
-              project.id
-            );
-            updateData.driveDeliveryEmailSent = true;
-            updateData.driveDeliveryEmailSentAt = new Date();
-            updateData.deliveryEmailSentAt = new Date();
-            console.log(`📧 Drive Monitor: Sent delivery email to ${project.clientEmail} for ${project.clientName}`);
-          } catch (err: any) {
-            console.error(`📂 Drive Monitor: Failed to send delivery email for ${project.clientName}: ${err.message}`);
-          }
-        } else {
-          console.log(`📂 Drive Monitor: No client email for ${project.clientName} — skipping delivery email`);
-        }
-      }
-    } catch (err: any) {
-      console.error(`📂 Drive Monitor: Failed to check folder sharing for ${project.clientName}: ${err.message}`);
     }
   }
 

@@ -204,6 +204,29 @@ export async function checkFolderIsPublicLink(folderId: string): Promise<boolean
   }
 }
 
+export async function makeFolderPublic(folderId: string): Promise<string> {
+  const drive = await getDriveClient();
+
+  const alreadyPublic = await checkFolderIsPublicLink(folderId);
+  if (!alreadyPublic) {
+    await drive.permissions.create({
+      fileId: folderId,
+      requestBody: {
+        role: 'reader',
+        type: 'anyone',
+      },
+    });
+    console.log(`🔓 Drive: Made folder ${folderId} public (Anyone with the link)`);
+  }
+
+  const file = await drive.files.get({
+    fileId: folderId,
+    fields: 'webViewLink',
+  });
+
+  return file.data.webViewLink!;
+}
+
 export async function getFolderSize(folderId: string): Promise<number> {
   const files = await listFilesInFolder(folderId);
   return files.reduce((sum, f) => sum + f.size, 0);
