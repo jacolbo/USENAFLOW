@@ -40,8 +40,19 @@ const MEMORY_CATEGORIES = [
 
 function getAuthHeaders(): Record<string, string> {
   const role = localStorage.getItem("usena_role") || "";
-  const userStr = localStorage.getItem("usena_user");
-  const userId = userStr ? JSON.parse(userStr)?.id?.toString() || "" : "";
+  const userId = localStorage.getItem("usena_user_id") || "";
+  if (!role || !userId) {
+    try {
+      const sessionStr = localStorage.getItem("usenaflow_session");
+      if (sessionStr) {
+        const session = JSON.parse(sessionStr);
+        const user = session?.user;
+        if (user) {
+          return { "x-usena-role": user.role || "", "x-usena-user-id": user.name || user.id || "" };
+        }
+      }
+    } catch {}
+  }
   return { "x-usena-role": role, "x-usena-user-id": userId };
 }
 
