@@ -185,19 +185,19 @@ export async function generateShareLink(folderId: string): Promise<string> {
   return file.data.webViewLink!;
 }
 
-export async function checkClientHasAccess(folderId: string, clientEmail: string): Promise<boolean> {
+export async function checkFolderIsPublicLink(folderId: string): Promise<boolean> {
   try {
     const drive = await getDriveClient();
     const permissions = await drive.permissions.list({
       fileId: folderId,
-      fields: 'permissions(id, emailAddress, role, type)',
+      fields: 'permissions(id, role, type)',
     });
 
-    const clientPermission = permissions.data.permissions?.find(
-      (p) => p.type === 'user' && p.emailAddress?.toLowerCase() === clientEmail.toLowerCase()
+    const anyonePermission = permissions.data.permissions?.find(
+      (p) => p.type === 'anyone'
     );
 
-    return !!clientPermission;
+    return !!anyonePermission;
   } catch (error: any) {
     console.error(`🔒 Drive: Failed to check permissions for folder ${folderId}: ${error.message}`);
     return false;

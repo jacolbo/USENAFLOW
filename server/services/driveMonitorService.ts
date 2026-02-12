@@ -119,11 +119,11 @@ export async function scanProjectFolder(project: any): Promise<DriveMonitorResul
   const galleryLink = project.driveGalleryLink || updateData.driveGalleryLink;
   const alreadyDelivered = project.status === 'Delivered' || project.status === 'Done' || project.driveDeliveryEmailSent;
 
-  if (photosReady && galleryLink && project.clientEmail && project.driveFolderId && !project.driveAccessGranted && !alreadyDelivered) {
+  if (photosReady && galleryLink && project.driveFolderId && !project.driveAccessGranted && !alreadyDelivered) {
     try {
-      const hasAccess = await driveService.checkClientHasAccess(project.driveFolderId, project.clientEmail);
-      if (hasAccess) {
-        console.log(`🔓 Drive Monitor: Access granted detected for ${project.clientName} (${project.clientEmail})`);
+      const isPublic = await driveService.checkFolderIsPublicLink(project.driveFolderId);
+      if (isPublic) {
+        console.log(`🔓 Drive Monitor: "Anyone with link" detected for ${project.clientName}`);
 
         updateData.driveAccessGranted = true;
         updateData.driveAccessGrantedAt = new Date();
@@ -133,24 +133,28 @@ export async function scanProjectFolder(project: any): Promise<DriveMonitorResul
         updateData.deliveredAt = new Date();
         result.deliveryTriggered = true;
 
-        try {
-          const { sendGalleryDeliveryEmail } = await import('./emailService');
-          await sendGalleryDeliveryEmail(
-            project.clientEmail,
-            project.clientName,
-            galleryLink,
-            project.id
-          );
-          updateData.driveDeliveryEmailSent = true;
-          updateData.driveDeliveryEmailSentAt = new Date();
-          updateData.deliveryEmailSentAt = new Date();
-          console.log(`📧 Drive Monitor: Sent delivery email to ${project.clientEmail} for ${project.clientName} (access granted trigger)`);
-        } catch (err: any) {
-          console.error(`📂 Drive Monitor: Failed to send delivery email for ${project.clientName}: ${err.message}`);
+        if (project.clientEmail) {
+          try {
+            const { sendGalleryDeliveryEmail } = await import('./emailService');
+            await sendGalleryDeliveryEmail(
+              project.clientEmail,
+              project.clientName,
+              galleryLink,
+              project.id
+            );
+            updateData.driveDeliveryEmailSent = true;
+            updateData.driveDeliveryEmailSentAt = new Date();
+            updateData.deliveryEmailSentAt = new Date();
+            console.log(`📧 Drive Monitor: Sent delivery email to ${project.clientEmail} for ${project.clientName}`);
+          } catch (err: any) {
+            console.error(`📂 Drive Monitor: Failed to send delivery email for ${project.clientName}: ${err.message}`);
+          }
+        } else {
+          console.log(`📂 Drive Monitor: No client email for ${project.clientName} — skipping delivery email`);
         }
       }
     } catch (err: any) {
-      console.error(`📂 Drive Monitor: Failed to check permissions for ${project.clientName}: ${err.message}`);
+      console.error(`📂 Drive Monitor: Failed to check folder sharing for ${project.clientName}: ${err.message}`);
     }
   }
 
