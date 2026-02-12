@@ -126,7 +126,57 @@ export function registerShoottrackerRoutes(app: Express): void {
     try {
       const validatedSettings = shoottrackerSettingsSchema.parse(req.body);
       await storage.setAppSetting(SETTINGS_KEY, validatedSettings);
-      res.json({ success: true, settings: validatedSettings });
+
+      const allProjects = await storage.getAllProjects();
+      const activeCalendarProjects = allProjects.filter(
+        (p) => p.createdFrom === "CALENDAR" && p.shootDate && p.status !== "Delivered" && p.status !== "Cancelled"
+      );
+
+      let recalculated = 0;
+      const now = new Date();
+      now.setHours(0, 0, 0, 0);
+
+      const getWeekStartSunday = (date: Date) => {
+        const sunday = new Date(date);
+        sunday.setDate(sunday.getDate() - sunday.getDay());
+        sunday.setHours(0, 0, 0, 0);
+        return sunday;
+      };
+
+      for (const project of activeCalendarProjects) {
+        const shootDate = new Date(project.shootDate!);
+        const { turnaroundDays } = resolveTurnaroundDays(project.clientName, validatedSettings);
+
+        const newDeliveryDueDate = addBusinessDays(
+          shootDate,
+          turnaroundDays,
+          validatedSettings.working_days,
+          validatedSettings.holidays,
+          validatedSettings.timezone
+        );
+
+        const newRiskLevel = calculateShootTrackerRiskLevel(
+          newDeliveryDueDate,
+          false,
+          validatedSettings.working_days,
+          validatedSettings.holidays,
+          new Date()
+        );
+
+        const dueWeekStart = getWeekStartSunday(newDeliveryDueDate);
+        const thisWeekStart = getWeekStartSunday(now);
+        const weekStart = newDeliveryDueDate < now ? thisWeekStart : dueWeekStart;
+
+        await storage.updateProject(project.id, {
+          deliveryDueDate: newDeliveryDueDate,
+          dueDate: weekStart,
+          riskLevel: newRiskLevel,
+        });
+        recalculated++;
+      }
+
+      console.log(`[ShootTracker] Settings updated. Recalculated ${recalculated} active project due dates.`);
+      res.json({ success: true, settings: validatedSettings, recalculatedProjects: recalculated });
     } catch (error: any) {
       console.error("Error saving ShootTracker settings:", error);
       res.status(400).json({ error: error.message || "Invalid settings" });
