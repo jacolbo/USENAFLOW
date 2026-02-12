@@ -11,6 +11,9 @@ import type { Notification, WebSocketMessage } from "@shared/schema";
 import { triggerManualRollover, performManualRolloverToNextWeek, performManualRollbackFromNextWeek } from "./rolloverScheduler";
 import { registerShoottrackerRoutes } from "./shoottrackerRoutes";
 import { sendChatLinkEmail, sendGalleryDeliveryEmail, sendSneakPeekEmail, sendSatisfactionSurveyEmail, sendSchedulingNotificationEmail, sendManualDelayNoticeEmail, generateToken } from "./services/emailService";
+import { evaluateLeaveRequest, aiTeamChat, generateDailySummaryForAdmin } from "./services/aiService";
+import { appSettings } from "@shared/schema";
+import { insertLeaveRequestSchema } from "@shared/schema";
 import { seedDefaultTemplates } from "./services/defaultEmailTemplates";
 import { VipTier } from "@shared/schema";
 import { sendStatusUpdateMessage } from './services/chatAutoResponder';
@@ -561,8 +564,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "Project not found" });
       }
 
-      // Check for status changes and send notifications
       if (oldProject && oldProject.status !== project.status) {
+        const changedBy = req.headers["x-usena-user-id"] as string || req.headers["x-usena-role"] as string || "unknown";
+        try {
+          await storage.recordStatusTransition(id, oldProject.status, project.status, changedBy);
+        } catch (err: any) {
+          console.error(`[Speed Tracking] Failed to record transition:`, err.message);
+        }
+
         let notification: Notification | null = null;
 
         if (project.status === ProjectStatus.DELIVERED) {
@@ -3217,6 +3226,358 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({ success: true });
     } catch (error: any) {
       res.status(500).json({ error: "Failed to end call" });
+    }
+  });
+
+  // Speed stats API
+  app.get("/api/speed-stats", async (req, res) => {
+    try {
+      const role = req.headers["x-usena-role"] as string;
+      if (role !== "Admin") {
+        return res.status(403).json({ error: "Admin access required" });
+      }
+
+      const allUsers = await storage.getAllUsers();
+      const retouchers = allUsers.filter(u => ['Retoucher1', 'Retoucher2', 'Retoucher3'].includes(u.role));
+
+      const stats = await Promise.all(
+        retouchers.map(async (r) => ({
+          username: r.name,
+          role: r.role,
+          ...(await storage.getRetoucherSpeedStats(r.name)),
+        }))
+      );
+
+      res.json({ retoucherStats: stats });
+    } catch (error: any) {
+      console.error("[Speed Stats] Error:", error.message);
+      res.status(500).json({ error: "Failed to fetch speed stats" });
+    }
+  });
+
+  // Leave Management API
+  app.post("/api/leave/request", async (req, res) => {
+    try {
+      const username = req.headers["x-usena-user-id"] as string;
+      if (!username) {
+        return res.status(401).json({ error: "User not identified" });
+      }
+
+      const { startDate, endDate, weekdaysCount, reason, leaveType } = req.body;
+      if (!startDate || !endDate || !weekdaysCount || !reason || !leaveType) {
+        return res.status(400).json({ error: "Missing required fields" });
+      }
+
+      const year = new Date(startDate).getFullYear();
+      const usedDays = await storage.getUsedLeaveDays(username, year);
+
+      const allProjects = await storage.getAllProjects();
+      const userProjects = allProjects.filter(p => p.assignedTo === username);
+      const overdueProjects = userProjects.filter(p => p.dueDate && new Date(p.dueDate) < new Date() && p.status !== 'Delivered').length;
+      const pendingProjects = userProjects.filter(p => p.status !== 'Delivered').length;
+
+      const sevenDaysFromNow = new Date();
+      sevenDaysFromNow.setDate(sevenDaysFromNow.getDate() + 7);
+      const upcomingDueCount = userProjects.filter(p => p.dueDate && new Date(p.dueDate) <= sevenDaysFromNow && p.status !== 'Delivered').length;
+
+      const existingLeaves = await storage.getLeaveRequests(undefined, year);
+      const reqStart = new Date(startDate);
+      const reqEnd = new Date(endDate);
+      const teamMembersOnLeave = existingLeaves
+        .filter(l => l.username !== username && l.status === 'approved' &&
+          new Date(l.startDate) <= reqEnd && new Date(l.endDate) >= reqStart)
+        .map(l => l.username)
+        .filter((v, i, a) => a.indexOf(v) === i);
+
+      const aiResult = await evaluateLeaveRequest({
+        username,
+        startDate,
+        endDate,
+        weekdaysCount,
+        reason,
+        leaveType,
+        usedDays,
+        maxDays: 15,
+        pendingProjects,
+        overdueProjects,
+        upcomingDueCount,
+        teamMembersOnLeave,
+      });
+
+      const leaveRequest = await storage.createLeaveRequest({
+        username,
+        startDate: new Date(startDate),
+        endDate: new Date(endDate),
+        weekdaysCount,
+        reason,
+        leaveType,
+        status: aiResult.decision === 'approved' ? 'approved' : aiResult.decision === 'denied' ? 'denied' : 'pending',
+        year,
+      });
+
+      const updated = await storage.updateLeaveRequest(leaveRequest.id, {
+        aiDecision: aiResult.decision,
+        aiReason: aiResult.reason,
+      });
+
+      res.json(updated || leaveRequest);
+    } catch (error: any) {
+      console.error("[Leave] Error creating request:", error.message);
+      res.status(500).json({ error: "Failed to create leave request" });
+    }
+  });
+
+  app.get("/api/leave/requests", async (req, res) => {
+    try {
+      const role = req.headers["x-usena-role"] as string;
+      const username = req.headers["x-usena-user-id"] as string;
+      const year = req.query.year ? parseInt(req.query.year as string) : undefined;
+
+      if (role === "Admin") {
+        const requests = await storage.getLeaveRequests(undefined, year);
+        return res.json(requests);
+      }
+
+      if (!username) {
+        return res.status(401).json({ error: "User not identified" });
+      }
+
+      const requests = await storage.getLeaveRequests(username, year);
+      res.json(requests);
+    } catch (error: any) {
+      console.error("[Leave] Error fetching requests:", error.message);
+      res.status(500).json({ error: "Failed to fetch leave requests" });
+    }
+  });
+
+  app.post("/api/leave/:id/review", async (req, res) => {
+    try {
+      const role = req.headers["x-usena-role"] as string;
+      if (role !== "Admin") {
+        return res.status(403).json({ error: "Admin access required" });
+      }
+
+      const { id } = req.params;
+      const { status } = req.body;
+      const reviewedBy = req.headers["x-usena-user-id"] as string || "Admin";
+
+      if (!status || !['approved', 'denied'].includes(status)) {
+        return res.status(400).json({ error: "Invalid status. Must be 'approved' or 'denied'" });
+      }
+
+      const updated = await storage.updateLeaveRequest(id, {
+        status,
+        reviewedBy,
+        reviewedAt: new Date(),
+      });
+
+      if (!updated) {
+        return res.status(404).json({ error: "Leave request not found" });
+      }
+
+      res.json(updated);
+    } catch (error: any) {
+      console.error("[Leave] Error reviewing request:", error.message);
+      res.status(500).json({ error: "Failed to review leave request" });
+    }
+  });
+
+  // === AI TEAM CHAT ROUTES ===
+
+  app.post("/api/ai-chat/message", async (req, res) => {
+    try {
+      const role = req.headers["x-usena-role"] as string;
+      const userId = req.headers["x-usena-user-id"] as string;
+      const { message } = req.body;
+
+      if (!userId || !role || !message) {
+        return res.status(400).json({ error: "Missing required fields" });
+      }
+
+      const history = await storage.getAiTeamMessages(userId, 20);
+      const conversationHistory = history.map((m: any) => ({
+        sender: m.sender_type || m.senderType,
+        message: m.message,
+      }));
+
+      const allProjects = await storage.getProjects();
+      const now = new Date();
+      const yesterday = new Date(now);
+      yesterday.setDate(yesterday.getDate() - 1);
+      yesterday.setHours(0, 0, 0, 0);
+      const yesterdayEnd = new Date(yesterday);
+      yesterdayEnd.setHours(23, 59, 59, 999);
+
+      const overdueProjects = allProjects
+        .filter((p: any) => p.status !== "Delivered" && p.dueDate && new Date(p.dueDate) < now)
+        .map((p: any) => ({
+          clientName: p.clientName,
+          assignedTo: p.assignedTo || "Unassigned",
+          dueDate: p.dueDate,
+          status: p.status,
+        }));
+
+      const yesterdayIncomplete = allProjects
+        .filter((p: any) => {
+          if (!p.dueDate || p.status === "Delivered") return false;
+          const due = new Date(p.dueDate);
+          return due >= yesterday && due <= yesterdayEnd;
+        })
+        .map((p: any) => ({
+          clientName: p.clientName,
+          assignedTo: p.assignedTo || "Unassigned",
+          dueDate: p.dueDate,
+          status: p.status,
+        }));
+
+      const users = await storage.getUsers();
+      const retouchers = users.filter((u: any) => u.role === "Retoucher" || u.role === "SeniorRetoucher");
+
+      const retoucherStats = [];
+      const speedStats = [];
+      for (const r of retouchers) {
+        const userProjects = allProjects.filter((p: any) => p.assignedTo === r.username);
+        const completed = userProjects.filter((p: any) => p.status === "Delivered").length;
+        const active = userProjects.filter((p: any) => p.status !== "Delivered" && p.status !== "Cancelled").length;
+        const overdue = userProjects.filter((p: any) => p.status !== "Delivered" && p.dueDate && new Date(p.dueDate) < now).length;
+        const ratings = userProjects.filter((p: any) => p.qualityRating != null).map((p: any) => p.qualityRating);
+        const avgRating = ratings.length > 0 ? ratings.reduce((a: number, b: number) => a + b, 0) / ratings.length : null;
+        retoucherStats.push({ name: r.username, completed, active, overdue, avgRating });
+
+        try {
+          const speed = await storage.getRetoucherSpeedStats(r.username);
+          speedStats.push({ name: r.username, avgMinutes: speed.avgMinutes });
+        } catch {
+          speedStats.push({ name: r.username, avgMinutes: 0 });
+        }
+      }
+
+      const activeLeaves = await storage.getLeaveRequests();
+      const teamOnLeave = activeLeaves
+        .filter((l: any) => l.status === "approved" && new Date(l.startDate) <= now && new Date(l.endDate) >= now)
+        .map((l: any) => ({
+          username: l.username,
+          startDate: l.startDate,
+          endDate: l.endDate,
+        }));
+
+      const guidelinesResult = await db.select().from(appSettings).where(eq(appSettings.key, "retouching_guidelines"));
+      const retouchingGuidelines = guidelinesResult[0]?.value || "";
+
+      const isExplanation = /late|delay|couldn'?t|sorry|behind|issue|problem|stuck/i.test(message);
+      const metadata = isExplanation && role !== "Admin" && role !== "LeadRetoucher"
+        ? { type: "explanation" }
+        : undefined;
+
+      await storage.createAiTeamMessage({
+        username: userId,
+        role,
+        senderType: "user",
+        message,
+        metadata: metadata || undefined,
+      });
+
+      const aiResponse = await aiTeamChat({
+        username: userId,
+        role,
+        message,
+        conversationHistory,
+        projectData: {
+          totalProjects: allProjects.length,
+          overdueProjects,
+          yesterdayIncomplete,
+          retoucherStats,
+          speedStats,
+          teamOnLeave,
+        },
+        retouchingGuidelines,
+      });
+
+      await storage.createAiTeamMessage({
+        username: userId,
+        role,
+        senderType: "ai",
+        message: aiResponse,
+      });
+
+      res.json({ response: aiResponse });
+    } catch (error: any) {
+      console.error("[AI Chat] Error:", error.message);
+      res.status(500).json({ error: "Failed to process message" });
+    }
+  });
+
+  app.get("/api/ai-chat/messages", async (req, res) => {
+    try {
+      const userId = req.headers["x-usena-user-id"] as string;
+      if (!userId) return res.status(400).json({ error: "Missing user ID" });
+
+      const limit = parseInt(req.query.limit as string) || 50;
+      const messages = await storage.getAiTeamMessages(userId, limit);
+      res.json(messages);
+    } catch (error: any) {
+      console.error("[AI Chat] Error fetching messages:", error.message);
+      res.status(500).json({ error: "Failed to fetch messages" });
+    }
+  });
+
+  app.get("/api/ai-chat/admin/summary", async (req, res) => {
+    try {
+      const role = req.headers["x-usena-role"] as string;
+      if (role !== "Admin" && role !== "LeadRetoucher") {
+        return res.status(403).json({ error: "Admin access required" });
+      }
+
+      const allProjects = await storage.getProjects();
+      const now = new Date();
+      const yesterday = new Date(now);
+      yesterday.setDate(yesterday.getDate() - 1);
+      yesterday.setHours(0, 0, 0, 0);
+      const yesterdayEnd = new Date(yesterday);
+      yesterdayEnd.setHours(23, 59, 59, 999);
+
+      const yesterdayIncomplete = allProjects
+        .filter((p: any) => {
+          if (!p.dueDate || p.status === "Delivered") return false;
+          const due = new Date(p.dueDate);
+          return due >= yesterday && due <= yesterdayEnd;
+        })
+        .map((p: any) => ({
+          clientName: p.clientName,
+          assignedTo: p.assignedTo || "Unassigned",
+          dueDate: p.dueDate,
+          status: p.status,
+        }));
+
+      const explanations = await storage.getRecentRetoucherExplanations(yesterday);
+      const retoucherExplanations = explanations.map((e: any) => ({
+        username: e.username,
+        message: e.message,
+        timestamp: e.created_at || e.createdAt,
+      }));
+
+      const users = await storage.getUsers();
+      const retouchers = users.filter((u: any) => u.role === "Retoucher" || u.role === "SeniorRetoucher");
+      const retoucherStats = retouchers.map((r: any) => {
+        const userProjects = allProjects.filter((p: any) => p.assignedTo === r.username);
+        return {
+          name: r.username,
+          completed: userProjects.filter((p: any) => p.status === "Delivered").length,
+          active: userProjects.filter((p: any) => p.status !== "Delivered" && p.status !== "Cancelled").length,
+          overdue: userProjects.filter((p: any) => p.status !== "Delivered" && p.dueDate && new Date(p.dueDate) < now).length,
+        };
+      });
+
+      const summary = await generateDailySummaryForAdmin({
+        yesterdayIncomplete,
+        retoucherExplanations,
+        retoucherStats,
+      });
+
+      res.json({ summary });
+    } catch (error: any) {
+      console.error("[AI Chat] Error generating summary:", error.message);
+      res.status(500).json({ error: "Failed to generate summary" });
     }
   });
 

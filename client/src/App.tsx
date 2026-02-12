@@ -11,6 +11,8 @@ import EditorChat from "@/pages/editor-chat";
 import SurveyPage from "@/pages/survey";
 import ReferralPage from "@/pages/referral";
 import UnsubscribePage from "@/pages/unsubscribe";
+import LeaveManagement from "@/pages/leave-management";
+import AiTeamChat from "@/pages/ai-team-chat";
 import NotFound from "@/pages/not-found";
 
 function Router() {
@@ -24,6 +26,8 @@ function Router() {
       <Route path="/survey/:token" component={SurveyPage} />
       <Route path="/refer/:code" component={ReferralPage} />
       <Route path="/unsubscribe/:token" component={UnsubscribePage} />
+      <Route path="/leave" component={LeaveManagement} />
+      <Route path="/ai-chat" component={AiTeamChat} />
       <Route component={NotFound} />
     </Switch>
   );

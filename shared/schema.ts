@@ -80,6 +80,9 @@ export const projects = pgTable("projects", {
   driveAccessGrantedAt: timestamp("drive_access_granted_at"),
   driveLastCheckedAt: timestamp("drive_last_checked_at"),
   driveClientAccessedAt: timestamp("drive_client_accessed_at"),
+  chatArchived: boolean("chat_archived").notNull().default(false),
+  chatArchivedAt: timestamp("chat_archived_at"),
+  chatArchivedBy: text("chat_archived_by"),
 });
 
 // ShootTracker metadata table (1:1 with projects)
@@ -746,6 +749,75 @@ export const pushSubscriptions = pgTable("push_subscriptions", {
 export const insertPushSubscriptionSchema = createInsertSchema(pushSubscriptions).omit({ id: true, createdAt: true });
 export type PushSubscription = typeof pushSubscriptions.$inferSelect;
 export type InsertPushSubscription = z.infer<typeof insertPushSubscriptionSchema>;
+
+// Project status transitions for speed tracking
+export const projectStatusTransitions = pgTable("project_status_transitions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  projectId: varchar("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
+  fromStatus: text("from_status").notNull(),
+  toStatus: text("to_status").notNull(),
+  changedBy: text("changed_by").notNull(),
+  transitionedAt: timestamp("transitioned_at").notNull().default(sql`now()`),
+  durationMinutes: integer("duration_minutes"),
+});
+
+export const insertStatusTransitionSchema = createInsertSchema(projectStatusTransitions).omit({
+  id: true,
+  transitionedAt: true,
+  durationMinutes: true,
+});
+
+export type StatusTransition = typeof projectStatusTransitions.$inferSelect;
+export type InsertStatusTransition = z.infer<typeof insertStatusTransitionSchema>;
+
+// Leave management system
+export const leaveRequests = pgTable("leave_requests", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  username: text("username").notNull(),
+  startDate: timestamp("start_date").notNull(),
+  endDate: timestamp("end_date").notNull(),
+  weekdaysCount: integer("weekdays_count").notNull(),
+  reason: text("reason").notNull(),
+  leaveType: text("leave_type").notNull().default("annual"),
+  status: text("status").notNull().default("pending"),
+  aiDecision: text("ai_decision"),
+  aiReason: text("ai_reason"),
+  reviewedBy: text("reviewed_by"),
+  reviewedAt: timestamp("reviewed_at"),
+  year: integer("year").notNull(),
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+});
+
+export const insertLeaveRequestSchema = createInsertSchema(leaveRequests).omit({
+  id: true,
+  createdAt: true,
+  aiDecision: true,
+  aiReason: true,
+  reviewedBy: true,
+  reviewedAt: true,
+});
+
+export type LeaveRequest = typeof leaveRequests.$inferSelect;
+export type InsertLeaveRequest = z.infer<typeof insertLeaveRequestSchema>;
+
+// AI team chat messages
+export const aiTeamMessages = pgTable("ai_team_messages", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  username: text("username").notNull(),
+  role: text("role").notNull(),
+  senderType: text("sender_type").notNull(),
+  message: text("message").notNull(),
+  metadata: jsonb("metadata"),
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+});
+
+export const insertAiTeamMessageSchema = createInsertSchema(aiTeamMessages).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type AiTeamMessage = typeof aiTeamMessages.$inferSelect;
+export type InsertAiTeamMessage = z.infer<typeof insertAiTeamMessageSchema>;
 
 export const AVAILABLE_WIDGETS: WidgetConfig[] = [
   { id: "daily_quote", name: "Daily Inspiration", description: "Motivational quote of the day", icon: "Quote", defaultEnabled: true, roles: ["Admin", "LeadRetoucher", "Retoucher1", "Retoucher2", "Retoucher3", "DataWrangler", "Sales", "Evans"] },

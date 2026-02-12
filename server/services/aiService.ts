@@ -255,6 +255,48 @@ export async function reviewDrivePhotos(photos: { name: string; thumbnailUrl: st
   }
 }
 
+export async function evaluateLeaveRequest(context: {
+  username: string;
+  startDate: string;
+  endDate: string;
+  weekdaysCount: number;
+  reason: string;
+  leaveType: string;
+  usedDays: number;
+  maxDays: number;
+  pendingProjects: number;
+  overdueProjects: number;
+  upcomingDueCount: number;
+  teamMembersOnLeave: string[];
+}): Promise<{ decision: 'approved' | 'denied' | 'needs_review'; reason: string }> {
+  try {
+    if (context.leaveType === 'sick') {
+      return { decision: 'approved', reason: 'Sick leave approved. Take care and get well soon.' };
+    }
+
+    if (context.usedDays + context.weekdaysCount > context.maxDays) {
+      return { decision: 'denied', reason: 'Annual leave allowance would be exceeded with this request.' };
+    }
+
+    if (context.overdueProjects >= 5 || context.upcomingDueCount >= 8) {
+      return { decision: 'denied', reason: 'There is currently a significant project backlog that requires team availability. Please try again when workload has stabilized.' };
+    }
+
+    if (context.teamMembersOnLeave.length >= 2) {
+      return { decision: 'denied', reason: 'Multiple team members are already on leave during this period. Adequate team coverage cannot be maintained.' };
+    }
+
+    if (context.overdueProjects >= 3 || context.upcomingDueCount >= 5 || context.teamMembersOnLeave.length >= 1) {
+      return { decision: 'needs_review', reason: 'This request needs manager review due to current workload and team availability considerations.' };
+    }
+
+    return { decision: 'approved', reason: 'Leave request approved. Team coverage and workload are within acceptable levels.' };
+  } catch (error: any) {
+    console.error(`[AI] Leave evaluation failed:`, error.message);
+    return { decision: 'needs_review', reason: 'Unable to automatically evaluate. Requires manager review.' };
+  }
+}
+
 export async function suggestChatReply(context: {
   clientName: string;
   projectName: string;
@@ -295,5 +337,95 @@ export async function suggestChatReply(context: {
   } catch (error: any) {
     console.error(`[AI] Chat reply suggestion failed:`, error.message);
     return context.draftMessage || "Thank you for your message. I'll get back to you shortly.";
+  }
+}
+
+export async function aiTeamChat(context: {
+  username: string;
+  role: string;
+  message: string;
+  conversationHistory: { sender: string; message: string }[];
+  projectData: {
+    totalProjects: number;
+    overdueProjects: { clientName: string; assignedTo: string; dueDate: string; status: string }[];
+    yesterdayIncomplete: { clientName: string; assignedTo: string; dueDate: string; status: string }[];
+    retoucherStats: { name: string; completed: number; active: number; overdue: number; avgRating: number | null }[];
+    speedStats: { name: string; avgMinutes: number }[];
+    teamOnLeave: { username: string; startDate: string; endDate: string }[];
+  };
+  retouchingGuidelines: string;
+}): Promise<string> {
+  try {
+    const isAdmin = context.role === "Admin" || context.role === "LeadRetoucher";
+
+    const systemPrompt = isAdmin
+      ? `You are the AI Studio Manager at Jepson Myles Studio. Admin is asking you about team performance. You have access to project data, retoucher stats, speed metrics, and team availability. Answer questions about who hasn't done their work, suggest follow-ups, identify patterns. When admin asks who hasn't completed work, check the overdue and yesterday's incomplete data. Reference the retouching guidelines when relevant. Be direct and helpful.
+
+PROJECT DATA:
+${JSON.stringify(context.projectData, null, 2)}
+
+RETOUCHING GUIDELINES:
+${context.retouchingGuidelines || "No guidelines set."}`
+      : `You are the AI Studio Assistant at Jepson Myles Studio. A retoucher is chatting with you. They may be explaining why a project was delayed or asking for guidance. Be supportive but professional. Reference the retouching guidelines when relevant. When they explain a delay, acknowledge it and note that the admin will be informed. Ask clarifying questions if needed.
+
+PROJECT DATA:
+${JSON.stringify(context.projectData, null, 2)}
+
+RETOUCHING GUIDELINES:
+${context.retouchingGuidelines || "No guidelines set."}`;
+
+    const messages: { role: "system" | "user" | "assistant"; content: string }[] = [
+      { role: "system", content: systemPrompt },
+    ];
+
+    for (const msg of context.conversationHistory.slice(-15)) {
+      messages.push({
+        role: msg.sender === "ai" ? "assistant" : "user",
+        content: msg.message,
+      });
+    }
+
+    messages.push({ role: "user", content: context.message });
+
+    const response = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages,
+      temperature: 0.7,
+      max_tokens: 1500,
+    });
+
+    return response.choices[0]?.message?.content?.trim() || "I'm sorry, I couldn't generate a response. Please try again.";
+  } catch (error: any) {
+    console.error(`[AI] Team chat failed:`, error.message);
+    return "I'm temporarily unavailable. Please try again in a moment.";
+  }
+}
+
+export async function generateDailySummaryForAdmin(context: {
+  yesterdayIncomplete: { clientName: string; assignedTo: string; dueDate: string; status: string }[];
+  retoucherExplanations: { username: string; message: string; timestamp: string }[];
+  retoucherStats: { name: string; completed: number; active: number; overdue: number }[];
+}): Promise<string> {
+  try {
+    const response = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: [
+        {
+          role: "system",
+          content: "You are the AI Studio Manager at Jepson Myles Studio. Generate a concise daily summary for the admin about yesterday's incomplete work and any explanations provided by retouchers. Highlight who didn't complete their work, any patterns, and suggest follow-up actions. Be direct and actionable. Format with clear sections using markdown-style headers.",
+        },
+        {
+          role: "user",
+          content: `Generate a daily summary from this data:\n\nYESTERDAY'S INCOMPLETE PROJECTS:\n${JSON.stringify(context.yesterdayIncomplete, null, 2)}\n\nRETOUCHER EXPLANATIONS:\n${JSON.stringify(context.retoucherExplanations, null, 2)}\n\nRETOUCHER STATS:\n${JSON.stringify(context.retoucherStats, null, 2)}`,
+        },
+      ],
+      temperature: 0.7,
+      max_tokens: 2000,
+    });
+
+    return response.choices[0]?.message?.content?.trim() || "Unable to generate summary at this time.";
+  } catch (error: any) {
+    console.error(`[AI] Daily summary generation failed:`, error.message);
+    return "Daily summary is temporarily unavailable. Please try again later.";
   }
 }

@@ -1,4 +1,4 @@
-import { type User, type InsertUser, type Project, type InsertProject, type UpdateProject, type ProjectNote, type InsertProjectNote, type UpdateProjectNote, type TradeOffer, type InsertTradeOffer, type UpdateTradeOffer, type WranglerCommission, type InsertWranglerCommission, type ProjectEvent, type InsertProjectEvent, type Complaint, type InsertComplaint, type ShoottrackerMeta, type InsertShoottrackerMeta, type UpdateShoottrackerMeta, type AppSetting, type CalendarEventStaging, type InsertCalendarEventStaging, type UpdateCalendarEventStaging, type ClientAuthToken, type InsertClientAuthToken, type ClientMessage, type InsertClientMessage, type DashboardPreferences, type InsertDashboardPreferences, type SneakPeek, type InsertSneakPeek, type Survey, type InsertSurvey, type Referral, type InsertReferral, type ClientProfile, type InsertClientProfile, type RewardClaim, type InsertRewardClaim, type EmailTemplate, type InsertEmailTemplate, type PushSubscription, type InsertPushSubscription, ProjectStatus, TradeOfferStatus, StagingStatus, users, projects, projectNotes, tradeOffers, wranglerCommissions, projectEvents, complaints, shoottrackerMeta, appSettings, calendarEventsStaging, clientAuthTokens, clientMessages, dashboardPreferences, sneakPeeks, clientSurveys, referrals, clientProfiles, referralRewardClaims, emailTemplates, pushSubscriptions, chatEncryptionKeys } from "@shared/schema";
+import { type User, type InsertUser, type Project, type InsertProject, type UpdateProject, type ProjectNote, type InsertProjectNote, type UpdateProjectNote, type TradeOffer, type InsertTradeOffer, type UpdateTradeOffer, type WranglerCommission, type InsertWranglerCommission, type ProjectEvent, type InsertProjectEvent, type Complaint, type InsertComplaint, type ShoottrackerMeta, type InsertShoottrackerMeta, type UpdateShoottrackerMeta, type AppSetting, type CalendarEventStaging, type InsertCalendarEventStaging, type UpdateCalendarEventStaging, type ClientAuthToken, type InsertClientAuthToken, type ClientMessage, type InsertClientMessage, type DashboardPreferences, type InsertDashboardPreferences, type SneakPeek, type InsertSneakPeek, type Survey, type InsertSurvey, type Referral, type InsertReferral, type ClientProfile, type InsertClientProfile, type RewardClaim, type InsertRewardClaim, type EmailTemplate, type InsertEmailTemplate, type PushSubscription, type InsertPushSubscription, type StatusTransition, type InsertStatusTransition, type LeaveRequest, type InsertLeaveRequest, type AiTeamMessage, type InsertAiTeamMessage, ProjectStatus, TradeOfferStatus, StagingStatus, users, projects, projectNotes, tradeOffers, wranglerCommissions, projectEvents, complaints, shoottrackerMeta, appSettings, calendarEventsStaging, clientAuthTokens, clientMessages, dashboardPreferences, sneakPeeks, clientSurveys, referrals, clientProfiles, referralRewardClaims, emailTemplates, pushSubscriptions, chatEncryptionKeys, projectStatusTransitions, leaveRequests, aiTeamMessages } from "@shared/schema";
 import { db } from "./db";
 import { eq, sql, asc, and, ilike } from "drizzle-orm";
 import { randomUUID } from "crypto";
@@ -84,7 +84,7 @@ export interface IStorage {
   getMessagesByProject(projectId: string): Promise<ClientMessage[]>;
   createClientMessage(message: InsertClientMessage): Promise<ClientMessage>;
   markMessagesAsRead(projectId: string, senderType: string): Promise<number>;
-  getProjectsWithUnreadCounts(assignedTo?: string): Promise<Array<{ project: Project; unreadCount: number; lastMessageAt: Date | null }>>;
+  getProjectsWithUnreadCounts(assignedTo?: string, archived?: boolean): Promise<Array<{ project: Project; unreadCount: number; lastMessageAt: Date | null }>>;
   
   // Dashboard preferences methods
   getDashboardPreferences(userId: string): Promise<DashboardPreferences | undefined>;
@@ -131,6 +131,20 @@ export interface IStorage {
   savePushSubscription(sub: InsertPushSubscription): Promise<PushSubscription>;
   getPushSubscriptionsByProject(projectId: string): Promise<PushSubscription[]>;
   deletePushSubscription(endpoint: string): Promise<void>;
+
+  recordStatusTransition(projectId: string, fromStatus: string, toStatus: string, changedBy: string): Promise<StatusTransition>;
+  getStatusTransitions(projectId: string): Promise<StatusTransition[]>;
+  getRetoucherSpeedStats(username: string): Promise<{ avgMinutes: number; totalProjects: number; fastestMinutes: number; slowestMinutes: number }>;
+
+  createLeaveRequest(request: InsertLeaveRequest): Promise<LeaveRequest>;
+  getLeaveRequests(username?: string, year?: number): Promise<LeaveRequest[]>;
+  getLeaveRequestById(id: string): Promise<LeaveRequest | undefined>;
+  updateLeaveRequest(id: string, updates: Partial<LeaveRequest>): Promise<LeaveRequest | undefined>;
+  getUsedLeaveDays(username: string, year: number): Promise<number>;
+
+  createAiTeamMessage(msg: InsertAiTeamMessage): Promise<AiTeamMessage>;
+  getAiTeamMessages(username: string, limit?: number): Promise<AiTeamMessage[]>;
+  getRecentRetoucherExplanations(since: Date): Promise<AiTeamMessage[]>;
 }
 
 export class MemStorage implements IStorage {
@@ -817,6 +831,40 @@ export class MemStorage implements IStorage {
   async setChatEncryptionKey(projectId: string, encryptionKey: string, createdBy: string): Promise<void> {
     throw new Error("Not implemented in MemStorage");
   }
+
+  async recordStatusTransition(projectId: string, fromStatus: string, toStatus: string, changedBy: string): Promise<StatusTransition> {
+    throw new Error("Not implemented in MemStorage");
+  }
+  async getStatusTransitions(projectId: string): Promise<StatusTransition[]> {
+    throw new Error("Not implemented in MemStorage");
+  }
+  async getRetoucherSpeedStats(username: string): Promise<{ avgMinutes: number; totalProjects: number; fastestMinutes: number; slowestMinutes: number }> {
+    throw new Error("Not implemented in MemStorage");
+  }
+  async createLeaveRequest(request: InsertLeaveRequest): Promise<LeaveRequest> {
+    throw new Error("Not implemented in MemStorage");
+  }
+  async getLeaveRequests(username?: string, year?: number): Promise<LeaveRequest[]> {
+    throw new Error("Not implemented in MemStorage");
+  }
+  async getLeaveRequestById(id: string): Promise<LeaveRequest | undefined> {
+    throw new Error("Not implemented in MemStorage");
+  }
+  async updateLeaveRequest(id: string, updates: Partial<LeaveRequest>): Promise<LeaveRequest | undefined> {
+    throw new Error("Not implemented in MemStorage");
+  }
+  async getUsedLeaveDays(username: string, year: number): Promise<number> {
+    throw new Error("Not implemented in MemStorage");
+  }
+  async createAiTeamMessage(msg: InsertAiTeamMessage): Promise<AiTeamMessage> {
+    throw new Error("Not implemented in MemStorage");
+  }
+  async getAiTeamMessages(username: string, limit?: number): Promise<AiTeamMessage[]> {
+    throw new Error("Not implemented in MemStorage");
+  }
+  async getRecentRetoucherExplanations(since: Date): Promise<AiTeamMessage[]> {
+    throw new Error("Not implemented in MemStorage");
+  }
 }
 
 // Database Storage Implementation
@@ -1304,14 +1352,18 @@ export class DatabaseStorage implements IStorage {
     return result.rowCount || 0;
   }
   
-  async getProjectsWithUnreadCounts(assignedTo?: string): Promise<Array<{ project: Project; unreadCount: number; lastMessageAt: Date | null }>> {
-    // Build the query condition using raw SQL with table alias 'p'
-    // Only show projects that are NOT delivered (status != 'Delivered' and delivered_at IS NULL)
-    const assignedCondition = assignedTo 
-      ? sql`p.client_email IS NOT NULL AND p.assigned_to = ${assignedTo} AND p.status != 'Delivered' AND p.delivered_at IS NULL`
-      : sql`p.client_email IS NOT NULL AND p.status != 'Delivered' AND p.delivered_at IS NULL`;
+  async getProjectsWithUnreadCounts(assignedTo?: string, archived: boolean = false): Promise<Array<{ project: Project; unreadCount: number; lastMessageAt: Date | null }>> {
+    let assignedCondition;
+    if (archived) {
+      assignedCondition = assignedTo
+        ? sql`p.client_email IS NOT NULL AND p.assigned_to = ${assignedTo} AND p.chat_archived = true`
+        : sql`p.client_email IS NOT NULL AND p.chat_archived = true`;
+    } else {
+      assignedCondition = assignedTo
+        ? sql`p.client_email IS NOT NULL AND p.assigned_to = ${assignedTo} AND p.chat_archived = false`
+        : sql`p.client_email IS NOT NULL AND p.chat_archived = false`;
+    }
     
-    // Single aggregate query with LEFT JOIN to get all data at once
     const aggregateQuery = await db.execute(sql`
       SELECT 
         p.*,
@@ -1324,11 +1376,9 @@ export class DatabaseStorage implements IStorage {
       ORDER BY last_message_at DESC NULLS LAST, unread_count DESC
     `);
     
-    // Map the raw results to the expected format
     const result: Array<{ project: Project; unreadCount: number; lastMessageAt: Date | null }> = [];
     
     for (const row of aggregateQuery.rows as any[]) {
-      // Reconstruct the project object from the row (using SQL column names from schema)
       const project: Project = {
         id: row.id,
         clientName: row.client_name,
@@ -1364,6 +1414,33 @@ export class DatabaseStorage implements IStorage {
         extrasApprovalToken: row.extras_approval_token,
         deliveryEstimateEmailSentAt: row.delivery_estimate_email_sent_at,
         projectAddedEmailSentAt: row.project_added_email_sent_at,
+        galleryLink: row.gallery_link,
+        galleryLinkAddedAt: row.gallery_link_added_at,
+        galleryLinkAddedBy: row.gallery_link_added_by,
+        deliveryApproved: row.delivery_approved,
+        deliveryApprovedAt: row.delivery_approved_at,
+        deliveryApprovedBy: row.delivery_approved_by,
+        deliveryEmailSentAt: row.delivery_email_sent_at,
+        driveFolderId: row.drive_folder_id,
+        driveFolderName: row.drive_folder_name,
+        driveBwFolderId: row.drive_bw_folder_id,
+        drivePhotoCount: row.drive_photo_count,
+        driveBwPhotoCount: row.drive_bw_photo_count,
+        driveStorageBytes: row.drive_storage_bytes,
+        driveGalleryLink: row.drive_gallery_link,
+        driveBwSent: row.drive_bw_sent,
+        driveBwSentAt: row.drive_bw_sent_at,
+        driveDeliveryComplete: row.drive_delivery_complete,
+        driveDeliveryCompletedAt: row.drive_delivery_completed_at,
+        driveDeliveryEmailSent: row.drive_delivery_email_sent,
+        driveDeliveryEmailSentAt: row.drive_delivery_email_sent_at,
+        driveAccessGranted: row.drive_access_granted,
+        driveAccessGrantedAt: row.drive_access_granted_at,
+        driveLastCheckedAt: row.drive_last_checked_at,
+        driveClientAccessedAt: row.drive_client_accessed_at,
+        chatArchived: row.chat_archived,
+        chatArchivedAt: row.chat_archived_at,
+        chatArchivedBy: row.chat_archived_by,
       };
       
       result.push({
@@ -1645,6 +1722,120 @@ export class DatabaseStorage implements IStorage {
     } else {
       await db.insert(chatEncryptionKeys).values({ projectId, encryptionKey, createdBy });
     }
+  }
+
+  async recordStatusTransition(projectId: string, fromStatus: string, toStatus: string, changedBy: string): Promise<StatusTransition> {
+    const previousTransitions = await db
+      .select()
+      .from(projectStatusTransitions)
+      .where(eq(projectStatusTransitions.projectId, projectId))
+      .orderBy(sql`${projectStatusTransitions.transitionedAt} DESC`)
+      .limit(1);
+
+    let durationMinutes: number | null = null;
+    if (previousTransitions.length > 0 && previousTransitions[0].transitionedAt) {
+      const prev = new Date(previousTransitions[0].transitionedAt).getTime();
+      const now = Date.now();
+      durationMinutes = Math.round((now - prev) / 60000);
+    }
+
+    const [transition] = await db
+      .insert(projectStatusTransitions)
+      .values({ projectId, fromStatus, toStatus, changedBy, durationMinutes })
+      .returning();
+    return transition;
+  }
+
+  async getStatusTransitions(projectId: string): Promise<StatusTransition[]> {
+    return await db
+      .select()
+      .from(projectStatusTransitions)
+      .where(eq(projectStatusTransitions.projectId, projectId))
+      .orderBy(asc(projectStatusTransitions.transitionedAt));
+  }
+
+  async getRetoucherSpeedStats(username: string): Promise<{ avgMinutes: number; totalProjects: number; fastestMinutes: number; slowestMinutes: number }> {
+    const result = await db.execute(sql`
+      SELECT 
+        COALESCE(AVG(duration_minutes), 0)::int as avg_minutes,
+        COUNT(DISTINCT project_id)::int as total_projects,
+        COALESCE(MIN(duration_minutes), 0)::int as fastest_minutes,
+        COALESCE(MAX(duration_minutes), 0)::int as slowest_minutes
+      FROM project_status_transitions
+      WHERE to_status = 'Delivered' AND changed_by = ${username} AND duration_minutes IS NOT NULL
+    `);
+    const row = result.rows[0] as any;
+    return {
+      avgMinutes: Number(row?.avg_minutes || 0),
+      totalProjects: Number(row?.total_projects || 0),
+      fastestMinutes: Number(row?.fastest_minutes || 0),
+      slowestMinutes: Number(row?.slowest_minutes || 0),
+    };
+  }
+
+  async createLeaveRequest(request: InsertLeaveRequest): Promise<LeaveRequest> {
+    const [created] = await db.insert(leaveRequests).values(request).returning();
+    return created;
+  }
+
+  async getLeaveRequests(username?: string, year?: number): Promise<LeaveRequest[]> {
+    let conditions = [];
+    if (username) conditions.push(eq(leaveRequests.username, username));
+    if (year) conditions.push(eq(leaveRequests.year, year));
+
+    if (conditions.length === 0) {
+      return await db.select().from(leaveRequests).orderBy(sql`${leaveRequests.createdAt} DESC`);
+    } else if (conditions.length === 1) {
+      return await db.select().from(leaveRequests).where(conditions[0]).orderBy(sql`${leaveRequests.createdAt} DESC`);
+    } else {
+      return await db.select().from(leaveRequests).where(and(...conditions)).orderBy(sql`${leaveRequests.createdAt} DESC`);
+    }
+  }
+
+  async getLeaveRequestById(id: string): Promise<LeaveRequest | undefined> {
+    const [found] = await db.select().from(leaveRequests).where(eq(leaveRequests.id, id));
+    return found || undefined;
+  }
+
+  async updateLeaveRequest(id: string, updates: Partial<LeaveRequest>): Promise<LeaveRequest | undefined> {
+    const [updated] = await db.update(leaveRequests).set(updates).where(eq(leaveRequests.id, id)).returning();
+    return updated || undefined;
+  }
+
+  async getUsedLeaveDays(username: string, year: number): Promise<number> {
+    const result = await db.execute(sql`
+      SELECT COALESCE(SUM(weekdays_count), 0)::int as used_days
+      FROM leave_requests
+      WHERE username = ${username} AND year = ${year} AND status IN ('approved', 'pending')
+    `);
+    return Number((result.rows[0] as any)?.used_days || 0);
+  }
+
+  async createAiTeamMessage(msg: InsertAiTeamMessage): Promise<AiTeamMessage> {
+    const [created] = await db.insert(aiTeamMessages).values(msg).returning();
+    return created;
+  }
+
+  async getAiTeamMessages(username: string, limit: number = 50): Promise<AiTeamMessage[]> {
+    const result = await db.execute(sql`
+      SELECT * FROM ai_team_messages
+      WHERE username = ${username}
+      ORDER BY created_at ASC
+      LIMIT ${limit}
+    `);
+    return result.rows as AiTeamMessage[];
+  }
+
+  async getRecentRetoucherExplanations(since: Date): Promise<AiTeamMessage[]> {
+    const result = await db.execute(sql`
+      SELECT * FROM ai_team_messages
+      WHERE sender_type = 'user'
+        AND role NOT IN ('Admin', 'LeadRetoucher')
+        AND metadata->>'type' = 'explanation'
+        AND created_at >= ${since}
+      ORDER BY created_at DESC
+    `);
+    return result.rows as AiTeamMessage[];
   }
 }
 

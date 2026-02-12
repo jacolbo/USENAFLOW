@@ -1004,12 +1004,13 @@ export function registerShoottrackerRoutes(app: Express): void {
     try {
       const role = req.headers["x-usena-role"] as string;
       const userId = req.headers["x-usena-user-id"] as string;
+      const archived = req.query.archived === 'true';
       
       // Admins and Lead Retouchers can see all projects, retouchers only their own
       const isAdmin = [UserRoles.ADMIN, UserRoles.LEAD_RETOUCHER].includes(role as any);
       const assignedTo = isAdmin ? undefined : userId;
       
-      const projectsWithCounts = await storage.getProjectsWithUnreadCounts(assignedTo);
+      const projectsWithCounts = await storage.getProjectsWithUnreadCounts(assignedTo, archived);
       // Disable caching to ensure unread counts are always fresh
       res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
       res.set('Pragma', 'no-cache');
@@ -1176,6 +1177,68 @@ export function registerShoottrackerRoutes(app: Express): void {
     } catch (error: any) {
       console.error("Error sending chat message:", error);
       res.status(500).json({ error: "Failed to send message" });
+    }
+  });
+
+  // Archive a chat project
+  app.post("/api/admin/chat/project/:projectId/archive", verifyChatRequest, async (req: Request, res: Response) => {
+    try {
+      const { projectId } = req.params;
+      const role = req.headers["x-usena-role"] as string;
+      const userId = req.headers["x-usena-user-id"] as string;
+
+      const project = await storage.getProject(projectId);
+      if (!project) {
+        return res.status(404).json({ error: "Project not found" });
+      }
+
+      const isAdmin = [UserRoles.ADMIN, UserRoles.LEAD_RETOUCHER].includes(role as any);
+      if (!isAdmin && project.assignedTo !== userId) {
+        return res.status(403).json({ error: "Not authorized to archive this chat" });
+      }
+
+      await storage.updateProject(projectId, {
+        chatArchived: true,
+        chatArchivedAt: new Date(),
+        chatArchivedBy: userId,
+      });
+
+      res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error("Error archiving chat:", error);
+      res.status(500).json({ error: "Failed to archive chat" });
+    }
+  });
+
+  // Unarchive a chat project
+  app.post("/api/admin/chat/project/:projectId/unarchive", verifyChatRequest, async (req: Request, res: Response) => {
+    try {
+      const { projectId } = req.params;
+      const role = req.headers["x-usena-role"] as string;
+      const userId = req.headers["x-usena-user-id"] as string;
+
+      const project = await storage.getProject(projectId);
+      if (!project) {
+        return res.status(404).json({ error: "Project not found" });
+      }
+
+      const isAdmin = [UserRoles.ADMIN, UserRoles.LEAD_RETOUCHER].includes(role as any);
+      if (!isAdmin && project.assignedTo !== userId) {
+        return res.status(403).json({ error: "Not authorized to unarchive this chat" });
+      }
+
+      await storage.updateProject(projectId, {
+        chatArchived: false,
+        chatArchivedAt: null,
+        chatArchivedBy: null,
+      });
+
+      res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error("Error unarchiving chat:", error);
+      res.status(500).json({ error: "Failed to unarchive chat" });
     }
   });
 

@@ -19,7 +19,7 @@ import { WRUButton } from "@/components/WRUButton";
 import { useSSE } from "@/hooks/use-sse";
 import { User } from "@/lib/types";
 import { Project } from "@shared/schema";
-import { User as UserIcon, LogOut, Settings, Archive, ArrowRightLeft, DollarSign, AlertTriangle, Calendar, MessageCircle, LayoutDashboard, Gift, Crown, RefreshCw, Mail, MoreHorizontal, Wrench, Trophy, Star, HardDrive, Sparkles, Brain } from "lucide-react";
+import { User as UserIcon, LogOut, Settings, Archive, ArrowRightLeft, DollarSign, AlertTriangle, Calendar, CalendarDays, MessageCircle, LayoutDashboard, Gift, Crown, RefreshCw, Mail, MoreHorizontal, Wrench, Trophy, Star, HardDrive, Sparkles, Brain, Bot } from "lucide-react";
 import { useLocation } from "wouter";
 import logoImage from "@assets/USENA-FLOW_1754522507856.png";
 import { WidgetCustomizer, useWidgetPreferences } from "@/components/widget-customizer";
@@ -2505,6 +2505,16 @@ export default function Dashboard() {
                             ShootTracker
                           </DropdownMenuItem>
                         )}
+
+                        <DropdownMenuItem onClick={() => setLocation('/leave')}>
+                          <CalendarDays className="h-4 w-4 mr-2" />
+                          Leave Management
+                        </DropdownMenuItem>
+
+                        <DropdownMenuItem onClick={() => setLocation('/ai-chat')}>
+                          <Bot className="h-4 w-4 mr-2" />
+                          AI Team Chat
+                        </DropdownMenuItem>
 
                         {/* Commissions - DataWrangler */}
                         {user.role === "DataWrangler" && (

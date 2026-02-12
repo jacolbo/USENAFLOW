@@ -11,7 +11,7 @@ import { useUpload } from "@/hooks/use-upload";
 import { queryClient } from "@/lib/queryClient";
 import { getAdminHeaders } from "@/lib/adminAuth";
 import { UserRoles, type Project } from "@shared/schema";
-import { ArrowLeft, Send, MessageCircle, User, Clock, Loader2, Search, X, Paperclip, Mic, Video, Image, FileText, Play, Pause, Download, Bot, Wand2, Phone } from "lucide-react";
+import { ArrowLeft, Send, MessageCircle, User, Clock, Loader2, Search, X, Paperclip, Mic, Video, Image, FileText, Play, Pause, Download, Bot, Wand2, Phone, Archive, ArchiveRestore } from "lucide-react";
 import { format, formatDistanceToNow } from "date-fns";
 import { getOrCreateKey, storeKeyFromRemote, getExportedKey, encryptMessage, decryptMessage, isEncrypted } from "@/lib/e2ee";
 import VoiceCall from "@/components/voice-call";
@@ -108,6 +108,7 @@ export default function EditorChat() {
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [messageText, setMessageText] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
+  const [showArchived, setShowArchived] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [showSuggestion, setShowSuggestion] = useState(false);
   const [suggestedText, setSuggestedText] = useState("");
@@ -155,10 +156,10 @@ export default function EditorChat() {
   });
 
   const projectsQuery = useQuery<ProjectWithUnread[]>({
-    queryKey: ["/api/admin/chat/projects"],
+    queryKey: ["/api/admin/chat/projects", { archived: showArchived }],
     queryFn: async () => {
       const headers = getAdminHeaders(userRole, userId);
-      const response = await fetch(`/api/admin/chat/projects?_t=${Date.now()}`, { 
+      const response = await fetch(`/api/admin/chat/projects?archived=${showArchived}&_t=${Date.now()}`, { 
         headers,
         cache: 'no-store'
       });
@@ -263,6 +264,58 @@ export default function EditorChat() {
     },
     onError: (error: any) => {
       toast({ title: "AI Suggestion Failed", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const archiveMutation = useMutation({
+    mutationFn: async (projectId: string) => {
+      const headers = {
+        ...getAdminHeaders(userRole, userId),
+        "Content-Type": "application/json",
+      };
+      const response = await fetch(`/api/admin/chat/project/${projectId}/archive`, {
+        method: "POST",
+        headers,
+      });
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || "Failed to archive chat");
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      toast({ title: "Chat archived" });
+      setSelectedProjectId(null);
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/chat/projects"] });
+    },
+    onError: (error: any) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const unarchiveMutation = useMutation({
+    mutationFn: async (projectId: string) => {
+      const headers = {
+        ...getAdminHeaders(userRole, userId),
+        "Content-Type": "application/json",
+      };
+      const response = await fetch(`/api/admin/chat/project/${projectId}/unarchive`, {
+        method: "POST",
+        headers,
+      });
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || "Failed to unarchive chat");
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      toast({ title: "Chat unarchived" });
+      setSelectedProjectId(null);
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/chat/projects"] });
+    },
+    onError: (error: any) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
     },
   });
 
@@ -462,7 +515,26 @@ export default function EditorChat() {
 
       <div className="flex flex-1 overflow-hidden">
         <div className="w-80 border-r flex flex-col bg-card">
-          <div className="p-3 border-b">
+          <div className="p-3 border-b space-y-2">
+            <div className="flex rounded-lg bg-muted p-0.5">
+              <button
+                onClick={() => { setShowArchived(false); setSelectedProjectId(null); }}
+                className={`flex-1 text-sm font-medium py-1.5 rounded-md transition-colors ${
+                  !showArchived ? "bg-background shadow-sm" : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                Active
+              </button>
+              <button
+                onClick={() => { setShowArchived(true); setSelectedProjectId(null); }}
+                className={`flex-1 text-sm font-medium py-1.5 rounded-md transition-colors flex items-center justify-center gap-1 ${
+                  showArchived ? "bg-background shadow-sm" : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                <Archive className="h-3.5 w-3.5" />
+                Archived
+              </button>
+            </div>
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
@@ -496,33 +568,50 @@ export default function EditorChat() {
             ) : (
               <div className="divide-y">
                 {filteredProjects.map(({ project, unreadCount, lastMessageAt }) => (
-                  <button
+                  <div
                     key={project.id}
-                    onClick={() => setSelectedProjectId(project.id)}
-                    className={`w-full p-3 text-left hover:bg-accent/50 transition-colors ${
+                    className={`w-full p-3 text-left hover:bg-accent/50 transition-colors flex items-start gap-2 cursor-pointer ${
                       selectedProjectId === project.id ? "bg-accent" : ""
                     }`}
+                    onClick={() => setSelectedProjectId(project.id)}
                   >
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="flex-1 min-w-0">
-                        <div className="font-medium truncate">{project.clientName}</div>
-                        <div className="text-sm text-muted-foreground truncate">
-                          {project.clientEmail}
-                        </div>
-                        {lastMessageAt && (
-                          <div className="text-xs text-muted-foreground flex items-center gap-1 mt-1">
-                            <Clock className="h-3 w-3" />
-                            {formatDistanceToNow(new Date(lastMessageAt), { addSuffix: true })}
-                          </div>
-                        )}
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium truncate">{project.clientName}</div>
+                      <div className="text-sm text-muted-foreground truncate">
+                        {project.clientEmail}
                       </div>
+                      {lastMessageAt && (
+                        <div className="text-xs text-muted-foreground flex items-center gap-1 mt-1">
+                          <Clock className="h-3 w-3" />
+                          {formatDistanceToNow(new Date(lastMessageAt), { addSuffix: true })}
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-1 flex-shrink-0">
                       {unreadCount > 0 && (
                         <Badge variant="destructive" className="rounded-full h-5 min-w-[20px] flex items-center justify-center">
                           {unreadCount}
                         </Badge>
                       )}
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (showArchived) {
+                            unarchiveMutation.mutate(project.id);
+                          } else {
+                            archiveMutation.mutate(project.id);
+                          }
+                        }}
+                        disabled={archiveMutation.isPending || unarchiveMutation.isPending}
+                        title={showArchived ? "Unarchive chat" : "Archive chat"}
+                      >
+                        {showArchived ? <ArchiveRestore className="h-4 w-4" /> : <Archive className="h-4 w-4" />}
+                      </Button>
                     </div>
-                  </button>
+                  </div>
                 ))}
               </div>
             )}
@@ -541,6 +630,22 @@ export default function EditorChat() {
                     <div className="font-medium">{selectedProject.project.clientName}</div>
                     <div className="text-sm text-muted-foreground">{selectedProject.project.clientEmail}</div>
                   </div>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => {
+                      if (showArchived) {
+                        unarchiveMutation.mutate(selectedProject.project.id);
+                      } else {
+                        archiveMutation.mutate(selectedProject.project.id);
+                      }
+                    }}
+                    disabled={archiveMutation.isPending || unarchiveMutation.isPending}
+                    title={showArchived ? "Unarchive chat" : "Archive chat"}
+                    className="text-muted-foreground hover:text-foreground"
+                  >
+                    {showArchived ? <ArchiveRestore className="h-5 w-5" /> : <Archive className="h-5 w-5" />}
+                  </Button>
                   <Button
                     variant="ghost"
                     size="icon"
