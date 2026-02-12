@@ -1,5 +1,5 @@
 import OpenAI from "openai";
-import { formatMemoriesForPrompt, formatAdminInstructionsForPrompt, extractAndStoreInsights } from "./aiMemoryService";
+import { formatMemoriesForPrompt, formatAdminInstructionsForPrompt, extractAndStoreInsights, storeMemory } from "./aiMemoryService";
 
 const openai = new OpenAI({
   apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
@@ -328,12 +328,15 @@ export async function suggestChatReply(context: {
       userPrompt += `\n\nSuggest an appropriate reply.`;
     }
 
+    const pastMemories = await formatMemoriesForPrompt("client_chat");
+    const adminInstructions = await formatAdminInstructionsForPrompt();
+
     const response = await openai.chat.completions.create({
       model: "gpt-4o-mini",
       messages: [
         {
           role: "system",
-          content: "You are a communication assistant at Jepson Myles Studio, a professional photography retouching studio. Help craft professional, warm, and helpful replies to client messages. If a draft message is provided, polish and improve it while keeping the same intent. If no draft is provided, suggest an appropriate reply based on the conversation context. Keep responses concise (2-4 sentences). Be professional but personable. Return ONLY the suggested message text, no quotes or markdown."
+          content: `You are a communication assistant at Jepson Myles Studio, a professional photography retouching studio. Help craft professional, warm, and helpful replies to client messages. If a draft message is provided, polish and improve it while keeping the same intent. If no draft is provided, suggest an appropriate reply based on the conversation context. Keep responses concise (2-4 sentences). Be professional but personable. When past client communication patterns are available, use them to tailor your tone and approach. Return ONLY the suggested message text, no quotes or markdown.${pastMemories}${adminInstructions}`
         },
         {
           role: "user",
@@ -428,6 +431,11 @@ ${context.retouchingGuidelines || "No guidelines set."}`;
     const cleanText = rawResponse.replace(/\[ACTION:MARK_DONE:[^\]]+\]\n?/g, "").trim();
 
     extractAndStoreInsights("team_chat", cleanText, { retoucherName: isAdmin ? undefined : context.username }).catch(() => {});
+
+    if (!isAdmin && context.message) {
+      extractAndStoreInsights("retoucher_behavior", `Retoucher ${context.username} said: "${context.message.substring(0, 200)}" — AI responded with: "${cleanText.substring(0, 200)}"`, { retoucherName: context.username }).catch(() => {});
+    }
+
     return { text: cleanText, actions };
   } catch (error: any) {
     console.error(`[AI] Team chat failed:`, error.message);
@@ -643,6 +651,21 @@ export async function evaluateQualityGate(context: {
       recommendation: typeof parsed.recommendation === "string" ? parsed.recommendation : "Unable to evaluate. Please try again.",
     };
     extractAndStoreInsights("quality_gate", result.feedback.join(". ") + " " + result.recommendation, { projectId: context.projectName }).catch(() => {});
+
+    if (result.overallScore > 0) {
+      const passStatus = result.passed ? "PASSED" : "FAILED";
+      storeMemory({
+        type: "performance_trend",
+        category: "retoucher_behavior",
+        content: `Quality gate ${passStatus} for project "${context.projectName}" with score ${result.overallScore}/10. Key issues: ${result.feedback.slice(0, 2).join("; ")}`,
+        context: { source: "quality_gate_result" },
+        retoucherName: null,
+        projectId: context.projectName,
+        importance: result.passed ? 5 : 8,
+        expiresAt: null,
+      }).catch(() => {});
+    }
+
     return result;
   } catch (error: any) {
     console.error(`[AI] Quality gate evaluation failed:`, error.message);

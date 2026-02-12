@@ -2,7 +2,7 @@
 
 ## Overview
 
-USENA FLOW is a full-stack photography workflow management application designed for Jepson Myles Studio. It streamlines project management from client submission to delivery, offering role-based access control, comprehensive project status tracking, and an intuitive dashboard. The application aims to enhance efficiency, reduce manual overhead, and provide a clear overview of project statuses across various user roles, including Sales/Admin, Lead Retoucher, Data Wrangler, and individual retouchers. The business vision is to improve operational efficiency and provide clear oversight of project lifecycles.
+USENA FLOW is a full-stack photography workflow management application designed for Jepson Myles Studio. It streamlines project management from client submission to delivery, offering role-based access control, comprehensive project status tracking, and an intuitive dashboard. The application aims to enhance efficiency, reduce manual overhead, and provide a clear overview of project statuses across various user roles. The business vision is to improve operational efficiency and provide clear oversight of project lifecycles.
 
 ## User Preferences
 
@@ -14,50 +14,44 @@ Preferred communication style: Simple, everyday language.
 The application uses React 18 with TypeScript and Vite, employing `shadcn/ui` (built on Radix UI) and Tailwind CSS for a responsive, mobile-first design. It supports light/dark mode theming and features color-coded visual indicators, sortable data tables, week-based project organization, and integrated charts for analytics.
 
 ### Technical Implementation
-The backend is built with Node.js and Express.js (TypeScript), utilizing a RESTful API with structured error handling. PostgreSQL with Drizzle ORM (via Neon Database) serves as the database, and Zod schemas are used for data validation. Authentication is role-based, supporting seven distinct user roles with cross-device login and admin-controlled team management. The frontend manages state with TanStack Query and uses Wouter for routing and React Hook Form with Zod for form management.
+The backend is built with Node.js and Express.js (TypeScript), utilizing a RESTful API. PostgreSQL with Drizzle ORM (via Neon Database) serves as the database, and Zod schemas are used for data validation. Authentication is role-based, supporting seven distinct user roles. The frontend manages state with TanStack Query and uses Wouter for routing and React Hook Form with Zod for form management.
 
 Key features include:
-- **Project Workflow**: Five-stage status tracking (Awaiting Payment → Ready → Assigned → Review → Delivered), project assignment, quality rating, and automated due date calculation.
+- **Project Workflow**: Five-stage status tracking, project assignment, quality rating, and automated due date calculation.
 - **Real-time Communication**: WebSocket integration for live updates and smart notifications.
-- **Notes System**: Supports text and image notes with role-based access.
-- **Automated Calculations**: Calculates "extras" based on photo count.
-- **ShootTracker Engine**: Integrates Google Calendar for automated project creation, delivery due date calculation, risk assessment, and idempotent sync. It includes configurable settings for turnaround times, working days, and daily capacity, with automatic sync capabilities.
-- **Client-Editor Communication**: A WhatsApp-style messaging interface allows direct communication between editors and clients, featuring threading, unread message counters, email notifications, and token-based client authentication. Includes automated comfort features: after-hours auto-reply (outside Mon-Fri 9AM-4PM), 30-minute delayed acknowledgment for unanswered messages, seen/read indicators, project status auto-messages in chat, and estimated response time display.
-- **Customizable Dashboard**: A widget system allows users to configure and reorder dashboard elements with persistent preferences stored per user.
-- **Persistent User Management**: User accounts and roles are stored in the database, including admin-controlled user creation and management.
-- **Gallery Link Delivery**: Facilitates retouchers adding gallery links and Sales approving delivery, triggering branded client emails and updating project status.
-- **Sneak Peek Feature**: Allows retouchers to send preview photos to clients before full delivery via branded emails.
-- **Satisfaction Survey System**: Triggers post-delivery surveys, prompting clients with high ratings for Google reviews.
-- **Referral Rewards System**: Clients receive referral codes for bonus photos. Referred clients enter name and email on the landing page. Auto-matching uses email as primary key (falling back to name), with 5 bonus photos credited on match.
-- **VIP Client Tiers**: Automated loyalty program based on project count, offering bonus photos and priority services, with an admin override.
-- **Independent Rewards System**: Standalone rewards engine that pulls historical booking data directly from Google Calendar (up to 2 years back), combines it with referral match counts, and calculates reward scores/tiers per client (Bronze/Silver/Gold/Platinum/Diamond). Completely independent from ShootTracker -- has its own calendar sync, dashboard, and API routes. Scoring: 1 point per booking + 2 points per matched referral.
-- **Editable Email Templates**: Admin can customize all 11 email templates (subject and body) via a built-in editor with live preview and variable placeholders. Templates are stored in the database with fallback to defaults.
-- **Automated Notifications**: Includes client scheduling notifications upon project due date updates and a Data Wrangler delay alert system for unassigned projects.
-- **Interactive Calendar**: Supports drag-and-drop project movement, quick assignment via double-click, real-time search, and color-coded project display based on status and rollover history.
-- **Google Drive Integration**: Automated photo delivery system that creates organized client folders `ClientName(photoCount)` with "Black and White" subfolders, monitors uploads every 5 minutes, auto-detects delivery completion when photo counts match selectedCount, generates shareable gallery links, and sends branded delivery emails. Includes B&W preview detection and email, storage tracking per project, and client access monitoring. Drive folders are auto-created on project creation (manual and ShootTracker promotion). All Drive API routes are admin-protected. Services: `googleDriveService.ts` (core Drive operations), `driveMonitorService.ts` (periodic scanning and auto-delivery), `drive-manager.tsx` (dashboard UI).
-- **Chat Archiving**: Team can archive client chats when projects are done. Active/Archived toggle tabs in chat sidebar, archive/unarchive buttons per chat. Archived chats move to a separate section and can be restored.
-- **Project Speed Tracking**: Background system recording timestamps at each project status transition (`project_status_transitions` table). Calculates turnaround times per project and per retoucher. API at `/api/speed-stats` for admin. Data used by AI for performance analysis.
-- **Leave Management System**: 15 weekday annual leave per year, no rollover. Leave request form with date range, reason, and type (annual/sick/personal). AI-powered approval: sick leave always approved; non-sick leave denied during heavy backlog or when too many team members already on leave. Admin can override AI decisions. Remaining leave days intentionally hidden from UI. Page at `/leave`.
-- **AI Team Chat System**: Two-way AI chat (`/ai-chat`) where admin can ask AI about incomplete work, team performance, and who hasn't finished their projects. Retouchers can talk to AI to explain delays — AI acknowledges and forwards explanations to admin. AI uses project data, speed stats, team availability, and the studio's retouching guidelines in all conversations. Admin has a "Daily Summary" button for consolidated reports. Messages stored in `ai_team_messages` table.
-- **Retouching Guidelines Policy**: Studio retouching guidelines stored in `app_settings` table, referenced by AI in team communications to ensure quality standards are maintained.
-- **AI-Powered Features** (via OpenAI/Replit AI Integrations, `server/services/aiService.ts`):
-  - **Email Text Variation**: Each outgoing client email is rephrased by AI (gpt-4o-mini) before sending so every client receives uniquely worded messages while preserving meaning, links, variables, and proper nouns. Applied to 10 email types. Falls back to original on error.
-  - **Smart Insights Widget** (`ai_insights`): Dashboard widget for Admin, Lead Retoucher, Data Wrangler, Sales. Aggregates project data and generates 4-6 AI-powered trend observations via `/api/ai/insights`. 5-minute cache, manual refresh.
-  - **AI Retoucher Coach** (`retoucher_coach`): Dashboard widget for Retoucher1/2/3 roles. Analyzes individual performance (completed projects, ratings, turnaround times, overdue count) and generates personalized tips and encouragement via `/api/ai/retoucher-advice/:name`. 10-minute cache.
-  - **AI Photo Review**: In Drive Manager, admins can trigger AI vision analysis (gpt-4o) on project photos. Samples up to 6 thumbnails from the Drive folder and evaluates skin retouching, hair detail, color correction, exposure, and composition. Returns per-photo scores and feedback via `/api/ai/review-photos`.
-  - **Chat Reply Assistant**: In the editor chat interface, a magic wand button lets users get AI-suggested replies or polish their draft messages before sending. Uses conversation context (last 5 messages) via `/api/ai/suggest-reply`.
-  - **Workload Forecast** (`workload_forecast`): Dashboard widget for Admin/Lead Retoucher. AI analyzes upcoming projects, team capacity, current backlog, and approved leave to generate a 4-6 week capacity forecast. Shows weekly load bars with risk levels (low/medium/high/critical), warnings for capacity crunches, and actionable recommendations. API at `/api/ai/workload-forecast`. 5-minute cache.
-  - **Predictive Risk Alerts** (`predictive_risk`): Dashboard widget for Admin/Lead Retoucher. AI analyzes active projects against retoucher performance history (speed stats, overdue rates, current workload) to predict which projects are likely to go overdue BEFORE they miss their deadlines. Shows risk scores (%), predicted days late, risk factors, and recommendations. API at `/api/ai/predictive-risk`. 5-minute cache.
-  - **Quality Gate**: Non-blocking AI photo review for retoucher feedback. When Drive Monitor detects upload complete (photo count matches selectedCount), it sends a branded email to the client saying their photos are ready with the gallery link (folder still private, no access yet) and runs AI quality check (gpt-4o vision, threshold 7/10) in the background. Quality results are feedback-only: if quality fails, AI sends personalized feedback to the assigned retoucher via AI chat. Quality gate does NOT block delivery. When retoucher re-uploads (photo count changes), quality gate auto-resets for re-check. Admin makes the folder public manually in Google Drive. Drive Monitor detects the folder is now public on next scan and automatically sends delivery email with access link, creates referral code, sends satisfaction survey, records status transition, and marks project Delivered. Reference images from Instagram/portfolio can be uploaded via Drive Manager UI and are used as benchmarks by the AI. Schema fields: `qualityGateScore`, `qualityGatePassed`, `qualityGateOverride`, `drivePreviewEmailSent` on projects table. APIs at `/api/ai/quality-gate`, `/api/ai/quality-gate/override`, `/api/quality-reference-images`. Configurable via `quality_gate_settings` and `quality_reference_images` app settings.
-  - **AI Learning Layer** (`ai_memory` table, `server/services/aiMemoryService.ts`): Persistent memory system that enables AI to learn from past interactions. After each AI response (insights, coaching, team chat, quality gate, workload, risk), the system extracts key observations and stores them. Before generating new responses, the AI retrieves relevant past memories to provide context-aware, evolving advice. Memories have type (observation/pattern/feedback/performance_trend), category, importance score (1-10), and optional retoucher/project association. Auto-pruning removes low-importance and expired memories when storage exceeds 300 entries. APIs at `/api/ai/memory` (GET, DELETE), `/api/ai/memory/:id` (DELETE), `/api/ai/memory/prune` (POST).
-  - **Admin AI Directives** (`ai_admin_instructions` table): Admin can give the AI specific instructions on how to handle the team. Directives are injected into every AI prompt across all features. Categories: general, quality, deadlines, individual, communication. Can target specific team members or apply to all. Supports priority levels, enable/disable toggle. Admin UI at `/ai-brain` page. APIs at `/api/ai/admin-instructions` (GET, POST), `/api/ai/admin-instructions/:id` (PATCH, DELETE).
-- **Client Chat PWA**: The client chat page (`/client-chat/:token`) is a Progressive Web App with:
-  - **Install Prompt**: Optional, dismissible "Add to Home Screen" banner. Clients can install the chat as a standalone app on their phone or ignore it.
-  - **Push Notifications**: When a retoucher sends a message, the client receives a phone notification (if they granted permission). Uses Web Push API with VAPID keys. Subscriptions stored in `push_subscriptions` table. Expired subscriptions auto-cleaned.
-  - **Service Worker**: `client/public/sw.js` handles push events and notification clicks, opening the chat directly.
-  - **Manifest**: `client/public/manifest.json` with Jepson Myles branding, standalone display mode.
-
-- **Automation Hub**: Admin page (`/automations`) showing all 95 system automations organized by type and category. Features include: visual cards with trigger/action details, enable/disable toggles, connection flow view showing how automations chain together, activity log tracking when automations fire, search/filter by type, and stats dashboard. Registry at `server/services/automationRegistry.ts`, page at `client/src/pages/automations.tsx`. Accessible to Admin and Lead Retoucher roles via dashboard menu.
+- **ShootTracker Engine**: Integrates Google Calendar for automated project creation, delivery due date calculation, and risk assessment.
+- **Client-Editor Communication**: A WhatsApp-style messaging interface with threading, unread counters, email notifications, and token-based client authentication, including automated comfort features like auto-replies and status messages.
+- **Customizable Dashboard**: A widget system allows users to configure and reorder dashboard elements with persistent preferences.
+- **Persistent User Management**: User accounts and roles are stored in the database with admin-controlled management.
+- **Gallery Link Delivery**: Facilitates retouchers adding gallery links and Sales approving delivery, triggering client emails.
+- **Sneak Peek Feature**: Allows retouchers to send preview photos to clients via branded emails.
+- **Satisfaction Survey System**: Triggers post-delivery surveys, prompting clients for Google reviews.
+- **Referral Rewards System**: Clients receive referral codes for bonus photos.
+- **VIP Client Tiers**: Automated loyalty program based on project count, offering bonus photos and priority services.
+- **Independent Rewards System**: Standalone engine calculating reward scores/tiers per client based on booking data and referrals.
+- **Editable Email Templates**: Admin can customize all email templates via a built-in editor with live preview and variable placeholders.
+- **Automated Notifications**: Includes client scheduling notifications and a Data Wrangler delay alert system.
+- **Interactive Calendar**: Supports drag-and-drop project movement, quick assignment, and color-coded project display.
+- **Google Drive Integration**: Automated photo delivery system that creates organized client folders, monitors uploads, auto-detects delivery completion, generates shareable gallery links, and sends branded delivery emails.
+- **Chat Archiving**: Team can archive client chats with active/archived toggle tabs.
+- **Project Speed Tracking**: Background system recording timestamps for project status transitions to calculate turnaround times.
+- **Leave Management System**: Allows users to request leave, with AI-powered approval based on studio workload and team availability.
+- **AI Team Chat System**: Two-way AI chat for admin to inquire about work and for retouchers to explain delays, leveraging project data and retouching guidelines.
+- **Retouching Guidelines Policy**: Studio retouching guidelines are stored and referenced by AI in team communications.
+- **AI-Powered Features**:
+    - **Email Text Variation**: AI rephrases outgoing client emails for uniqueness.
+    - **Smart Insights Widget**: Aggregates project data and generates AI-powered trend observations for management roles.
+    - **AI Retoucher Coach**: Analyzes individual performance and generates personalized tips and encouragement.
+    - **AI Photo Review**: AI vision analysis of project photos for quality evaluation and feedback.
+    - **Chat Reply Assistant**: AI-suggested replies or message polishing in the editor chat interface.
+    - **Workload Forecast**: AI analyzes upcoming projects, team capacity, and leave to generate capacity forecasts with recommendations.
+    - **Predictive Risk Alerts**: AI predicts projects likely to go overdue before deadlines based on performance history.
+    - **Quality Gate**: Non-blocking AI photo review providing feedback to retouchers upon upload, using reference images for benchmarking.
+    - **AI Learning Layer**: Persistent memory system enabling AI to learn from past interactions and provide context-aware advice.
+    - **Admin AI Directives**: Admin can give specific instructions to the AI on team management, injected into all AI prompts.
+    - **Comprehensive Data Learning**: On-demand AI scan of all data sources to extract observations and update memories.
+- **Client Chat PWA**: The client chat page is a Progressive Web App with install prompt, push notifications, and a service worker.
+- **Automation Hub**: Admin page showing all system automations with visual details, enable/disable toggles, and activity logs.
 
 ## External Dependencies
 

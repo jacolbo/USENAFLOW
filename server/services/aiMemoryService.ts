@@ -10,16 +10,34 @@ export async function getRelevantMemories(category: string, retoucherName?: stri
 }
 
 export async function formatMemoriesForPrompt(category: string, retoucherName?: string): Promise<string> {
-  const memories = await getRelevantMemories(category, retoucherName, 15);
-  if (memories.length === 0) return "";
+  const memories = await getRelevantMemories(category, retoucherName, 10);
 
-  const formatted = memories.map((m, i) => {
+  const crossCategories = ["project_history", "client_feedback", "client_chat", "retoucher_behavior"];
+  const relevantCross = crossCategories.filter(c => c !== category);
+  let crossMemories: AiMemory[] = [];
+  for (const crossCat of relevantCross) {
+    const mems = await getRelevantMemories(crossCat, retoucherName, 3);
+    crossMemories = crossMemories.concat(mems);
+  }
+
+  const allMemories = [...memories, ...crossMemories];
+  if (allMemories.length === 0) return "";
+
+  const seen = new Set<string>();
+  const unique = allMemories.filter(m => {
+    if (seen.has(m.id)) return false;
+    seen.add(m.id);
+    return true;
+  });
+
+  const formatted = unique.slice(0, 20).map((m, i) => {
     const date = new Date(m.createdAt).toLocaleDateString();
     const retoucher = m.retoucherName ? ` [${m.retoucherName}]` : "";
-    return `${i + 1}. [${date}]${retoucher} (${m.type}): ${m.content}`;
+    const cat = m.category !== category ? ` {${m.category}}` : "";
+    return `${i + 1}. [${date}]${retoucher}${cat} (${m.type}): ${m.content}`;
   }).join("\n");
 
-  return `\n\nPAST OBSERVATIONS & LEARNED PATTERNS:\nThe following are your previous observations and learnings. Use them to provide more informed, context-aware responses. Reference trends you've noticed and track improvements or regressions:\n${formatted}`;
+  return `\n\nPAST OBSERVATIONS & LEARNED PATTERNS:\nThe following are your previous observations and learnings from project data, client feedback, retoucher behavior, and past interactions. Use them to provide more informed, context-aware responses. Reference trends you've noticed and track improvements or regressions:\n${formatted}`;
 }
 
 export async function formatAdminInstructionsForPrompt(retoucherName?: string): Promise<string> {

@@ -282,6 +282,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.post("/api/ai/data-scan", verifyAdminRequest, async (_req, res) => {
+    try {
+      const { runFullDataScan } = await import("./services/dataLearningService");
+      const results = await runFullDataScan();
+      res.json({ success: true, results });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   app.get("/public/email-logo.png", async (req, res) => {
     try {
       const objectStorageService = new ObjectStorageService();
@@ -2014,6 +2024,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
         completedAt: new Date(),
       });
       const googleReviewPrompt = rating >= 4;
+
+      try {
+        const { storeMemory } = await import("./services/aiMemoryService");
+        const project = await storage.getProject(survey.projectId);
+        const assignedTo = project?.assignedTo || null;
+        const feedbackSummary = feedback ? ` Feedback: "${feedback.substring(0, 150)}"` : "";
+        const recommendNote = wouldRecommend === true ? " Would recommend." : wouldRecommend === false ? " Would NOT recommend." : "";
+        await storeMemory({
+          type: "feedback",
+          category: "client_feedback",
+          content: `Client ${survey.clientName} rated project ${rating}/5 (communication: ${communicationRating || "N/A"}/5).${feedbackSummary}${recommendNote}`,
+          context: { source: "survey_submission" },
+          retoucherName: assignedTo,
+          projectId: survey.projectId,
+          importance: rating <= 2 ? 9 : rating >= 4 ? 5 : 7,
+          expiresAt: null,
+        });
+      } catch (memErr: any) {
+        console.error("[AI Memory] Failed to store survey learning:", memErr.message);
+      }
+
       res.json({ ...updated, googleReviewPrompt });
     } catch (error) {
       res.status(500).json({ error: "Failed to submit survey" });

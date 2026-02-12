@@ -21,6 +21,7 @@ const INSTRUCTION_CATEGORIES = [
   { value: "deadlines", label: "Deadlines & Speed", icon: Clock, color: "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300" },
   { value: "individual", label: "Individual Team Member", icon: Target, color: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300" },
   { value: "communication", label: "Communication Style", icon: MessageSquare, color: "bg-pink-100 text-pink-700 dark:bg-pink-900/30 dark:text-pink-300" },
+  { value: "code_of_conduct", label: "Code of Conduct", icon: Shield, color: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300" },
 ];
 
 const MEMORY_CATEGORIES = [
@@ -31,6 +32,10 @@ const MEMORY_CATEGORIES = [
   { value: "quality_gate", label: "Quality Gate" },
   { value: "workload", label: "Workload Forecast" },
   { value: "risk", label: "Risk Alerts" },
+  { value: "project_history", label: "Project History" },
+  { value: "client_feedback", label: "Client Feedback" },
+  { value: "client_chat", label: "Client Chat" },
+  { value: "retoucher_behavior", label: "Retoucher Behavior" },
 ];
 
 function getAuthHeaders(): Record<string, string> {
@@ -152,6 +157,23 @@ export default function AiBrainPage() {
       queryClient.invalidateQueries({ queryKey: ["/api/ai/memory", memoryFilter] });
       toast({ title: "Old memories pruned" });
     },
+  });
+
+  const dataScanMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch("/api/ai/data-scan", { method: "POST", headers: getAuthHeaders() });
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    },
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/ai/memory", memoryFilter] });
+      const r = data.results;
+      toast({
+        title: "Data scan complete",
+        description: `Learned ${r.total} new patterns: ${r.projectHistory} from projects, ${r.clientSurveys} from surveys, ${r.clientChats} from chats, ${r.retoucherBehavior} from retoucher behavior, ${r.referralPatterns} from referrals`,
+      });
+    },
+    onError: () => toast({ title: "Error", description: "Data scan failed", variant: "destructive" }),
   });
 
   const instructions = instructionsData?.instructions || [];
@@ -419,7 +441,16 @@ export default function AiBrainPage() {
                       What the AI has learned from past interactions. It uses these memories to give more informed, context-aware responses.
                     </CardDescription>
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex gap-2 flex-wrap">
+                    <Button
+                      variant="default"
+                      size="sm"
+                      onClick={() => dataScanMutation.mutate()}
+                      disabled={dataScanMutation.isPending}
+                    >
+                      <Sparkles className={`h-4 w-4 mr-1 ${dataScanMutation.isPending ? "animate-spin" : ""}`} />
+                      {dataScanMutation.isPending ? "Scanning..." : "Learn from All Data"}
+                    </Button>
                     <Button
                       variant="outline"
                       size="sm"
