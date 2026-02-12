@@ -186,6 +186,256 @@ function AIInsightsWidget() {
   );
 }
 
+interface ForecastWeek {
+  weekStart: string;
+  projectedLoad: number;
+  capacity: number;
+  riskLevel: 'low' | 'medium' | 'high' | 'critical';
+  warnings: string[];
+}
+
+function WorkloadForecastWidget({ userRole, userId }: { userRole: string; userId: string }) {
+  const { data, isLoading, refetch, isFetching } = useQuery<{
+    weeks: ForecastWeek[];
+    recommendations: string[];
+    summary: string;
+    generatedAt: string;
+  }>({
+    queryKey: ["/api/ai/workload-forecast"],
+    queryFn: async () => {
+      const res = await fetch("/api/ai/workload-forecast", { headers: getAdminHeaders(userRole, userId) });
+      if (!res.ok) throw new Error("Failed to fetch forecast");
+      return res.json();
+    },
+    staleTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: false,
+  });
+
+  const riskColors: Record<string, string> = {
+    low: "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400",
+    medium: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400",
+    high: "bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400",
+    critical: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400",
+  };
+
+  const riskBarColors: Record<string, string> = {
+    low: "bg-green-500",
+    medium: "bg-yellow-500",
+    high: "bg-orange-500",
+    critical: "bg-red-500",
+  };
+
+  return (
+    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm">
+      <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <Calendar className="h-5 w-5 text-blue-600" />
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Workload Forecast</h2>
+            <span className="text-sm text-gray-500 dark:text-gray-400">AI capacity planning</span>
+          </div>
+          <button
+            onClick={() => refetch()}
+            disabled={isFetching}
+            className="text-sm text-blue-600 hover:text-blue-800 dark:text-blue-400 disabled:opacity-50 flex items-center gap-1"
+          >
+            <RefreshCw className={`h-3.5 w-3.5 ${isFetching ? 'animate-spin' : ''}`} />
+            Refresh
+          </button>
+        </div>
+      </div>
+      <div className="px-6 py-4">
+        {isLoading ? (
+          <div className="space-y-4 animate-pulse">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="h-12 bg-gray-200 dark:bg-gray-600 rounded" />
+            ))}
+          </div>
+        ) : data?.weeks && data.weeks.length > 0 ? (
+          <div className="space-y-4">
+            {data.summary && (
+              <p className="text-sm text-gray-700 dark:text-gray-300 bg-blue-50 dark:bg-blue-900/20 px-3 py-2 rounded">
+                {data.summary}
+              </p>
+            )}
+            <div className="space-y-3">
+              {data.weeks.map((week, idx) => {
+                const pct = week.capacity > 0 ? Math.min((week.projectedLoad / week.capacity) * 100, 150) : 0;
+                const weekDate = new Date(week.weekStart);
+                const label = weekDate.toLocaleDateString("en-ZA", { month: "short", day: "numeric" });
+                return (
+                  <div key={idx} className="space-y-1">
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-gray-700 dark:text-gray-300 font-medium">Week of {label}</span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-gray-500 dark:text-gray-400">{week.projectedLoad}/{week.capacity} projects</span>
+                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${riskColors[week.riskLevel]}`}>
+                          {week.riskLevel}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="w-full h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                      <div
+                        className={`h-full rounded-full transition-all ${riskBarColors[week.riskLevel]}`}
+                        style={{ width: `${Math.min(pct, 100)}%` }}
+                      />
+                    </div>
+                    {week.warnings.length > 0 && (
+                      <div className="flex items-start gap-1.5 mt-1">
+                        <AlertTriangle className="h-3.5 w-3.5 text-amber-500 flex-shrink-0 mt-0.5" />
+                        <p className="text-xs text-amber-700 dark:text-amber-400">{week.warnings.join(". ")}</p>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+            {data.recommendations && data.recommendations.length > 0 && (
+              <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+                <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-200 mb-2">Recommendations</h3>
+                <ul className="space-y-2">
+                  {data.recommendations.map((rec, i) => (
+                    <li key={i} className="flex items-start gap-2">
+                      <div className="w-1.5 h-1.5 mt-1.5 rounded-full bg-blue-500 flex-shrink-0" />
+                      <p className="text-sm text-gray-600 dark:text-gray-400">{rec}</p>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {data.generatedAt && (
+              <p className="text-xs text-gray-400 dark:text-gray-500 mt-3 text-right">
+                Generated {new Date(data.generatedAt).toLocaleTimeString()}
+              </p>
+            )}
+          </div>
+        ) : (
+          <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-4">
+            No forecast data available. Sync your calendar to see capacity planning.
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+interface RiskAlert {
+  projectId: string;
+  clientName: string;
+  riskScore: number;
+  riskFactors: string[];
+  predictedDaysLate: number;
+  recommendation: string;
+}
+
+function PredictiveRiskWidget({ userRole, userId }: { userRole: string; userId: string }) {
+  const { data, isLoading, refetch, isFetching } = useQuery<{
+    alerts: RiskAlert[];
+    summary: string;
+    generatedAt: string;
+  }>({
+    queryKey: ["/api/ai/predictive-risk"],
+    queryFn: async () => {
+      const res = await fetch("/api/ai/predictive-risk", { headers: getAdminHeaders(userRole, userId) });
+      if (!res.ok) throw new Error("Failed to fetch risk alerts");
+      return res.json();
+    },
+    staleTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: false,
+  });
+
+  const getRiskColor = (score: number) => {
+    if (score >= 80) return "text-red-600 dark:text-red-400";
+    if (score >= 60) return "text-orange-600 dark:text-orange-400";
+    return "text-yellow-600 dark:text-yellow-400";
+  };
+
+  const getRiskBg = (score: number) => {
+    if (score >= 80) return "bg-red-100 dark:bg-red-900/30";
+    if (score >= 60) return "bg-orange-100 dark:bg-orange-900/30";
+    return "bg-yellow-100 dark:bg-yellow-900/30";
+  };
+
+  return (
+    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm">
+      <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <AlertTriangle className="h-5 w-5 text-amber-500" />
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Predictive Risk Alerts</h2>
+            <span className="text-sm text-gray-500 dark:text-gray-400">AI early warnings</span>
+          </div>
+          <button
+            onClick={() => refetch()}
+            disabled={isFetching}
+            className="text-sm text-amber-600 hover:text-amber-800 dark:text-amber-400 disabled:opacity-50 flex items-center gap-1"
+          >
+            <RefreshCw className={`h-3.5 w-3.5 ${isFetching ? 'animate-spin' : ''}`} />
+            Refresh
+          </button>
+        </div>
+      </div>
+      <div className="px-6 py-4">
+        {isLoading ? (
+          <div className="space-y-4 animate-pulse">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="h-16 bg-gray-200 dark:bg-gray-600 rounded" />
+            ))}
+          </div>
+        ) : data?.alerts && data.alerts.length > 0 ? (
+          <div className="space-y-4">
+            {data.summary && (
+              <p className="text-sm text-gray-700 dark:text-gray-300 bg-amber-50 dark:bg-amber-900/20 px-3 py-2 rounded">
+                {data.summary}
+              </p>
+            )}
+            <div className="space-y-3">
+              {data.alerts.slice(0, 8).map((alert, idx) => (
+                <div key={idx} className={`p-3 rounded-lg ${getRiskBg(alert.riskScore)}`}>
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="font-medium text-sm text-gray-900 dark:text-gray-100">{alert.clientName}</span>
+                    <div className="flex items-center gap-2">
+                      {alert.predictedDaysLate > 0 && (
+                        <span className="text-xs text-gray-600 dark:text-gray-400">
+                          ~{alert.predictedDaysLate}d late
+                        </span>
+                      )}
+                      <span className={`text-sm font-bold ${getRiskColor(alert.riskScore)}`}>
+                        {alert.riskScore}%
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap gap-1 mb-1.5">
+                    {alert.riskFactors.slice(0, 3).map((factor, fi) => (
+                      <span key={fi} className="text-xs px-1.5 py-0.5 bg-white/50 dark:bg-gray-800/50 rounded text-gray-700 dark:text-gray-300">
+                        {factor}
+                      </span>
+                    ))}
+                  </div>
+                  <p className="text-xs text-gray-600 dark:text-gray-400">{alert.recommendation}</p>
+                </div>
+              ))}
+            </div>
+            {data.generatedAt && (
+              <p className="text-xs text-gray-400 dark:text-gray-500 mt-3 text-right">
+                Generated {new Date(data.generatedAt).toLocaleTimeString()}
+              </p>
+            )}
+          </div>
+        ) : (
+          <div className="text-center py-6">
+            <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-green-100 dark:bg-green-900/30 mb-3">
+              <Star className="h-6 w-6 text-green-600 dark:text-green-400" />
+            </div>
+            <p className="text-sm text-gray-700 dark:text-gray-300 font-medium">All Clear</p>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">No projects are predicted to go overdue</p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function ExtraPhotosSalesView({ projects }: { projects: Project[] }) {
   const currentWeek = new Date();
   const startOfWeek = new Date(currentWeek);
@@ -2880,6 +3130,18 @@ export default function Dashboard() {
                 !showCommissions && !showExtraPhotosSales && !showComplaints && !showRewards && !showReferrals && !showVipClients && !showDriveManager &&
                 ["Retoucher1", "Retoucher2", "Retoucher3"].includes(user.role)) {
               return <RetoucherCoachWidget key={widgetId} retoucherName={user.name} />;
+            }
+
+            if (widgetId === "workload_forecast" && isWidgetVisible("workload_forecast") && !showArchive && 
+                !showCommissions && !showExtraPhotosSales && !showComplaints && !showRewards && !showReferrals && !showVipClients && !showDriveManager &&
+                ["Admin", "LeadRetoucher"].includes(user.role)) {
+              return <WorkloadForecastWidget key={widgetId} userRole={user.role} userId={user.name || user.id || ''} />;
+            }
+
+            if (widgetId === "predictive_risk" && isWidgetVisible("predictive_risk") && !showArchive && 
+                !showCommissions && !showExtraPhotosSales && !showComplaints && !showRewards && !showReferrals && !showVipClients && !showDriveManager &&
+                ["Admin", "LeadRetoucher"].includes(user.role)) {
+              return <PredictiveRiskWidget key={widgetId} userRole={user.role} userId={user.name || user.id || ''} />;
             }
 
             return null;

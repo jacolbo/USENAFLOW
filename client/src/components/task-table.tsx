@@ -11,7 +11,7 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Project } from "@shared/schema";
 import { User, formatRetoucherAbbr, getRetoucherFullName } from "@/lib/types";
-import { Calendar, Star, ChevronDown, ChevronRight, Copy, UserPlus, Search, X, Camera, Link, Send, CheckCircle, ExternalLink, Eye, Trash2, Image, Gift } from "lucide-react";
+import { Calendar, Star, ChevronDown, ChevronRight, Copy, UserPlus, Search, X, Camera, Link, Send, CheckCircle, ExternalLink, Eye, Trash2, Image, Gift, Shield, ShieldCheck, ShieldX, ShieldAlert } from "lucide-react";
 import { useState, useMemo, useCallback, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from 'framer-motion';
 import { LoadingSpinner, FloatingAction, StaggeredList } from './LoadingStates';
@@ -612,10 +612,77 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
         description: "The gallery has been delivered and the client has been notified via email.",
       });
     },
+    onError: (error: any) => {
+      let qualityGateRequired = false;
+      try {
+        const msg = error?.message || "";
+        const jsonPart = msg.substring(msg.indexOf("{"));
+        if (jsonPart) {
+          const parsed = JSON.parse(jsonPart);
+          qualityGateRequired = parsed?.qualityGateRequired === true;
+        }
+      } catch {}
+      if (qualityGateRequired) {
+        toast({
+          title: "Quality Gate Required",
+          description: "Please run the AI quality review before approving delivery.",
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "Error",
+          description: "Failed to approve delivery. Please try again.",
+          variant: "destructive",
+        });
+      }
+    },
+  });
+
+  const qualityGateMutation = useMutation({
+    mutationFn: async ({ projectId }: { projectId: string }) => {
+      const response = await apiRequest("POST", "/api/ai/quality-gate", { projectId });
+      return response.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
+      if (data.passed) {
+        toast({
+          title: "Quality Gate Passed",
+          description: `Score: ${data.overallScore}/10 - Ready for delivery!`,
+        });
+      } else {
+        toast({
+          title: "Quality Gate Failed",
+          description: `Score: ${data.overallScore}/10 - Review needed before delivery.`,
+          variant: "destructive",
+        });
+      }
+    },
     onError: () => {
       toast({
         title: "Error",
-        description: "Failed to approve delivery. Please try again.",
+        description: "Failed to run quality review. Ensure photos are in the Drive folder.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const qualityGateOverrideMutation = useMutation({
+    mutationFn: async ({ projectId, overrideBy }: { projectId: string; overrideBy: string }) => {
+      const response = await apiRequest("POST", "/api/ai/quality-gate/override", { projectId, overrideBy });
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
+      toast({
+        title: "Quality Gate Overridden",
+        description: "Admin has approved delivery despite quality gate concerns.",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to override quality gate.",
         variant: "destructive",
       });
     },
@@ -2229,6 +2296,56 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
                               {hasRetouchingAbilities(user.role) && project.assignedTo === user.name && project.clientEmail && 
                                !['Delivered', 'Done'].includes(project.status) && (
                                 <SneakPeekDialog project={project} user={user} />
+                              )}
+
+                              {/* Quality Gate Status & Controls */}
+                              {(user.role === 'Admin' || user.role === 'LeadRetoucher') && project.status === 'Review' && project.driveFolderId && (
+                                <div className="flex items-center gap-1">
+                                  {project.qualityGatePassed === true ? (
+                                    <Badge variant="secondary" className="bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300 text-xs">
+                                      <ShieldCheck className="h-3 w-3 mr-1" />
+                                      QG {project.qualityGateScore}/10
+                                    </Badge>
+                                  ) : project.qualityGateOverride ? (
+                                    <Badge variant="secondary" className="bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300 text-xs">
+                                      <ShieldAlert className="h-3 w-3 mr-1" />
+                                      Override
+                                    </Badge>
+                                  ) : project.qualityGatePassed === false ? (
+                                    <>
+                                      <Badge variant="secondary" className="bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300 text-xs">
+                                        <ShieldX className="h-3 w-3 mr-1" />
+                                        QG {project.qualityGateScore}/10
+                                      </Badge>
+                                      {user.role === 'Admin' && (
+                                        <Button
+                                          size="sm"
+                                          variant="outline"
+                                          onClick={() => qualityGateOverrideMutation.mutate({ projectId: project.id, overrideBy: user.name })}
+                                          disabled={qualityGateOverrideMutation.isPending}
+                                          className="h-6 text-xs px-2 text-yellow-700 border-yellow-400 hover:bg-yellow-50"
+                                        >
+                                          Override
+                                        </Button>
+                                      )}
+                                    </>
+                                  ) : (
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={() => qualityGateMutation.mutate({ projectId: project.id })}
+                                      disabled={qualityGateMutation.isPending}
+                                      className="h-7 text-xs"
+                                    >
+                                      {qualityGateMutation.isPending ? (
+                                        <LoadingSpinner size={12} className="mr-1" />
+                                      ) : (
+                                        <Shield className="h-3.5 w-3.5 mr-1" />
+                                      )}
+                                      Quality Check
+                                    </Button>
+                                  )}
+                                </div>
                               )}
 
                               {/* Admin/Sales can approve delivery when in Review with gallery link */}

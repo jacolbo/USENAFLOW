@@ -448,3 +448,159 @@ export async function generateDailySummaryForAdmin(context: {
     return "Daily summary is temporarily unavailable. Please try again later.";
   }
 }
+
+export async function generateWorkloadForecast(context: {
+  upcomingProjects: { clientName: string; shootDate: string; deliveryDueDate: string; status: string; assignedTo: string | null }[];
+  currentBacklog: { total: number; byRetoucher: { name: string; active: number; overdue: number }[] };
+  teamCapacity: { dailyCapacity: number; totalRetouchers: number; retoucherNames: string[] };
+  approvedLeave: { username: string; startDate: string; endDate: string }[];
+  weeklyBreakdown: { weekStart: string; projectsDue: number; newShoots: number }[];
+}): Promise<{ weeks: { weekStart: string; projectedLoad: number; capacity: number; riskLevel: 'low' | 'medium' | 'high' | 'critical'; warnings: string[] }[]; recommendations: string[]; summary: string }> {
+  try {
+    const response = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: [
+        {
+          role: "system",
+          content: "You are a workforce planning AI for Jepson Myles Studio, a photography retouching studio. Analyze upcoming workload data and predict capacity crunches. For each week, assess the projected number of projects vs available capacity (considering leave and daily limits). Return a JSON object with: 'weeks' (array with weekStart, projectedLoad, capacity, riskLevel, warnings), 'recommendations' (array of 3-5 actionable suggestions), 'summary' (1-2 sentence overview). Be specific with numbers. riskLevel: 'low' = under 60% capacity, 'medium' = 60-80%, 'high' = 80-100%, 'critical' = over 100%. Do NOT use markdown. Return ONLY the JSON object."
+        },
+        {
+          role: "user",
+          content: `Analyze this workload data and generate a forecast:\n${JSON.stringify(context, null, 2)}`
+        }
+      ],
+      temperature: 0.5,
+      max_tokens: 2000,
+    });
+
+    const content = response.choices[0]?.message?.content?.trim() || "{}";
+
+    let cleaned = content;
+    if (cleaned.startsWith("```json")) {
+      cleaned = cleaned.replace(/^```json\s*/, "").replace(/\s*```$/, "");
+    } else if (cleaned.startsWith("```")) {
+      cleaned = cleaned.replace(/^```\s*/, "").replace(/\s*```$/, "");
+    }
+
+    const parsed = JSON.parse(cleaned);
+    return {
+      weeks: Array.isArray(parsed.weeks) ? parsed.weeks : [],
+      recommendations: Array.isArray(parsed.recommendations) ? parsed.recommendations : [],
+      summary: typeof parsed.summary === "string" ? parsed.summary : "Unable to generate forecast at this time.",
+    };
+  } catch (error: any) {
+    console.error(`[AI] Workload forecast generation failed:`, error.message);
+    return {
+      weeks: [],
+      recommendations: [],
+      summary: "Workload forecast is temporarily unavailable. Please try again later.",
+    };
+  }
+}
+
+export async function generatePredictiveRiskAlerts(context: {
+  activeProjects: { id: string; clientName: string; assignedTo: string | null; status: string; dueDate: string; deliveryDueDate: string | null; daysRemaining: number; selectedCount: number | null }[];
+  retoucherHistory: { name: string; avgTurnaroundDays: number; completedCount: number; overdueRate: number; currentLoad: number }[];
+  historicalPatterns: { avgCompletionDays: number; overduePercentage: number };
+}): Promise<{ alerts: { projectId: string; clientName: string; riskScore: number; riskFactors: string[]; predictedDaysLate: number; recommendation: string }[]; summary: string }> {
+  try {
+    const response = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: [
+        {
+          role: "system",
+          content: "You are a predictive analytics AI for Jepson Myles Studio. Analyze active projects and predict which ones are likely to go overdue BEFORE they actually miss their deadline. Consider: retoucher's historical speed vs time remaining, current workload per retoucher, project complexity (photo count), unassigned projects approaching deadlines. Return a JSON object with: 'alerts' (array of at-risk projects sorted by riskScore descending, each with projectId, clientName, riskScore 1-100, riskFactors array, predictedDaysLate, recommendation), 'summary' (brief overview). Only include projects with riskScore > 40. Do NOT use markdown. Return ONLY the JSON object."
+        },
+        {
+          role: "user",
+          content: `Analyze these active projects and predict risk:\n${JSON.stringify(context, null, 2)}`
+        }
+      ],
+      temperature: 0.3,
+      max_tokens: 2000,
+    });
+
+    const content = response.choices[0]?.message?.content?.trim() || "{}";
+
+    let cleaned = content;
+    if (cleaned.startsWith("```json")) {
+      cleaned = cleaned.replace(/^```json\s*/, "").replace(/\s*```$/, "");
+    } else if (cleaned.startsWith("```")) {
+      cleaned = cleaned.replace(/^```\s*/, "").replace(/\s*```$/, "");
+    }
+
+    const parsed = JSON.parse(cleaned);
+    return {
+      alerts: Array.isArray(parsed.alerts) ? parsed.alerts : [],
+      summary: typeof parsed.summary === "string" ? parsed.summary : "Unable to generate risk alerts at this time.",
+    };
+  } catch (error: any) {
+    console.error(`[AI] Predictive risk alerts generation failed:`, error.message);
+    return {
+      alerts: [],
+      summary: "Risk alerts are temporarily unavailable. Please try again later.",
+    };
+  }
+}
+
+export async function evaluateQualityGate(context: {
+  projectName: string;
+  photos: { name: string; thumbnailUrl: string }[];
+  threshold: number;
+}): Promise<{ passed: boolean; overallScore: number; feedback: string[]; details: { photo: string; score: number; issues: string[] }[]; recommendation: string }> {
+  try {
+    const contentArray: any[] = [
+      { type: "text", text: `Evaluate these retouched photos for project "${context.projectName}":` },
+    ];
+
+    for (const photo of context.photos) {
+      contentArray.push({
+        type: "image_url",
+        image_url: { url: photo.thumbnailUrl, detail: "low" },
+      });
+    }
+
+    const response = await openai.chat.completions.create({
+      model: "gpt-4o",
+      messages: [
+        {
+          role: "system",
+          content: `You are a quality control AI for Jepson Myles Studio. You are the QUALITY GATE — photos must meet minimum standards before delivery to clients. Evaluate the retouched photos rigorously for: skin retouching quality, hair detail preservation, color correction accuracy, exposure consistency, composition, and overall professional standard. Return a JSON object with: 'passed' (boolean, true if overallScore >= threshold), 'overallScore' (1-10, be honest and strict), 'feedback' (array of 3-5 observations), 'details' (array per photo with 'photo' name, 'score' 1-10, 'issues' array of specific problems found), 'recommendation' (what to fix if failed, or 'Approved for delivery' if passed). The threshold for this project is ${context.threshold}. Do NOT use markdown. Return ONLY the JSON object.`
+        },
+        {
+          role: "user",
+          content: contentArray,
+        }
+      ],
+      temperature: 0.3,
+      max_tokens: 2500,
+    });
+
+    const content = response.choices[0]?.message?.content?.trim() || "{}";
+
+    let cleaned = content;
+    if (cleaned.startsWith("```json")) {
+      cleaned = cleaned.replace(/^```json\s*/, "").replace(/\s*```$/, "");
+    } else if (cleaned.startsWith("```")) {
+      cleaned = cleaned.replace(/^```\s*/, "").replace(/\s*```$/, "");
+    }
+
+    const parsed = JSON.parse(cleaned);
+    return {
+      passed: typeof parsed.passed === "boolean" ? parsed.passed : false,
+      overallScore: typeof parsed.overallScore === "number" ? parsed.overallScore : 0,
+      feedback: Array.isArray(parsed.feedback) ? parsed.feedback : ["Quality gate evaluation is temporarily unavailable. Please try again later."],
+      details: Array.isArray(parsed.details) ? parsed.details : [],
+      recommendation: typeof parsed.recommendation === "string" ? parsed.recommendation : "Unable to evaluate. Please try again.",
+    };
+  } catch (error: any) {
+    console.error(`[AI] Quality gate evaluation failed:`, error.message);
+    return {
+      passed: false,
+      overallScore: 0,
+      feedback: ["Quality gate evaluation is temporarily unavailable. Please try again later."],
+      details: [],
+      recommendation: "Unable to evaluate. Please try again.",
+    };
+  }
+}

@@ -25,6 +25,10 @@ const wsConnections = new Map<string, { ws: WebSocket, userId?: string }>();
 // Global SSE connections store
 const sseConnections = new Map<string, { res: any; userId: string; username: string }>();
 
+let forecastCache: { data: any; timestamp: number } | null = null;
+let riskCache: { data: any; timestamp: number } | null = null;
+const CACHE_TTL = 5 * 60 * 1000;
+
 // Function to broadcast via SSE
 export function broadcastSSE(message: { type: string; payload?: any }, targetUserId?: string) {
   if (!sseConnections) return;
@@ -492,6 +496,263 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error: any) {
       console.error("Failed to suggest reply:", error);
       res.status(500).json({ error: "Failed to suggest reply" });
+    }
+  });
+
+  app.get("/api/ai/workload-forecast", async (req, res) => {
+    try {
+      const role = req.headers["x-usena-role"] as string;
+      if (role !== "Admin") {
+        return res.status(403).json({ error: "Admin access required" });
+      }
+
+      if (forecastCache && Date.now() - forecastCache.timestamp < CACHE_TTL) {
+        return res.json(forecastCache.data);
+      }
+
+      const allProjects = await storage.getAllProjects();
+      const allUsers = await storage.getAllUsers();
+      const shootSettings = await storage.getAppSetting("shoottracker_settings") as any;
+      const leaveRequests = await storage.getLeaveRequests();
+
+      const now = new Date();
+      const sixWeeksOut = new Date(now.getTime() + 6 * 7 * 24 * 60 * 60 * 1000);
+
+      const upcomingProjects = allProjects.filter((p) => {
+        if (p.status === "Delivered" || p.status === "Cancelled") return false;
+        const shootDate = p.shootDate ? new Date(p.shootDate) : null;
+        const dueDate = p.deliveryDueDate ? new Date(p.deliveryDueDate) : p.dueDate ? new Date(p.dueDate) : null;
+        if (shootDate && shootDate <= sixWeeksOut && shootDate >= now) return true;
+        if (dueDate && dueDate <= sixWeeksOut && dueDate >= now) return true;
+        return false;
+      });
+
+      const retoucherUsers = allUsers.filter((u) => u.role.startsWith("Retoucher") || u.role === "LeadRetoucher");
+      const backlogByRetoucher = retoucherUsers.map((u) => {
+        const active = allProjects.filter((p) => p.assignedTo === u.name && p.status !== "Delivered" && p.status !== "Cancelled");
+        const overdue = active.filter((p) => p.riskLevel === "OVERDUE");
+        return { name: u.name, active: active.length, overdue: overdue.length };
+      });
+
+      const weeklyBreakdown: { weekStart: string; projectsDue: number; newShoots: number }[] = [];
+      for (let i = 0; i < 6; i++) {
+        const weekStart = new Date(now.getTime() + i * 7 * 24 * 60 * 60 * 1000);
+        const weekEnd = new Date(weekStart.getTime() + 7 * 24 * 60 * 60 * 1000);
+        const projectsDue = allProjects.filter((p) => {
+          const due = p.deliveryDueDate ? new Date(p.deliveryDueDate) : p.dueDate ? new Date(p.dueDate) : null;
+          return due && due >= weekStart && due < weekEnd && p.status !== "Delivered" && p.status !== "Cancelled";
+        }).length;
+        const newShoots = allProjects.filter((p) => {
+          const shoot = p.shootDate ? new Date(p.shootDate) : null;
+          return shoot && shoot >= weekStart && shoot < weekEnd;
+        }).length;
+        weeklyBreakdown.push({ weekStart: weekStart.toISOString().split("T")[0], projectsDue, newShoots });
+      }
+
+      const approvedLeave = leaveRequests.filter((lr) => {
+        if (lr.status !== "approved") return false;
+        const start = new Date(lr.startDate);
+        const end = new Date(lr.endDate);
+        return end >= now && start <= sixWeeksOut;
+      }).map((lr) => ({ username: lr.username, startDate: lr.startDate as unknown as string, endDate: lr.endDate as unknown as string }));
+
+      const dailyCapacity = shootSettings?.value?.dailyCapacity || 10;
+
+      const { generateWorkloadForecast } = await import("./services/aiService");
+      const forecast = await generateWorkloadForecast({
+        upcomingProjects: upcomingProjects.map((p) => ({
+          clientName: p.clientName,
+          shootDate: p.shootDate ? new Date(p.shootDate).toISOString() : "",
+          deliveryDueDate: p.deliveryDueDate ? new Date(p.deliveryDueDate).toISOString() : p.dueDate ? new Date(p.dueDate).toISOString() : "",
+          status: p.status,
+          assignedTo: p.assignedTo,
+        })),
+        currentBacklog: { total: backlogByRetoucher.reduce((sum, r) => sum + r.active, 0), byRetoucher: backlogByRetoucher },
+        teamCapacity: { dailyCapacity, totalRetouchers: retoucherUsers.length, retoucherNames: retoucherUsers.map((u) => u.name) },
+        approvedLeave,
+        weeklyBreakdown,
+      });
+
+      const responseData = { ...forecast, generatedAt: new Date().toISOString() };
+      forecastCache = { data: responseData, timestamp: Date.now() };
+      res.json(responseData);
+    } catch (error: any) {
+      console.error("Failed to generate workload forecast:", error);
+      res.status(500).json({ error: "Failed to generate workload forecast" });
+    }
+  });
+
+  app.get("/api/ai/predictive-risk", async (req, res) => {
+    try {
+      const role = req.headers["x-usena-role"] as string;
+      if (role !== "Admin") {
+        return res.status(403).json({ error: "Admin access required" });
+      }
+
+      if (riskCache && Date.now() - riskCache.timestamp < CACHE_TTL) {
+        return res.json(riskCache.data);
+      }
+
+      const allProjects = await storage.getAllProjects();
+      const allUsers = await storage.getAllUsers();
+      const now = new Date();
+
+      const activeProjects = allProjects.filter((p) =>
+        p.status === "Assigned" || p.status === "Review" || p.status === "Ready for Retouching"
+      );
+
+      const activeWithDays = activeProjects.map((p) => {
+        const dueDate = p.deliveryDueDate ? new Date(p.deliveryDueDate) : p.dueDate ? new Date(p.dueDate) : now;
+        const daysRemaining = Math.ceil((dueDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+        return {
+          id: p.id,
+          clientName: p.clientName,
+          assignedTo: p.assignedTo,
+          status: p.status,
+          dueDate: p.dueDate ? new Date(p.dueDate).toISOString() : "",
+          deliveryDueDate: p.deliveryDueDate ? new Date(p.deliveryDueDate).toISOString() : null,
+          daysRemaining,
+          selectedCount: p.selectedCount,
+        };
+      });
+
+      const retoucherUsers = allUsers.filter((u) => u.role.startsWith("Retoucher") || u.role === "LeadRetoucher");
+      const retoucherHistory = await Promise.all(
+        retoucherUsers.map(async (u) => {
+          const stats = await storage.getRetoucherSpeedStats(u.username);
+          const retoucherActive = activeProjects.filter((p) => p.assignedTo === u.name);
+          const retoucherOverdue = retoucherActive.filter((p) => p.riskLevel === "OVERDUE");
+          return {
+            name: u.name,
+            avgTurnaroundDays: stats.avgMinutes > 0 ? Math.round((stats.avgMinutes / 60 / 24) * 10) / 10 : 0,
+            completedCount: stats.totalProjects,
+            overdueRate: retoucherActive.length > 0 ? Math.round((retoucherOverdue.length / retoucherActive.length) * 100) / 100 : 0,
+            currentLoad: retoucherActive.length,
+          };
+        })
+      );
+
+      const deliveredProjects = allProjects.filter((p) => p.status === "Delivered" && p.deliveredAt && p.createdAt);
+      const completionTimes = deliveredProjects.map((p) => {
+        const start = new Date(p.createdAt).getTime();
+        const end = new Date(p.deliveredAt!).getTime();
+        return (end - start) / (1000 * 60 * 60 * 24);
+      });
+      const avgCompletionDays = completionTimes.length > 0 ? Math.round((completionTimes.reduce((a, b) => a + b, 0) / completionTimes.length) * 10) / 10 : 0;
+      const overdueProjects = allProjects.filter((p) => p.riskLevel === "OVERDUE");
+      const overduePercentage = allProjects.length > 0 ? Math.round((overdueProjects.length / allProjects.length) * 100) / 100 : 0;
+
+      const { generatePredictiveRiskAlerts } = await import("./services/aiService");
+      const alerts = await generatePredictiveRiskAlerts({
+        activeProjects: activeWithDays,
+        retoucherHistory,
+        historicalPatterns: { avgCompletionDays, overduePercentage },
+      });
+
+      const responseData = { ...alerts, generatedAt: new Date().toISOString() };
+      riskCache = { data: responseData, timestamp: Date.now() };
+      res.json(responseData);
+    } catch (error: any) {
+      console.error("Failed to generate predictive risk alerts:", error);
+      res.status(500).json({ error: "Failed to generate predictive risk alerts" });
+    }
+  });
+
+  app.post("/api/ai/quality-gate", async (req, res) => {
+    try {
+      const role = req.headers["x-usena-role"] as string;
+      if (role !== "Admin" && role !== "LeadRetoucher") {
+        return res.status(403).json({ error: "Admin or LeadRetoucher access required" });
+      }
+
+      const { projectId } = req.body;
+      if (!projectId) {
+        return res.status(400).json({ error: "projectId is required" });
+      }
+
+      const qualitySettings = await storage.getAppSetting("quality_gate_settings") as any;
+      const threshold = qualitySettings?.threshold ?? 7;
+
+      const project = await storage.getProject(projectId);
+      if (!project) {
+        return res.status(404).json({ error: "Project not found" });
+      }
+
+      const driveFolderId = (project as any).driveFolderId;
+      if (!driveFolderId) {
+        return res.status(400).json({ error: "No Drive folder linked to this project" });
+      }
+
+      const { getImageThumbnails } = await import("./services/googleDriveService");
+      const images = await getImageThumbnails(driveFolderId, 6);
+
+      const photos = images
+        .filter((img) => img.thumbnailLink)
+        .map((img) => ({
+          name: img.name,
+          thumbnailUrl: img.thumbnailLink!,
+        }));
+
+      if (photos.length === 0) {
+        return res.status(400).json({ error: "No photo thumbnails available for quality review" });
+      }
+
+      const { evaluateQualityGate } = await import("./services/aiService");
+      const result = await evaluateQualityGate({
+        projectName: project.clientName,
+        photos,
+        threshold,
+      });
+
+      await storage.updateProject(projectId, {
+        qualityGateScore: result.overallScore,
+        qualityGatePassed: result.passed,
+        qualityGateAt: new Date(),
+        qualityGateFeedback: result,
+      } as any);
+
+      res.json({ ...result, projectName: project.clientName, generatedAt: new Date().toISOString() });
+    } catch (error: any) {
+      console.error("Failed to evaluate quality gate:", error);
+      res.status(500).json({ error: "Failed to evaluate quality gate" });
+    }
+  });
+
+  app.post("/api/ai/quality-gate/override", async (req, res) => {
+    try {
+      const role = req.headers["x-usena-role"] as string;
+      if (role !== "Admin") {
+        return res.status(403).json({ error: "Admin access required" });
+      }
+
+      const { projectId, overrideBy } = req.body;
+      if (!projectId || !overrideBy) {
+        return res.status(400).json({ error: "projectId and overrideBy are required" });
+      }
+
+      const project = await storage.getProject(projectId);
+      if (!project) {
+        return res.status(404).json({ error: "Project not found" });
+      }
+
+      if ((project as any).qualityGatePassed === true) {
+        return res.status(400).json({ error: "Quality gate has already passed, no override needed" });
+      }
+
+      if (!(project as any).qualityGateScore && (project as any).qualityGateScore !== 0) {
+        return res.status(400).json({ error: "No quality gate result found for this project" });
+      }
+
+      const updatedProject = await storage.updateProject(projectId, {
+        qualityGateOverride: true,
+        qualityGateOverrideBy: overrideBy,
+        qualityGateOverrideAt: new Date(),
+      } as any);
+
+      res.json(updatedProject);
+    } catch (error: any) {
+      console.error("Failed to override quality gate:", error);
+      res.status(500).json({ error: "Failed to override quality gate" });
     }
   });
 
@@ -1372,6 +1633,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       if (project.deliveryApproved) {
         return res.status(400).json({ error: "Delivery has already been approved" });
+      }
+
+      const qualitySettings = await storage.getAppSetting("quality_gate_settings") as any;
+      const qualityGateEnabled = qualitySettings?.enabled !== false;
+      if (qualityGateEnabled && (project as any).driveFolderId) {
+        const hasPassedGate = (project as any).qualityGatePassed === true || (project as any).qualityGateOverride === true;
+        if (!hasPassedGate) {
+          return res.status(400).json({ error: "Quality gate has not been passed. Please run quality review first or request an admin override.", qualityGateRequired: true });
+        }
       }
 
       const updateData: any = {

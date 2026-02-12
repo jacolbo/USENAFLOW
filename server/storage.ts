@@ -1441,6 +1441,13 @@ export class DatabaseStorage implements IStorage {
         chatArchived: row.chat_archived,
         chatArchivedAt: row.chat_archived_at,
         chatArchivedBy: row.chat_archived_by,
+        qualityGateScore: row.quality_gate_score,
+        qualityGatePassed: row.quality_gate_passed,
+        qualityGateAt: row.quality_gate_at,
+        qualityGateOverride: row.quality_gate_override,
+        qualityGateOverrideBy: row.quality_gate_override_by,
+        qualityGateOverrideAt: row.quality_gate_override_at,
+        qualityGateFeedback: row.quality_gate_feedback,
       };
       
       result.push({

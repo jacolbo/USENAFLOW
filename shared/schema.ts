@@ -83,6 +83,13 @@ export const projects = pgTable("projects", {
   chatArchived: boolean("chat_archived").notNull().default(false),
   chatArchivedAt: timestamp("chat_archived_at"),
   chatArchivedBy: text("chat_archived_by"),
+  qualityGateScore: integer("quality_gate_score"),
+  qualityGatePassed: boolean("quality_gate_passed"),
+  qualityGateAt: timestamp("quality_gate_at"),
+  qualityGateOverride: boolean("quality_gate_override").notNull().default(false),
+  qualityGateOverrideBy: text("quality_gate_override_by"),
+  qualityGateOverrideAt: timestamp("quality_gate_override_at"),
+  qualityGateFeedback: jsonb("quality_gate_feedback"),
 });
 
 // ShootTracker metadata table (1:1 with projects)
@@ -829,4 +836,6 @@ export const AVAILABLE_WIDGETS: WidgetConfig[] = [
   { id: "ready_delivery", name: "Ready for Delivery", description: "Projects ready to deliver", icon: "Package", defaultEnabled: true, roles: ["Sales"] },
   { id: "ai_insights", name: "AI Insights", description: "AI-powered project trends and recommendations", icon: "Sparkles", defaultEnabled: true, roles: ["Admin", "LeadRetoucher", "DataWrangler", "Sales"] },
   { id: "retoucher_coach", name: "AI Coach", description: "Personalized performance tips from AI", icon: "Brain", defaultEnabled: true, roles: ["Retoucher1", "Retoucher2", "Retoucher3"] },
+  { id: "workload_forecast", name: "Workload Forecast", description: "AI-powered capacity planning for upcoming weeks", icon: "BarChart3", defaultEnabled: true, roles: ["Admin", "LeadRetoucher"] },
+  { id: "predictive_risk", name: "Risk Alerts", description: "AI predictions for projects likely to go overdue", icon: "Sparkles", defaultEnabled: true, roles: ["Admin", "LeadRetoucher"] },
 ];
