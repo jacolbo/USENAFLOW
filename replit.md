@@ -55,6 +55,8 @@ Key features include:
   - **Service Worker**: `client/public/sw.js` handles push events and notification clicks, opening the chat directly.
   - **Manifest**: `client/public/manifest.json` with Jepson Myles branding, standalone display mode.
 
+- **Automation Hub**: Admin page (`/automations`) showing all 95 system automations organized by type and category. Features include: visual cards with trigger/action details, enable/disable toggles, connection flow view showing how automations chain together, activity log tracking when automations fire, search/filter by type, and stats dashboard. Registry at `server/services/automationRegistry.ts`, page at `client/src/pages/automations.tsx`. Accessible to Admin and Lead Retoucher roles via dashboard menu.
+
 ## External Dependencies
 
 - **@tanstack/react-query**: Server state management.

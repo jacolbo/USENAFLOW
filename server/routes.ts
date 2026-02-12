@@ -145,6 +145,50 @@ async function seedDefaultUsers() {
 export async function registerRoutes(app: Express): Promise<Server> {
   await seedDefaultUsers();
 
+  // --- AUTOMATION REGISTRY ROUTES ---
+  app.get("/api/automations", async (_req, res) => {
+    try {
+      const { getAllAutomations, getStats } = await import('./services/automationRegistry');
+      const automations = getAllAutomations();
+      const stats = getStats();
+      res.json({ automations, stats });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.get("/api/automations/stats", async (_req, res) => {
+    try {
+      const { getStats } = await import('./services/automationRegistry');
+      res.json(getStats());
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.get("/api/automations/activity", async (req, res) => {
+    try {
+      const { getActivityLog } = await import('./services/automationRegistry');
+      const automationId = req.query.automationId as string | undefined;
+      const limit = parseInt(req.query.limit as string) || 50;
+      res.json(getActivityLog(automationId, limit));
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.patch("/api/automations/:id/toggle", async (req, res) => {
+    try {
+      const { setEnabled, getAutomation } = await import('./services/automationRegistry');
+      const { enabled } = req.body;
+      const success = setEnabled(req.params.id, enabled);
+      if (!success) return res.status(404).json({ error: "Automation not found" });
+      res.json(getAutomation(req.params.id));
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   app.get("/public/email-logo.png", async (req, res) => {
     try {
       const objectStorageService = new ObjectStorageService();

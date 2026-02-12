@@ -4,6 +4,7 @@ import { projects, aiTeamMessages } from '@shared/schema';
 import { eq, isNotNull, and, sql } from 'drizzle-orm';
 import * as driveService from './googleDriveService';
 import { sendGalleryPreviewEmail, sendGalleryDeliveryEmail, sendSatisfactionSurveyEmail, generateToken } from './emailService';
+import { recordFired, isEnabled } from './automationRegistry';
 
 let monitorInterval: NodeJS.Timeout | null = null;
 const MONITOR_INTERVAL_MS = 2 * 60 * 1000; // Check every 2 minutes
@@ -28,6 +29,7 @@ export async function scanAllProjectFolders(): Promise<DriveMonitorResult[]> {
     .from(projects)
     .where(isNotNull(projects.driveFolderId));
 
+  recordFired('bg_drive_monitor', `Scanning ${projectsWithFolders.length} folders`);
   console.log(`📂 Drive Monitor: Scanning ${projectsWithFolders.length} project folders...`);
 
   for (const project of projectsWithFolders) {
@@ -121,7 +123,7 @@ export async function scanProjectFolder(project: any): Promise<DriveMonitorResul
       updateData.qualityGateFeedback = null;
     }
 
-    if (!project.drivePreviewEmailSent) {
+    if (!project.drivePreviewEmailSent && isEnabled('dm_preview_email')) {
       const galleryLink = updateData.driveGalleryLink || project.driveGalleryLink || project.galleryLink;
       if (galleryLink && project.clientEmail) {
         try {
@@ -133,6 +135,7 @@ export async function scanProjectFolder(project: any): Promise<DriveMonitorResul
           );
           updateData.drivePreviewEmailSent = true;
           updateData.drivePreviewEmailSentAt = new Date();
+          recordFired('dm_preview_email', `Preview email sent to ${project.clientName}`);
           console.log(`📧 Drive Monitor: Preview email (no access) sent to ${project.clientEmail} for ${project.clientName}`);
         } catch (err: any) {
           console.error(`📂 Drive Monitor: Failed to send preview email for ${project.clientName}: ${err.message}`);
@@ -153,10 +156,11 @@ export async function scanProjectFolder(project: any): Promise<DriveMonitorResul
     }
   }
 
-  if (photosReady && !alreadyDelivered && project.drivePreviewEmailSent && !project.driveDeliveryEmailSent) {
+  if (photosReady && !alreadyDelivered && project.drivePreviewEmailSent && !project.driveDeliveryEmailSent && isEnabled('dm_detect_public')) {
     try {
       const isPublic = await driveService.checkFolderIsPublicLink(project.driveFolderId);
       if (isPublic) {
+        recordFired('dm_detect_public', `Public folder detected for ${project.clientName}`);
         console.log(`🔓 Drive Monitor: Folder for ${project.clientName} is now public — triggering delivery`);
         await executeDeliveryOnPublic(project, updateData, result);
       }
@@ -340,6 +344,7 @@ async function executeDeliveryOnPublic(project: any, updateData: any, result: Dr
         updateData.driveDeliveryEmailSent = true;
         updateData.driveDeliveryEmailSentAt = new Date();
         updateData.deliveryEmailSentAt = new Date();
+        recordFired('dm_delivery_email', `Delivery email sent to ${project.clientName}`);
         console.log(`📧 Drive Monitor: Delivery email (with access) sent to ${project.clientEmail} for ${project.clientName}`);
       }
     } catch (emailError) {
@@ -382,6 +387,10 @@ export function startDriveMonitor() {
   console.log(`📂 Drive Monitor started (checking every ${MONITOR_INTERVAL_MS / 1000}s)`);
 
   monitorInterval = setInterval(async () => {
+    if (!isEnabled('bg_drive_monitor')) {
+      console.log('📂 Drive Monitor: Skipping scan (disabled via Automation Hub)');
+      return;
+    }
     try {
       await scanAllProjectFolders();
     } catch (error: any) {

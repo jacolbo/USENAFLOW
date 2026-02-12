@@ -14,6 +14,7 @@ import ReferralPage from "@/pages/referral";
 import UnsubscribePage from "@/pages/unsubscribe";
 import LeaveManagement from "@/pages/leave-management";
 import AiTeamChat from "@/pages/ai-team-chat";
+import AutomationsPage from "@/pages/automations";
 import NotFound from "@/pages/not-found";
 
 function Router() {
@@ -29,6 +30,7 @@ function Router() {
       <Route path="/unsubscribe/:token" component={UnsubscribePage} />
       <Route path="/leave" component={LeaveManagement} />
       <Route path="/ai-chat" component={AiTeamChat} />
+      <Route path="/automations" component={AutomationsPage} />
       <Route component={NotFound} />
     </Switch>
   );
