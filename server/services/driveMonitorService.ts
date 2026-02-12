@@ -6,7 +6,7 @@ import * as driveService from './googleDriveService';
 import { sendGalleryDeliveryEmail, sendSneakPeekEmail } from './emailService';
 
 let monitorInterval: NodeJS.Timeout | null = null;
-const MONITOR_INTERVAL_MS = 5 * 60 * 1000; // Check every 5 minutes
+const MONITOR_INTERVAL_MS = 2 * 60 * 1000; // Check every 2 minutes
 
 export interface DriveMonitorResult {
   projectId: string;
