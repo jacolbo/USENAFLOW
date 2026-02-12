@@ -1,0 +1,58 @@
+Studio Retouching Guidelines: Achieving Client Satisfaction
+Our Core Philosophy: Enhance, do not replace. Our goal is to make our clients look like the absolute best version of themselves on their best day—rested, vibrant, and confident. We never want a client to look at a photo and feel like they don't recognize themselves.
+
+1. The "Standard Retouch" Rules
+Unless a client has specifically requested heavy alterations or "glamour" editing, adhere strictly strictly to these baseline standards:
+
+The Do's (Always fix these):
+
+Temporary Blemishes: Remove acne, shaving cuts, unexpected scratches, or recent bruises. If it will be gone in two weeks, remove it today.
+
+Distracting Elements: Clean up stray/flyaway hairs that cross the face or eyes, lint on clothing, and distracting background debris.
+
+Skin Tone & Lighting: Even out minor skin discoloration (like mild under-eye shadows or redness) and ensure accurate, flattering color balance.
+
+Teeth & Eyes: Apply subtle brightening to the teeth and the whites of the eyes. Do not over-whiten; they should not glow unnaturally.
+
+The Don'ts (Never alter these without explicit written request):
+
+Permanent Features: Never remove birthmarks, moles, freckles, or scars. These are part of a person's identity.
+
+Body Modification: Do not digitally alter a client's weight, reshape their nose, slim their arms, or alter their jawline.
+
+Age Erasing: Do not completely remove wrinkles or laugh lines. Soften them slightly if lighting has made them overly harsh, but do not give a 50-year-old the skin texture of a mannequin.
+
+The "Plastic" Effect: Avoid heavy frequency separation or blurring that destroys natural skin pores and texture.
+
+2. Workflow and Technical Standards
+To ensure efficiency and protect original files, all retouchers must follow this workflow:
+
+Non-Destructive Editing: Always work on duplicate layers or use adjustment layers. Never overwrite the original RAW or high-res JPEG files. * Monitor Calibration: Ensure your monitor is calibrated weekly. Color shifts between the editor's screen and the client's print/screen are a leading cause of complaints.
+
+Zoom Out: It’s easy to get lost at 300% zoom. Frequently zoom out to 100% and 50% to ensure the overall image still looks natural and the edits aren't noticeable from a standard viewing distance.
+
+File Naming: Adhere to the studio's naming conventions for final exports (e.g., ClientName_Date_Retouched_01.jpg) to prevent version confusion.
+
+3. Handling Client Requests & Revisions
+Sometimes clients will ask for edits that go against our natural philosophy. Here is how to handle them:
+
+Follow the Client Notes: Always review the client's specific retouching requests before starting. If they asked for a mole to be removed, remove it.
+
+When in Doubt, Ask: If a client requests something vague like "make me look skinnier," escalate this to the studio manager or client liaison to clarify exactly what the client means before spending hours on body-warping edits.
+
+Revision Empathy: If a client requests a revision because they don't like how they look, do not take it personally. Validate their feelings, adjust the edit according to their feedback, and remember that self-image is deeply personal.
+
+4. The Final Quality Assurance (QA) Checklist
+Before marking an image as "Ready for Delivery," ask yourself:
+
+[ ] Did I address all specific client notes?
+
+[ ] Does the skin still have natural texture (pores)?
+
+[ ] Are the eyes and teeth naturally bright, not glowing?
+
+[ ] Is the background free of cloning stamps or smudges?
+
+[ ] Would the client instantly recognize themselves?
+
+Would you like me to draft a "Retouching Expectation Guide" that you can send directly to your clients before their shoot so everyone is on the same page?
