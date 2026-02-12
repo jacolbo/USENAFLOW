@@ -83,6 +83,8 @@ export const projects = pgTable("projects", {
   chatArchived: boolean("chat_archived").notNull().default(false),
   chatArchivedAt: timestamp("chat_archived_at"),
   chatArchivedBy: text("chat_archived_by"),
+  drivePreviewEmailSent: boolean("drive_preview_email_sent").notNull().default(false),
+  drivePreviewEmailSentAt: timestamp("drive_preview_email_sent_at"),
   qualityGateScore: integer("quality_gate_score"),
   qualityGatePassed: boolean("quality_gate_passed"),
   qualityGateAt: timestamp("quality_gate_at"),
@@ -690,6 +692,7 @@ export const EmailType = {
   SATISFACTION_SURVEY: "satisfaction_survey",
   SCHEDULING_NOTIFICATION: "scheduling_notification",
   MANUAL_DELAY_NOTICE: "manual_delay_notice",
+  GALLERY_PREVIEW: "gallery_preview",
 } as const;
 
 export type EmailTypeValue = typeof EmailType[keyof typeof EmailType];

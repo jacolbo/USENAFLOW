@@ -1,9 +1,9 @@
 import { storage } from '../storage';
 import { db } from '../db';
-import { projects } from '@shared/schema';
+import { projects, aiTeamMessages } from '@shared/schema';
 import { eq, isNotNull, and, sql } from 'drizzle-orm';
 import * as driveService from './googleDriveService';
-import { sendGalleryDeliveryEmail, sendSneakPeekEmail } from './emailService';
+import { sendGalleryDeliveryEmail, sendGalleryPreviewEmail } from './emailService';
 
 let monitorInterval: NodeJS.Timeout | null = null;
 const MONITOR_INTERVAL_MS = 2 * 60 * 1000; // Check every 2 minutes
@@ -97,54 +97,44 @@ export async function scanProjectFolder(project: any): Promise<DriveMonitorResul
 
   const alreadyDelivered = project.status === 'Delivered' || project.status === 'Done' || project.driveDeliveryEmailSent;
 
-  if (photosReady && !alreadyDelivered && project.deliveryApproved) {
-    console.log(`✅ Drive Monitor: ${project.clientName} photos complete & delivery approved! (${result.drivePhotoCount}/${project.selectedCount}) — auto-sharing folder and delivering`);
-    try {
-      const shareLink = await driveService.makeFolderPublic(project.driveFolderId);
-      updateData.driveGalleryLink = shareLink;
-      updateData.galleryLink = shareLink;
-      updateData.galleryLinkAddedAt = new Date();
-      updateData.galleryLinkAddedBy = 'Drive Auto-Detection';
-      updateData.driveAccessGranted = true;
-      updateData.driveAccessGrantedAt = new Date();
-      updateData.driveDeliveryComplete = true;
-      updateData.driveDeliveryCompletedAt = new Date();
-      updateData.status = 'Delivered';
-      updateData.deliveredAt = new Date();
-      result.deliveryTriggered = true;
-
-      if (project.clientEmail) {
-        try {
-          const { sendGalleryDeliveryEmail } = await import('./emailService');
-          await sendGalleryDeliveryEmail(
-            project.clientEmail,
-            project.clientName,
-            shareLink,
-            project.id
-          );
-          updateData.driveDeliveryEmailSent = true;
-          updateData.driveDeliveryEmailSentAt = new Date();
-          updateData.deliveryEmailSentAt = new Date();
-          console.log(`📧 Drive Monitor: Sent delivery email to ${project.clientEmail} for ${project.clientName}`);
-        } catch (err: any) {
-          console.error(`📂 Drive Monitor: Failed to send delivery email for ${project.clientName}: ${err.message}`);
-        }
-      } else {
-        console.log(`📂 Drive Monitor: No client email for ${project.clientName} — skipping delivery email`);
+  if (photosReady && !alreadyDelivered) {
+    if (!project.driveGalleryLink && !updateData.driveGalleryLink) {
+      try {
+        const shareLink = await driveService.generateShareLink(project.driveFolderId);
+        updateData.driveGalleryLink = shareLink;
+        updateData.galleryLink = shareLink;
+        updateData.galleryLinkAddedAt = new Date();
+        updateData.galleryLinkAddedBy = 'Drive Auto-Detection';
+        console.log(`🔗 Drive Monitor: Gallery link generated for ${project.clientName}`);
+      } catch (err: any) {
+        console.error(`📂 Drive Monitor: Failed to generate share link for ${project.clientName}: ${err.message}`);
       }
-    } catch (err: any) {
-      console.error(`📂 Drive Monitor: Failed to auto-share folder for ${project.clientName}: ${err.message} — will retry next scan`);
     }
-  } else if (photosReady && !project.driveGalleryLink && !updateData.driveGalleryLink) {
-    try {
-      const shareLink = await driveService.generateShareLink(project.driveFolderId);
-      updateData.driveGalleryLink = shareLink;
-      updateData.galleryLink = shareLink;
-      updateData.galleryLinkAddedAt = new Date();
-      updateData.galleryLinkAddedBy = 'Drive Auto-Detection';
-      console.log(`🔗 Drive Monitor: Gallery link saved for ${project.clientName} (awaiting delivery approval)`);
-    } catch (err: any) {
-      console.error(`📂 Drive Monitor: Failed to generate share link for ${project.clientName}: ${err.message}`);
+
+    const photoCountChanged = result.drivePhotoCount !== project.drivePhotoCount;
+    const qualityGateFailed = project.qualityGatePassed === false && !project.qualityGateOverride;
+    if (photoCountChanged && qualityGateFailed) {
+      console.log(`🔄 Drive Monitor: Photo count changed for ${project.clientName} (${project.drivePhotoCount} → ${result.drivePhotoCount}) and quality gate previously failed — resetting for re-check`);
+      updateData.qualityGatePassed = null;
+      updateData.qualityGateScore = null;
+      updateData.qualityGateAt = null;
+      updateData.qualityGateFeedback = null;
+    }
+
+    const currentQualityPassed = updateData.qualityGatePassed !== undefined ? updateData.qualityGatePassed : project.qualityGatePassed;
+    const hasQualityGateResult = currentQualityPassed !== null && currentQualityPassed !== undefined;
+    const qualityPassed = currentQualityPassed === true || project.qualityGateOverride === true;
+
+    if (!hasQualityGateResult) {
+      console.log(`🔍 Drive Monitor: ${project.clientName} photos complete (${result.drivePhotoCount}/${project.selectedCount}) — triggering automatic quality gate check...`);
+      try {
+        await runAutomaticQualityGate(project, updateData);
+      } catch (err: any) {
+        console.error(`📂 Drive Monitor: Quality gate failed for ${project.clientName}: ${err.message}`);
+      }
+    } else if (qualityPassed && !project.driveDeliveryEmailSent) {
+      console.log(`✅ Drive Monitor: ${project.clientName} quality passed — proceeding with delivery pipeline`);
+      await executeDeliveryPipeline(project, updateData, result);
     }
   }
 
@@ -167,6 +157,176 @@ export async function scanProjectFolder(project: any): Promise<DriveMonitorResul
   await db.update(projects).set(updateData).where(eq(projects.id, project.id));
 
   return result;
+}
+
+async function runAutomaticQualityGate(project: any, updateData: any) {
+  const qualitySettings = await storage.getAppSetting("quality_gate_settings") as any;
+  const threshold = qualitySettings?.threshold ?? 7;
+
+  const { getImageThumbnails } = await import('./googleDriveService');
+  const images = await getImageThumbnails(project.driveFolderId, 6);
+
+  const photos = images
+    .filter((img: any) => img.thumbnailLink)
+    .map((img: any) => ({
+      name: img.name,
+      thumbnailUrl: img.thumbnailLink!,
+    }));
+
+  if (photos.length === 0) {
+    console.log(`📂 Drive Monitor: No thumbnails available for quality check on ${project.clientName} — skipping`);
+    return;
+  }
+
+  let referenceUrls: string[] = [];
+  try {
+    const refSetting = await storage.getAppSetting("quality_reference_images") as any;
+    if (refSetting && Array.isArray(refSetting)) {
+      referenceUrls = refSetting;
+    }
+  } catch (e) {}
+
+  const { evaluateQualityGate } = await import('./aiService');
+  const result = await evaluateQualityGate({
+    projectName: project.clientName,
+    photos,
+    threshold,
+    referenceImageUrls: referenceUrls.length > 0 ? referenceUrls : undefined,
+  });
+
+  updateData.qualityGateScore = result.overallScore;
+  updateData.qualityGatePassed = result.passed;
+  updateData.qualityGateAt = new Date();
+  updateData.qualityGateFeedback = result;
+
+  if (result.passed) {
+    console.log(`✅ Drive Monitor: Quality gate PASSED for ${project.clientName} (score: ${result.overallScore}/${threshold})`);
+    updateData.deliveryApproved = true;
+    updateData.deliveryApprovedAt = new Date();
+    updateData.deliveryApprovedBy = 'AI Quality Gate';
+  } else {
+    console.log(`❌ Drive Monitor: Quality gate FAILED for ${project.clientName} (score: ${result.overallScore}/${threshold}) — notifying retoucher`);
+    await notifyRetoucherQualityFailed(project, result);
+  }
+}
+
+async function notifyRetoucherQualityFailed(project: any, qualityResult: any) {
+  const retoucherName = project.assignedTo;
+  if (!retoucherName) {
+    console.log(`📂 Drive Monitor: No retoucher assigned to ${project.clientName} — cannot notify about quality failure`);
+    return;
+  }
+
+  let aiMessage = `Hi ${retoucherName}, the automated quality check for "${project.clientName}" did not pass (score: ${qualityResult.overallScore}/10). `;
+  if (qualityResult.feedback && qualityResult.feedback.length > 0) {
+    aiMessage += `Here's what needs attention:\n`;
+    qualityResult.feedback.forEach((f: string, i: number) => {
+      aiMessage += `${i + 1}. ${f}\n`;
+    });
+  }
+  if (qualityResult.recommendation) {
+    aiMessage += `\nRecommendation: ${qualityResult.recommendation}`;
+  }
+  aiMessage += `\n\nPlease make the necessary corrections and re-upload. The system will automatically re-check once updated photos are detected.`;
+
+  try {
+    const OpenAI = require("openai").default;
+    const openai = new OpenAI();
+
+    const response = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: [
+        {
+          role: "system",
+          content: "You are the studio manager AI at Jepson Myles Studio. Rewrite the following quality feedback message for the retoucher in a professional, supportive but clear tone. Keep all specific feedback points and the recommendation. Address them by name. Do not add markdown formatting."
+        },
+        { role: "user", content: aiMessage }
+      ],
+      temperature: 0.7,
+      max_tokens: 800,
+    });
+
+    const polishedMessage = response.choices[0]?.message?.content?.trim() || aiMessage;
+
+    await db.insert(aiTeamMessages).values({
+      username: retoucherName,
+      role: 'system',
+      message: polishedMessage,
+      senderType: 'ai',
+      metadata: { type: 'quality_gate_failed', projectId: project.id, score: qualityResult.overallScore },
+    });
+
+    console.log(`🤖 Drive Monitor: AI quality feedback sent to ${retoucherName} for ${project.clientName}`);
+  } catch (err: any) {
+    console.error(`📂 Drive Monitor: Failed to send AI quality message to ${retoucherName}: ${err.message}`);
+    try {
+      await db.insert(aiTeamMessages).values({
+        username: retoucherName,
+        role: 'system',
+        message: aiMessage,
+        senderType: 'ai',
+        metadata: { type: 'quality_gate_failed', projectId: project.id, score: qualityResult.overallScore },
+      });
+    } catch (e) {}
+  }
+}
+
+async function executeDeliveryPipeline(project: any, updateData: any, result: DriveMonitorResult) {
+  const galleryLink = updateData.driveGalleryLink || project.driveGalleryLink || project.galleryLink;
+
+  if (!galleryLink) {
+    console.log(`📂 Drive Monitor: No gallery link for ${project.clientName} — cannot deliver`);
+    return;
+  }
+
+  if (project.clientEmail && !project.drivePreviewEmailSent) {
+    try {
+      await sendGalleryPreviewEmail(
+        project.clientEmail,
+        project.clientName,
+        galleryLink,
+        project.id
+      );
+      updateData.drivePreviewEmailSent = true;
+      updateData.drivePreviewEmailSentAt = new Date();
+      console.log(`📧 Drive Monitor: Preview email (no access) sent to ${project.clientEmail} for ${project.clientName}`);
+    } catch (err: any) {
+      console.error(`📂 Drive Monitor: Failed to send preview email for ${project.clientName}: ${err.message}`);
+    }
+  }
+
+  try {
+    const shareLink = await driveService.makeFolderPublic(project.driveFolderId);
+    updateData.driveGalleryLink = shareLink;
+    updateData.galleryLink = shareLink;
+    updateData.driveAccessGranted = true;
+    updateData.driveAccessGrantedAt = new Date();
+    updateData.driveDeliveryComplete = true;
+    updateData.driveDeliveryCompletedAt = new Date();
+    updateData.status = 'Delivered';
+    updateData.deliveredAt = new Date();
+    result.deliveryTriggered = true;
+    console.log(`🔓 Drive Monitor: Folder made public for ${project.clientName}`);
+
+    if (project.clientEmail) {
+      try {
+        await sendGalleryDeliveryEmail(
+          project.clientEmail,
+          project.clientName,
+          shareLink,
+          project.id
+        );
+        updateData.driveDeliveryEmailSent = true;
+        updateData.driveDeliveryEmailSentAt = new Date();
+        updateData.deliveryEmailSentAt = new Date();
+        console.log(`📧 Drive Monitor: Delivery email (with access) sent to ${project.clientEmail} for ${project.clientName}`);
+      } catch (err: any) {
+        console.error(`📂 Drive Monitor: Failed to send delivery email for ${project.clientName}: ${err.message}`);
+      }
+    }
+  } catch (err: any) {
+    console.error(`📂 Drive Monitor: Failed to make folder public for ${project.clientName}: ${err.message} — will retry next scan`);
+  }
 }
 
 export function startDriveMonitor() {

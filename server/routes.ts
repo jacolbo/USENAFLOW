@@ -697,11 +697,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "No photo thumbnails available for quality review" });
       }
 
+      let referenceUrls: string[] = [];
+      try {
+        const refSetting = await storage.getAppSetting("quality_reference_images") as any;
+        if (refSetting && Array.isArray(refSetting)) {
+          referenceUrls = refSetting;
+        }
+      } catch (e) {}
+
       const { evaluateQualityGate } = await import("./services/aiService");
       const result = await evaluateQualityGate({
         projectName: project.clientName,
         photos,
         threshold,
+        referenceImageUrls: referenceUrls.length > 0 ? referenceUrls : undefined,
       });
 
       await storage.updateProject(projectId, {
@@ -753,6 +762,78 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error: any) {
       console.error("Failed to override quality gate:", error);
       res.status(500).json({ error: "Failed to override quality gate" });
+    }
+  });
+
+  app.get("/api/quality-reference-images", async (req, res) => {
+    try {
+      const role = req.headers["x-usena-role"] as string;
+      if (role !== "Admin") {
+        return res.status(403).json({ error: "Admin access required" });
+      }
+      const images = await storage.getAppSetting("quality_reference_images") as any;
+      res.json({ images: Array.isArray(images) ? images : [] });
+    } catch (error: any) {
+      res.status(500).json({ error: "Failed to get reference images" });
+    }
+  });
+
+  app.post("/api/quality-reference-images", async (req, res) => {
+    try {
+      const role = req.headers["x-usena-role"] as string;
+      if (role !== "Admin") {
+        return res.status(403).json({ error: "Admin access required" });
+      }
+      const { urls } = req.body;
+      if (!Array.isArray(urls)) {
+        return res.status(400).json({ error: "urls must be an array of image URLs" });
+      }
+      await storage.setAppSetting("quality_reference_images", urls);
+      res.json({ success: true, count: urls.length });
+    } catch (error: any) {
+      res.status(500).json({ error: "Failed to save reference images" });
+    }
+  });
+
+  app.post("/api/quality-reference-images/add", async (req, res) => {
+    try {
+      const role = req.headers["x-usena-role"] as string;
+      if (role !== "Admin") {
+        return res.status(403).json({ error: "Admin access required" });
+      }
+      const { url } = req.body;
+      if (!url || typeof url !== "string") {
+        return res.status(400).json({ error: "url is required" });
+      }
+      const existing = await storage.getAppSetting("quality_reference_images") as any;
+      const images = Array.isArray(existing) ? existing : [];
+      if (!images.includes(url)) {
+        images.push(url);
+      }
+      await storage.setAppSetting("quality_reference_images", images);
+      res.json({ success: true, count: images.length });
+    } catch (error: any) {
+      res.status(500).json({ error: "Failed to add reference image" });
+    }
+  });
+
+  app.delete("/api/quality-reference-images", async (req, res) => {
+    try {
+      const role = req.headers["x-usena-role"] as string;
+      if (role !== "Admin") {
+        return res.status(403).json({ error: "Admin access required" });
+      }
+      const { url } = req.body;
+      if (!url || typeof url !== "string") {
+        return res.status(400).json({ error: "url is required" });
+      }
+      const existing = await storage.getAppSetting("quality_reference_images") as any;
+      const images = Array.isArray(existing) ? existing : [];
+      const filtered = images.filter((u: string) => u !== url);
+      await storage.setAppSetting("quality_reference_images", filtered);
+      res.json({ success: true, count: filtered.length });
+    } catch (error: any) {
+      res.status(500).json({ error: "Failed to remove reference image" });
     }
   });
 

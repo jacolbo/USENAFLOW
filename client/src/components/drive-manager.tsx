@@ -6,7 +6,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { HardDrive, FolderPlus, RefreshCw, CheckCircle, AlertTriangle, ExternalLink, Cloud, Play, Square, Sparkles, Eye, Star, X } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { HardDrive, FolderPlus, RefreshCw, CheckCircle, AlertTriangle, ExternalLink, Cloud, Play, Square, Sparkles, Eye, Star, X, ImagePlus, Trash2, Camera } from "lucide-react";
 
 function formatBytes(bytes: number): string {
   if (!bytes || bytes === 0) return "0 B";
@@ -35,6 +36,7 @@ export function DriveManager({ userRole, userId }: { userRole: string; userId: s
   const [monitorRunning, setMonitorRunning] = useState(false);
   const [reviewingProjectId, setReviewingProjectId] = useState<string | null>(null);
   const [photoReview, setPhotoReview] = useState<any>(null);
+  const [newRefUrl, setNewRefUrl] = useState("");
 
   const adminHeaders: Record<string, string> = {
     "x-usena-role": userRole,
@@ -493,6 +495,121 @@ export function DriveManager({ userRole, userId }: { userRole: string; userId: s
           </CardContent>
         </Card>
       )}
+
+      {userRole === "Admin" && <ReferenceImagesSection adminFetch={adminFetch} newRefUrl={newRefUrl} setNewRefUrl={setNewRefUrl} />}
     </div>
+  );
+}
+
+function ReferenceImagesSection({ adminFetch, newRefUrl, setNewRefUrl }: { adminFetch: (url: string, method?: string, body?: any) => Promise<any>; newRefUrl: string; setNewRefUrl: (v: string) => void }) {
+  const { toast } = useToast();
+
+  const refImagesQuery = useQuery({
+    queryKey: ["/api/quality-reference-images"],
+    queryFn: async () => {
+      const data = await adminFetch("/api/quality-reference-images");
+      return data.images as string[];
+    },
+  });
+
+  const addRefImage = useMutation({
+    mutationFn: async (url: string) => {
+      return adminFetch("/api/quality-reference-images/add", "POST", { url });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/quality-reference-images"] });
+      setNewRefUrl("");
+      toast({ title: "Reference image added" });
+    },
+  });
+
+  const removeRefImage = useMutation({
+    mutationFn: async (url: string) => {
+      return adminFetch("/api/quality-reference-images", "DELETE", { url });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/quality-reference-images"] });
+      toast({ title: "Reference image removed" });
+    },
+  });
+
+  const images = refImagesQuery.data || [];
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-lg">
+          <Camera className="h-5 w-5 text-pink-500" />
+          Quality Reference Images
+          <Badge variant="outline" className="ml-2">{images.length} images</Badge>
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <p className="text-sm text-muted-foreground">
+          Add Instagram or portfolio image URLs here. The AI Quality Gate will use these as the benchmark standard when reviewing project photos.
+        </p>
+
+        <div className="flex gap-2">
+          <Input
+            placeholder="Paste Instagram or image URL..."
+            value={newRefUrl}
+            onChange={(e) => setNewRefUrl(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && newRefUrl.trim()) {
+                addRefImage.mutate(newRefUrl.trim());
+              }
+            }}
+          />
+          <Button
+            size="sm"
+            onClick={() => {
+              if (newRefUrl.trim()) {
+                addRefImage.mutate(newRefUrl.trim());
+              }
+            }}
+            disabled={!newRefUrl.trim() || addRefImage.isPending}
+          >
+            <ImagePlus className="h-4 w-4 mr-1" />
+            Add
+          </Button>
+        </div>
+
+        {images.length > 0 && (
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+            {images.map((url: string, i: number) => (
+              <div key={i} className="relative group rounded-lg overflow-hidden border">
+                <img
+                  src={url}
+                  alt={`Reference ${i + 1}`}
+                  className="w-full h-32 object-cover"
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100'%3E%3Crect fill='%23f0f0f0' width='100' height='100'/%3E%3Ctext x='50' y='55' text-anchor='middle' fill='%23999' font-size='12'%3ENo preview%3C/text%3E%3C/svg%3E";
+                  }}
+                />
+                <Button
+                  variant="destructive"
+                  size="icon"
+                  className="absolute top-1 right-1 h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
+                  onClick={() => removeRefImage.mutate(url)}
+                >
+                  <Trash2 className="h-3 w-3" />
+                </Button>
+                <div className="absolute bottom-0 left-0 right-0 bg-black/50 px-2 py-1">
+                  <p className="text-xs text-white truncate">{url.split('/').pop()}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {images.length === 0 && (
+          <div className="text-center py-8 text-muted-foreground">
+            <Camera className="h-8 w-8 mx-auto mb-2 opacity-50" />
+            <p className="text-sm">No reference images yet</p>
+            <p className="text-xs">Add your best Instagram photos as quality benchmarks</p>
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }

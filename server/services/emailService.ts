@@ -1108,6 +1108,102 @@ export async function sendGalleryDeliveryEmail(
   }
 }
 
+export async function sendGalleryPreviewEmail(
+  clientEmail: string,
+  clientName: string,
+  galleryLink: string,
+  projectId: string
+): Promise<EmailResult> {
+  const firstName = getFirstName(clientName);
+  let subject = `Your Photos Are Almost Ready! - Jepson Myles Studio`;
+
+  try {
+    const { client, fromEmail } = await getResendClient();
+
+    const variables: Record<string, string> = {
+      clientName: firstName,
+      galleryLink,
+      emailHeader: getEmailHeader('Your Photos Are Almost Ready!'),
+    };
+
+    let htmlContent = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+        ${variables.emailHeader}
+
+        <p style="color: #333; font-size: 16px; line-height: 1.6;">
+          Dear ${firstName},
+        </p>
+
+        <div style="background: linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%); border-radius: 12px; padding: 25px; margin: 25px 0; text-align: center;">
+          <p style="color: #e65100; font-size: 20px; line-height: 1.6; margin: 0; font-weight: bold;">
+            Great News!
+          </p>
+          <p style="color: #333; font-size: 16px; line-height: 1.6; margin: 10px 0 0 0;">
+            Your retouched photos have been completed and are going through our final quality review.
+          </p>
+        </div>
+
+        <p style="color: #333; font-size: 16px; line-height: 1.6;">
+          We'll send you another email shortly with full access to view and download your photos. This is just a heads-up that your gallery is being prepared!
+        </p>
+
+        <div style="background: #f8f8f8; border-radius: 8px; padding: 15px 20px; margin: 25px 0;">
+          <p style="color: #555; font-size: 14px; line-height: 1.6; margin: 0;">
+            <strong>Your Gallery Link (access coming soon):</strong><br>
+            <a href="${galleryLink}" style="color: #e91e63; word-break: break-all;">${galleryLink}</a>
+          </p>
+        </div>
+
+        <p style="color: #333; font-size: 16px; line-height: 1.6;">
+          Thank you for your patience! We want to make sure everything is perfect before you see your photos.
+        </p>
+
+        <p style="color: #333; font-size: 16px; line-height: 1.6;">
+          Warm regards,<br>
+          <strong>The Jepson Myles Studio Team</strong>
+        </p>
+
+        <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;">
+
+        <p style="color: #999; font-size: 12px; text-align: center;">
+          This is an automated message from Jepson Myles Studio.<br>
+          If you have any questions, please reply to this email.
+        </p>
+      </div>
+    `;
+
+    const dbTemplate = await getTemplate('gallery_preview');
+    if (dbTemplate) {
+      subject = renderTemplate(dbTemplate.subject, variables);
+      htmlContent = renderTemplate(dbTemplate.htmlBody, variables);
+    }
+
+    htmlContent = await aiRephrase(htmlContent, firstName);
+    const replyTo = getProjectReplyToEmail(projectId);
+    const response = await client.emails.send({
+      from: fromEmail,
+      replyTo: replyTo,
+      to: clientEmail,
+      subject,
+      html: htmlContent,
+    });
+
+    if (response.data?.id) {
+      await logEmail(projectId, EmailType.GALLERY_PREVIEW, clientEmail, subject, 'sent', response.data.id);
+      console.log(`[Resend] Gallery preview email sent to ${clientEmail} for project ${projectId}`);
+      return { success: true, messageId: response.data.id };
+    } else {
+      const errorMsg = response.error?.message || 'Unknown error';
+      await logEmail(projectId, EmailType.GALLERY_PREVIEW, clientEmail, subject, 'failed', undefined, errorMsg);
+      return { success: false, error: errorMsg };
+    }
+  } catch (error: any) {
+    console.error(`[Email] Failed to send gallery preview email:`, error);
+    await logEmail(projectId, EmailType.GALLERY_PREVIEW, clientEmail, subject, 'failed', undefined, error.message);
+    return { success: false, error: error.message };
+  }
+}
+
 // Email 10: Scheduling Notification Email
 // Sent when a Data Wrangler schedules a project for a specific week
 export async function sendSchedulingNotificationEmail(

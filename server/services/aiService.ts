@@ -547,6 +547,7 @@ export async function evaluateQualityGate(context: {
   projectName: string;
   photos: { name: string; thumbnailUrl: string }[];
   threshold: number;
+  referenceImageUrls?: string[];
 }): Promise<{ passed: boolean; overallScore: number; feedback: string[]; details: { photo: string; score: number; issues: string[] }[]; recommendation: string }> {
   try {
     const contentArray: any[] = [
@@ -560,12 +561,29 @@ export async function evaluateQualityGate(context: {
       });
     }
 
+    if (context.referenceImageUrls && context.referenceImageUrls.length > 0) {
+      contentArray.push({
+        type: "text",
+        text: "The following are REFERENCE IMAGES showing the studio's quality standard. Compare the project photos against these references:",
+      });
+      for (const refUrl of context.referenceImageUrls.slice(0, 6)) {
+        contentArray.push({
+          type: "image_url",
+          image_url: { url: refUrl, detail: "low" },
+        });
+      }
+    }
+
+    const referenceNote = context.referenceImageUrls && context.referenceImageUrls.length > 0
+      ? " Reference images from the studio's portfolio are provided — use them as the benchmark for quality, style, and retouching standards. Photos that do not match the reference standard should score lower."
+      : "";
+
     const response = await openai.chat.completions.create({
       model: "gpt-4o",
       messages: [
         {
           role: "system",
-          content: `You are a quality control AI for Jepson Myles Studio. You are the QUALITY GATE — photos must meet minimum standards before delivery to clients. Evaluate the retouched photos rigorously for: skin retouching quality, hair detail preservation, color correction accuracy, exposure consistency, composition, and overall professional standard. Return a JSON object with: 'passed' (boolean, true if overallScore >= threshold), 'overallScore' (1-10, be honest and strict), 'feedback' (array of 3-5 observations), 'details' (array per photo with 'photo' name, 'score' 1-10, 'issues' array of specific problems found), 'recommendation' (what to fix if failed, or 'Approved for delivery' if passed). The threshold for this project is ${context.threshold}. Do NOT use markdown. Return ONLY the JSON object.`
+          content: `You are a quality control AI for Jepson Myles Studio. You are the QUALITY GATE — photos must meet minimum standards before delivery to clients. Evaluate the retouched photos rigorously for: skin retouching quality, hair detail preservation, color correction accuracy, exposure consistency, composition, and overall professional standard.${referenceNote} Return a JSON object with: 'passed' (boolean, true if overallScore >= threshold), 'overallScore' (1-10, be honest and strict), 'feedback' (array of 3-5 observations), 'details' (array per photo with 'photo' name, 'score' 1-10, 'issues' array of specific problems found), 'recommendation' (what to fix if failed, or 'Approved for delivery' if passed). The threshold for this project is ${context.threshold}. Do NOT use markdown. Return ONLY the JSON object.`
         },
         {
           role: "user",
