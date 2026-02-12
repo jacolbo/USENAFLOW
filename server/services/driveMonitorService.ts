@@ -3,7 +3,7 @@ import { db } from '../db';
 import { projects, aiTeamMessages } from '@shared/schema';
 import { eq, isNotNull, and, sql } from 'drizzle-orm';
 import * as driveService from './googleDriveService';
-import { sendGalleryDeliveryEmail, sendGalleryPreviewEmail } from './emailService';
+import { sendGalleryPreviewEmail } from './emailService';
 
 let monitorInterval: NodeJS.Timeout | null = null;
 const MONITOR_INTERVAL_MS = 2 * 60 * 1000; // Check every 2 minutes
@@ -121,20 +121,35 @@ export async function scanProjectFolder(project: any): Promise<DriveMonitorResul
       updateData.qualityGateFeedback = null;
     }
 
+    if (!project.drivePreviewEmailSent) {
+      const galleryLink = updateData.driveGalleryLink || project.driveGalleryLink || project.galleryLink;
+      if (galleryLink && project.clientEmail) {
+        try {
+          await sendGalleryPreviewEmail(
+            project.clientEmail,
+            project.clientName,
+            galleryLink,
+            project.id
+          );
+          updateData.drivePreviewEmailSent = true;
+          updateData.drivePreviewEmailSentAt = new Date();
+          console.log(`📧 Drive Monitor: Preview email (no access) sent to ${project.clientEmail} for ${project.clientName}`);
+        } catch (err: any) {
+          console.error(`📂 Drive Monitor: Failed to send preview email for ${project.clientName}: ${err.message}`);
+        }
+      }
+    }
+
     const currentQualityPassed = updateData.qualityGatePassed !== undefined ? updateData.qualityGatePassed : project.qualityGatePassed;
     const hasQualityGateResult = currentQualityPassed !== null && currentQualityPassed !== undefined;
-    const qualityPassed = currentQualityPassed === true || project.qualityGateOverride === true;
 
     if (!hasQualityGateResult) {
-      console.log(`🔍 Drive Monitor: ${project.clientName} photos complete (${result.drivePhotoCount}/${project.selectedCount}) — triggering automatic quality gate check...`);
+      console.log(`🔍 Drive Monitor: ${project.clientName} photos complete (${result.drivePhotoCount}/${project.selectedCount}) — running quality gate for feedback...`);
       try {
         await runAutomaticQualityGate(project, updateData);
       } catch (err: any) {
-        console.error(`📂 Drive Monitor: Quality gate failed for ${project.clientName}: ${err.message}`);
+        console.error(`📂 Drive Monitor: Quality gate check failed for ${project.clientName}: ${err.message}`);
       }
-    } else if (qualityPassed && !project.driveDeliveryEmailSent) {
-      console.log(`✅ Drive Monitor: ${project.clientName} quality passed — proceeding with delivery pipeline`);
-      await executeDeliveryPipeline(project, updateData, result);
     }
   }
 
@@ -200,10 +215,7 @@ async function runAutomaticQualityGate(project: any, updateData: any) {
   updateData.qualityGateFeedback = result;
 
   if (result.passed) {
-    console.log(`✅ Drive Monitor: Quality gate PASSED for ${project.clientName} (score: ${result.overallScore}/${threshold})`);
-    updateData.deliveryApproved = true;
-    updateData.deliveryApprovedAt = new Date();
-    updateData.deliveryApprovedBy = 'AI Quality Gate';
+    console.log(`✅ Drive Monitor: Quality gate PASSED for ${project.clientName} (score: ${result.overallScore}/${threshold}) — awaiting manual release`);
   } else {
     console.log(`❌ Drive Monitor: Quality gate FAILED for ${project.clientName} (score: ${result.overallScore}/${threshold}) — notifying retoucher`);
     await notifyRetoucherQualityFailed(project, result);
@@ -268,64 +280,6 @@ async function notifyRetoucherQualityFailed(project: any, qualityResult: any) {
         metadata: { type: 'quality_gate_failed', projectId: project.id, score: qualityResult.overallScore },
       });
     } catch (e) {}
-  }
-}
-
-async function executeDeliveryPipeline(project: any, updateData: any, result: DriveMonitorResult) {
-  const galleryLink = updateData.driveGalleryLink || project.driveGalleryLink || project.galleryLink;
-
-  if (!galleryLink) {
-    console.log(`📂 Drive Monitor: No gallery link for ${project.clientName} — cannot deliver`);
-    return;
-  }
-
-  if (project.clientEmail && !project.drivePreviewEmailSent) {
-    try {
-      await sendGalleryPreviewEmail(
-        project.clientEmail,
-        project.clientName,
-        galleryLink,
-        project.id
-      );
-      updateData.drivePreviewEmailSent = true;
-      updateData.drivePreviewEmailSentAt = new Date();
-      console.log(`📧 Drive Monitor: Preview email (no access) sent to ${project.clientEmail} for ${project.clientName}`);
-    } catch (err: any) {
-      console.error(`📂 Drive Monitor: Failed to send preview email for ${project.clientName}: ${err.message}`);
-    }
-  }
-
-  try {
-    const shareLink = await driveService.makeFolderPublic(project.driveFolderId);
-    updateData.driveGalleryLink = shareLink;
-    updateData.galleryLink = shareLink;
-    updateData.driveAccessGranted = true;
-    updateData.driveAccessGrantedAt = new Date();
-    updateData.driveDeliveryComplete = true;
-    updateData.driveDeliveryCompletedAt = new Date();
-    updateData.status = 'Delivered';
-    updateData.deliveredAt = new Date();
-    result.deliveryTriggered = true;
-    console.log(`🔓 Drive Monitor: Folder made public for ${project.clientName}`);
-
-    if (project.clientEmail) {
-      try {
-        await sendGalleryDeliveryEmail(
-          project.clientEmail,
-          project.clientName,
-          shareLink,
-          project.id
-        );
-        updateData.driveDeliveryEmailSent = true;
-        updateData.driveDeliveryEmailSentAt = new Date();
-        updateData.deliveryEmailSentAt = new Date();
-        console.log(`📧 Drive Monitor: Delivery email (with access) sent to ${project.clientEmail} for ${project.clientName}`);
-      } catch (err: any) {
-        console.error(`📂 Drive Monitor: Failed to send delivery email for ${project.clientName}: ${err.message}`);
-      }
-    }
-  } catch (err: any) {
-    console.error(`📂 Drive Monitor: Failed to make folder public for ${project.clientName}: ${err.message} — will retry next scan`);
   }
 }
 

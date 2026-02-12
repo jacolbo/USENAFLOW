@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Input } from "@/components/ui/input";
-import { HardDrive, FolderPlus, RefreshCw, CheckCircle, AlertTriangle, ExternalLink, Cloud, Play, Square, Sparkles, Eye, Star, X, ImagePlus, Trash2, Camera } from "lucide-react";
+import { HardDrive, FolderPlus, RefreshCw, CheckCircle, AlertTriangle, ExternalLink, Cloud, Play, Square, Sparkles, Eye, Star, X, ImagePlus, Trash2, Camera, Send } from "lucide-react";
 
 function formatBytes(bytes: number): string {
   if (!bytes || bytes === 0) return "0 B";
@@ -133,6 +133,18 @@ export function DriveManager({ userRole, userId }: { userRole: string; userId: s
     },
     onError: (err: any) => {
       toast({ title: "Failed to create folders", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const releaseMutation = useMutation({
+    mutationFn: (projectId: string) =>
+      adminFetch(`/api/drive/release/${projectId}`, "POST", { approvedBy: userId }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/drive/overview", userRole, userId] });
+      toast({ title: "Released & Delivered", description: "Folder is now public and delivery email sent to client." });
+    },
+    onError: (err: any) => {
+      toast({ title: "Release failed", description: err.message, variant: "destructive" });
     },
   });
 
@@ -353,26 +365,45 @@ export function DriveManager({ userRole, userId }: { userRole: string; userId: s
                           {formatDate(project.lastChecked)}
                         </td>
                         <td className="py-2 px-3">
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => {
-                              setReviewingProjectId(project.id);
-                              reviewPhotosMutation.mutate(project.id);
-                            }}
-                            disabled={reviewPhotosMutation.isPending}
-                            title="AI Photo Review"
-                          >
-                            <Eye className={`h-3 w-3 ${reviewPhotosMutation.isPending && reviewingProjectId === project.id ? "animate-pulse" : ""}`} />
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => scanProjectMutation.mutate(project.id)}
-                            disabled={scanProjectMutation.isPending}
-                          >
-                            <RefreshCw className={`h-3 w-3 ${scanProjectMutation.isPending ? "animate-spin" : ""}`} />
-                          </Button>
+                          <div className="flex items-center gap-1">
+                            {(isComplete || isOver) && !project.driveDeliveryComplete && project.status !== 'Delivered' && (
+                              <Button
+                                size="sm"
+                                variant="default"
+                                className="bg-green-600 hover:bg-green-700 text-white"
+                                onClick={() => {
+                                  if (confirm(`Release & deliver photos to ${project.clientName}? This will make the folder public and send the delivery email.`)) {
+                                    releaseMutation.mutate(project.id);
+                                  }
+                                }}
+                                disabled={releaseMutation.isPending}
+                                title="Release & Deliver"
+                              >
+                                <Send className={`h-3 w-3 mr-1 ${releaseMutation.isPending ? "animate-pulse" : ""}`} />
+                                Release
+                              </Button>
+                            )}
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => {
+                                setReviewingProjectId(project.id);
+                                reviewPhotosMutation.mutate(project.id);
+                              }}
+                              disabled={reviewPhotosMutation.isPending}
+                              title="AI Photo Review"
+                            >
+                              <Eye className={`h-3 w-3 ${reviewPhotosMutation.isPending && reviewingProjectId === project.id ? "animate-pulse" : ""}`} />
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => scanProjectMutation.mutate(project.id)}
+                              disabled={scanProjectMutation.isPending}
+                            >
+                              <RefreshCw className={`h-3 w-3 ${scanProjectMutation.isPending ? "animate-spin" : ""}`} />
+                            </Button>
+                          </div>
                         </td>
                       </tr>
                     );
