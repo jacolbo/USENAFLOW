@@ -3400,7 +3400,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         message: m.message,
       }));
 
-      const allProjects = await storage.getProjects();
+      const allProjects = await storage.getAllProjects();
       const now = new Date();
       const yesterday = new Date(now);
       yesterday.setDate(yesterday.getDate() - 1);
@@ -3430,7 +3430,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           status: p.status,
         }));
 
-      const users = await storage.getUsers();
+      const users = await storage.getAllUsers();
       const retouchers = users.filter((u: any) => u.role === "Retoucher" || u.role === "SeniorRetoucher");
 
       const retoucherStats = [];
@@ -3462,7 +3462,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }));
 
       const guidelinesResult = await db.select().from(appSettings).where(eq(appSettings.key, "retouching_guidelines"));
-      const retouchingGuidelines = guidelinesResult[0]?.value || "";
+      const retouchingGuidelines = String(guidelinesResult[0]?.value || "");
 
       const isExplanation = /late|delay|couldn'?t|sorry|behind|issue|problem|stuck/i.test(message);
       const metadata = isExplanation && role !== "Admin" && role !== "LeadRetoucher"
@@ -3528,7 +3528,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ error: "Admin access required" });
       }
 
-      const allProjects = await storage.getProjects();
+      const allProjects = await storage.getAllProjects();
       const now = new Date();
       const yesterday = new Date(now);
       yesterday.setDate(yesterday.getDate() - 1);
@@ -3556,7 +3556,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         timestamp: e.created_at || e.createdAt,
       }));
 
-      const users = await storage.getUsers();
+      const users = await storage.getAllUsers();
       const retouchers = users.filter((u: any) => u.role === "Retoucher" || u.role === "SeniorRetoucher");
       const retoucherStats = retouchers.map((r: any) => {
         const userProjects = allProjects.filter((p: any) => p.assignedTo === r.username);
