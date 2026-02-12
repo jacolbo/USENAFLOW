@@ -377,10 +377,19 @@ export async function aiTeamChat(context: {
     const adminInstructions = await formatAdminInstructionsForPrompt(isAdmin ? undefined : context.username);
 
     const actionInstructions = isAdmin
-      ? `\n\nACTION CAPABILITY:
+      ? `\n\nACTION CAPABILITIES:
+
+1. MARK PROJECTS DONE:
 You can mark projects as done/delivered when admin instructs you to. When the admin says something like "mark X as done", "X is delivered", "complete project X", find the matching project from the active/overdue lists and include this exact tag in your response (on its own line):
 [ACTION:MARK_DONE:projectId:clientName]
-Replace projectId with the actual project ID and clientName with the client name. You can mark multiple projects at once by including multiple action tags. Always confirm what you're doing in your text response. Only mark projects that actually exist in the data — if you can't find a match, tell the admin you couldn't find that project.`
+Replace projectId with the actual project ID and clientName with the client name. You can mark multiple projects at once by including multiple action tags. Only mark projects that actually exist in the data.
+
+2. MESSAGE TEAM MEMBERS:
+You can DIRECTLY send messages to retouchers' chat threads. When admin asks you to "check on the team", "follow up with retouchers", "ask them about progress", or anything about communicating with team members, you MUST use this action tag to actually send them a message:
+[ACTION:MESSAGE_RETOUCHER:retoucherUsername:Your message to them]
+Replace retoucherUsername with the exact retoucher name from the stats data, and write a personalized message based on their current workload and project status. You MUST send messages to each relevant retoucher — do NOT just say you will do it, ACTUALLY do it by including the action tags. After the tags, confirm to admin what you sent and to whom.
+
+IMPORTANT: When admin asks you to manage, check on, or communicate with the team, ALWAYS use the MESSAGE_RETOUCHER action. Never say "I cannot communicate with team members" — you CAN and MUST send them messages through their chat threads. This is your primary management capability.`
       : "";
 
     const systemPrompt = isAdmin
@@ -421,14 +430,22 @@ ${context.retouchingGuidelines || "No guidelines set."}`;
 
     const rawResponse = response.choices[0]?.message?.content?.trim() || "I'm sorry, I couldn't generate a response. Please try again.";
 
-    const actions: { type: string; projectId: string; projectName: string }[] = [];
-    const actionRegex = /\[ACTION:MARK_DONE:([^:\]]+):([^\]]+)\]/g;
+    const actions: { type: string; projectId: string; projectName: string; targetUser?: string; messageText?: string }[] = [];
+    const markDoneRegex = /\[ACTION:MARK_DONE:([^:\]]+):([^\]]+)\]/g;
     let match;
-    while ((match = actionRegex.exec(rawResponse)) !== null) {
+    while ((match = markDoneRegex.exec(rawResponse)) !== null) {
       actions.push({ type: "MARK_DONE", projectId: match[1], projectName: match[2] });
     }
 
-    const cleanText = rawResponse.replace(/\[ACTION:MARK_DONE:[^\]]+\]\n?/g, "").trim();
+    const messageRegex = /\[ACTION:MESSAGE_RETOUCHER:([^:\]]+):([^\]]+)\]/g;
+    while ((match = messageRegex.exec(rawResponse)) !== null) {
+      actions.push({ type: "MESSAGE_RETOUCHER", projectId: "", projectName: "", targetUser: match[1], messageText: match[2] });
+    }
+
+    const cleanText = rawResponse
+      .replace(/\[ACTION:MARK_DONE:[^\]]+\]\n?/g, "")
+      .replace(/\[ACTION:MESSAGE_RETOUCHER:[^\]]+\]\n?/g, "")
+      .trim();
 
     extractAndStoreInsights("team_chat", cleanText, { retoucherName: isAdmin ? undefined : context.username }).catch(() => {});
 

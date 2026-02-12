@@ -4037,6 +4037,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
               console.error(`[AI Action] Failed to mark project ${action.projectId}:`, err.message);
               executedActions.push(`Failed to mark "${action.projectName}" — project not found`);
             }
+          } else if (action.type === "MESSAGE_RETOUCHER" && action.targetUser && action.messageText) {
+            try {
+              await storage.createAiTeamMessage({
+                username: action.targetUser,
+                role: "AI",
+                senderType: "ai",
+                message: action.messageText,
+              });
+              executedActions.push(`📨 Sent message to **${action.targetUser}**: "${action.messageText.substring(0, 80)}${action.messageText.length > 80 ? '...' : ''}"`);
+              console.log(`[AI Action] Sent message to retoucher ${action.targetUser} on behalf of admin ${userId}`);
+            } catch (err: any) {
+              console.error(`[AI Action] Failed to message ${action.targetUser}:`, err.message);
+              executedActions.push(`Failed to message ${action.targetUser}`);
+            }
           }
         }
       }
