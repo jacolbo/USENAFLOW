@@ -97,7 +97,11 @@ export default function AiTeamChat() {
   };
 
   const getSenderType = (msg: ChatMessage) => msg.sender_type || msg.senderType || "user";
-  const getTimestamp = (msg: ChatMessage) => msg.created_at || msg.createdAt || "";
+  const getTimestamp = (msg: ChatMessage) => {
+    const ts = msg.created_at || msg.createdAt || "";
+    if (ts && !ts.endsWith("Z") && !ts.includes("+")) return ts + "Z";
+    return ts;
+  };
 
   if (!userId || !role) {
     return (
