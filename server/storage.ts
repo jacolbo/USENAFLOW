@@ -1,4 +1,4 @@
-import { type User, type InsertUser, type Project, type InsertProject, type UpdateProject, type ProjectNote, type InsertProjectNote, type UpdateProjectNote, type TradeOffer, type InsertTradeOffer, type UpdateTradeOffer, type WranglerCommission, type InsertWranglerCommission, type ProjectEvent, type InsertProjectEvent, type Complaint, type InsertComplaint, type ShoottrackerMeta, type InsertShoottrackerMeta, type UpdateShoottrackerMeta, type AppSetting, type CalendarEventStaging, type InsertCalendarEventStaging, type UpdateCalendarEventStaging, type ClientAuthToken, type InsertClientAuthToken, type ClientMessage, type InsertClientMessage, type DashboardPreferences, type InsertDashboardPreferences, type SneakPeek, type InsertSneakPeek, type Survey, type InsertSurvey, type Referral, type InsertReferral, type ClientProfile, type InsertClientProfile, type RewardClaim, type InsertRewardClaim, type EmailTemplate, type InsertEmailTemplate, type PushSubscription, type InsertPushSubscription, type StatusTransition, type InsertStatusTransition, type LeaveRequest, type InsertLeaveRequest, type AiTeamMessage, type InsertAiTeamMessage, ProjectStatus, TradeOfferStatus, StagingStatus, users, projects, projectNotes, tradeOffers, wranglerCommissions, projectEvents, complaints, shoottrackerMeta, appSettings, calendarEventsStaging, clientAuthTokens, clientMessages, dashboardPreferences, sneakPeeks, clientSurveys, referrals, clientProfiles, referralRewardClaims, emailTemplates, pushSubscriptions, chatEncryptionKeys, projectStatusTransitions, leaveRequests, aiTeamMessages } from "@shared/schema";
+import { type User, type InsertUser, type Project, type InsertProject, type UpdateProject, type ProjectNote, type InsertProjectNote, type UpdateProjectNote, type TradeOffer, type InsertTradeOffer, type UpdateTradeOffer, type WranglerCommission, type InsertWranglerCommission, type ProjectEvent, type InsertProjectEvent, type Complaint, type InsertComplaint, type ShoottrackerMeta, type InsertShoottrackerMeta, type UpdateShoottrackerMeta, type AppSetting, type CalendarEventStaging, type InsertCalendarEventStaging, type UpdateCalendarEventStaging, type ClientAuthToken, type InsertClientAuthToken, type ClientMessage, type InsertClientMessage, type DashboardPreferences, type InsertDashboardPreferences, type SneakPeek, type InsertSneakPeek, type Survey, type InsertSurvey, type Referral, type InsertReferral, type ClientProfile, type InsertClientProfile, type RewardClaim, type InsertRewardClaim, type EmailTemplate, type InsertEmailTemplate, type PushSubscription, type InsertPushSubscription, type StatusTransition, type InsertStatusTransition, type LeaveRequest, type InsertLeaveRequest, type AiTeamMessage, type InsertAiTeamMessage, type AiMemory, type InsertAiMemory, type AiAdminInstruction, type InsertAiAdminInstruction, ProjectStatus, TradeOfferStatus, StagingStatus, users, projects, projectNotes, tradeOffers, wranglerCommissions, projectEvents, complaints, shoottrackerMeta, appSettings, calendarEventsStaging, clientAuthTokens, clientMessages, dashboardPreferences, sneakPeeks, clientSurveys, referrals, clientProfiles, referralRewardClaims, emailTemplates, pushSubscriptions, chatEncryptionKeys, projectStatusTransitions, leaveRequests, aiTeamMessages, aiMemory, aiAdminInstructions } from "@shared/schema";
 import { db } from "./db";
 import { eq, sql, asc, and, ilike } from "drizzle-orm";
 import { randomUUID } from "crypto";
@@ -145,6 +145,21 @@ export interface IStorage {
   createAiTeamMessage(msg: InsertAiTeamMessage): Promise<AiTeamMessage>;
   getAiTeamMessages(username: string, limit?: number): Promise<AiTeamMessage[]>;
   getRecentRetoucherExplanations(since: Date): Promise<AiTeamMessage[]>;
+
+  // AI Memory methods
+  createAiMemory(memory: InsertAiMemory): Promise<AiMemory>;
+  getAiMemories(options?: { category?: string; retoucherName?: string; limit?: number }): Promise<AiMemory[]>;
+  getAiMemoriesByCategory(category: string, limit?: number): Promise<AiMemory[]>;
+  deleteAiMemory(id: string): Promise<boolean>;
+  clearAiMemories(category?: string): Promise<number>;
+  pruneExpiredMemories(): Promise<number>;
+
+  // Admin Instructions methods
+  createAdminInstruction(instruction: InsertAiAdminInstruction): Promise<AiAdminInstruction>;
+  getAdminInstructions(options?: { category?: string; targetRetoucher?: string; activeOnly?: boolean }): Promise<AiAdminInstruction[]>;
+  getActiveAdminInstructions(retoucherName?: string): Promise<AiAdminInstruction[]>;
+  updateAdminInstruction(id: string, updates: Partial<AiAdminInstruction>): Promise<AiAdminInstruction | undefined>;
+  deleteAdminInstruction(id: string): Promise<boolean>;
 }
 
 export class MemStorage implements IStorage {
@@ -864,6 +879,110 @@ export class MemStorage implements IStorage {
   }
   async getRecentRetoucherExplanations(since: Date): Promise<AiTeamMessage[]> {
     throw new Error("Not implemented in MemStorage");
+  }
+
+  // AI Memory methods (MemStorage stubs)
+  private aiMemories: Map<string, AiMemory> = new Map();
+
+  async createAiMemory(memory: InsertAiMemory): Promise<AiMemory> {
+    const id = randomUUID();
+    const created: AiMemory = {
+      ...memory,
+      id,
+      context: memory.context ?? null,
+      retoucherName: memory.retoucherName ?? null,
+      projectId: memory.projectId ?? null,
+      importance: memory.importance ?? 5,
+      expiresAt: memory.expiresAt ?? null,
+      createdAt: new Date(),
+    };
+    this.aiMemories.set(id, created);
+    return created;
+  }
+
+  async getAiMemories(options?: { category?: string; retoucherName?: string; limit?: number }): Promise<AiMemory[]> {
+    let results = Array.from(this.aiMemories.values());
+    if (options?.category) results = results.filter(m => m.category === options.category);
+    if (options?.retoucherName) results = results.filter(m => m.retoucherName === options.retoucherName);
+    results.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+    return results.slice(0, options?.limit || 100);
+  }
+
+  async getAiMemoriesByCategory(category: string, limit: number = 50): Promise<AiMemory[]> {
+    return Array.from(this.aiMemories.values())
+      .filter(m => m.category === category)
+      .sort((a, b) => (b.importance - a.importance) || (b.createdAt.getTime() - a.createdAt.getTime()))
+      .slice(0, limit);
+  }
+
+  async deleteAiMemory(id: string): Promise<boolean> {
+    return this.aiMemories.delete(id);
+  }
+
+  async clearAiMemories(category?: string): Promise<number> {
+    if (category) {
+      const toDelete = Array.from(this.aiMemories.entries()).filter(([, m]) => m.category === category);
+      toDelete.forEach(([id]) => this.aiMemories.delete(id));
+      return toDelete.length;
+    }
+    const count = this.aiMemories.size;
+    this.aiMemories.clear();
+    return count;
+  }
+
+  async pruneExpiredMemories(): Promise<number> {
+    const now = new Date();
+    const toDelete = Array.from(this.aiMemories.entries()).filter(([, m]) => m.expiresAt && m.expiresAt < now);
+    toDelete.forEach(([id]) => this.aiMemories.delete(id));
+    return toDelete.length;
+  }
+
+  // Admin Instructions methods (MemStorage stubs)
+  private adminInstructions: Map<string, AiAdminInstruction> = new Map();
+
+  async createAdminInstruction(instruction: InsertAiAdminInstruction): Promise<AiAdminInstruction> {
+    const id = randomUUID();
+    const now = new Date();
+    const created: AiAdminInstruction = {
+      ...instruction,
+      id,
+      category: instruction.category ?? "general",
+      targetRetoucher: instruction.targetRetoucher ?? null,
+      priority: instruction.priority ?? 5,
+      isActive: instruction.isActive ?? true,
+      createdAt: now,
+      updatedAt: now,
+    };
+    this.adminInstructions.set(id, created);
+    return created;
+  }
+
+  async getAdminInstructions(options?: { category?: string; targetRetoucher?: string; activeOnly?: boolean }): Promise<AiAdminInstruction[]> {
+    let results = Array.from(this.adminInstructions.values());
+    if (options?.category) results = results.filter(i => i.category === options.category);
+    if (options?.targetRetoucher) results = results.filter(i => i.targetRetoucher === options.targetRetoucher);
+    if (options?.activeOnly) results = results.filter(i => i.isActive);
+    return results.sort((a, b) => (b.priority - a.priority) || (b.createdAt.getTime() - a.createdAt.getTime()));
+  }
+
+  async getActiveAdminInstructions(retoucherName?: string): Promise<AiAdminInstruction[]> {
+    let results = Array.from(this.adminInstructions.values()).filter(i => i.isActive);
+    if (retoucherName) {
+      results = results.filter(i => i.targetRetoucher === null || i.targetRetoucher === retoucherName);
+    }
+    return results.sort((a, b) => b.priority - a.priority);
+  }
+
+  async updateAdminInstruction(id: string, updates: Partial<AiAdminInstruction>): Promise<AiAdminInstruction | undefined> {
+    const existing = this.adminInstructions.get(id);
+    if (!existing) return undefined;
+    const updated = { ...existing, ...updates, updatedAt: new Date() };
+    this.adminInstructions.set(id, updated);
+    return updated;
+  }
+
+  async deleteAdminInstruction(id: string): Promise<boolean> {
+    return this.adminInstructions.delete(id);
   }
 }
 
@@ -1843,6 +1962,100 @@ export class DatabaseStorage implements IStorage {
       ORDER BY created_at DESC
     `);
     return result.rows as AiTeamMessage[];
+  }
+
+  // AI Memory methods
+  async createAiMemory(memory: InsertAiMemory): Promise<AiMemory> {
+    const [created] = await db.insert(aiMemory).values(memory).returning();
+    return created;
+  }
+
+  async getAiMemories(options?: { category?: string; retoucherName?: string; limit?: number }): Promise<AiMemory[]> {
+    const conditions: any[] = [];
+    if (options?.category) conditions.push(eq(aiMemory.category, options.category));
+    if (options?.retoucherName) conditions.push(eq(aiMemory.retoucherName, options.retoucherName));
+    
+    const query = conditions.length > 0
+      ? db.select().from(aiMemory).where(and(...conditions)).orderBy(sql`created_at DESC`).limit(options?.limit || 100)
+      : db.select().from(aiMemory).orderBy(sql`created_at DESC`).limit(options?.limit || 100);
+    
+    return await query;
+  }
+
+  async getAiMemoriesByCategory(category: string, limit: number = 50): Promise<AiMemory[]> {
+    return await db.select().from(aiMemory)
+      .where(eq(aiMemory.category, category))
+      .orderBy(sql`importance DESC, created_at DESC`)
+      .limit(limit);
+  }
+
+  async deleteAiMemory(id: string): Promise<boolean> {
+    const result = await db.delete(aiMemory).where(eq(aiMemory.id, id)).returning();
+    return result.length > 0;
+  }
+
+  async clearAiMemories(category?: string): Promise<number> {
+    if (category) {
+      const result = await db.delete(aiMemory).where(eq(aiMemory.category, category)).returning();
+      return result.length;
+    }
+    const result = await db.delete(aiMemory).returning();
+    return result.length;
+  }
+
+  async pruneExpiredMemories(): Promise<number> {
+    const result = await db.delete(aiMemory)
+      .where(sql`expires_at IS NOT NULL AND expires_at < NOW()`)
+      .returning();
+    return result.length;
+  }
+
+  // Admin Instructions methods
+  async createAdminInstruction(instruction: InsertAiAdminInstruction): Promise<AiAdminInstruction> {
+    const [created] = await db.insert(aiAdminInstructions).values(instruction).returning();
+    return created;
+  }
+
+  async getAdminInstructions(options?: { category?: string; targetRetoucher?: string; activeOnly?: boolean }): Promise<AiAdminInstruction[]> {
+    const conditions: any[] = [];
+    if (options?.category) conditions.push(eq(aiAdminInstructions.category, options.category));
+    if (options?.targetRetoucher) conditions.push(eq(aiAdminInstructions.targetRetoucher, options.targetRetoucher));
+    if (options?.activeOnly) conditions.push(eq(aiAdminInstructions.isActive, true));
+    
+    const query = conditions.length > 0
+      ? db.select().from(aiAdminInstructions).where(and(...conditions)).orderBy(sql`priority DESC, created_at DESC`)
+      : db.select().from(aiAdminInstructions).orderBy(sql`priority DESC, created_at DESC`);
+    
+    return await query;
+  }
+
+  async getActiveAdminInstructions(retoucherName?: string): Promise<AiAdminInstruction[]> {
+    const conditions: any[] = [eq(aiAdminInstructions.isActive, true)];
+    if (retoucherName) {
+      const result = await db.select().from(aiAdminInstructions)
+        .where(and(
+          eq(aiAdminInstructions.isActive, true),
+          sql`(target_retoucher IS NULL OR target_retoucher = ${retoucherName})`
+        ))
+        .orderBy(sql`priority DESC`);
+      return result;
+    }
+    return await db.select().from(aiAdminInstructions)
+      .where(eq(aiAdminInstructions.isActive, true))
+      .orderBy(sql`priority DESC`);
+  }
+
+  async updateAdminInstruction(id: string, updates: Partial<AiAdminInstruction>): Promise<AiAdminInstruction | undefined> {
+    const [updated] = await db.update(aiAdminInstructions)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(aiAdminInstructions.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteAdminInstruction(id: string): Promise<boolean> {
+    const result = await db.delete(aiAdminInstructions).where(eq(aiAdminInstructions.id, id)).returning();
+    return result.length > 0;
   }
 }
 

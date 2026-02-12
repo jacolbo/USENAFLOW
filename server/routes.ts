@@ -189,6 +189,99 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // --- AI ADMIN INSTRUCTIONS ROUTES (Admin-only) ---
+  app.get("/api/ai/admin-instructions", verifyAdminRequest, async (_req, res) => {
+    try {
+      const instructions = await storage.getAdminInstructions();
+      res.json({ instructions });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/ai/admin-instructions", verifyAdminRequest, async (req, res) => {
+    try {
+      const { instruction, category, targetRetoucher, priority, createdBy } = req.body;
+      if (!instruction || !createdBy) {
+        return res.status(400).json({ error: "instruction and createdBy are required" });
+      }
+      const created = await storage.createAdminInstruction({
+        instruction,
+        category: category || "general",
+        targetRetoucher: targetRetoucher || null,
+        priority: priority || 5,
+        isActive: true,
+        createdBy,
+      });
+      res.json(created);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.patch("/api/ai/admin-instructions/:id", verifyAdminRequest, async (req, res) => {
+    try {
+      const updated = await storage.updateAdminInstruction(req.params.id, req.body);
+      if (!updated) return res.status(404).json({ error: "Instruction not found" });
+      res.json(updated);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.delete("/api/ai/admin-instructions/:id", verifyAdminRequest, async (req, res) => {
+    try {
+      const deleted = await storage.deleteAdminInstruction(req.params.id);
+      if (!deleted) return res.status(404).json({ error: "Instruction not found" });
+      res.json({ success: true });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // --- AI MEMORY ROUTES (Admin-only) ---
+  app.get("/api/ai/memory", verifyAdminRequest, async (req, res) => {
+    try {
+      const category = req.query.category as string | undefined;
+      const retoucherName = req.query.retoucherName as string | undefined;
+      const limit = parseInt(req.query.limit as string) || 100;
+      const memories = await storage.getAiMemories({ category, retoucherName, limit });
+      res.json({ memories, total: memories.length });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.delete("/api/ai/memory", verifyAdminRequest, async (req, res) => {
+    try {
+      const category = req.query.category as string | undefined;
+      const count = await storage.clearAiMemories(category);
+      res.json({ cleared: count });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.delete("/api/ai/memory/:id", verifyAdminRequest, async (req, res) => {
+    try {
+      const deleted = await storage.deleteAiMemory(req.params.id);
+      if (!deleted) return res.status(404).json({ error: "Memory not found" });
+      res.json({ success: true });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/ai/memory/prune", verifyAdminRequest, async (_req, res) => {
+    try {
+      const { pruneOldMemories } = await import("./services/aiMemoryService");
+      await pruneOldMemories();
+      res.json({ success: true });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   app.get("/public/email-logo.png", async (req, res) => {
     try {
       const objectStorageService = new ObjectStorageService();

@@ -829,6 +829,50 @@ export const insertAiTeamMessageSchema = createInsertSchema(aiTeamMessages).omit
 export type AiTeamMessage = typeof aiTeamMessages.$inferSelect;
 export type InsertAiTeamMessage = z.infer<typeof insertAiTeamMessageSchema>;
 
+// AI Memory - learning layer for AI to remember past observations
+export const aiMemory = pgTable("ai_memory", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  type: text("type").notNull(), // 'observation', 'pattern', 'feedback', 'preference', 'performance_trend'
+  category: text("category").notNull(), // 'insights', 'retoucher_coach', 'team_chat', 'quality_gate', 'workload', 'risk', 'general'
+  content: text("content").notNull(),
+  context: jsonb("context"), // Additional structured data
+  retoucherName: text("retoucher_name"), // null for general memories
+  projectId: varchar("project_id"), // null for general memories
+  importance: integer("importance").notNull().default(5), // 1-10 scale
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+  expiresAt: timestamp("expires_at"), // null = never expires
+});
+
+export const insertAiMemorySchema = createInsertSchema(aiMemory).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type AiMemory = typeof aiMemory.$inferSelect;
+export type InsertAiMemory = z.infer<typeof insertAiMemorySchema>;
+
+// Admin Instructions - directives for AI on how to handle the team
+export const aiAdminInstructions = pgTable("ai_admin_instructions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  instruction: text("instruction").notNull(),
+  category: text("category").notNull().default("general"), // 'general', 'quality', 'deadlines', 'individual', 'communication'
+  targetRetoucher: text("target_retoucher"), // null = applies to all
+  priority: integer("priority").notNull().default(5), // 1-10
+  isActive: boolean("is_active").notNull().default(true),
+  createdBy: text("created_by").notNull(),
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+  updatedAt: timestamp("updated_at").notNull().default(sql`now()`),
+});
+
+export const insertAiAdminInstructionSchema = createInsertSchema(aiAdminInstructions).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type AiAdminInstruction = typeof aiAdminInstructions.$inferSelect;
+export type InsertAiAdminInstruction = z.infer<typeof insertAiAdminInstructionSchema>;
+
 export const AVAILABLE_WIDGETS: WidgetConfig[] = [
   { id: "daily_quote", name: "Daily Inspiration", description: "Motivational quote of the day", icon: "Quote", defaultEnabled: true, roles: ["Admin", "LeadRetoucher", "Retoucher1", "Retoucher2", "Retoucher3", "DataWrangler", "Sales", "Evans"] },
   { id: "my_tasks", name: "My Tasks", description: "Projects assigned to you", icon: "User", defaultEnabled: true, roles: ["Admin", "Retoucher1", "Retoucher2", "Retoucher3"] },

@@ -1,4 +1,5 @@
 import OpenAI from "openai";
+import { formatMemoriesForPrompt, formatAdminInstructionsForPrompt, extractAndStoreInsights } from "./aiMemoryService";
 
 const openai = new OpenAI({
   apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
@@ -111,6 +112,9 @@ export async function generateProjectInsights(projectData: {
   clientTierBreakdown: Record<string, number>;
 }): Promise<string[]> {
   try {
+    const pastMemories = await formatMemoriesForPrompt("insights");
+    const adminInstructions = await formatAdminInstructionsForPrompt();
+
     const response = await openai.chat.completions.create({
       model: "gpt-4o-mini",
       messages: [
@@ -121,8 +125,9 @@ Generate 4-6 brief, actionable insights based on the project data provided.
 Each insight should be 1-2 sentences max.
 Be specific with numbers. Use a professional but friendly tone.
 Focus on trends, alerts, and actionable observations.
+When you have past observations, compare current data against them to highlight improvements or regressions.
 Return a JSON array of strings, each being one insight.
-Do NOT use markdown. Return ONLY the JSON array.`
+Do NOT use markdown. Return ONLY the JSON array.${pastMemories}${adminInstructions}`
         },
         {
           role: "user",
@@ -144,7 +149,9 @@ Do NOT use markdown. Return ONLY the JSON array.`
 
     const insights = JSON.parse(cleaned);
     if (Array.isArray(insights)) {
-      return insights.filter((i: any) => typeof i === "string");
+      const filtered = insights.filter((i: any) => typeof i === "string");
+      extractAndStoreInsights("insights", filtered.join(". ")).catch(() => {});
+      return filtered;
     }
     return ["Unable to generate insights at this time."];
   } catch (error: any) {
@@ -163,12 +170,15 @@ export async function generateRetoucherAdvice(retoucherData: {
   avgTurnaroundDays: number | null;
 }): Promise<{ advice: string[]; encouragement: string }> {
   try {
+    const pastMemories = await formatMemoriesForPrompt("retoucher_coach", retoucherData.name);
+    const adminInstructions = await formatAdminInstructionsForPrompt(retoucherData.name);
+
     const response = await openai.chat.completions.create({
       model: "gpt-4o-mini",
       messages: [
         {
           role: "system",
-          content: "You are a supportive team lead at Jepson Myles Studio, a professional photography retouching studio. Generate personalized performance advice for a retoucher. Be encouraging but honest. Return a JSON object with two fields: 'advice' (array of 3-4 brief, actionable tips) and 'encouragement' (one motivating sentence). Do NOT use markdown. Return ONLY the JSON object."
+          content: `You are a supportive team lead at Jepson Myles Studio, a professional photography retouching studio. Generate personalized performance advice for a retoucher. Be encouraging but honest. When you have past observations about this retoucher, reference their progress — note improvements or recurring issues. Return a JSON object with two fields: 'advice' (array of 3-4 brief, actionable tips) and 'encouragement' (one motivating sentence). Do NOT use markdown. Return ONLY the JSON object.${pastMemories}${adminInstructions}`
         },
         {
           role: "user",
@@ -188,10 +198,12 @@ export async function generateRetoucherAdvice(retoucherData: {
     }
 
     const parsed = JSON.parse(cleaned);
-    return {
+    const result = {
       advice: Array.isArray(parsed.advice) ? parsed.advice : ["Keep up the great work! Check back later for personalized tips."],
       encouragement: typeof parsed.encouragement === "string" ? parsed.encouragement : "You're doing great!",
     };
+    extractAndStoreInsights("retoucher_coach", result.advice.join(". "), { retoucherName: retoucherData.name }).catch(() => {});
+    return result;
   } catch (error: any) {
     console.error(`[AI] Retoucher advice generation failed:`, error.message);
     return {
@@ -358,6 +370,8 @@ export async function aiTeamChat(context: {
 }): Promise<{ text: string; actions: { type: string; projectId: string; projectName: string }[] }> {
   try {
     const isAdmin = context.role === "Admin" || context.role === "LeadRetoucher";
+    const pastMemories = await formatMemoriesForPrompt("team_chat", isAdmin ? undefined : context.username);
+    const adminInstructions = await formatAdminInstructionsForPrompt(isAdmin ? undefined : context.username);
 
     const actionInstructions = isAdmin
       ? `\n\nACTION CAPABILITY:
@@ -367,14 +381,14 @@ Replace projectId with the actual project ID and clientName with the client name
       : "";
 
     const systemPrompt = isAdmin
-      ? `You are the AI Studio Manager at Jepson Myles Studio. Admin is asking you about team performance. You have access to project data, retoucher stats, speed metrics, and team availability. Answer questions about who hasn't done their work, suggest follow-ups, identify patterns. When admin asks who hasn't completed work, check the overdue and yesterday's incomplete data. Reference the retouching guidelines when relevant. Be direct and helpful.${actionInstructions}
+      ? `You are the AI Studio Manager at Jepson Myles Studio. Admin is asking you about team performance. You have access to project data, retoucher stats, speed metrics, and team availability. Answer questions about who hasn't done their work, suggest follow-ups, identify patterns. When admin asks who hasn't completed work, check the overdue and yesterday's incomplete data. Reference the retouching guidelines when relevant. Be direct and helpful. When you have past observations, reference them to show continuity and progress tracking.${actionInstructions}${pastMemories}${adminInstructions}
 
 PROJECT DATA:
 ${JSON.stringify(context.projectData, null, 2)}
 
 RETOUCHING GUIDELINES:
 ${context.retouchingGuidelines || "No guidelines set."}`
-      : `You are the AI Studio Assistant at Jepson Myles Studio. A retoucher is chatting with you. They may be explaining why a project was delayed or asking for guidance. Be supportive but professional. Reference the retouching guidelines when relevant. When they explain a delay, acknowledge it and note that the admin will be informed. Ask clarifying questions if needed.
+      : `You are the AI Studio Assistant at Jepson Myles Studio. A retoucher is chatting with you. They may be explaining why a project was delayed or asking for guidance. Be supportive but professional. Reference the retouching guidelines when relevant. When they explain a delay, acknowledge it and note that the admin will be informed. Ask clarifying questions if needed. When you have past observations about this retoucher, use them to provide context-aware responses.${pastMemories}${adminInstructions}
 
 PROJECT DATA:
 ${JSON.stringify(context.projectData, null, 2)}
@@ -413,6 +427,7 @@ ${context.retouchingGuidelines || "No guidelines set."}`;
 
     const cleanText = rawResponse.replace(/\[ACTION:MARK_DONE:[^\]]+\]\n?/g, "").trim();
 
+    extractAndStoreInsights("team_chat", cleanText, { retoucherName: isAdmin ? undefined : context.username }).catch(() => {});
     return { text: cleanText, actions };
   } catch (error: any) {
     console.error(`[AI] Team chat failed:`, error.message);
@@ -426,12 +441,15 @@ export async function generateDailySummaryForAdmin(context: {
   retoucherStats: { name: string; completed: number; active: number; overdue: number }[];
 }): Promise<string> {
   try {
+    const pastMemories = await formatMemoriesForPrompt("team_chat");
+    const adminInstructions = await formatAdminInstructionsForPrompt();
+
     const response = await openai.chat.completions.create({
       model: "gpt-4o-mini",
       messages: [
         {
           role: "system",
-          content: "You are the AI Studio Manager at Jepson Myles Studio. Generate a concise daily summary for the admin about yesterday's incomplete work and any explanations provided by retouchers. Highlight who didn't complete their work, any patterns, and suggest follow-up actions. Be direct and actionable. Format with clear sections using markdown-style headers.",
+          content: `You are the AI Studio Manager at Jepson Myles Studio. Generate a concise daily summary for the admin about yesterday's incomplete work and any explanations provided by retouchers. Highlight who didn't complete their work, any patterns, and suggest follow-up actions. Be direct and actionable. Format with clear sections using markdown-style headers. When you have past observations, compare against them to highlight recurring issues or improvements.${pastMemories}${adminInstructions}`,
         },
         {
           role: "user",
@@ -457,12 +475,15 @@ export async function generateWorkloadForecast(context: {
   weeklyBreakdown: { weekStart: string; projectsDue: number; newShoots: number }[];
 }): Promise<{ weeks: { weekStart: string; projectedLoad: number; capacity: number; riskLevel: 'low' | 'medium' | 'high' | 'critical'; warnings: string[] }[]; recommendations: string[]; summary: string }> {
   try {
+    const pastMemories = await formatMemoriesForPrompt("workload");
+    const adminInstructions = await formatAdminInstructionsForPrompt();
+
     const response = await openai.chat.completions.create({
       model: "gpt-4o-mini",
       messages: [
         {
           role: "system",
-          content: "You are a workforce planning AI for Jepson Myles Studio, a photography retouching studio. Analyze upcoming workload data and predict capacity crunches. For each week, assess the projected number of projects vs available capacity (considering leave and daily limits). Return a JSON object with: 'weeks' (array with weekStart, projectedLoad, capacity, riskLevel, warnings), 'recommendations' (array of 3-5 actionable suggestions), 'summary' (1-2 sentence overview). Be specific with numbers. riskLevel: 'low' = under 60% capacity, 'medium' = 60-80%, 'high' = 80-100%, 'critical' = over 100%. Do NOT use markdown. Return ONLY the JSON object."
+          content: `You are a workforce planning AI for Jepson Myles Studio, a photography retouching studio. Analyze upcoming workload data and predict capacity crunches. For each week, assess the projected number of projects vs available capacity (considering leave and daily limits). Return a JSON object with: 'weeks' (array with weekStart, projectedLoad, capacity, riskLevel, warnings), 'recommendations' (array of 3-5 actionable suggestions), 'summary' (1-2 sentence overview). Be specific with numbers. riskLevel: 'low' = under 60% capacity, 'medium' = 60-80%, 'high' = 80-100%, 'critical' = over 100%. When past observations are available, reference them to show if workload patterns are improving or worsening. Do NOT use markdown. Return ONLY the JSON object.${pastMemories}${adminInstructions}`
         },
         {
           role: "user",
@@ -483,11 +504,13 @@ export async function generateWorkloadForecast(context: {
     }
 
     const parsed = JSON.parse(cleaned);
-    return {
+    const result = {
       weeks: Array.isArray(parsed.weeks) ? parsed.weeks : [],
       recommendations: Array.isArray(parsed.recommendations) ? parsed.recommendations : [],
       summary: typeof parsed.summary === "string" ? parsed.summary : "Unable to generate forecast at this time.",
     };
+    extractAndStoreInsights("workload", result.summary + " " + result.recommendations.join(". ")).catch(() => {});
+    return result;
   } catch (error: any) {
     console.error(`[AI] Workload forecast generation failed:`, error.message);
     return {
@@ -504,12 +527,15 @@ export async function generatePredictiveRiskAlerts(context: {
   historicalPatterns: { avgCompletionDays: number; overduePercentage: number };
 }): Promise<{ alerts: { projectId: string; clientName: string; riskScore: number; riskFactors: string[]; predictedDaysLate: number; recommendation: string }[]; summary: string }> {
   try {
+    const pastMemories = await formatMemoriesForPrompt("risk");
+    const adminInstructions = await formatAdminInstructionsForPrompt();
+
     const response = await openai.chat.completions.create({
       model: "gpt-4o-mini",
       messages: [
         {
           role: "system",
-          content: "You are a predictive analytics AI for Jepson Myles Studio. Analyze active projects and predict which ones are likely to go overdue BEFORE they actually miss their deadline. Consider: retoucher's historical speed vs time remaining, current workload per retoucher, project complexity (photo count), unassigned projects approaching deadlines. Return a JSON object with: 'alerts' (array of at-risk projects sorted by riskScore descending, each with projectId, clientName, riskScore 1-100, riskFactors array, predictedDaysLate, recommendation), 'summary' (brief overview). Only include projects with riskScore > 40. Do NOT use markdown. Return ONLY the JSON object."
+          content: `You are a predictive analytics AI for Jepson Myles Studio. Analyze active projects and predict which ones are likely to go overdue BEFORE they actually miss their deadline. Consider: retoucher's historical speed vs time remaining, current workload per retoucher, project complexity (photo count), unassigned projects approaching deadlines. When past observations are available, use them to calibrate predictions (e.g., if a retoucher consistently runs late, increase risk scores). Return a JSON object with: 'alerts' (array of at-risk projects sorted by riskScore descending, each with projectId, clientName, riskScore 1-100, riskFactors array, predictedDaysLate, recommendation), 'summary' (brief overview). Only include projects with riskScore > 40. Do NOT use markdown. Return ONLY the JSON object.${pastMemories}${adminInstructions}`
         },
         {
           role: "user",
@@ -530,10 +556,12 @@ export async function generatePredictiveRiskAlerts(context: {
     }
 
     const parsed = JSON.parse(cleaned);
-    return {
+    const result = {
       alerts: Array.isArray(parsed.alerts) ? parsed.alerts : [],
       summary: typeof parsed.summary === "string" ? parsed.summary : "Unable to generate risk alerts at this time.",
     };
+    extractAndStoreInsights("risk", result.summary).catch(() => {});
+    return result;
   } catch (error: any) {
     console.error(`[AI] Predictive risk alerts generation failed:`, error.message);
     return {
@@ -578,12 +606,15 @@ export async function evaluateQualityGate(context: {
       ? " Reference images from the studio's portfolio are provided — use them as the benchmark for quality, style, and retouching standards. Photos that do not match the reference standard should score lower."
       : "";
 
+    const pastMemories = await formatMemoriesForPrompt("quality_gate");
+    const adminInstructions = await formatAdminInstructionsForPrompt();
+
     const response = await openai.chat.completions.create({
       model: "gpt-4o",
       messages: [
         {
           role: "system",
-          content: `You are a quality control AI for Jepson Myles Studio. You are the QUALITY GATE — photos must meet minimum standards before delivery to clients. Evaluate the retouched photos rigorously for: skin retouching quality, hair detail preservation, color correction accuracy, exposure consistency, composition, and overall professional standard.${referenceNote} Return a JSON object with: 'passed' (boolean, true if overallScore >= threshold), 'overallScore' (1-10, be honest and strict), 'feedback' (array of 3-5 observations), 'details' (array per photo with 'photo' name, 'score' 1-10, 'issues' array of specific problems found), 'recommendation' (what to fix if failed, or 'Approved for delivery' if passed). The threshold for this project is ${context.threshold}. Do NOT use markdown. Return ONLY the JSON object.`
+          content: `You are a quality control AI for Jepson Myles Studio. You are the QUALITY GATE — photos must meet minimum standards before delivery to clients. Evaluate the retouched photos rigorously for: skin retouching quality, hair detail preservation, color correction accuracy, exposure consistency, composition, and overall professional standard.${referenceNote} When past quality observations are available, use them to calibrate your review (e.g., if recurring issues were noted, watch for them). Return a JSON object with: 'passed' (boolean, true if overallScore >= threshold), 'overallScore' (1-10, be honest and strict), 'feedback' (array of 3-5 observations), 'details' (array per photo with 'photo' name, 'score' 1-10, 'issues' array of specific problems found), 'recommendation' (what to fix if failed, or 'Approved for delivery' if passed). The threshold for this project is ${context.threshold}. Do NOT use markdown. Return ONLY the JSON object.${pastMemories}${adminInstructions}`
         },
         {
           role: "user",
@@ -604,13 +635,15 @@ export async function evaluateQualityGate(context: {
     }
 
     const parsed = JSON.parse(cleaned);
-    return {
+    const result = {
       passed: typeof parsed.passed === "boolean" ? parsed.passed : false,
       overallScore: typeof parsed.overallScore === "number" ? parsed.overallScore : 0,
       feedback: Array.isArray(parsed.feedback) ? parsed.feedback : ["Quality gate evaluation is temporarily unavailable. Please try again later."],
       details: Array.isArray(parsed.details) ? parsed.details : [],
       recommendation: typeof parsed.recommendation === "string" ? parsed.recommendation : "Unable to evaluate. Please try again.",
     };
+    extractAndStoreInsights("quality_gate", result.feedback.join(". ") + " " + result.recommendation, { projectId: context.projectName }).catch(() => {});
+    return result;
   } catch (error: any) {
     console.error(`[AI] Quality gate evaluation failed:`, error.message);
     return {

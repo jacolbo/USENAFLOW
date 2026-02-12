@@ -2773,6 +2773,13 @@ export default function Dashboard() {
                           </DropdownMenuItem>
                         )}
 
+                        {user.role === 'Admin' && (
+                          <DropdownMenuItem onClick={() => setLocation('/ai-brain')}>
+                            <Brain className="h-4 w-4 mr-2" />
+                            AI Brain
+                          </DropdownMenuItem>
+                        )}
+
                         {/* Commissions - DataWrangler */}
                         {user.role === "DataWrangler" && (
                           <DropdownMenuItem
