@@ -4025,6 +4025,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
         retouchingGuidelines,
       });
 
+      if (aiResult.actions.filter(a => a.type === "MESSAGE_RETOUCHER").length === 0 && (role === "Admin" || role === "LeadRetoucher")) {
+        const messageIntent = /(?:send|message|follow up|check on|ask|reach out|contact).*(?:team|retoucher|member)/i.test(message);
+        if (messageIntent) {
+          const retoucherNames = retoucherStats.map((r: any) => r.name);
+          const mentionedRetouchers: { name: string; context: string }[] = [];
+          for (const name of retoucherNames) {
+            const namePattern = new RegExp(`(?:to\\s+\\*{0,2}${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\*{0,2})[:\\s]*[""]([^""]+)[""]`, 'i');
+            const match2 = namePattern.exec(aiResult.text);
+            if (match2) {
+              mentionedRetouchers.push({ name, context: match2[1] });
+            }
+          }
+          for (const r of mentionedRetouchers) {
+            aiResult.actions.push({
+              type: "MESSAGE_RETOUCHER",
+              projectId: "",
+              projectName: "",
+              targetUser: r.name,
+              messageText: r.context,
+            });
+          }
+          if (mentionedRetouchers.length > 0) {
+            console.log(`[AI Action] Auto-detected ${mentionedRetouchers.length} message intents from AI response text`);
+          }
+        }
+      }
+
       const executedActions: string[] = [];
       if (aiResult.actions.length > 0 && (role === "Admin" || role === "LeadRetoucher")) {
         for (const action of aiResult.actions) {
