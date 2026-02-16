@@ -46,6 +46,7 @@ export interface NormalizedEvent {
   start: Date;
   end: Date;
   rawPayload: any;
+  attendeeEmails: string[];
 }
 
 export interface ClassifiedEvent {
@@ -63,6 +64,7 @@ export function normalizeEvent(event: CalendarEvent): NormalizedEvent {
     start: new Date(event.start),
     end: new Date(event.end),
     rawPayload: event,
+    attendeeEmails: event.attendeeEmails || [],
   };
 }
 
@@ -181,18 +183,19 @@ export function calculateShootTrackerRiskLevel(
   return RiskLevel.SAFE;
 }
 
-// Extract email from calendar event description or location
-export function extractClientEmail(description: string, location: string = ''): string | null {
+export function extractClientEmail(description: string, location: string = '', attendeeEmails: string[] = []): string | null {
   const combined = `${description} ${location}`;
-  if (!combined.trim()) return null;
   
-  // Common email patterns in calendar notes
-  const emailPattern = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
-  const matches = combined.match(emailPattern);
+  if (combined.trim()) {
+    const emailPattern = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
+    const matches = combined.match(emailPattern);
+    if (matches && matches.length > 0) {
+      return matches[0].toLowerCase();
+    }
+  }
   
-  if (matches && matches.length > 0) {
-    // Return the first email found (lowercase)
-    return matches[0].toLowerCase();
+  if (attendeeEmails.length > 0) {
+    return attendeeEmails[0].toLowerCase();
   }
   
   return null;

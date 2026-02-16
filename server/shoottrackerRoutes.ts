@@ -239,8 +239,12 @@ export function registerShoottrackerRoutes(app: Express): void {
             
             const existing = await storage.getStagedEventByCalendarEventId(event.id);
             
-            // Extract client email from description or location
-            const clientEmail = extractClientEmail(event.description, event.location);
+            const clientEmail = extractClientEmail(event.description, event.location, event.attendeeEmails);
+            if (!clientEmail) {
+              console.log(`📅 [Sync] No email found for "${event.title}" — description: ${event.description ? 'has text' : 'empty'}, location: ${event.location ? 'has text' : 'empty'}, attendees: ${event.attendeeEmails.length}`);
+            } else {
+              console.log(`📅 [Sync] Email found for "${event.title}": ${clientEmail}`);
+            }
             
             if (existing) {
               if (existing.status === StagingStatus.IGNORED || existing.status === StagingStatus.PROMOTED) {
