@@ -247,7 +247,17 @@ export function registerShoottrackerRoutes(app: Express): void {
             }
             
             if (existing) {
-              if (existing.status === StagingStatus.IGNORED || existing.status === StagingStatus.PROMOTED) {
+              if (existing.status === StagingStatus.PROMOTED) {
+                if (clientEmail && existing.promotedProjectId) {
+                  const promotedProject = await storage.getProject(existing.promotedProjectId);
+                  if (promotedProject && !promotedProject.clientEmail) {
+                    await storage.updateProject(existing.promotedProjectId, { clientEmail });
+                    console.log(`📅 [Sync] Backfilled email ${clientEmail} to promoted project "${event.title}"`);
+                  }
+                }
+                continue;
+              }
+              if (existing.status === StagingStatus.IGNORED) {
                 continue;
               }
               await storage.updateStagedEvent(existing.id, {
