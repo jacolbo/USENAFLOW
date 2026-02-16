@@ -285,7 +285,7 @@ export async function createProjectFolderStructure(
   selectedCount: number,
   parentFolderId?: string
 ): Promise<{ mainFolder: DriveFolder; bwFolder: DriveFolder }> {
-  const folderName = `${clientName}(${selectedCount})`;
+  const folderName = `${clientName.toUpperCase()} (${selectedCount})`;
 
   const mainFolder = await createFolder(folderName, parentFolderId);
   const bwFolder = await createFolder('Black and White', mainFolder.id);
