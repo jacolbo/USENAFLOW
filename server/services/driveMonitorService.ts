@@ -7,6 +7,7 @@ import { sendGalleryPreviewEmail, sendGalleryDeliveryEmail, sendSatisfactionSurv
 import { recordFired, isEnabled } from './automationRegistry';
 
 let monitorInterval: NodeJS.Timeout | null = null;
+let scanInProgress = false;
 const MONITOR_INTERVAL_MS = 2 * 60 * 1000; // Check every 2 minutes
 
 export interface DriveMonitorResult {
@@ -124,21 +125,26 @@ export async function scanProjectFolder(project: any): Promise<DriveMonitorResul
     }
 
     if (!project.drivePreviewEmailSent && isEnabled('dm_preview_email')) {
-      const galleryLink = updateData.driveGalleryLink || project.driveGalleryLink || project.galleryLink;
-      if (galleryLink && project.clientEmail) {
-        try {
-          await sendGalleryPreviewEmail(
-            project.clientEmail,
-            project.clientName,
-            galleryLink,
-            project.id
-          );
-          updateData.drivePreviewEmailSent = true;
-          updateData.drivePreviewEmailSentAt = new Date();
-          recordFired('dm_preview_email', `Preview email sent to ${project.clientName}`);
-          console.log(`📧 Drive Monitor: Preview email (no access) sent to ${project.clientEmail} for ${project.clientName}`);
-        } catch (err: any) {
-          console.error(`📂 Drive Monitor: Failed to send preview email for ${project.clientName}: ${err.message}`);
+      const [freshProject] = await db.select({ drivePreviewEmailSent: projects.drivePreviewEmailSent }).from(projects).where(eq(projects.id, project.id));
+      if (freshProject && !freshProject.drivePreviewEmailSent) {
+        const galleryLink = updateData.driveGalleryLink || project.driveGalleryLink || project.galleryLink;
+        if (galleryLink && project.clientEmail) {
+          await db.update(projects).set({ drivePreviewEmailSent: true, drivePreviewEmailSentAt: new Date() }).where(eq(projects.id, project.id));
+          try {
+            await sendGalleryPreviewEmail(
+              project.clientEmail,
+              project.clientName,
+              galleryLink,
+              project.id
+            );
+            updateData.drivePreviewEmailSent = true;
+            updateData.drivePreviewEmailSentAt = new Date();
+            recordFired('dm_preview_email', `Preview email sent to ${project.clientName}`);
+            console.log(`📧 Drive Monitor: Preview email (no access) sent to ${project.clientEmail} for ${project.clientName}`);
+          } catch (err: any) {
+            await db.update(projects).set({ drivePreviewEmailSent: false, drivePreviewEmailSentAt: null }).where(eq(projects.id, project.id));
+            console.error(`📂 Drive Monitor: Failed to send preview email for ${project.clientName}: ${err.message} — flag reset for retry`);
+          }
         }
       }
     }
@@ -333,6 +339,8 @@ async function executeDeliveryOnPublic(project: any, updateData: any, result: Dr
     }
 
     try {
+      await db.update(projects).set({ driveDeliveryEmailSent: true, driveDeliveryEmailSentAt: new Date(), deliveryEmailSentAt: new Date() }).where(eq(projects.id, project.id));
+
       const emailResult = await sendGalleryDeliveryEmail(
         project.clientEmail,
         project.clientName,
@@ -346,8 +354,12 @@ async function executeDeliveryOnPublic(project: any, updateData: any, result: Dr
         updateData.deliveryEmailSentAt = new Date();
         recordFired('dm_delivery_email', `Delivery email sent to ${project.clientName}`);
         console.log(`📧 Drive Monitor: Delivery email (with access) sent to ${project.clientEmail} for ${project.clientName}`);
+      } else {
+        await db.update(projects).set({ driveDeliveryEmailSent: false, driveDeliveryEmailSentAt: null }).where(eq(projects.id, project.id));
+        console.error(`📂 Drive Monitor: Delivery email failed for ${project.clientName} — flag reset for retry`);
       }
     } catch (emailError) {
+      await db.update(projects).set({ driveDeliveryEmailSent: false, driveDeliveryEmailSentAt: null }).where(eq(projects.id, project.id));
       console.error(`[Email] Error sending delivery email for ${project.clientName}:`, emailError);
     }
 
@@ -388,13 +400,19 @@ export function startDriveMonitor() {
 
   monitorInterval = setInterval(async () => {
     if (!isEnabled('bg_drive_monitor')) {
-      console.log('📂 Drive Monitor: Skipping scan (disabled via Automation Hub)');
+      return;
+    }
+    if (scanInProgress) {
+      console.log('📂 Drive Monitor: Previous scan still running, skipping this cycle');
       return;
     }
     try {
+      scanInProgress = true;
       await scanAllProjectFolders();
     } catch (error: any) {
       console.error(`📂 Drive Monitor error: ${error.message}`);
+    } finally {
+      scanInProgress = false;
     }
   }, MONITOR_INTERVAL_MS);
 }
