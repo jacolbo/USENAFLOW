@@ -711,49 +711,72 @@ export default function EditorChat() {
                   </div>
                 ) : (
                   <div className="space-y-3">
-                    {messagesQuery.data?.map((msg) => {
+                    {messagesQuery.data?.map((msg, idx, arr) => {
+                      const msgDate = new Date(msg.createdAt);
+                      const dateStr = format(msgDate, "EEEE, MMM d, yyyy");
+                      const prevMsg = idx > 0 ? arr[idx - 1] : null;
+                      const showDateSeparator = !prevMsg || format(new Date(prevMsg.createdAt), "yyyy-MM-dd") !== format(msgDate, "yyyy-MM-dd");
+                      const timeLabel = format(msgDate, "MMM d, h:mm a");
+
                       if (msg.senderType === "system") {
                         return (
-                          <div key={msg.id} className="flex justify-center my-1">
-                            <div className="bg-blue-50 dark:bg-blue-950/30 border border-blue-100 dark:border-blue-900 rounded-lg px-3 py-1.5 max-w-[80%]">
-                              <div className="flex items-center gap-1.5">
-                                <Bot className="h-3 w-3 text-blue-500" />
-                                <span className="text-xs text-blue-600 dark:text-blue-400">{decryptedMessages.get(msg.id) || msg.message}</span>
+                          <div key={msg.id}>
+                            {showDateSeparator && (
+                              <div className="flex items-center gap-2 my-3">
+                                <div className="flex-1 border-t" />
+                                <span className="text-xs text-muted-foreground px-2">{dateStr}</span>
+                                <div className="flex-1 border-t" />
                               </div>
-                              <p className="text-[10px] text-blue-400 mt-0.5">
-                                {format(new Date(msg.createdAt), "h:mm a")}
-                              </p>
+                            )}
+                            <div className="flex justify-center my-1">
+                              <div className="bg-blue-50 dark:bg-blue-950/30 border border-blue-100 dark:border-blue-900 rounded-lg px-3 py-1.5 max-w-[80%]">
+                                <div className="flex items-center gap-1.5">
+                                  <Bot className="h-3 w-3 text-blue-500" />
+                                  <span className="text-xs text-blue-600 dark:text-blue-400">{decryptedMessages.get(msg.id) || msg.message}</span>
+                                </div>
+                                <p className="text-[10px] text-blue-400 mt-0.5">
+                                  {timeLabel}
+                                </p>
+                              </div>
                             </div>
                           </div>
                         );
                       }
                       return (
-                        <div
-                          key={msg.id}
-                          className={`flex ${msg.senderType === "retoucher" ? "justify-end" : "justify-start"}`}
-                        >
+                        <div key={msg.id}>
+                          {showDateSeparator && (
+                            <div className="flex items-center gap-2 my-3">
+                              <div className="flex-1 border-t" />
+                              <span className="text-xs text-muted-foreground px-2">{dateStr}</span>
+                              <div className="flex-1 border-t" />
+                            </div>
+                          )}
                           <div
-                            className={`max-w-[70%] rounded-2xl px-4 py-2 ${
-                              msg.senderType === "retoucher"
-                                ? "bg-primary text-primary-foreground rounded-br-md"
-                                : "bg-muted rounded-bl-md"
-                            }`}
+                            className={`flex ${msg.senderType === "retoucher" ? "justify-end" : "justify-start"}`}
                           >
-                            {msg.message && <p className="text-sm whitespace-pre-wrap">{decryptedMessages.get(msg.id) || msg.message}</p>}
-                            {msg.attachmentUrl && msg.attachmentType && (
-                              <AttachmentPreview 
-                                url={msg.attachmentUrl} 
-                                type={msg.attachmentType} 
-                                name={msg.attachmentName}
-                              />
-                            )}
-                            <div className={`text-xs mt-1 flex items-center gap-1 ${
-                              msg.senderType === "retoucher" ? "text-primary-foreground/70" : "text-muted-foreground"
-                            }`}>
-                              {format(new Date(msg.createdAt), "h:mm a")}
-                              {msg.channel && msg.channel !== "web" && (
-                                <span className="ml-1">via {msg.channel}</span>
+                            <div
+                              className={`max-w-[70%] rounded-2xl px-4 py-2 ${
+                                msg.senderType === "retoucher"
+                                  ? "bg-primary text-primary-foreground rounded-br-md"
+                                  : "bg-muted rounded-bl-md"
+                              }`}
+                            >
+                              {msg.message && <p className="text-sm whitespace-pre-wrap">{decryptedMessages.get(msg.id) || msg.message}</p>}
+                              {msg.attachmentUrl && msg.attachmentType && (
+                                <AttachmentPreview 
+                                  url={msg.attachmentUrl} 
+                                  type={msg.attachmentType} 
+                                  name={msg.attachmentName}
+                                />
                               )}
+                              <div className={`text-xs mt-1 flex items-center gap-1 ${
+                                msg.senderType === "retoucher" ? "text-primary-foreground/70" : "text-muted-foreground"
+                              }`}>
+                                {timeLabel}
+                                {msg.channel && msg.channel !== "web" && (
+                                  <span className="ml-1">via {msg.channel}</span>
+                                )}
+                              </div>
                             </div>
                           </div>
                         </div>
