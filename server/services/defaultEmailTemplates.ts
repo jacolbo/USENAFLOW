@@ -243,6 +243,29 @@ export const DEFAULT_EMAIL_TEMPLATES: InsertEmailTemplate[] = [
     availableVariables: ["clientName", "weekStartText", "weekEndText", "emailHeader"],
     isCustomized: false,
   },
+  {
+    templateKey: "gallery_preview",
+    name: "Gallery Preview (Pre-Delivery)",
+    subject: "Your Photos Are Almost Ready! - Jepson Myles Studio",
+    htmlBody: `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+  {{emailHeader}}
+  <p style="color: #333; font-size: 16px; line-height: 1.6;">Dear {{clientName}},</p>
+  <div style="background: linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%); border-radius: 12px; padding: 25px; margin: 25px 0; text-align: center;">
+    <p style="color: #e65100; font-size: 20px; line-height: 1.6; margin: 0; font-weight: bold;">Great News!</p>
+    <p style="color: #333; font-size: 16px; line-height: 1.6; margin: 10px 0 0 0;">Your retouched photos have been completed and are going through our final quality review.</p>
+  </div>
+  <p style="color: #333; font-size: 16px; line-height: 1.6;">We'll send you another email shortly with full access to view and download your photos. This is just a heads-up that your gallery is being prepared!</p>
+  <div style="background: #f8f8f8; border-radius: 8px; padding: 15px 20px; margin: 25px 0;">
+    <p style="color: #555; font-size: 14px; line-height: 1.6; margin: 0;"><strong>Your Gallery Link (access coming soon):</strong><br><a href="{{galleryLink}}" style="color: #e91e63; word-break: break-all;">{{galleryLink}}</a></p>
+  </div>
+  <p style="color: #333; font-size: 16px; line-height: 1.6;">Thank you for your patience! We want to make sure everything is perfect before you see your photos.</p>
+  <p style="color: #333; font-size: 16px; line-height: 1.6;">Warm regards,<br><strong>The Jepson Myles Studio Team</strong></p>
+  <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;">
+  <p style="color: #999; font-size: 12px; text-align: center;">This is an automated message from Jepson Myles Studio.<br>If you have any questions, please reply to this email.</p>
+</div>`,
+    availableVariables: ["clientName", "galleryLink", "emailHeader"],
+    isCustomized: false,
+  },
 ];
 
 export async function seedDefaultTemplates(storage: IStorage) {
