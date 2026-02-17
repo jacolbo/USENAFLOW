@@ -25,26 +25,6 @@ export interface DriveMonitorResult {
 export async function scanAllProjectFolders(): Promise<DriveMonitorResult[]> {
   const results: DriveMonitorResult[] = [];
 
-  const projectsMissingFolders = await db
-    .select()
-    .from(projects)
-    .where(and(
-      isNull(projects.driveFolderId),
-      not(inArray(projects.status, ['Delivered', 'Done']))
-    ));
-
-  for (const project of projectsMissingFolders) {
-    try {
-      const folderResult = await createDriveFolderForProject(project.id);
-      if (folderResult) {
-        console.log(`📁 Drive Monitor: Auto-recovered missing folder for ${project.clientName}`);
-        recordFired('bg_drive_monitor', `Auto-created missing folder for ${project.clientName}`);
-      }
-    } catch (err: any) {
-      console.error(`📁 Drive Monitor: Failed to auto-create folder for ${project.clientName}: ${err.message}`);
-    }
-  }
-
   const projectsWithFolders = await db
     .select()
     .from(projects)
