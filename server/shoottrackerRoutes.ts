@@ -1514,5 +1514,38 @@ export function registerShoottrackerRoutes(app: Express): void {
   startDelayNotificationScheduler();
   console.log("✅ Delay notification scheduler started");
 
+  async function autoArchiveDeliveredChats() {
+    try {
+      const allProjects = await storage.getProjectsWithUnreadCounts(undefined, false);
+      const now = new Date();
+      const sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
+      let archived = 0;
+
+      for (const { project } of allProjects) {
+        if (project.deliveredAt && !project.chatArchived) {
+          const deliveredDate = new Date(project.deliveredAt);
+          if (now.getTime() - deliveredDate.getTime() >= sevenDaysMs) {
+            await storage.updateProject(project.id, {
+              chatArchived: true,
+              chatArchivedAt: new Date(),
+              chatArchivedBy: "system",
+            });
+            archived++;
+          }
+        }
+      }
+
+      if (archived > 0) {
+        console.log(`[AutoArchive] Archived ${archived} chats (7+ days after delivery)`);
+      }
+    } catch (error) {
+      console.error("[AutoArchive] Error:", error);
+    }
+  }
+
+  autoArchiveDeliveredChats();
+  setInterval(autoArchiveDeliveredChats, 6 * 60 * 60 * 1000);
+  console.log("✅ Auto-archive scheduler started (every 6 hours)");
+
   console.log("✅ ShootTracker routes registered");
 }

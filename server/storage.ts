@@ -84,7 +84,7 @@ export interface IStorage {
   getMessagesByProject(projectId: string): Promise<ClientMessage[]>;
   createClientMessage(message: InsertClientMessage): Promise<ClientMessage>;
   markMessagesAsRead(projectId: string, senderType: string): Promise<number>;
-  getProjectsWithUnreadCounts(assignedTo?: string, archived?: boolean): Promise<Array<{ project: Project; unreadCount: number; lastMessageAt: Date | null }>>;
+  getProjectsWithUnreadCounts(assignedTo?: string, archived?: boolean): Promise<Array<{ project: Project; unreadCount: number; lastMessageAt: Date | null; lastSenderType: string | null }>>;
   
   // Dashboard preferences methods
   getDashboardPreferences(userId: string): Promise<DashboardPreferences | undefined>;
@@ -755,7 +755,7 @@ export class MemStorage implements IStorage {
     return 0;
   }
   
-  async getProjectsWithUnreadCounts(assignedTo?: string): Promise<Array<{ project: Project; unreadCount: number; lastMessageAt: Date | null }>> {
+  async getProjectsWithUnreadCounts(assignedTo?: string): Promise<Array<{ project: Project; unreadCount: number; lastMessageAt: Date | null; lastSenderType: string | null }>> {
     return [];
   }
   
@@ -1471,7 +1471,7 @@ export class DatabaseStorage implements IStorage {
     return result.rowCount || 0;
   }
   
-  async getProjectsWithUnreadCounts(assignedTo?: string, archived: boolean = false): Promise<Array<{ project: Project; unreadCount: number; lastMessageAt: Date | null }>> {
+  async getProjectsWithUnreadCounts(assignedTo?: string, archived: boolean = false): Promise<Array<{ project: Project; unreadCount: number; lastMessageAt: Date | null; lastSenderType: string | null }>> {
     let assignedCondition;
     if (archived) {
       assignedCondition = assignedTo
@@ -1487,7 +1487,8 @@ export class DatabaseStorage implements IStorage {
       SELECT 
         p.*,
         COALESCE(SUM(CASE WHEN cm.sender_type = 'client' AND cm.is_read = false THEN 1 ELSE 0 END), 0)::int as unread_count,
-        MAX(cm.created_at) as last_message_at
+        MAX(cm.created_at) as last_message_at,
+        (SELECT sender_type FROM client_messages WHERE project_id = p.id ORDER BY created_at DESC LIMIT 1) as last_sender_type
       FROM projects p
       LEFT JOIN client_messages cm ON p.id = cm.project_id
       WHERE ${assignedCondition}
@@ -1495,7 +1496,7 @@ export class DatabaseStorage implements IStorage {
       ORDER BY last_message_at DESC NULLS LAST, unread_count DESC
     `);
     
-    const result: Array<{ project: Project; unreadCount: number; lastMessageAt: Date | null }> = [];
+    const result: Array<{ project: Project; unreadCount: number; lastMessageAt: Date | null; lastSenderType: string | null }> = [];
     
     for (const row of aggregateQuery.rows as any[]) {
       const project: Project = {
@@ -1573,6 +1574,7 @@ export class DatabaseStorage implements IStorage {
         project,
         unreadCount: Number(row.unread_count || 0),
         lastMessageAt: row.last_message_at ? new Date(row.last_message_at) : null,
+        lastSenderType: row.last_sender_type || null,
       });
     }
     
