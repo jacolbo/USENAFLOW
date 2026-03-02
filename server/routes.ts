@@ -17,6 +17,7 @@ import { insertLeaveRequestSchema } from "@shared/schema";
 import { seedDefaultTemplates } from "./services/defaultEmailTemplates";
 import { VipTier } from "@shared/schema";
 import { sendStatusUpdateMessage } from './services/chatAutoResponder';
+import { scheduleEmail } from './services/emailQueue';
 import { verifyAdminRequest } from './middleware/adminAuth';
 
 // Global WebSocket connections store
@@ -1104,77 +1105,84 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       if (wasJustAssigned && oldProject?.clientEmail && validatedData.assignedTo) {
         const assignedToRetoucher = validatedData.assignedTo;
-        console.log(`[Email] Project ${project.clientName} was just assigned to ${assignedToRetoucher}, sending welcome email to ${oldProject.clientEmail}`);
-        
-        try {
-          // Get the retoucher's display name
-          const retoucherUser = await storage.getUserByUsername(assignedToRetoucher);
-          const retoucherDisplayName = retoucherUser?.username || assignedToRetoucher;
-          
-          // Check for existing valid token, reuse if available
-          let chatToken: string;
-          const existingToken = await storage.getClientAuthTokenByProjectId(project.id);
-          
-          if (existingToken && new Date(existingToken.expiresAt) > new Date()) {
-            chatToken = existingToken.token;
-            console.log(`[Email] Reusing existing chat token for project ${project.id}`);
-          } else {
-            chatToken = generateToken();
-            const expiresAt = new Date();
-            expiresAt.setDate(expiresAt.getDate() + 30);
-            
-            await storage.createClientAuthToken({
-              token: chatToken,
-              projectId: project.id,
-              email: oldProject.clientEmail,
-              expiresAt,
-            });
-            console.log(`[Email] Created new chat token for project ${project.id}`);
+        const capturedClientEmail = oldProject.clientEmail;
+        const capturedClientName = project.clientName;
+        const capturedProjectId = project.id;
+        console.log(`[Email] Project ${capturedClientName} assigned to ${assignedToRetoucher} — queuing chat link email (30 min delay)`);
+
+        scheduleEmail(`${capturedProjectId}:chat-link`, 30 * 60 * 1000, async () => {
+          try {
+            const retoucherUser = await storage.getUserByUsername(assignedToRetoucher);
+            const retoucherDisplayName = retoucherUser?.username || assignedToRetoucher;
+
+            let chatToken: string;
+            const existingToken = await storage.getClientAuthTokenByProjectId(capturedProjectId);
+
+            if (existingToken && new Date(existingToken.expiresAt) > new Date()) {
+              chatToken = existingToken.token;
+              console.log(`[Email] Reusing existing chat token for project ${capturedProjectId}`);
+            } else {
+              chatToken = generateToken();
+              const expiresAt = new Date();
+              expiresAt.setDate(expiresAt.getDate() + 30);
+              await storage.createClientAuthToken({
+                token: chatToken,
+                projectId: capturedProjectId,
+                email: capturedClientEmail,
+                expiresAt,
+              });
+              console.log(`[Email] Created new chat token for project ${capturedProjectId}`);
+            }
+
+            console.log(`[Email] Sending deferred chat link email: client=${capturedClientName}, retoucher=${retoucherDisplayName}`);
+            const emailResult = await sendChatLinkEmail(
+              capturedClientEmail,
+              capturedClientName,
+              retoucherDisplayName,
+              capturedProjectId,
+              chatToken
+            );
+            if (emailResult.success) {
+              console.log(`[Email] Successfully sent chat link email to ${capturedClientEmail}`);
+            } else {
+              console.error(`[Email] Failed to send chat link email: ${emailResult.error}`);
+            }
+          } catch (emailError) {
+            console.error('[Email] Error sending deferred chat link email:', emailError);
           }
-          
-          console.log(`[Email] Sending chat link email: client=${project.clientName}, retoucher=${retoucherDisplayName}`);
-          
-          const emailResult = await sendChatLinkEmail(
-            oldProject.clientEmail,
-            project.clientName,
-            retoucherDisplayName,
-            project.id,
-            chatToken
-          );
-          
-          if (emailResult.success) {
-            console.log(`[Email] Successfully sent chat link email to ${oldProject.clientEmail}`);
-          } else {
-            console.error(`[Email] Failed to send chat link email: ${emailResult.error}`);
-          }
-        } catch (emailError) {
-          console.error('[Email] Error sending chat link email:', emailError);
-        }
+        });
       }
 
-      // Check if dueDate was changed - send scheduling notification
+      // Check if dueDate was changed - send scheduling notification (30 min delay)
       if (validatedData.dueDate && oldProject && oldProject.clientEmail) {
         const oldDue = oldProject.dueDate ? new Date(oldProject.dueDate).toDateString() : null;
         const newDue = new Date(validatedData.dueDate).toDateString();
         if (oldDue !== newDue) {
-          try {
-            const dueDate = new Date(validatedData.dueDate);
-            const weekStart = new Date(dueDate);
-            weekStart.setDate(dueDate.getDate() - dueDate.getDay() + 1); // Monday
-            const weekEnd = new Date(weekStart);
-            weekEnd.setDate(weekStart.getDate() + 4); // Friday
+          const capturedClientEmail = oldProject.clientEmail;
+          const capturedClientName = project.clientName;
+          const capturedProjectId = project.id;
+          const dueDate = new Date(validatedData.dueDate);
+          const weekStart = new Date(dueDate);
+          weekStart.setDate(dueDate.getDate() - dueDate.getDay() + 1); // Monday
+          const weekEnd = new Date(weekStart);
+          weekEnd.setDate(weekStart.getDate() + 4); // Friday
 
-            await sendSchedulingNotificationEmail(
-              oldProject.clientEmail,
-              project.clientName,
-              weekStart,
-              weekEnd,
-              project.id
-            );
-            console.log(`[Email] Scheduling notification sent to ${oldProject.clientEmail} for project ${project.clientName}`);
-          } catch (emailError) {
-            console.error('[Email] Error sending scheduling notification:', emailError);
-          }
+          console.log(`[Email] Delivery week changed for ${capturedClientName} — queuing scheduling notification (30 min delay)`);
+
+          scheduleEmail(`${capturedProjectId}:scheduling`, 30 * 60 * 1000, async () => {
+            try {
+              await sendSchedulingNotificationEmail(
+                capturedClientEmail,
+                capturedClientName,
+                weekStart,
+                weekEnd,
+                capturedProjectId
+              );
+              console.log(`[Email] Deferred scheduling notification sent to ${capturedClientEmail} for project ${capturedClientName}`);
+            } catch (emailError) {
+              console.error('[Email] Error sending deferred scheduling notification:', emailError);
+            }
+          });
         }
       }
 
@@ -1224,58 +1232,55 @@ export async function registerRoutes(app: Express): Promise<Server> {
         };
         broadcastNotification(notification, assignedTo);
         
-        // Send welcome email to client with chat link (if client has email)
+        // Queue welcome email to client with chat link (30 min delay)
         console.log(`[Email Debug] Checking email conditions: clientEmail=${project.clientEmail}, updatedProject=${!!updatedProject}`);
         if (project.clientEmail && updatedProject) {
-          console.log(`[Email Debug] Conditions met, attempting to send welcome email to ${project.clientEmail}`);
-          try {
-            // Get the retoucher's name (username is the display name in this system)
-            const retoucherUser = await storage.getUserByUsername(assignedTo);
-            const retoucherDisplayName = retoucherUser?.username || assignedTo;
-            console.log(`[Email Debug] Retoucher display name: ${retoucherDisplayName}`);
-            
-            // Check for existing valid token, reuse if available
-            let chatToken: string;
-            const existingToken = await storage.getClientAuthTokenByProjectId(project.id);
-            
-            if (existingToken && new Date(existingToken.expiresAt) > new Date()) {
-              // Reuse existing valid token
-              chatToken = existingToken.token;
-            } else {
-              // Generate new chat token
-              chatToken = generateToken();
-              const expiresAt = new Date();
-              expiresAt.setDate(expiresAt.getDate() + 30); // 30 days expiry
-              
-              // Store the chat token
-              await storage.createClientAuthToken({
-                token: chatToken,
-                projectId: project.id,
-                email: project.clientEmail,
-                expiresAt,
-              });
+          const capturedClientEmail = project.clientEmail;
+          const capturedClientName = project.clientName;
+          const capturedProjectId = project.id;
+          const capturedAssignedTo = assignedTo;
+          console.log(`[Email] Project ${capturedClientName} assigned to ${capturedAssignedTo} — queuing chat link email (30 min delay)`);
+
+          scheduleEmail(`${capturedProjectId}:chat-link`, 30 * 60 * 1000, async () => {
+            try {
+              const retoucherUser = await storage.getUserByUsername(capturedAssignedTo);
+              const retoucherDisplayName = retoucherUser?.username || capturedAssignedTo;
+              console.log(`[Email Debug] Retoucher display name: ${retoucherDisplayName}`);
+
+              let chatToken: string;
+              const existingToken = await storage.getClientAuthTokenByProjectId(capturedProjectId);
+
+              if (existingToken && new Date(existingToken.expiresAt) > new Date()) {
+                chatToken = existingToken.token;
+              } else {
+                chatToken = generateToken();
+                const expiresAt = new Date();
+                expiresAt.setDate(expiresAt.getDate() + 30);
+                await storage.createClientAuthToken({
+                  token: chatToken,
+                  projectId: capturedProjectId,
+                  email: capturedClientEmail,
+                  expiresAt,
+                });
+              }
+
+              console.log(`[Email Debug] Sending deferred chat link email: email=${capturedClientEmail}, client=${capturedClientName}, retoucher=${retoucherDisplayName}`);
+              const emailResult = await sendChatLinkEmail(
+                capturedClientEmail,
+                capturedClientName,
+                retoucherDisplayName,
+                capturedProjectId,
+                chatToken
+              );
+              if (emailResult.success) {
+                console.log(`[Email] Sent deferred chat link email to ${capturedClientEmail} for project ${capturedClientName} (retoucher: ${retoucherDisplayName})`);
+              } else {
+                console.error(`[Email] Failed to send deferred chat link email: ${emailResult.error}`);
+              }
+            } catch (emailError) {
+              console.error('[Email] Failed to send deferred chat link email:', emailError);
             }
-            
-            console.log(`[Email Debug] Calling sendChatLinkEmail with: email=${project.clientEmail}, client=${project.clientName}, retoucher=${retoucherDisplayName}`);
-            
-            const emailResult = await sendChatLinkEmail(
-              project.clientEmail,
-              project.clientName,
-              retoucherDisplayName,
-              project.id,
-              chatToken
-            );
-            
-            console.log(`[Email Debug] sendChatLinkEmail result:`, JSON.stringify(emailResult));
-            
-            if (emailResult.success) {
-              console.log(`[Email] Sent chat link email to ${project.clientEmail} for project ${project.clientName} (retoucher: ${retoucherDisplayName})`);
-            } else {
-              console.error(`[Email] Failed to send chat link email: ${emailResult.error}`);
-            }
-          } catch (emailError) {
-            console.error('[Email] Failed to send chat link email:', emailError);
-          }
+          });
         }
       }
 
