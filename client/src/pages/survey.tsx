@@ -128,7 +128,7 @@ export default function SurveyPage() {
                   className="w-full bg-pink-600 hover:bg-pink-700 disabled:opacity-40 disabled:cursor-not-allowed"
                   disabled={feedback ? !copied : false}
                   onClick={() => {
-                    window.open("https://www.google.com/search?q=Jepson+Myles+Studio+reviews", "_blank", "noopener,noreferrer");
+                    window.open("https://maps.app.goo.gl/w5KHWMKSc3YAphnt6", "_blank", "noopener,noreferrer");
                   }}
                 >
                   <ExternalLink className="h-4 w-4 mr-2" />
