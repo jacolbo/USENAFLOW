@@ -91,53 +91,49 @@ export default function SurveyPage() {
               We truly appreciate your feedback. It helps us continue delivering the best experience possible.
             </p>
             {showGoogleReview && (
-              <div className="mt-6 p-4 bg-pink-50 rounded-lg space-y-4">
-                <p className="text-gray-700">
-                  We're thrilled you had a great experience! Would you mind sharing your thoughts on Google?
-                </p>
+              <div className="mt-6 rounded-xl border-2 border-amber-300 bg-amber-50 p-5 space-y-4">
+                <div className="text-center space-y-1">
+                  <p className="text-base font-semibold text-amber-900">
+                    We'd love this on Google—just copy below and paste there, takes 30 seconds.
+                  </p>
+                </div>
                 {feedback && (
-                  <div className="bg-white rounded-md p-3 border border-pink-200">
-                    <p className="text-xs text-gray-500 mb-1">Your review (tap to copy)</p>
-                    <p className="text-sm text-gray-700 italic">"{feedback}"</p>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="mt-2 text-xs"
-                      onClick={() => {
-                        navigator.clipboard.writeText(feedback);
-                        setCopied(true);
-                        setTimeout(() => setCopied(false), 2000);
-                      }}
-                    >
-                      {copied ? (
-                        <>
-                          <Check className="h-3 w-3 mr-1 text-green-600" />
-                          Copied!
-                        </>
-                      ) : (
-                        <>
-                          <Copy className="h-3 w-3 mr-1" />
-                          Copy your review
-                        </>
-                      )}
-                    </Button>
+                  <div className="bg-white rounded-lg p-4 border border-amber-200 shadow-sm">
+                    <p className="text-sm text-gray-700 italic leading-relaxed">"{feedback}"</p>
                   </div>
                 )}
-                <a
-                  href="https://www.google.com/search?q=Jepson+Myles+Studio+reviews"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  <Button className="w-full bg-pink-600 hover:bg-pink-700">
-                    <ExternalLink className="h-4 w-4 mr-2" />
-                    {feedback ? "Paste your review on Google" : "Leave a Google Review"}
-                  </Button>
-                </a>
                 {feedback && (
-                  <p className="text-xs text-gray-500 text-center">
-                    Tap "Copy your review" above, then paste it on the Google page
-                  </p>
+                  <Button
+                    variant="outline"
+                    className={`w-full border-2 transition-all ${copied ? "border-green-500 text-green-700 bg-green-50" : "border-amber-400 text-amber-800 hover:bg-amber-100"}`}
+                    onClick={() => {
+                      navigator.clipboard.writeText(feedback);
+                      setCopied(true);
+                    }}
+                  >
+                    {copied ? (
+                      <>
+                        <Check className="h-4 w-4 mr-2 text-green-600" />
+                        Copied!
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="h-4 w-4 mr-2" />
+                        Copy Review
+                      </>
+                    )}
+                  </Button>
                 )}
+                <Button
+                  className="w-full bg-pink-600 hover:bg-pink-700 disabled:opacity-40 disabled:cursor-not-allowed"
+                  disabled={feedback ? !copied : false}
+                  onClick={() => {
+                    window.open("https://www.google.com/search?q=Jepson+Myles+Studio+reviews", "_blank", "noopener,noreferrer");
+                  }}
+                >
+                  <ExternalLink className="h-4 w-4 mr-2" />
+                  Paste review on Google
+                </Button>
               </div>
             )}
           </CardContent>
