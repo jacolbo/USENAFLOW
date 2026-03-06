@@ -185,14 +185,14 @@ export const DEFAULT_EMAIL_TEMPLATES: InsertEmailTemplate[] = [
     subject: "How Was Your Experience? - Jepson Myles Studio",
     htmlBody: `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
   {{emailHeader}}
-  <p style="color: #333; font-size: 16px; line-height: 1.6;">Dear {{clientName}},</p>
-  <p style="color: #333; font-size: 16px; line-height: 1.6;">We hope you're enjoying your beautiful photos! We'd love to hear about your experience with Jepson Myles Studio.</p>
-  <p style="color: #333; font-size: 16px; line-height: 1.6;">Your feedback helps us improve and continue delivering the best possible service. It only takes a minute!</p>
+  <p style="color: #333; font-size: 16px; line-height: 1.6;">Hey {{clientName}},</p>
+  <p style="color: #333; font-size: 16px; line-height: 1.6;">Hope you're well! Dive into the review and let me know your thoughts. Bonus points for creativity here and there 👀</p>
   <div style="text-align: center; margin: 30px 0;">
     <a href="{{surveyUrl}}" style="display: inline-block; background: #e91e63; color: white; text-decoration: none; padding: 16px 48px; border-radius: 30px; font-weight: bold; font-size: 18px; letter-spacing: 0.5px;">Share Your Feedback</a>
   </div>
-  <p style="color: #333; font-size: 16px; line-height: 1.6;">Thank you for being a valued client. We truly appreciate your time and your trust in us.</p>
-  <p style="color: #333; font-size: 16px; line-height: 1.6;">Warm regards,<br><strong>The Jepson Myles Studio Team</strong></p>
+  <p style="color: #333; font-size: 16px; line-height: 1.6;">And, by the way, we are not just open to constructive criticism; we are also open to crushing... on positive feedback! 😄</p>
+  <p style="color: #333; font-size: 16px; line-height: 1.6;">We love it when you tag us and I re-share so please do — and please stay away from posting screenshots. Call us, we are open to making sure you download the high resolution images.</p>
+  <p style="color: #333; font-size: 16px; line-height: 1.6;">Cheers,<br><strong>Jepson Myles Team</strong></p>
   <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;">
   <p style="color: #999; font-size: 12px; text-align: center;">This is an automated message from Jepson Myles Studio.</p>
 </div>`,
