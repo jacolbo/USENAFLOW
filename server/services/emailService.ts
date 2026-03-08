@@ -5,7 +5,6 @@ import { emailLogs, projects, EmailType, type EmailTypeValue } from '@shared/sch
 import { eq } from 'drizzle-orm';
 import { formatDateYMD } from './shoottrackerEngine';
 import { sendEmail as sendGmailEmail, getMyEmailAddress } from './gmailService';
-import { rephraseEmailHtml } from './aiService';
 
 let connectionSettings: any;
 
@@ -202,11 +201,15 @@ export function renderTemplate(template: string, variables: Record<string, strin
 }
 
 async function aiRephrase(html: string, clientName: string): Promise<string> {
-  try {
-    return await rephraseEmailHtml(html, clientName);
-  } catch {
-    return html;
-  }
+  const hash = clientName.split('').reduce((acc, c) => acc + c.charCodeAt(0), 0);
+  const greetings = ['Hi', 'Hello', 'Dear'];
+  const signoffs = ['Warm regards', 'Best wishes', 'Kind regards', 'With care'];
+  const chosenGreeting = greetings[hash % greetings.length];
+  const chosenSignoff = signoffs[(hash + 1) % signoffs.length];
+  let result = html;
+  result = result.replace(/(?<=>|\s)(Hi|Hello|Dear)(?=\s+[A-Z])/g, chosenGreeting);
+  result = result.replace(/\b(Warm regards|Best wishes|Kind regards|With love)\b/g, chosenSignoff);
+  return result;
 }
 
 async function getTemplate(templateKey: string): Promise<{ subject: string; htmlBody: string } | null> {
