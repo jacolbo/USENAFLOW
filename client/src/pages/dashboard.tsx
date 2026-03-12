@@ -1982,7 +1982,7 @@ function EmailTemplatesEditor() {
     setShowPreview(false);
     setTimeout(() => {
       if (editorRef.current) {
-        editorRef.current.innerHTML = template.htmlBody;
+        editorRef.current.innerHTML = DOMPurify.sanitize(template.htmlBody);
       }
     }, 0);
   };
