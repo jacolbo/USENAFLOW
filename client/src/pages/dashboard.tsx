@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from "react";
+import DOMPurify from "dompurify";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { motion, AnimatePresence } from "framer-motion";
@@ -2215,7 +2216,7 @@ function EmailTemplatesEditor() {
                   setEditorMode("visual");
                   setTimeout(() => {
                     if (editorRef.current) {
-                      editorRef.current.innerHTML = editBody;
+                      editorRef.current.innerHTML = DOMPurify.sanitize(editBody);
                     }
                   }, 0);
                 }}
