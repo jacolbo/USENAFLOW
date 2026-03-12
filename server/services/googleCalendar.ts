@@ -53,7 +53,6 @@ async function getAccessToken() {
   if (data.items && data.items.length > 0) {
     console.log(`📅 [DEBUG] First connection:`);
     console.log(`   - Has settings: ${!!data.items[0]?.settings}`);
-    console.log(`   - Has access_token: ${!!data.items[0]?.settings?.access_token}`);
   } else {
     console.log(`📅 [DEBUG] Raw response (first 500 chars): ${JSON.stringify(data).substring(0, 500)}`);
   }
