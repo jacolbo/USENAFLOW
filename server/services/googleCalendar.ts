@@ -54,7 +54,6 @@ async function getAccessToken() {
     console.log(`📅 [DEBUG] First connection:`);
     console.log(`   - Has settings: ${!!data.items[0]?.settings}`);
     console.log(`   - Has access_token: ${!!data.items[0]?.settings?.access_token}`);
-    console.log(`   - Has oauth.credentials: ${!!data.items[0]?.settings?.oauth?.credentials}`);
   } else {
     console.log(`📅 [DEBUG] Raw response (first 500 chars): ${JSON.stringify(data).substring(0, 500)}`);
   }
