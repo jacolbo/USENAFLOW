@@ -84,7 +84,6 @@ async function getCredentials() {
     if (connectionSettings) {
       console.log(`[Resend] First connection:`);
       console.log(`  - Has settings: ${!!connectionSettings.settings}`);
-      console.log(`  - Has api_key: ${!!connectionSettings.settings?.api_key}`);
     }
 
     if (!connectionSettings || (!connectionSettings.settings?.api_key)) {
