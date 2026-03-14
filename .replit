@@ -52,3 +52,6 @@ APP_URL = "https://Usenaflow.replit.app"
 VAPID_PUBLIC_KEY = "BKrMja12uzeSN_ukFSthpmn1pkYikyYUicDi5AIo0za3J14dhvpEwjoj-z_HV_VcrxHcu5XTW0C9dAVS7rjwS64"
 VAPID_PRIVATE_KEY = "SET_VIA_REPLIT_SECRETS"
 VITE_VAPID_PUBLIC_KEY = "BKrMja12uzeSN_ukFSthpmn1pkYikyYUicDi5AIo0za3J14dhvpEwjoj-z_HV_VcrxHcu5XTW0C9dAVS7rjwS64"
+
+[objectStorage]
+defaultBucketID = "replit-objstore-36146d31-ae4d-40c1-b92e-b20750c78157"
