@@ -1,0 +1,8 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "IjZ-zCAQnE8UmvA48Z1mh"
+uri = "file://USENA_Flow_Architecture.pdf"
+type = "pdf"
+title = "USENA Flow - Full Architecture Document"
