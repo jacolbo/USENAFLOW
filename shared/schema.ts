@@ -872,7 +872,176 @@ export const insertAiAdminInstructionSchema = createInsertSchema(aiAdminInstruct
 
 export type AiAdminInstruction = typeof aiAdminInstructions.$inferSelect;
 export type InsertAiAdminInstruction = z.infer<typeof insertAiAdminInstructionSchema>;
+// ============================================
+// STEP 1: Open shared/schema.ts
+// STEP 2: Find this line (around line 876):
+//     export const AVAILABLE_WIDGETS: WidgetConfig[] = [
+// STEP 3: Paste EVERYTHING below this comment block
+//         right ABOVE that AVAILABLE_WIDGETS line
+// ============================================
 
+// Client photo selection galleries (replaces Pixieset)
+export const galleries = pgTable("galleries", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  projectId: varchar("project_id").references(() => projects.id, { onDelete: "set null" }),
+  name: text("name").notNull(),
+  slug: text("slug").notNull().unique(),
+  password: text("password"),
+  downloadPin: text("download_pin"),
+  coverImageKey: text("cover_image_key"),
+  status: text("status").notNull().default("draft"),
+  settings: jsonb("settings").notNull().default(sql`'{"downloadEnabled":true,"downloadSizes":["original","web"],"favoritesEnabled":true,"favoriteNotesEnabled":true,"slideshowEnabled":true,"socialSharingEnabled":false,"filenameDisplay":true,"watermarkEnabled":true,"emailRegistration":false,"galleryAssist":false,"language":"en","gridStyle":"vertical","thumbnailSize":"regular","colorTheme":"light","fontTheme":"sans"}'::jsonb`),
+  expiresAt: timestamp("expires_at"),
+  createdBy: text("created_by").notNull(),
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+  updatedAt: timestamp("updated_at").notNull().default(sql`now()`),
+  publishedAt: timestamp("published_at"),
+});
+
+export const gallerySets = pgTable("gallery_sets", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  galleryId: varchar("gallery_id").notNull().references(() => galleries.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  sortOrder: integer("sort_order").notNull().default(0),
+  isDownloadable: boolean("is_downloadable").notNull().default(true),
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+});
+
+export const galleryPhotos = pgTable("gallery_photos", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  setId: varchar("set_id").notNull().references(() => gallerySets.id, { onDelete: "cascade" }),
+  galleryId: varchar("gallery_id").notNull().references(() => galleries.id, { onDelete: "cascade" }),
+  filename: text("filename").notNull(),
+  storageKey: text("storage_key").notNull(),
+  thumbnailKey: text("thumbnail_key"),
+  width: integer("width"),
+  height: integer("height"),
+  fileSize: integer("file_size"),
+  sortOrder: integer("sort_order").notNull().default(0),
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+});
+
+export const galleryFavLists = pgTable("gallery_fav_lists", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  galleryId: varchar("gallery_id").notNull().references(() => galleries.id, { onDelete: "cascade" }),
+  clientEmail: text("client_email").notNull(),
+  name: text("name").notNull().default("My Favorites"),
+  selectionLimit: integer("selection_limit"),
+  isSubmitted: boolean("is_submitted").notNull().default(false),
+  submittedAt: timestamp("submitted_at"),
+  submittedMessage: text("submitted_message"),
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+  updatedAt: timestamp("updated_at").notNull().default(sql`now()`),
+});
+
+export const gallerySelections = pgTable("gallery_selections", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  favListId: varchar("fav_list_id").notNull().references(() => galleryFavLists.id, { onDelete: "cascade" }),
+  photoId: varchar("photo_id").notNull().references(() => galleryPhotos.id, { onDelete: "cascade" }),
+  note: text("note"),
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+});
+
+export const galleryDownloads = pgTable("gallery_downloads", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  galleryId: varchar("gallery_id").notNull().references(() => galleries.id, { onDelete: "cascade" }),
+  clientEmail: text("client_email").notNull(),
+  downloadType: text("download_type").notNull(),
+  photoIds: jsonb("photo_ids"),
+  downloadSize: text("download_size").notNull().default("original"),
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+});
+
+export const galleryAuthTokens = pgTable("gallery_auth_tokens", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  galleryId: varchar("gallery_id").notNull().references(() => galleries.id, { onDelete: "cascade" }),
+  clientEmail: text("client_email").notNull(),
+  token: text("token").notNull().unique(),
+  expiresAt: timestamp("expires_at").notNull(),
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+});
+
+// Gallery Zod schemas
+export const insertGallerySchema = createInsertSchema(galleries).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  publishedAt: true,
+});
+
+export const updateGallerySchema = createInsertSchema(galleries).partial().omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertGallerySetSchema = createInsertSchema(gallerySets).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertGalleryPhotoSchema = createInsertSchema(galleryPhotos).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertGalleryFavListSchema = createInsertSchema(galleryFavLists).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  isSubmitted: true,
+  submittedAt: true,
+  submittedMessage: true,
+});
+
+export const insertGallerySelectionSchema = createInsertSchema(gallerySelections).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertGalleryDownloadSchema = createInsertSchema(galleryDownloads).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertGalleryAuthTokenSchema = createInsertSchema(galleryAuthTokens).omit({
+  id: true,
+  createdAt: true,
+});
+
+// Gallery type exports
+export type Gallery = typeof galleries.$inferSelect;
+export type InsertGallery = z.infer<typeof insertGallerySchema>;
+export type UpdateGallery = z.infer<typeof updateGallerySchema>;
+export type GallerySet = typeof gallerySets.$inferSelect;
+export type InsertGallerySet = z.infer<typeof insertGallerySetSchema>;
+export type GalleryPhoto = typeof galleryPhotos.$inferSelect;
+export type InsertGalleryPhoto = z.infer<typeof insertGalleryPhotoSchema>;
+export type GalleryFavList = typeof galleryFavLists.$inferSelect;
+export type InsertGalleryFavList = z.infer<typeof insertGalleryFavListSchema>;
+export type GallerySelection = typeof gallerySelections.$inferSelect;
+export type InsertGallerySelection = z.infer<typeof insertGallerySelectionSchema>;
+export type GalleryDownload = typeof galleryDownloads.$inferSelect;
+export type InsertGalleryDownload = z.infer<typeof insertGalleryDownloadSchema>;
+export type GalleryAuthToken = typeof galleryAuthTokens.$inferSelect;
+export type InsertGalleryAuthToken = z.infer<typeof insertGalleryAuthTokenSchema>;
+
+export const GalleryStatus = {
+  DRAFT: "draft",
+  PUBLISHED: "published",
+  HIDDEN: "hidden",
+  EXPIRED: "expired",
+} as const;
+
+export const GalleryPermissions = {
+  FULL: ["Admin", "Evans", "Retoucher1", "Retoucher2", "Retoucher3", "DataWrangler"],
+  MANAGE: ["LeadRetoucher"],
+  READ_ONLY: ["Finance"],
+} as const;
+
+// ============================================
+// STEP 4: After pasting, the AVAILABLE_WIDGETS line
+//         should immediately follow below this point
+// ============================================
 export const AVAILABLE_WIDGETS: WidgetConfig[] = [
   { id: "daily_quote", name: "Daily Inspiration", description: "Motivational quote of the day", icon: "Quote", defaultEnabled: true, roles: ["Admin", "LeadRetoucher", "Retoucher1", "Retoucher2", "Retoucher3", "DataWrangler", "Sales", "Evans"] },
   { id: "my_tasks", name: "My Tasks", description: "Projects assigned to you", icon: "User", defaultEnabled: true, roles: ["Admin", "Retoucher1", "Retoucher2", "Retoucher3"] },

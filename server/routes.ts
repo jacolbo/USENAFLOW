@@ -1,3 +1,4 @@
+import { registerGalleryRoutes } from "./galleryRoutes";
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { WebSocketServer, WebSocket } from "ws";
@@ -3070,6 +3071,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Register ShootTracker routes (settings, sync, forecast, toggles)
   registerShoottrackerRoutes(app);
+  registerGalleryRoutes(app);
 
   // Register object storage routes for file uploads
   registerObjectStorageRoutes(app);
