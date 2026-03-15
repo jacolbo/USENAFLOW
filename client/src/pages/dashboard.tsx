@@ -20,7 +20,7 @@ import { WRUButton } from "@/components/WRUButton";
 import { useSSE } from "@/hooks/use-sse";
 import { User } from "@/lib/types";
 import { Project } from "@shared/schema";
-import { User as UserIcon, LogOut, Settings, Archive, ArrowRightLeft, DollarSign, AlertTriangle, Calendar, CalendarDays, MessageCircle, LayoutDashboard, Gift, Crown, RefreshCw, Mail, MoreHorizontal, Wrench, Trophy, Star, HardDrive, Sparkles, Brain, Bot, Zap } from "lucide-react";
+import { User as UserIcon, LogOut, Settings, Archive, ArrowRightLeft, DollarSign, AlertTriangle, Calendar, CalendarDays, MessageCircle, LayoutDashboard, Gift, Crown, RefreshCw, Mail, MoreHorizontal, Wrench, Trophy, Star, HardDrive, Sparkles, Brain, Bot, Zap, Image, Camera } from "lucide-react";
 import { useLocation } from "wouter";
 import logoImage from "@assets/USENA-FLOW_1754522507856.png";
 import { WidgetCustomizer, useWidgetPreferences } from "@/components/widget-customizer";
@@ -430,6 +430,89 @@ function PredictiveRiskWidget({ userRole, userId }: { userRole: string; userId: 
             </div>
             <p className="text-sm text-gray-700 dark:text-gray-300 font-medium">All Clear</p>
             <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">No projects are predicted to go overdue</p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function GalleryActivityWidget({ userRole, userId }: { userRole: string; userId: string }) {
+  const [, setLocation] = useLocation();
+  const { data: galleries = [], isLoading } = useQuery<Array<{ id: string; name: string; status: string; photoCount: number; favListCount: number }>>({
+    queryKey: ["/api/galleries"],
+    queryFn: async () => {
+      const res = await fetch("/api/galleries", {
+        headers: { "X-Usena-Role": userRole, "X-Usena-User-Id": userId },
+      });
+      if (!res.ok) return [];
+      return res.json();
+    },
+  });
+
+  const recentGalleries = galleries.slice(0, 5);
+
+  return (
+    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm">
+      <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <Image className="h-5 w-5 text-purple-600" />
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Gallery Activity</h2>
+            <span className="text-sm text-gray-500 dark:text-gray-400">Client selections & downloads</span>
+          </div>
+          <button
+            onClick={() => setLocation('/galleries')}
+            className="text-sm text-purple-600 hover:text-purple-800 dark:text-purple-400"
+          >
+            View All
+          </button>
+        </div>
+      </div>
+      <div className="px-6 py-4">
+        {isLoading ? (
+          <div className="space-y-3 animate-pulse">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="h-10 bg-gray-200 dark:bg-gray-600 rounded" />
+            ))}
+          </div>
+        ) : recentGalleries.length === 0 ? (
+          <div className="text-center py-6">
+            <Image className="h-8 w-8 mx-auto mb-2 text-gray-300" />
+            <p className="text-sm text-gray-500 dark:text-gray-400">No galleries yet</p>
+            <button
+              onClick={() => setLocation('/galleries')}
+              className="text-sm text-purple-600 hover:text-purple-800 mt-1"
+            >
+              Create your first gallery
+            </button>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {recentGalleries.map((gallery) => (
+              <div
+                key={gallery.id}
+                className="flex items-center justify-between py-2 px-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer transition-colors"
+                onClick={() => setLocation(`/galleries/${gallery.id}`)}
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded bg-gray-100 dark:bg-gray-700 flex items-center justify-center">
+                    <Camera className="h-4 w-4 text-gray-400" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-gray-900 dark:text-gray-100">{gallery.name}</p>
+                    <p className="text-xs text-gray-500">{gallery.photoCount} photos • {gallery.favListCount} fav lists</p>
+                  </div>
+                </div>
+                <span className={`text-xs px-2 py-0.5 rounded-full ${
+                  gallery.status === 'published' ? 'bg-green-100 text-green-700' :
+                  gallery.status === 'draft' ? 'bg-gray-100 text-gray-600' :
+                  'bg-yellow-100 text-yellow-700'
+                }`}>
+                  {gallery.status}
+                </span>
+              </div>
+            ))}
           </div>
         )}
       </div>
@@ -2331,6 +2414,20 @@ export default function Dashboard() {
     clearAllNotifications,
     unreadCount
   } = useSSE(user ? { id: user.role, username: user.name } : null);
+
+  const prevNotifCountRef = useRef(0);
+  useEffect(() => {
+    if (notifications.length > prevNotifCountRef.current) {
+      const newest = notifications[0];
+      if (newest && newest.title === 'Gallery Selections Received') {
+        toast({
+          title: newest.title,
+          description: newest.message,
+        });
+      }
+    }
+    prevNotifCountRef.current = notifications.length;
+  }, [notifications]);
   
   // Session timeout duration (2 hours in milliseconds)
   const SESSION_TIMEOUT = 2 * 60 * 60 * 1000;
@@ -2726,6 +2823,19 @@ export default function Dashboard() {
                             {totalUnreadMessages > 99 ? '99+' : totalUnreadMessages}
                           </span>
                         )}
+                      </Button>
+                    )}
+
+                    {/* Galleries - hidden for Finance */}
+                    {user.role !== "Finance" && (
+                      <Button 
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setLocation('/galleries')}
+                        className="flex items-center gap-2"
+                      >
+                        <Image className="h-4 w-4" />
+                        Galleries
                       </Button>
                     )}
 
@@ -3157,6 +3267,11 @@ export default function Dashboard() {
                 !showCommissions && !showExtraPhotosSales && !showComplaints && !showRewards && !showReferrals && !showVipClients && !showDriveManager &&
                 ["Admin", "LeadRetoucher"].includes(user.role)) {
               return <PredictiveRiskWidget key={widgetId} userRole={user.role} userId={user.name || user.id || ''} />;
+            }
+
+            if (widgetId === "gallery_activity" && isWidgetVisible("gallery_activity") && !showArchive && 
+                !showCommissions && !showExtraPhotosSales && !showComplaints && !showRewards && !showReferrals && !showVipClients && !showDriveManager) {
+              return <GalleryActivityWidget key={widgetId} userRole={user.role} userId={user.name || user.id || ''} />;
             }
 
             return null;

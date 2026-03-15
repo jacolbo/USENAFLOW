@@ -872,15 +872,7 @@ export const insertAiAdminInstructionSchema = createInsertSchema(aiAdminInstruct
 
 export type AiAdminInstruction = typeof aiAdminInstructions.$inferSelect;
 export type InsertAiAdminInstruction = z.infer<typeof insertAiAdminInstructionSchema>;
-// ============================================
-// STEP 1: Open shared/schema.ts
-// STEP 2: Find this line (around line 876):
-//     export const AVAILABLE_WIDGETS: WidgetConfig[] = [
-// STEP 3: Paste EVERYTHING below this comment block
-//         right ABOVE that AVAILABLE_WIDGETS line
-// ============================================
 
-// Client photo selection galleries (replaces Pixieset)
 export const galleries = pgTable("galleries", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   projectId: varchar("project_id").references(() => projects.id, { onDelete: "set null" }),
@@ -1038,10 +1030,6 @@ export const GalleryPermissions = {
   READ_ONLY: ["Finance"],
 } as const;
 
-// ============================================
-// STEP 4: After pasting, the AVAILABLE_WIDGETS line
-//         should immediately follow below this point
-// ============================================
 export const AVAILABLE_WIDGETS: WidgetConfig[] = [
   { id: "daily_quote", name: "Daily Inspiration", description: "Motivational quote of the day", icon: "Quote", defaultEnabled: true, roles: ["Admin", "LeadRetoucher", "Retoucher1", "Retoucher2", "Retoucher3", "DataWrangler", "Sales", "Evans"] },
   { id: "my_tasks", name: "My Tasks", description: "Projects assigned to you", icon: "User", defaultEnabled: true, roles: ["Admin", "Retoucher1", "Retoucher2", "Retoucher3"] },
@@ -1054,4 +1042,5 @@ export const AVAILABLE_WIDGETS: WidgetConfig[] = [
   { id: "retoucher_coach", name: "AI Coach", description: "Personalized performance tips from AI", icon: "Brain", defaultEnabled: true, roles: ["Retoucher1", "Retoucher2", "Retoucher3"] },
   { id: "workload_forecast", name: "Workload Forecast", description: "AI-powered capacity planning for upcoming weeks", icon: "BarChart3", defaultEnabled: true, roles: ["Admin", "LeadRetoucher"] },
   { id: "predictive_risk", name: "Risk Alerts", description: "AI predictions for projects likely to go overdue", icon: "Sparkles", defaultEnabled: true, roles: ["Admin", "LeadRetoucher"] },
+  { id: "gallery_activity", name: "Gallery Activity", description: "Recent client gallery selections and downloads", icon: "Image", defaultEnabled: true, roles: ["Admin", "LeadRetoucher", "Retoucher1", "Retoucher2", "Retoucher3", "DataWrangler", "Evans"] },
 ];

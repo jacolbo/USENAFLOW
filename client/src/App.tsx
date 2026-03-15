@@ -16,6 +16,9 @@ import LeaveManagement from "@/pages/leave-management";
 import AiTeamChat from "@/pages/ai-team-chat";
 import AutomationsPage from "@/pages/automations";
 import AiBrainPage from "@/pages/ai-brain";
+import GalleriesPage from "@/pages/galleries";
+import GalleryDetailPage from "@/pages/gallery-detail";
+import ClientGalleryPage from "@/pages/client-gallery";
 import NotFound from "@/pages/not-found";
 
 function Router() {
@@ -33,6 +36,9 @@ function Router() {
       <Route path="/ai-chat" component={AiTeamChat} />
       <Route path="/automations" component={AutomationsPage} />
       <Route path="/ai-brain" component={AiBrainPage} />
+      <Route path="/galleries" component={GalleriesPage} />
+      <Route path="/galleries/:id" component={GalleryDetailPage} />
+      <Route path="/g/:slug" component={ClientGalleryPage} />
       <Route component={NotFound} />
     </Switch>
   );

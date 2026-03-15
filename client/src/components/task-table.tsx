@@ -2292,7 +2292,8 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
                                 )
                               )}
 
-                              {/* Sneak Peek button for retouchers on assigned projects */}
+                              <ProjectGalleryLink projectId={project.id} role={user.role} userId={user.id || ""} />
+
                               {hasRetouchingAbilities(user.role) && project.assignedTo === user.name && project.clientEmail && 
                                !['Delivered', 'Done'].includes(project.status) && (
                                 <SneakPeekDialog project={project} user={user} />
@@ -3220,5 +3221,128 @@ function SneakPeekDialog({ project, user }: SneakPeekDialogProps) {
         )}
       </DialogContent>
     </Dialog>
+  );
+}
+
+interface ProjectGalleryData {
+  id: string;
+  name: string;
+  slug: string;
+  status: string;
+  photoCount?: number;
+  favListCount?: number;
+  publishedAt?: string | null;
+}
+
+function ProjectGalleryLink({ projectId, role, userId }: { projectId: string; role: string; userId: string }) {
+  const { toast } = useToast();
+  const qc = useQueryClient();
+  const [showPanel, setShowPanel] = useState(false);
+
+  const { data: linkedGallery, isLoading: galleryLoading } = useQuery<ProjectGalleryData | null>({
+    queryKey: ["/api/galleries/by-project", projectId],
+    queryFn: async () => {
+      const { getAdminHeaders } = await import("@/lib/adminAuth");
+      const headers = getAdminHeaders(role, userId);
+      const res = await fetch(`/api/galleries/by-project/${projectId}`, { headers });
+      if (!res.ok) return null;
+      return res.json();
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const createGalleryMutation = useMutation({
+    mutationFn: async () => {
+      const { getAdminHeaders } = await import("@/lib/adminAuth");
+      const headers = getAdminHeaders(role, userId);
+      const res = await fetch("/api/galleries", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...headers },
+        body: JSON.stringify({ name: `Gallery`, projectId }),
+      });
+      if (!res.ok) throw new Error("Failed to create gallery");
+      return res.json();
+    },
+    onSuccess: (data: { id: string }) => {
+      qc.invalidateQueries({ queryKey: ["/api/galleries/by-project", projectId] });
+      toast({ title: "Gallery created", description: "Linked gallery has been created for this project" });
+      window.location.href = `/galleries/${data.id}`;
+    },
+    onError: () => {
+      toast({ title: "Error", description: "Failed to create gallery", variant: "destructive" });
+    },
+  });
+
+  if (galleryLoading) return null;
+
+  if (!linkedGallery) {
+    return (
+      <Badge
+        variant="outline"
+        className="cursor-pointer text-xs hover:bg-purple-50 dark:hover:bg-purple-900/20 border-dashed"
+        onClick={(e) => { e.stopPropagation(); createGalleryMutation.mutate(); }}
+      >
+        <Image className="h-3 w-3 mr-1" />
+        {createGalleryMutation.isPending ? "Creating..." : "+ Gallery"}
+      </Badge>
+    );
+  }
+
+  return (
+    <div className="relative inline-block">
+      <Badge
+        variant="secondary"
+        className={`cursor-pointer text-xs ${
+          linkedGallery.status === "published"
+            ? "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300"
+            : "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300"
+        }`}
+        onClick={(e) => { e.stopPropagation(); setShowPanel(!showPanel); }}
+      >
+        <Image className="h-3 w-3 mr-1" />
+        Gallery{linkedGallery.status === "published" ? " Live" : ""}
+      </Badge>
+      {showPanel && (
+        <div
+          className="absolute z-50 top-full mt-1 right-0 w-64 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 p-3 space-y-2"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="flex items-center justify-between">
+            <span className="font-medium text-sm text-gray-900 dark:text-gray-100 truncate">{linkedGallery.name}</span>
+            <button onClick={() => setShowPanel(false)} className="text-gray-400 hover:text-gray-600">
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            <span className={`text-xs px-1.5 py-0.5 rounded-full ${
+              linkedGallery.status === "published" ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300" : "bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400"
+            }`}>
+              {linkedGallery.status}
+            </span>
+            {linkedGallery.photoCount !== undefined && (
+              <span className="text-xs px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
+                {linkedGallery.photoCount} photos
+              </span>
+            )}
+            {(linkedGallery.favListCount ?? 0) > 0 && (
+              <span className="text-xs px-1.5 py-0.5 rounded-full bg-pink-50 text-pink-700 dark:bg-pink-900/30 dark:text-pink-300">
+                {linkedGallery.favListCount} fav lists
+              </span>
+            )}
+          </div>
+          {linkedGallery.publishedAt && (
+            <p className="text-xs text-gray-500 dark:text-gray-400">
+              Published {new Date(linkedGallery.publishedAt).toLocaleDateString()}
+            </p>
+          )}
+          <a
+            href={`/galleries/${linkedGallery.id}`}
+            className="block text-center text-xs text-purple-600 hover:text-purple-800 dark:text-purple-400 dark:hover:text-purple-300 font-medium py-1 border-t border-gray-100 dark:border-gray-700 mt-2 pt-2"
+          >
+            Open Gallery Detail →
+          </a>
+        </div>
+      )}
+    </div>
   );
 }

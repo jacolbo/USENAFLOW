@@ -72,6 +72,31 @@ export function useSSE(user?: { id: string; username: string } | null) {
             console.log('SSE connection confirmed');
             break;
 
+          case 'gallery_selection_submitted':
+            console.log('Gallery selection submitted via SSE');
+            queryClient.invalidateQueries({ queryKey: ['/api/galleries'] });
+            if (data.payload) {
+              const p = data.payload;
+              const galleryNotif = {
+                id: `gallery-${Date.now()}`,
+                title: 'Gallery Selections Received',
+                message: `Client ${p.clientEmail} submitted ${p.selectionCount} selections for ${p.galleryName}`,
+                type: 'PROJECT_STATUS_CHANGED' as const,
+                projectId: p.galleryId || '',
+                projectName: p.galleryName || '',
+                read: false,
+                createdAt: new Date(),
+              };
+              setNotifications(prev => [galleryNotif, ...prev]);
+              if (audioRef.current) {
+                audioRef.current.play().catch(console.error);
+              }
+              if ('Notification' in window && window.Notification.permission === 'granted') {
+                new window.Notification(galleryNotif.title, { body: galleryNotif.message, icon: '/favicon.ico' });
+              }
+            }
+            break;
+
           default:
             // Handle rollover completion
           if (data.type === 'rollover_complete') {

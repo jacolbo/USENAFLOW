@@ -1,14 +1,7 @@
-// ============================================
-// GALLERY ROUTES — Save as server/galleryRoutes.ts
-// Then add to routes.ts:
-//   import { registerGalleryRoutes } from "./galleryRoutes";
-//   registerGalleryRoutes(app);  // Add near line 3075 next to registerShoottrackerRoutes
-// ============================================
-
 import type { Express, Request, Response } from "express";
 import { db } from "./db";
 import { eq, and, desc, asc, sql, inArray } from "drizzle-orm";
-import { randomUUID } from "crypto";
+import { randomUUID, createHmac } from "crypto";
 import {
   galleries, gallerySets, galleryPhotos, galleryFavLists,
   gallerySelections, galleryDownloads, galleryAuthTokens,
@@ -18,33 +11,45 @@ import { ObjectStorageService } from "./objectStorage";
 import { broadcastSSE } from "./routes";
 
 const objectStorage = new ObjectStorageService();
+const ADMIN_PHOTO_SECRET = process.env.SESSION_SECRET || randomUUID();
 
-// ============================================
-// PERMISSION MIDDLEWARE
-// ============================================
+function signAdminPhotoUrl(galleryId: string, photoId: string): string {
+  const expires = Math.floor(Date.now() / 1000) + 3600;
+  const data = `${galleryId}:${photoId}:${expires}`;
+  const sig = createHmac("sha256", ADMIN_PHOTO_SECRET).update(data).digest("hex").slice(0, 16);
+  return `sig=${sig}&exp=${expires}`;
+}
+
+function verifyAdminPhotoSig(galleryId: string, photoId: string, sig: string, exp: string): boolean {
+  const now = Math.floor(Date.now() / 1000);
+  if (parseInt(exp) < now) return false;
+  const data = `${galleryId}:${photoId}:${exp}`;
+  const expected = createHmac("sha256", ADMIN_PHOTO_SECRET).update(data).digest("hex").slice(0, 16);
+  return sig === expected;
+}
+
+interface GalleryAuthRequest extends Request {
+  galleryId?: string;
+  clientEmail?: string;
+}
 
 function hasGalleryAccess(role: string): boolean {
-  return (
-    GalleryPermissions.FULL.includes(role as any) ||
-    GalleryPermissions.MANAGE.includes(role as any) ||
-    GalleryPermissions.READ_ONLY.includes(role as any)
-  );
+  const allRoles = [...GalleryPermissions.FULL, ...GalleryPermissions.MANAGE, ...GalleryPermissions.READ_ONLY];
+  return allRoles.includes(role as typeof allRoles[number]);
 }
 
 function canManageGallery(role: string): boolean {
-  return (
-    GalleryPermissions.FULL.includes(role as any) ||
-    GalleryPermissions.MANAGE.includes(role as any)
-  );
+  const manageRoles = [...GalleryPermissions.FULL, ...GalleryPermissions.MANAGE];
+  return manageRoles.includes(role as typeof manageRoles[number]);
 }
 
 function canDeleteGallery(role: string): boolean {
-  return GalleryPermissions.FULL.includes(role as any);
+  return (GalleryPermissions.FULL as readonly string[]).includes(role);
 }
 
 function getUserFromRequest(req: Request): { userId: string; role: string } | null {
   const userId = req.headers["x-usena-user-id"] as string;
-  const role = req.headers["x-usena-user-role"] as string;
+  const role = (req.headers["x-usena-user-role"] || req.headers["x-usena-role"]) as string;
   if (!userId || !role) return null;
   return { userId, role };
 }
@@ -67,15 +72,7 @@ function generatePassword(): string {
   return pass;
 }
 
-// ============================================
-// REGISTER ALL GALLERY ROUTES
-// ============================================
-
 export function registerGalleryRoutes(app: Express) {
-
-  // ==========================================
-  // ADMIN ROUTES — Gallery CRUD
-  // ==========================================
 
   // List all galleries
   app.get("/api/galleries", async (req: Request, res: Response) => {
@@ -91,6 +88,8 @@ export function registerGalleryRoutes(app: Express) {
         .orderBy(desc(galleries.createdAt));
 
       // For each gallery, get photo count and fav activity count
+      const canManage = canManageGallery(user.role);
+
       const enriched = await Promise.all(
         allGalleries.map(async (gallery) => {
           const [photoCount] = await db
@@ -103,8 +102,10 @@ export function registerGalleryRoutes(app: Express) {
             .from(galleryFavLists)
             .where(eq(galleryFavLists.galleryId, gallery.id));
 
+          const { password, downloadPin, ...safeGallery } = gallery;
+
           return {
-            ...gallery,
+            ...(canManage ? gallery : safeGallery),
             photoCount: photoCount?.count || 0,
             favListCount: favCount?.count || 0,
           };
@@ -112,13 +113,53 @@ export function registerGalleryRoutes(app: Express) {
       );
 
       res.json(enriched);
-    } catch (error: any) {
-      console.error("[Gallery] Error listing galleries:", error.message);
+    } catch (error: unknown) {
+      console.error("[Gallery]", error);
       res.status(500).json({ error: "Failed to list galleries" });
     }
   });
 
-  // Create new gallery
+  app.get("/api/galleries/by-project/:projectId", async (req: Request, res: Response) => {
+    try {
+      const user = getUserFromRequest(req);
+      if (!user || !hasGalleryAccess(user.role)) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+
+      const [gallery] = await db
+        .select({
+          id: galleries.id,
+          name: galleries.name,
+          slug: galleries.slug,
+          status: galleries.status,
+          publishedAt: galleries.publishedAt,
+        })
+        .from(galleries)
+        .where(eq(galleries.projectId, req.params.projectId))
+        .limit(1);
+
+      if (!gallery) return res.json(null);
+
+      const photoCountResult = await db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(galleryPhotos)
+        .where(eq(galleryPhotos.galleryId, gallery.id));
+
+      const favListCountResult = await db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(galleryFavLists)
+        .where(eq(galleryFavLists.galleryId, gallery.id));
+
+      res.json({
+        ...gallery,
+        photoCount: photoCountResult[0]?.count ?? 0,
+        favListCount: favListCountResult[0]?.count ?? 0,
+      });
+    } catch (error: unknown) {
+      res.status(500).json({ error: "Failed to look up gallery" });
+    }
+  });
+
   app.post("/api/galleries", async (req: Request, res: Response) => {
     try {
       const user = getUserFromRequest(req);
@@ -169,8 +210,8 @@ export function registerGalleryRoutes(app: Express) {
       }
 
       res.json(gallery);
-    } catch (error: any) {
-      console.error("[Gallery] Error creating gallery:", error.message);
+    } catch (error: unknown) {
+      console.error("[Gallery]", error);
       res.status(500).json({ error: "Failed to create gallery" });
     }
   });
@@ -213,13 +254,16 @@ export function registerGalleryRoutes(app: Express) {
         .from(galleryPhotos)
         .where(eq(galleryPhotos.galleryId, gallery.id));
 
+      const canManage = canManageGallery(user.role);
+      const { password, downloadPin, ...safeGallery } = gallery;
+
       res.json({
-        ...gallery,
+        ...(canManage ? gallery : safeGallery),
         sets: setsWithCounts,
         totalPhotos: totalPhotos?.count || 0,
       });
-    } catch (error: any) {
-      console.error("[Gallery] Error getting gallery:", error.message);
+    } catch (error: unknown) {
+      console.error("[Gallery]", error);
       res.status(500).json({ error: "Failed to get gallery" });
     }
   });
@@ -240,8 +284,8 @@ export function registerGalleryRoutes(app: Express) {
 
       if (!updated) return res.status(404).json({ error: "Gallery not found" });
       res.json(updated);
-    } catch (error: any) {
-      console.error("[Gallery] Error updating gallery:", error.message);
+    } catch (error: unknown) {
+      console.error("[Gallery]", error);
       res.status(500).json({ error: "Failed to update gallery" });
     }
   });
@@ -268,8 +312,8 @@ export function registerGalleryRoutes(app: Express) {
 
       if (!updated) return res.status(404).json({ error: "Gallery not found" });
       res.json(updated);
-    } catch (error: any) {
-      console.error("[Gallery] Error publishing gallery:", error.message);
+    } catch (error: unknown) {
+      console.error("[Gallery]", error);
       res.status(500).json({ error: "Failed to publish gallery" });
     }
   });
@@ -289,8 +333,8 @@ export function registerGalleryRoutes(app: Express) {
 
       if (!deleted) return res.status(404).json({ error: "Gallery not found" });
       res.json({ success: true });
-    } catch (error: any) {
-      console.error("[Gallery] Error deleting gallery:", error.message);
+    } catch (error: unknown) {
+      console.error("[Gallery]", error);
       res.status(500).json({ error: "Failed to delete gallery" });
     }
   });
@@ -316,7 +360,7 @@ export function registerGalleryRoutes(app: Express) {
         downloadPin: gallery.downloadPin,
         status: gallery.status,
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       res.status(500).json({ error: "Failed to get share info" });
     }
   });
@@ -352,7 +396,7 @@ export function registerGalleryRoutes(app: Express) {
         .returning();
 
       res.json(set);
-    } catch (error: any) {
+    } catch (error: unknown) {
       res.status(500).json({ error: "Failed to create set" });
     }
   });
@@ -372,7 +416,7 @@ export function registerGalleryRoutes(app: Express) {
         .returning();
 
       res.json(updated);
-    } catch (error: any) {
+    } catch (error: unknown) {
       res.status(500).json({ error: "Failed to update set" });
     }
   });
@@ -387,7 +431,7 @@ export function registerGalleryRoutes(app: Express) {
 
       await db.delete(gallerySets).where(eq(gallerySets.id, req.params.setId));
       res.json({ success: true });
-    } catch (error: any) {
+    } catch (error: unknown) {
       res.status(500).json({ error: "Failed to delete set" });
     }
   });
@@ -416,8 +460,8 @@ export function registerGalleryRoutes(app: Express) {
       }
 
       res.json({ urls });
-    } catch (error: any) {
-      console.error("[Gallery] Error generating upload URLs:", error.message);
+    } catch (error: unknown) {
+      console.error("[Gallery]", error);
       res.status(500).json({ error: "Failed to generate upload URLs" });
     }
   });
@@ -457,8 +501,8 @@ export function registerGalleryRoutes(app: Express) {
         .returning();
 
       res.json(photo);
-    } catch (error: any) {
-      console.error("[Gallery] Error registering photo:", error.message);
+    } catch (error: unknown) {
+      console.error("[Gallery]", error);
       res.status(500).json({ error: "Failed to register photo" });
     }
   });
@@ -479,7 +523,7 @@ export function registerGalleryRoutes(app: Express) {
       const inserted = await db
         .insert(galleryPhotos)
         .values(
-          photos.map((p: any, i: number) => ({
+          photos.map((p: { setId: string; filename: string; storageKey: string; width?: number; height?: number; fileSize?: number }, i: number) => ({
             setId: p.setId,
             galleryId: req.params.id,
             filename: p.filename,
@@ -493,8 +537,8 @@ export function registerGalleryRoutes(app: Express) {
         .returning();
 
       res.json(inserted);
-    } catch (error: any) {
-      console.error("[Gallery] Error batch registering photos:", error.message);
+    } catch (error: unknown) {
+      console.error("[Gallery]", error);
       res.status(500).json({ error: "Failed to register photos" });
     }
   });
@@ -514,7 +558,7 @@ export function registerGalleryRoutes(app: Express) {
         .orderBy(asc(galleryPhotos.sortOrder));
 
       res.json(photos);
-    } catch (error: any) {
+    } catch (error: unknown) {
       res.status(500).json({ error: "Failed to get photos" });
     }
   });
@@ -530,7 +574,7 @@ export function registerGalleryRoutes(app: Express) {
       // TODO: Also delete from object storage
       await db.delete(galleryPhotos).where(eq(galleryPhotos.id, req.params.photoId));
       res.json({ success: true });
-    } catch (error: any) {
+    } catch (error: unknown) {
       res.status(500).json({ error: "Failed to delete photo" });
     }
   });
@@ -565,7 +609,7 @@ export function registerGalleryRoutes(app: Express) {
       );
 
       res.json(enriched);
-    } catch (error: any) {
+    } catch (error: unknown) {
       res.status(500).json({ error: "Failed to get favourite activity" });
     }
   });
@@ -602,7 +646,7 @@ export function registerGalleryRoutes(app: Express) {
         .orderBy(asc(galleryPhotos.filename));
 
       // Get set names for context
-      const setIds = [...new Set(selections.map((s) => s.setId))];
+      const setIds = Array.from(new Set(selections.map((s) => s.setId)));
       let setNames: Record<string, string> = {};
       if (setIds.length > 0) {
         const sets = await db
@@ -620,7 +664,7 @@ export function registerGalleryRoutes(app: Express) {
           setName: setNames[s.setId] || "Unknown",
         })),
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       res.status(500).json({ error: "Failed to get favourite list details" });
     }
   });
@@ -657,7 +701,7 @@ export function registerGalleryRoutes(app: Express) {
       res.setHeader("Content-Type", "text/csv");
       res.setHeader("Content-Disposition", `attachment; filename="selections-${req.params.listId}.csv"`);
       res.send(csv);
-    } catch (error: any) {
+    } catch (error: unknown) {
       res.status(500).json({ error: "Failed to export" });
     }
   });
@@ -677,7 +721,7 @@ export function registerGalleryRoutes(app: Express) {
         .orderBy(desc(galleryDownloads.createdAt));
 
       res.json(downloads);
-    } catch (error: any) {
+    } catch (error: unknown) {
       res.status(500).json({ error: "Failed to get download activity" });
     }
   });
@@ -694,12 +738,11 @@ export function registerGalleryRoutes(app: Express) {
         .from(galleries)
         .where(eq(galleries.slug, req.params.slug));
 
-      if (!gallery || gallery.status === GalleryStatus.DRAFT) {
+      if (!gallery || gallery.status !== GalleryStatus.PUBLISHED) {
+        if (gallery?.status === GalleryStatus.EXPIRED) {
+          return res.status(410).json({ error: "This gallery has expired" });
+        }
         return res.status(404).json({ error: "Gallery not found" });
-      }
-
-      if (gallery.status === GalleryStatus.EXPIRED) {
-        return res.status(410).json({ error: "This gallery has expired" });
       }
 
       // Check if expired by date
@@ -716,7 +759,7 @@ export function registerGalleryRoutes(app: Express) {
         coverImageKey: gallery.coverImageKey,
         settings: gallery.settings,
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       res.status(500).json({ error: "Failed to load gallery" });
     }
   });
@@ -761,35 +804,46 @@ export function registerGalleryRoutes(app: Express) {
       });
 
       res.json({ success: true, token, galleryId: gallery.id });
-    } catch (error: any) {
+    } catch (error: unknown) {
       res.status(500).json({ error: "Authentication failed" });
     }
   });
 
-  // Middleware to verify gallery auth token
   async function verifyGalleryToken(req: Request, res: Response, next: Function) {
-    const token = req.headers["x-gallery-token"] as string;
-    if (!token) return res.status(401).json({ error: "Authentication required" });
+    const tokenVal = (req.headers["x-gallery-token"] || req.query.token) as string;
+    if (!tokenVal) return res.status(401).json({ error: "Authentication required" });
 
     const [authToken] = await db
       .select()
       .from(galleryAuthTokens)
-      .where(eq(galleryAuthTokens.token, token));
+      .where(eq(galleryAuthTokens.token, tokenVal));
 
     if (!authToken || new Date(authToken.expiresAt) < new Date()) {
       return res.status(401).json({ error: "Token expired or invalid" });
     }
 
-    // Attach gallery info to request
-    (req as any).galleryId = authToken.galleryId;
-    (req as any).clientEmail = authToken.clientEmail;
+    const [gallery] = await db
+      .select({ status: galleries.status, expiresAt: galleries.expiresAt })
+      .from(galleries)
+      .where(eq(galleries.id, authToken.galleryId));
+
+    if (!gallery || gallery.status !== GalleryStatus.PUBLISHED) {
+      return res.status(403).json({ error: "Gallery is no longer available" });
+    }
+
+    if (gallery.expiresAt && new Date(gallery.expiresAt) < new Date()) {
+      return res.status(410).json({ error: "This gallery has expired" });
+    }
+
+    (req as GalleryAuthRequest).galleryId = authToken.galleryId;
+    (req as GalleryAuthRequest).clientEmail = authToken.clientEmail;
     next();
   }
 
   // Get all photos in a gallery (client view — requires auth token)
-  app.get("/api/g/:slug/photos", verifyGalleryToken as any, async (req: Request, res: Response) => {
+  app.get("/api/g/:slug/photos", verifyGalleryToken, async (req: Request, res: Response) => {
     try {
-      const galleryId = (req as any).galleryId;
+      const galleryId = (req as GalleryAuthRequest).galleryId!;
 
       const sets = await db
         .select()
@@ -803,27 +857,44 @@ export function registerGalleryRoutes(app: Express) {
         .where(eq(galleryPhotos.galleryId, galleryId))
         .orderBy(asc(galleryPhotos.sortOrder));
 
-      // Get gallery settings for filename display
       const [gallery] = await db
         .select({ settings: galleries.settings })
         .from(galleries)
         .where(eq(galleries.id, galleryId));
 
       res.json({ sets, photos, settings: gallery?.settings });
-    } catch (error: any) {
+    } catch (error: unknown) {
       res.status(500).json({ error: "Failed to load photos" });
     }
   });
 
   // Sign in to favourites (email-based, like Pixieset)
-  app.post("/api/g/:slug/favorites/signin", verifyGalleryToken as any, async (req: Request, res: Response) => {
+  app.post("/api/g/:slug/favorites/signin", verifyGalleryToken, async (req: Request, res: Response) => {
     try {
-      const galleryId = (req as any).galleryId;
-      const { email } = req.body;
+      const galleryId = (req as GalleryAuthRequest).galleryId!;
+      const { email, listName } = req.body;
 
       if (!email) return res.status(400).json({ error: "Email is required" });
 
-      // Check if client already has a fav list
+      if (listName) {
+        const [newList] = await db
+          .insert(galleryFavLists)
+          .values({
+            galleryId,
+            clientEmail: email,
+            name: listName,
+          })
+          .returning();
+
+        const tokenHeader = req.headers["x-gallery-token"] as string;
+        await db
+          .update(galleryAuthTokens)
+          .set({ clientEmail: email })
+          .where(eq(galleryAuthTokens.token, tokenHeader));
+
+        return res.json({ favList: newList });
+      }
+
       let [favList] = await db
         .select()
         .from(galleryFavLists)
@@ -832,7 +903,6 @@ export function registerGalleryRoutes(app: Express) {
           eq(galleryFavLists.clientEmail, email)
         ));
 
-      // Create if not exists
       if (!favList) {
         [favList] = await db
           .insert(galleryFavLists)
@@ -844,7 +914,6 @@ export function registerGalleryRoutes(app: Express) {
           .returning();
       }
 
-      // Update the auth token with the email
       const token = req.headers["x-gallery-token"] as string;
       await db
         .update(galleryAuthTokens)
@@ -852,16 +921,16 @@ export function registerGalleryRoutes(app: Express) {
         .where(eq(galleryAuthTokens.token, token));
 
       res.json({ favList });
-    } catch (error: any) {
+    } catch (error: unknown) {
       res.status(500).json({ error: "Failed to sign in" });
     }
   });
 
   // Get client's favourite lists
-  app.get("/api/g/:slug/favorites", verifyGalleryToken as any, async (req: Request, res: Response) => {
+  app.get("/api/g/:slug/favorites", verifyGalleryToken, async (req: Request, res: Response) => {
     try {
-      const galleryId = (req as any).galleryId;
-      const clientEmail = (req as any).clientEmail;
+      const galleryId = (req as GalleryAuthRequest).galleryId!;
+      const clientEmail = (req as GalleryAuthRequest).clientEmail!;
 
       if (!clientEmail || clientEmail === "anonymous" || clientEmail === "authenticated") {
         return res.json({ lists: [], signedIn: false });
@@ -891,18 +960,27 @@ export function registerGalleryRoutes(app: Express) {
       );
 
       res.json({ lists: enriched, signedIn: true, email: clientEmail });
-    } catch (error: any) {
+    } catch (error: unknown) {
       res.status(500).json({ error: "Failed to get favorites" });
     }
   });
 
   // Toggle photo favourite (add or remove)
-  app.post("/api/g/:slug/favorites/:listId/toggle", verifyGalleryToken as any, async (req: Request, res: Response) => {
+  app.post("/api/g/:slug/favorites/:listId/toggle", verifyGalleryToken, async (req: Request, res: Response) => {
     try {
+      const galleryId = (req as GalleryAuthRequest).galleryId!;
+      const clientEmail = (req as GalleryAuthRequest).clientEmail!;
       const { photoId } = req.body;
       if (!photoId) return res.status(400).json({ error: "photoId required" });
 
-      // Check if already favourited
+      const [ownerList] = await db.select().from(galleryFavLists)
+        .where(and(eq(galleryFavLists.id, req.params.listId), eq(galleryFavLists.galleryId, galleryId), eq(galleryFavLists.clientEmail, clientEmail)));
+      if (!ownerList) return res.status(403).json({ error: "Access denied" });
+
+      const [photoOwner] = await db.select().from(galleryPhotos)
+        .where(and(eq(galleryPhotos.id, photoId), eq(galleryPhotos.galleryId, galleryId)));
+      if (!photoOwner) return res.status(404).json({ error: "Photo not found in this gallery" });
+
       const [existing] = await db
         .select()
         .from(gallerySelections)
@@ -956,15 +1034,21 @@ export function registerGalleryRoutes(app: Express) {
         .where(eq(galleryFavLists.id, req.params.listId));
 
       res.json({ action: "added", photoId, selection });
-    } catch (error: any) {
+    } catch (error: unknown) {
       res.status(500).json({ error: "Failed to toggle favourite" });
     }
   });
 
   // Add note to a favourited photo
-  app.post("/api/g/:slug/favorites/:listId/note", verifyGalleryToken as any, async (req: Request, res: Response) => {
+  app.post("/api/g/:slug/favorites/:listId/note", verifyGalleryToken, async (req: Request, res: Response) => {
     try {
+      const galleryId = (req as GalleryAuthRequest).galleryId!;
+      const clientEmail = (req as GalleryAuthRequest).clientEmail!;
       const { photoId, note } = req.body;
+
+      const [ownerList] = await db.select().from(galleryFavLists)
+        .where(and(eq(galleryFavLists.id, req.params.listId), eq(galleryFavLists.galleryId, galleryId), eq(galleryFavLists.clientEmail, clientEmail)));
+      if (!ownerList) return res.status(403).json({ error: "Access denied" });
 
       const [updated] = await db
         .update(gallerySelections)
@@ -977,18 +1061,22 @@ export function registerGalleryRoutes(app: Express) {
 
       if (!updated) return res.status(404).json({ error: "Selection not found" });
       res.json(updated);
-    } catch (error: any) {
+    } catch (error: unknown) {
       res.status(500).json({ error: "Failed to add note" });
     }
   });
 
   // Submit selections to photographer ("Send to Photographer")
-  app.post("/api/g/:slug/favorites/:listId/submit", verifyGalleryToken as any, async (req: Request, res: Response) => {
+  app.post("/api/g/:slug/favorites/:listId/submit", verifyGalleryToken, async (req: Request, res: Response) => {
     try {
-      const clientEmail = (req as any).clientEmail;
+      const galleryId = (req as GalleryAuthRequest).galleryId!;
+      const clientEmail = (req as GalleryAuthRequest).clientEmail!;
       const { message } = req.body;
 
-      // Mark list as submitted
+      const [ownerList] = await db.select().from(galleryFavLists)
+        .where(and(eq(galleryFavLists.id, req.params.listId), eq(galleryFavLists.galleryId, galleryId), eq(galleryFavLists.clientEmail, clientEmail)));
+      if (!ownerList) return res.status(403).json({ error: "Access denied" });
+
       const [favList] = await db
         .update(galleryFavLists)
         .set({
@@ -1035,15 +1123,15 @@ export function registerGalleryRoutes(app: Express) {
         message: "Selections submitted to photographer",
         selectionCount: count?.count || 0,
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       res.status(500).json({ error: "Failed to submit selections" });
     }
   });
 
   // Verify download PIN
-  app.post("/api/g/:slug/download/verify-pin", verifyGalleryToken as any, async (req: Request, res: Response) => {
+  app.post("/api/g/:slug/download/verify-pin", verifyGalleryToken, async (req: Request, res: Response) => {
     try {
-      const galleryId = (req as any).galleryId;
+      const galleryId = (req as GalleryAuthRequest).galleryId!;
       const { pin, email } = req.body;
 
       const [gallery] = await db
@@ -1054,7 +1142,7 @@ export function registerGalleryRoutes(app: Express) {
       if (!gallery) return res.status(404).json({ error: "Gallery not found" });
 
       // Check if downloads are enabled
-      const settings = gallery.settings as any;
+      const settings = gallery.settings as Record<string, boolean | string | number | null> | null;
       if (!settings?.downloadEnabled) {
         return res.status(403).json({ error: "Downloads are not enabled for this gallery" });
       }
@@ -1069,27 +1157,71 @@ export function registerGalleryRoutes(app: Express) {
       }
 
       res.json({ success: true });
-    } catch (error: any) {
+    } catch (error: unknown) {
       res.status(500).json({ error: "Failed to verify PIN" });
     }
   });
 
-  // Serve gallery image (proxied through server for access control)
-  app.get("/api/g/:slug/image/:photoId", verifyGalleryToken as any, async (req: Request, res: Response) => {
+  app.get("/api/g/:slug/image/:photoId", verifyGalleryToken, async (req: Request, res: Response) => {
     try {
+      const galleryId = (req as GalleryAuthRequest).galleryId!;
       const [photo] = await db
         .select()
         .from(galleryPhotos)
-        .where(eq(galleryPhotos.id, req.params.photoId));
+        .where(and(eq(galleryPhotos.id, req.params.photoId), eq(galleryPhotos.galleryId, galleryId)));
 
       if (!photo) return res.status(404).json({ error: "Photo not found" });
 
-      // Serve from object storage
       const file = await objectStorage.getObjectEntityFile(photo.storageKey);
-      await objectStorage.downloadObject(file, res, 86400); // 24hr cache
-    } catch (error: any) {
-      console.error("[Gallery] Error serving image:", error.message);
+      await objectStorage.downloadObject(file, res, 86400);
+    } catch (error: unknown) {
+      console.error("[Gallery]", error);
       res.status(500).json({ error: "Failed to serve image" });
+    }
+  });
+
+  app.get("/api/galleries/:id/photos/signed-urls", async (req: Request, res: Response) => {
+    try {
+      const user = getUserFromRequest(req);
+      if (!user || !hasGalleryAccess(user.role)) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+
+      const galleryPhotosData = await db
+        .select({ id: galleryPhotos.id })
+        .from(galleryPhotos)
+        .where(eq(galleryPhotos.galleryId, req.params.id));
+
+      const urls: Record<string, string> = {};
+      for (const photo of galleryPhotosData) {
+        urls[photo.id] = `/api/galleries/${req.params.id}/photos/${photo.id}/serve?${signAdminPhotoUrl(req.params.id, photo.id)}`;
+      }
+      res.json(urls);
+    } catch (error: unknown) {
+      res.status(500).json({ error: "Failed to generate signed URLs" });
+    }
+  });
+
+  app.get("/api/galleries/:id/photos/:photoId/serve", async (req: Request, res: Response) => {
+    try {
+      const sig = req.query.sig as string;
+      const exp = req.query.exp as string;
+      if (!sig || !exp || !verifyAdminPhotoSig(req.params.id, req.params.photoId, sig, exp)) {
+        return res.status(403).json({ error: "Invalid or expired signature" });
+      }
+
+      const [photo] = await db
+        .select()
+        .from(galleryPhotos)
+        .where(and(eq(galleryPhotos.id, req.params.photoId), eq(galleryPhotos.galleryId, req.params.id)));
+
+      if (!photo) return res.status(404).json({ error: "Photo not found" });
+
+      const file = await objectStorage.getObjectEntityFile(photo.storageKey);
+      await objectStorage.downloadObject(file, res, 86400);
+    } catch (error: unknown) {
+      console.error("[Gallery] Error serving admin photo:", error);
+      res.status(500).json({ error: "Failed to serve photo" });
     }
   });
 
