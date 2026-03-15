@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { useUpload } from "@/hooks/use-upload";
-import { Send, Loader2, MessageCircle, User, Camera, AlertCircle, Paperclip, Mic, FileText, Play, Pause, Download, X, Image, Video, Clock, CheckCheck, Bot, Bell, Phone, Lock, ShieldCheck } from "lucide-react";
+import { Send, Loader2, MessageCircle, User, Camera, AlertCircle, Paperclip, Mic, FileText, Play, Pause, Download, X, Image, Video, Clock, CheckCheck, Bell, Phone, Lock, ShieldCheck } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { getOrCreateKey, storeKeyFromRemote, getExportedKey, encryptMessage, decryptMessage, isEncrypted } from "@/lib/e2ee";
 import VoiceCall from "@/components/voice-call";
@@ -661,10 +661,6 @@ export default function ClientChat() {
                 return (
                   <div key={msg.id} className="flex justify-center my-2">
                     <div className="bg-blue-50 border border-blue-100 rounded-xl px-4 py-2.5 max-w-[85%]">
-                      <div className="flex items-center gap-2 mb-1">
-                        <Bot className="h-3.5 w-3.5 text-blue-500" />
-                        <span className="text-xs font-medium text-blue-500">Automated Message</span>
-                      </div>
                       <p className="text-sm text-blue-800">{decryptedMessages.get(msg.id) || msg.message}</p>
                       <p className="text-xs text-blue-400 mt-1">
                         {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
