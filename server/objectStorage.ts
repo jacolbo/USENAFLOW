@@ -269,6 +269,28 @@ export class ObjectStorageService {
     return destinationFileName;
   }
 
+  async uploadPrivateBuffer(
+    buffer: Buffer,
+    contentType: string = "application/octet-stream"
+  ): Promise<string> {
+    const privateObjectDir = this.getPrivateObjectDir();
+    const objectId = randomUUID();
+    const fullPath = `${privateObjectDir}/uploads/${objectId}`;
+
+    const { bucketName, objectName } = parseObjectPath(fullPath);
+    const bucket = objectStorageClient.bucket(bucketName);
+    const file = bucket.file(objectName);
+
+    await file.save(buffer, {
+      contentType,
+      metadata: {
+        cacheControl: "private, max-age=3600",
+      },
+    });
+
+    return `/objects/uploads/${objectId}`;
+  }
+
   // Get the public URL for a file in the public folder
   getPublicFileUrl(fileName: string): string {
     const publicPaths = this.getPublicObjectSearchPaths();

@@ -210,46 +210,29 @@ export default function GalleryDetailPage() {
   const handleUpload = async (files: FileList, setId: string) => {
     if (!files.length) return;
     setUploading(true);
+    let uploaded = 0;
     try {
-      const urlRes = await fetch(`/api/galleries/${id}/photos/upload-url`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", ...headers },
-        body: JSON.stringify({ count: files.length }),
-      });
-      if (!urlRes.ok) throw new Error("Failed to get upload URLs");
-      const { urls } = await urlRes.json();
-
-      const photosToRegister: Array<{ setId: string; filename: string; storageKey: string; fileSize: number }> = [];
-
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
-        const { uploadUrl, storageKey } = urls[i];
-
-        await fetch(uploadUrl, {
-          method: "PUT",
+        const params = new URLSearchParams({ setId, filename: file.name });
+        const res = await fetch(`/api/galleries/${id}/photos/upload?${params}`, {
+          method: "POST",
+          headers: { "Content-Type": file.type, ...headers },
           body: file,
-          headers: { "Content-Type": file.type },
         });
-
-        photosToRegister.push({
-          setId,
-          filename: file.name,
-          storageKey,
-          fileSize: file.size,
-        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({ error: "Upload failed" }));
+          throw new Error(err.error || `Failed to upload ${file.name}`);
+        }
+        uploaded++;
       }
-
-      await fetch(`/api/galleries/${id}/photos/batch`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", ...headers },
-        body: JSON.stringify({ photos: photosToRegister }),
-      });
 
       queryClient.invalidateQueries({ queryKey: ["/api/galleries", id, "photos"] });
       queryClient.invalidateQueries({ queryKey: ["/api/galleries", id] });
-      toast({ title: "Photos uploaded", description: `${files.length} photo(s) added` });
+      toast({ title: "Photos uploaded", description: `${uploaded} photo(s) added` });
     } catch (e: unknown) {
-      toast({ title: "Upload failed", description: e instanceof Error ? e.message : "Unknown error", variant: "destructive" });
+      const msg = e instanceof Error ? e.message : "Unknown error";
+      toast({ title: "Upload failed", description: uploaded > 0 ? `${uploaded} uploaded, then: ${msg}` : msg, variant: "destructive" });
     } finally {
       setUploading(false);
     }

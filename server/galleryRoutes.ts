@@ -1,3 +1,4 @@
+import express from "express";
 import type { Express, Request, Response } from "express";
 import { db } from "./db";
 import { eq, and, desc, asc, sql, inArray } from "drizzle-orm";
@@ -463,6 +464,59 @@ export function registerGalleryRoutes(app: Express) {
     } catch (error: unknown) {
       console.error("[Gallery]", error);
       res.status(500).json({ error: "Failed to generate upload URLs" });
+    }
+  });
+
+  app.post("/api/galleries/:id/photos/upload",
+    express.raw({ type: ["image/*", "video/*", "application/octet-stream"], limit: "50mb" }),
+    async (req: Request, res: Response) => {
+    try {
+      const user = getUserFromRequest(req);
+      if (!user || !canManageGallery(user.role)) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+
+      const setId = req.query.setId as string;
+      const filename = req.query.filename as string;
+      const contentType = req.headers["content-type"] || "application/octet-stream";
+      const fileSize = req.body ? req.body.length : 0;
+
+      if (!setId || !filename) {
+        return res.status(400).json({ error: "Missing required query params: setId, filename" });
+      }
+
+      if (!req.body || req.body.length === 0) {
+        return res.status(400).json({ error: "No file data received" });
+      }
+
+      const storageKey = await objectStorage.uploadPrivateBuffer(
+        req.body as Buffer,
+        contentType
+      );
+
+      const [maxOrder] = await db
+        .select({ max: sql<number>`coalesce(max(sort_order), -1)::int` })
+        .from(galleryPhotos)
+        .where(eq(galleryPhotos.setId, setId));
+
+      const [photo] = await db
+        .insert(galleryPhotos)
+        .values({
+          setId,
+          galleryId: req.params.id,
+          filename,
+          storageKey,
+          width: null,
+          height: null,
+          fileSize,
+          sortOrder: (maxOrder?.max || 0) + 1,
+        })
+        .returning();
+
+      res.json(photo);
+    } catch (error: unknown) {
+      console.error("[Gallery] Upload error:", error);
+      res.status(500).json({ error: "Failed to upload photo" });
     }
   });
 

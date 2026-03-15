@@ -20,16 +20,15 @@ interface ChatMessage {
 }
 
 export default function AiChatBubble() {
+  const role = localStorage.getItem("usena_role") || "";
+  const userId = localStorage.getItem("usena_user_id") || "";
+  const userName = localStorage.getItem("usena_name") || "";
+  const isLoggedIn = !!userId && !!role;
+
   const [isOpen, setIsOpen] = useState(false);
   const [input, setInput] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-
-  const role = localStorage.getItem("usena_role") || "";
-  const userId = localStorage.getItem("usena_user_id") || "";
-  const userName = localStorage.getItem("usena_name") || "";
-
-  if (!userId || !role) return null;
 
   const headers = getAdminHeaders(role, userId);
 
@@ -41,6 +40,7 @@ export default function AiChatBubble() {
       return res.json();
     },
     refetchInterval: 30000,
+    enabled: isLoggedIn,
   });
 
   const unreadCount = unreadData?.count || 0;
@@ -52,7 +52,7 @@ export default function AiChatBubble() {
       if (!res.ok) throw new Error("Failed to fetch");
       return res.json();
     },
-    enabled: isOpen,
+    enabled: isOpen && isLoggedIn,
   });
 
   const markSeen = useMutation({
@@ -103,6 +103,8 @@ export default function AiChatBubble() {
       setTimeout(() => inputRef.current?.focus(), 100);
     }
   }, [isOpen]);
+
+  if (!isLoggedIn) return null;
 
   const handleSend = () => {
     const trimmed = input.trim();
