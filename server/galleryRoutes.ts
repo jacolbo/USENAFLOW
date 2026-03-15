@@ -489,6 +489,15 @@ export function registerGalleryRoutes(app: Express) {
         return res.status(400).json({ error: "No file data received" });
       }
 
+      const [set] = await db
+        .select({ id: gallerySets.id })
+        .from(gallerySets)
+        .where(and(eq(gallerySets.id, setId), eq(gallerySets.galleryId, req.params.id)));
+
+      if (!set) {
+        return res.status(400).json({ error: "Invalid setId: does not belong to this gallery" });
+      }
+
       const storageKey = await objectStorage.uploadPrivateBuffer(
         req.body as Buffer,
         contentType
