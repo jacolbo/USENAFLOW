@@ -1104,9 +1104,9 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
   const regularProjects: Project[] = [];
   
   visibleProjects.forEach(project => {
-    const projectDate = new Date(project.dueDate || project.createdAt);
+    const projectDate = project.dueDate ? new Date(project.dueDate) : null;
     const isUnassigned = !project.assignedTo || project.assignedTo === "__UNASSIGN__";
-    const isFromPastWeek = projectDate < previousWeekStart;
+    const isFromPastWeek = projectDate ? projectDate < previousWeekStart : true;
     
     if (isUnassigned && isFromPastWeek) {
       unassignedRollover.push(project);

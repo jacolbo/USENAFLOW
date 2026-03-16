@@ -2493,39 +2493,30 @@ export default function Dashboard() {
     currentWeekStart.setDate(today.getDate() - dayOfWeek); // Go back to Sunday
     currentWeekStart.setHours(0, 0, 0, 0);
     
-    // Calculate week boundaries for 4 weeks: previous, current, next, next-of-next
     const previousWeekStart = new Date(currentWeekStart);
     previousWeekStart.setDate(currentWeekStart.getDate() - 7);
     
-    const nextWeekStart = new Date(currentWeekStart);
-    nextWeekStart.setDate(currentWeekStart.getDate() + 7);
-    
-    const nextOfNextWeekStart = new Date(currentWeekStart);
-    nextOfNextWeekStart.setDate(currentWeekStart.getDate() + 14);
-    
-    const nextOfNextWeekEnd = new Date(nextOfNextWeekStart);
-    nextOfNextWeekEnd.setDate(nextOfNextWeekStart.getDate() + 6);
-    nextOfNextWeekEnd.setHours(23, 59, 59, 999);
+    const futureWindowEnd = new Date(currentWeekStart);
+    futureWindowEnd.setDate(currentWeekStart.getDate() + 12 * 7 - 1);
+    futureWindowEnd.setHours(23, 59, 59, 999);
     
     // Archive cutoff: 2 weeks before current week
     const archiveCutoff = new Date(currentWeekStart);
     archiveCutoff.setDate(currentWeekStart.getDate() - 14);
 
-
-
     let filteredProjects = [];
 
     if (showArchive) {
-      // Archive: Projects from weeks that are 2+ weeks old
       filteredProjects = visibleProjects.filter(project => {
-        const projectDate = new Date(project.dueDate || project.createdAt);
+        if (!project.dueDate) return false;
+        const projectDate = new Date(project.dueDate);
         return projectDate < archiveCutoff;
       });
     } else {
-      // Current: Previous week, current week, next week, and next-of-next week
       filteredProjects = visibleProjects.filter(project => {
-        const projectDate = new Date(project.dueDate || project.createdAt);
-        return projectDate >= previousWeekStart && projectDate <= nextOfNextWeekEnd;
+        if (!project.dueDate) return false;
+        const projectDate = new Date(project.dueDate);
+        return projectDate >= previousWeekStart && projectDate <= futureWindowEnd;
       });
     }
 
@@ -2545,17 +2536,14 @@ export default function Dashboard() {
     const previousWeekStart = new Date(currentWeekStart);
     previousWeekStart.setDate(currentWeekStart.getDate() - 7);
     
-    const nextWeekStart = new Date(currentWeekStart);
-    nextWeekStart.setDate(currentWeekStart.getDate() + 7);
+    const futureWindowEnd = new Date(currentWeekStart);
+    futureWindowEnd.setDate(currentWeekStart.getDate() + 12 * 7 - 1);
+    futureWindowEnd.setHours(23, 59, 59, 999);
     
-    const nextWeekEnd = new Date(nextWeekStart);
-    nextWeekEnd.setDate(nextWeekStart.getDate() + 6);
-    nextWeekEnd.setHours(23, 59, 59, 999);
-    
-    // Include projects in 3-week window
     const inCurrentRange = visibleProjects.filter(project => {
-      const projectDate = new Date(project.dueDate || project.createdAt);
-      return projectDate >= previousWeekStart && projectDate <= nextWeekEnd;
+      if (!project.dueDate) return false;
+      const projectDate = new Date(project.dueDate);
+      return projectDate >= previousWeekStart && projectDate <= futureWindowEnd;
     }).length;
 
     return inCurrentRange;
@@ -2572,7 +2560,8 @@ export default function Dashboard() {
     archiveCutoff.setDate(currentWeekStart.getDate() - 14);
     
     return visibleProjects.filter(project => {
-      const projectDate = new Date(project.dueDate || project.createdAt);
+      if (!project.dueDate) return false;
+      const projectDate = new Date(project.dueDate);
       return projectDate < archiveCutoff;
     }).length;
   };
