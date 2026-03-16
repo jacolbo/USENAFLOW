@@ -2496,10 +2496,21 @@ export default function Dashboard() {
     const previousWeekStart = new Date(currentWeekStart);
     previousWeekStart.setDate(currentWeekStart.getDate() - 7);
     
-    const futureWindowEnd = new Date(currentWeekStart);
-    futureWindowEnd.setDate(currentWeekStart.getDate() + 12 * 7 - 1);
+    const minFutureEnd = new Date(currentWeekStart);
+    minFutureEnd.setDate(currentWeekStart.getDate() + 12 * 7 - 1);
+    minFutureEnd.setHours(23, 59, 59, 999);
+
+    let maxDueDate = minFutureEnd;
+    for (const project of visibleProjects) {
+      if (project.dueDate) {
+        const d = new Date(project.dueDate);
+        if (d > maxDueDate) maxDueDate = d;
+      }
+    }
+    const futureWindowEnd = new Date(maxDueDate);
+    futureWindowEnd.setDate(futureWindowEnd.getDate() + (6 - futureWindowEnd.getDay()));
     futureWindowEnd.setHours(23, 59, 59, 999);
-    
+
     // Archive cutoff: 2 weeks before current week
     const archiveCutoff = new Date(currentWeekStart);
     archiveCutoff.setDate(currentWeekStart.getDate() - 14);
@@ -2536,14 +2547,10 @@ export default function Dashboard() {
     const previousWeekStart = new Date(currentWeekStart);
     previousWeekStart.setDate(currentWeekStart.getDate() - 7);
     
-    const futureWindowEnd = new Date(currentWeekStart);
-    futureWindowEnd.setDate(currentWeekStart.getDate() + 12 * 7 - 1);
-    futureWindowEnd.setHours(23, 59, 59, 999);
-    
     const inCurrentRange = visibleProjects.filter(project => {
       if (!project.dueDate) return false;
       const projectDate = new Date(project.dueDate);
-      return projectDate >= previousWeekStart && projectDate <= futureWindowEnd;
+      return projectDate >= previousWeekStart;
     }).length;
 
     return inCurrentRange;
