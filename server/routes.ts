@@ -2703,12 +2703,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { getResendClient } = await import('./services/emailService');
       const { client, fromEmail } = await getResendClient();
 
+      const allProfiles = await storage.getAllClientProfiles();
+      const emailToFirstName = new Map<string, string>();
+      for (const p of allProfiles) {
+        if (p.clientEmail && p.clientName) {
+          const rawFirst = p.clientName.trim().split(/\s+/)[0] || '';
+          const firstName = rawFirst.charAt(0).toUpperCase() + rawFirst.slice(1).toLowerCase();
+          emailToFirstName.set(p.clientEmail.toLowerCase(), firstName);
+        }
+      }
+
       let recipients: string[] = [];
       if (clientEmails && Array.isArray(clientEmails) && clientEmails.length > 0) {
         recipients = clientEmails.filter((e: string) => e && !e.includes('@unknown.pending'));
       } else if (tier) {
-        const profiles = await storage.getAllClientProfiles();
-        recipients = profiles
+        recipients = allProfiles
           .filter(p => p.rewardTier === tier && p.clientEmail && !p.clientEmail.includes('@unknown.pending') && !p.unsubscribed && !p.clientEmail.startsWith('unsubscribed_'))
           .map(p => p.clientEmail);
       }
@@ -2716,6 +2725,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (recipients.length === 0) {
         return res.status(400).json({ error: "No valid email addresses found for the selected clients" });
       }
+
+      const fs = await import('fs');
+      const path = await import('path');
+      const logoPath = path.resolve('attached_assets/USENA-FLOW_1754522507856.png');
+      let logoDataUri = '';
+      try {
+        const logoBuffer = fs.readFileSync(logoPath);
+        logoDataUri = `data:image/png;base64,${logoBuffer.toString('base64')}`;
+      } catch {
+        // logo not found — email sends without image
+      }
+
+      const logoHtml = logoDataUri
+        ? `<img src="${logoDataUri}" alt="Jepson Myles Studio" style="max-width: 160px; height: auto; display: block; margin: 0 auto;" />`
+        : `<h1 style="color: #1a1a1a; font-size: 24px; margin: 0;">Jepson Myles Studio</h1>`;
 
       let sent = 0;
       let failed = 0;
@@ -2727,6 +2751,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const baseUrl = `${req.protocol}://${req.get('host')}`;
           const unsubLink = `${baseUrl}/unsubscribe/${unsubToken}`;
 
+          const firstName = emailToFirstName.get(email.toLowerCase()) || '';
+          const greeting = firstName ? `Hi ${firstName},<br><br>` : `Hi there,<br><br>`;
+
           await client.emails.send({
             from: fromEmail,
             to: email,
@@ -2734,10 +2761,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
             html: `
               <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
                 <div style="text-align: center; margin-bottom: 20px;">
-                  <h1 style="color: #1a1a1a; font-size: 24px; margin: 0;">Jepson Myles Studio</h1>
+                  ${logoHtml}
                 </div>
                 <div style="background: #f8f9fa; border-radius: 12px; padding: 24px; margin-bottom: 20px;">
-                  ${message.replace(/\n/g, '<br>')}
+                  ${greeting}${message.replace(/\n/g, '<br>')}
                 </div>
                 <div style="text-align: center; color: #888; font-size: 12px; margin-top: 20px;">
                   <p>Jepson Myles Studio | Photography Excellence</p>
