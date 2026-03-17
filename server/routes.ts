@@ -2744,20 +2744,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "No valid email addresses found for the selected clients" });
       }
 
-      const fs = await import('fs');
-      const path = await import('path');
-      const logoPath = path.resolve('attached_assets/USENA-FLOW_1754522507856.png');
-      let logoDataUri = '';
-      try {
-        const logoBuffer = fs.readFileSync(logoPath);
-        logoDataUri = `data:image/png;base64,${logoBuffer.toString('base64')}`;
-      } catch {
-        // logo not found — email sends without image
-      }
-
-      const logoHtml = logoDataUri
-        ? `<img src="${logoDataUri}" alt="Jepson Myles Studio" style="max-width: 160px; height: auto; display: block; margin: 0 auto;" />`
-        : `<h1 style="color: #1a1a1a; font-size: 24px; margin: 0;">Jepson Myles Studio</h1>`;
+      const studioHeader = `<h1 style="color: #1a1a1a; font-size: 24px; margin: 0; font-family: Arial, sans-serif;">Jepson Myles Studio</h1>`;
 
       let sent = 0;
       let failed = 0;
@@ -2779,7 +2766,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             html: `
               <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
                 <div style="text-align: center; margin-bottom: 20px;">
-                  ${logoHtml}
+                  ${studioHeader}
                 </div>
                 <div style="background: #f8f9fa; border-radius: 12px; padding: 24px; margin-bottom: 20px;">
                   ${greeting}${message.replace(/\n/g, '<br>')}
