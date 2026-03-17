@@ -20,7 +20,7 @@ import { WRUButton } from "@/components/WRUButton";
 import { useSSE } from "@/hooks/use-sse";
 import { User } from "@/lib/types";
 import { Project } from "@shared/schema";
-import { User as UserIcon, LogOut, Settings, Archive, ArrowRightLeft, DollarSign, AlertTriangle, Calendar, CalendarDays, MessageCircle, LayoutDashboard, Gift, Crown, RefreshCw, Mail, MoreHorizontal, Wrench, Trophy, Star, HardDrive, Sparkles, Brain, Bot, Zap, Image, Camera } from "lucide-react";
+import { User as UserIcon, LogOut, Settings, Archive, ArrowRightLeft, DollarSign, AlertTriangle, Calendar, CalendarDays, MessageCircle, LayoutDashboard, Gift, Crown, RefreshCw, Mail, MoreHorizontal, Wrench, Trophy, Star, HardDrive, Sparkles, Brain, Bot, Zap, Image, Camera, Trash2 } from "lucide-react";
 import { useLocation } from "wouter";
 import logoImage from "@assets/USENA-FLOW_1754522507856.png";
 import { WidgetCustomizer, useWidgetPreferences } from "@/components/widget-customizer";
@@ -1189,6 +1189,8 @@ function RewardsDashboard({ userRole }: { userRole: string }) {
   const [showEmailDialog, setShowEmailDialog] = useState(false);
   const [emailSubject, setEmailSubject] = useState("");
   const [emailMessage, setEmailMessage] = useState("");
+  const [selectedClients, setSelectedClients] = useState<Set<string>>(new Set());
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   const { data: rewardClients = [], isLoading } = useQuery<any[]>({
     queryKey: ["/api/rewards/clients"],
@@ -1256,6 +1258,28 @@ function RewardsDashboard({ userRole }: { userRole: string }) {
     },
     onError: (error: any) => {
       toast({ title: "Send Failed", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (emails: string[]) => {
+      await Promise.all(emails.map(email =>
+        fetch(`/api/rewards/clients/${encodeURIComponent(email)}`, {
+          method: "DELETE",
+          headers: { "x-usena-role": userRole },
+        }).then(r => { if (!r.ok) throw new Error(`Failed to delete ${email}`); })
+      ));
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/rewards/clients"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/rewards/summary"] });
+      const count = selectedClients.size;
+      setSelectedClients(new Set());
+      setShowDeleteConfirm(false);
+      toast({ title: "Clients Removed", description: `${count} client${count !== 1 ? 's' : ''} removed from rewards.` });
+    },
+    onError: (error: any) => {
+      toast({ title: "Delete Failed", description: error.message, variant: "destructive" });
     },
   });
 
@@ -1442,56 +1466,119 @@ function RewardsDashboard({ userRole }: { userRole: string }) {
                 No reward data yet. Click "Sync Rewards" to pull booking history from Google Calendar.
               </div>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-gray-200">
-                      <th className="text-left py-3 px-4 font-medium text-gray-600">Client</th>
-                      <th className="text-center py-3 px-4 font-medium text-gray-600">Tier</th>
-                      <th className="text-center py-3 px-4 font-medium text-gray-600">Bookings</th>
-                      <th className="text-center py-3 px-4 font-medium text-gray-600">Referrals</th>
-                      <th className="text-left py-3 px-4 font-medium text-gray-600">First Visit</th>
-                      <th className="text-left py-3 px-4 font-medium text-gray-600">Last Visit</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {rewardClients.map((client: any) => (
-                      <tr key={client.id} className="border-b border-gray-100 hover:bg-gray-50">
-                        <td className="py-3 px-4">
-                          <div className="font-medium text-gray-900">{client.clientName}</div>
-                          <div className="text-xs text-gray-500">
-                            {client.clientEmail && !client.clientEmail.includes('@unknown.pending') ? client.clientEmail : 'No email on file'}
-                          </div>
-                        </td>
-                        <td className="py-3 px-4 text-center">
-                          <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold border ${rewardTierColors[client.rewardTier] || rewardTierColors.Bronze}`}>
-                            {rewardTierIcons[client.rewardTier] || "🥉"} {client.rewardTier}
-                          </span>
-                        </td>
-                        <td className="py-3 px-4 text-center">
-                          <span className="inline-flex items-center gap-1 text-blue-700 bg-blue-50 px-2 py-1 rounded-full text-xs font-medium">
-                            <Calendar className="h-3 w-3" /> {client.totalBookings}
-                          </span>
-                        </td>
-                        <td className="py-3 px-4 text-center">
-                          <span className="inline-flex items-center gap-1 text-pink-700 bg-pink-50 px-2 py-1 rounded-full text-xs font-medium">
-                            <Gift className="h-3 w-3" /> {client.referralMatchCount}
-                          </span>
-                        </td>
-                        <td className="py-3 px-4">
-                          <span className="text-xs text-gray-500">
-                            {client.firstProjectAt ? new Date(client.firstProjectAt).toLocaleDateString() : '-'}
-                          </span>
-                        </td>
-                        <td className="py-3 px-4">
-                          <span className="text-xs text-gray-500">
-                            {client.lastProjectAt ? new Date(client.lastProjectAt).toLocaleDateString() : '-'}
-                          </span>
-                        </td>
+              <div>
+                {selectedClients.size > 0 && (
+                  <div className="flex items-center justify-between mb-3 px-2 py-2 bg-red-50 border border-red-200 rounded-lg">
+                    <span className="text-sm text-red-700 font-medium">
+                      {selectedClients.size} client{selectedClients.size !== 1 ? 's' : ''} selected
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => setSelectedClients(new Set())}
+                        className="text-gray-500 hover:text-gray-700 text-xs"
+                      >
+                        Cancel
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="destructive"
+                        onClick={() => setShowDeleteConfirm(true)}
+                        disabled={deleteMutation.isPending}
+                        className="flex items-center gap-1"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                        Delete Selected
+                      </Button>
+                    </div>
+                  </div>
+                )}
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-gray-200">
+                        <th className="py-3 px-3 w-8">
+                          <input
+                            type="checkbox"
+                            className="rounded border-gray-300 cursor-pointer"
+                            checked={selectedClients.size === rewardClients.length && rewardClients.length > 0}
+                            ref={el => { if (el) el.indeterminate = selectedClients.size > 0 && selectedClients.size < rewardClients.length; }}
+                            onChange={e => {
+                              if (e.target.checked) {
+                                setSelectedClients(new Set(rewardClients.map((c: any) => c.clientEmail)));
+                              } else {
+                                setSelectedClients(new Set());
+                              }
+                            }}
+                          />
+                        </th>
+                        <th className="text-left py-3 px-4 font-medium text-gray-600">Client</th>
+                        <th className="text-center py-3 px-4 font-medium text-gray-600">Tier</th>
+                        <th className="text-center py-3 px-4 font-medium text-gray-600">Bookings</th>
+                        <th className="text-center py-3 px-4 font-medium text-gray-600">Referrals</th>
+                        <th className="text-left py-3 px-4 font-medium text-gray-600">First Visit</th>
+                        <th className="text-left py-3 px-4 font-medium text-gray-600">Last Visit</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {rewardClients.map((client: any) => {
+                        const isSelected = selectedClients.has(client.clientEmail);
+                        return (
+                          <tr
+                            key={client.id}
+                            className={`border-b border-gray-100 hover:bg-gray-50 ${isSelected ? 'bg-red-50' : ''}`}
+                          >
+                            <td className="py-3 px-3 w-8">
+                              <input
+                                type="checkbox"
+                                className="rounded border-gray-300 cursor-pointer"
+                                checked={isSelected}
+                                onChange={e => {
+                                  const next = new Set(selectedClients);
+                                  if (e.target.checked) next.add(client.clientEmail);
+                                  else next.delete(client.clientEmail);
+                                  setSelectedClients(next);
+                                }}
+                              />
+                            </td>
+                            <td className="py-3 px-4">
+                              <div className="font-medium text-gray-900">{client.clientName}</div>
+                              <div className="text-xs text-gray-500">
+                                {client.clientEmail && !client.clientEmail.includes('@unknown.pending') ? client.clientEmail : 'No email on file'}
+                              </div>
+                            </td>
+                            <td className="py-3 px-4 text-center">
+                              <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold border ${rewardTierColors[client.rewardTier] || rewardTierColors.Bronze}`}>
+                                {rewardTierIcons[client.rewardTier] || "🥉"} {client.rewardTier}
+                              </span>
+                            </td>
+                            <td className="py-3 px-4 text-center">
+                              <span className="inline-flex items-center gap-1 text-blue-700 bg-blue-50 px-2 py-1 rounded-full text-xs font-medium">
+                                <Calendar className="h-3 w-3" /> {client.totalBookings}
+                              </span>
+                            </td>
+                            <td className="py-3 px-4 text-center">
+                              <span className="inline-flex items-center gap-1 text-pink-700 bg-pink-50 px-2 py-1 rounded-full text-xs font-medium">
+                                <Gift className="h-3 w-3" /> {client.referralMatchCount}
+                              </span>
+                            </td>
+                            <td className="py-3 px-4">
+                              <span className="text-xs text-gray-500">
+                                {client.firstProjectAt ? new Date(client.firstProjectAt).toLocaleDateString() : '-'}
+                              </span>
+                            </td>
+                            <td className="py-3 px-4">
+                              <span className="text-xs text-gray-500">
+                                {client.lastProjectAt ? new Date(client.lastProjectAt).toLocaleDateString() : '-'}
+                              </span>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             )}
           </>
@@ -1535,6 +1622,37 @@ function RewardsDashboard({ userRole }: { userRole: string }) {
                 className="bg-emerald-600 hover:bg-emerald-700 text-white"
               >
                 {emailMutation.isPending ? "Sending..." : `Send to ${tierEmailCount} Client${tierEmailCount !== 1 ? 's' : ''}`}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-red-700">
+              <Trash2 className="h-5 w-5" />
+              Remove {selectedClients.size} Client{selectedClients.size !== 1 ? 's' : ''}?
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 mt-2">
+            <p className="text-sm text-gray-600">
+              This will permanently remove {selectedClients.size === 1 ? 'this client' : `these ${selectedClients.size} clients`} from the rewards system. Their booking history won't be affected, but their reward profile and tier will be deleted.
+            </p>
+            <p className="text-xs text-gray-500">You can re-add them by running <strong>Sync Rewards</strong> again.</p>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="outline" onClick={() => setShowDeleteConfirm(false)} disabled={deleteMutation.isPending}>
+                Cancel
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={() => deleteMutation.mutate(Array.from(selectedClients))}
+                disabled={deleteMutation.isPending}
+                className="flex items-center gap-2"
+              >
+                <Trash2 className="h-4 w-4" />
+                {deleteMutation.isPending ? "Removing..." : `Remove ${selectedClients.size} Client${selectedClients.size !== 1 ? 's' : ''}`}
               </Button>
             </div>
           </div>

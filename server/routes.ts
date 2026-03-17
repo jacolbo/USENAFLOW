@@ -2656,6 +2656,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.delete("/api/rewards/clients/:email", async (req, res) => {
+    try {
+      const role = req.headers["x-usena-role"] as string;
+      if (!role || !["Admin", "Sales"].includes(role)) {
+        return res.status(403).json({ error: "Unauthorized" });
+      }
+      const email = decodeURIComponent(req.params.email);
+      if (!email) {
+        return res.status(400).json({ error: "Email is required" });
+      }
+      await storage.deleteClientProfileByEmail(email);
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error("Error deleting reward client:", error);
+      res.status(500).json({ error: "Failed to delete client" });
+    }
+  });
+
   app.get("/api/rewards/clients", async (req, res) => {
     try {
       const role = req.headers["x-usena-role"] as string;
