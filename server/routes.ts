@@ -2744,7 +2744,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "No valid email addresses found for the selected clients" });
       }
 
-      const studioHeader = `<h1 style="color: #1a1a1a; font-size: 24px; margin: 0; font-family: Arial, sans-serif;">Jepson Myles Studio</h1>`;
+      const fs = await import('fs');
+      const path = await import('path');
+      const jmLogoPath = path.resolve('attached_assets/image_1770646812353.png');
+      let jmLogoDataUri = '';
+      try {
+        const buf = fs.readFileSync(jmLogoPath);
+        jmLogoDataUri = `data:image/png;base64,${buf.toString('base64')}`;
+      } catch {
+        // fall back to text if file missing
+      }
+      const studioHeader = jmLogoDataUri
+        ? `<img src="${jmLogoDataUri}" alt="Jepson Myles Studio" style="max-width: 200px; height: auto; display: block; margin: 0 auto;" />`
+        : `<h1 style="color: #1a1a1a; font-size: 24px; margin: 0; font-family: Arial, sans-serif;">Jepson Myles Studio</h1>`;
 
       let sent = 0;
       let failed = 0;
