@@ -2973,6 +2973,14 @@ export default function Dashboard() {
                           </DropdownMenuItem>
                         )}
 
+                        {/* Shoot Briefs - Admin, LeadRetoucher, DataWrangler, Retouchers */}
+                        {['Admin', 'LeadRetoucher', 'DataWrangler', 'Retoucher1', 'Retoucher2', 'Retoucher3'].includes(user.role) && (
+                          <DropdownMenuItem onClick={() => setLocation('/shoot-briefs')}>
+                            <Camera className="h-4 w-4 mr-2" />
+                            Shoot Briefs
+                          </DropdownMenuItem>
+                        )}
+
                         {/* ShootTracker - Admin, LeadRetoucher, DataWrangler */}
                         {['Admin', 'LeadRetoucher', 'DataWrangler'].includes(user.role) && (
                           <DropdownMenuItem onClick={() => setLocation('/shoottracker')}>

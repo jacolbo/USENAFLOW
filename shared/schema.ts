@@ -1000,6 +1000,50 @@ export const insertGalleryAuthTokenSchema = createInsertSchema(galleryAuthTokens
   createdAt: true,
 });
 
+// Shoot Briefs tables
+export const shootBriefs = pgTable("shoot_briefs", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  projectId: varchar("project_id").notNull().unique().references(() => projects.id, { onDelete: "cascade" }),
+  notes: text("notes"),
+  createdBy: text("created_by").notNull(),
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+  updatedAt: timestamp("updated_at").notNull().default(sql`now()`),
+});
+
+export const shootBriefImages = pgTable("shoot_brief_images", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  briefId: varchar("brief_id").notNull().references(() => shootBriefs.id, { onDelete: "cascade" }),
+  imageType: text("image_type").notNull(),
+  storageKey: text("storage_key").notNull(),
+  caption: text("caption"),
+  sortOrder: integer("sort_order").notNull().default(0),
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+});
+
+export const insertShootBriefSchema = createInsertSchema(shootBriefs).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const updateShootBriefSchema = createInsertSchema(shootBriefs).partial().omit({
+  id: true,
+  projectId: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertShootBriefImageSchema = createInsertSchema(shootBriefImages).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type ShootBrief = typeof shootBriefs.$inferSelect;
+export type InsertShootBrief = z.infer<typeof insertShootBriefSchema>;
+export type UpdateShootBrief = z.infer<typeof updateShootBriefSchema>;
+export type ShootBriefImage = typeof shootBriefImages.$inferSelect;
+export type InsertShootBriefImage = z.infer<typeof insertShootBriefImageSchema>;
+
 // Gallery type exports
 export type Gallery = typeof galleries.$inferSelect;
 export type InsertGallery = z.infer<typeof insertGallerySchema>;

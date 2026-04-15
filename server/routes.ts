@@ -1,4 +1,5 @@
 import { registerGalleryRoutes } from "./galleryRoutes";
+import express from "express";
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { WebSocketServer, WebSocket } from "ws";
@@ -4258,6 +4259,224 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error: any) {
       console.error("[AI Chat] Error marking seen:", error.message);
       res.status(500).json({ error: "Failed to mark seen" });
+    }
+  });
+
+  // ============================================
+  // Shoot Brief Routes
+  // ============================================
+
+  const briefWriteRoles = ['Admin'];
+  const briefReadRoles = ['Admin', 'LeadRetoucher', 'Retoucher1', 'Retoucher2', 'Retoucher3', 'DataWrangler'];
+
+  app.get("/api/shoots/today", async (req, res) => {
+    try {
+      const role = req.headers["x-usena-role"] as string;
+      if (!briefReadRoles.includes(role)) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+      const dateParam = req.query.date as string | undefined;
+      const targetDate = dateParam ? new Date(dateParam) : new Date();
+      const startOfDay = new Date(targetDate);
+      startOfDay.setHours(0, 0, 0, 0);
+      const endOfDay = new Date(targetDate);
+      endOfDay.setHours(23, 59, 59, 999);
+
+      const allProjects = await storage.getAllProjects();
+      const shoots = allProjects.filter(p => {
+        if (!p.shootDate) return false;
+        const sd = new Date(p.shootDate);
+        return sd >= startOfDay && sd <= endOfDay;
+      });
+
+      const briefProjectIds = await storage.getProjectsWithBriefs();
+      const result = shoots.map(p => ({
+        ...p,
+        hasBrief: briefProjectIds.includes(p.id),
+      }));
+
+      res.json(result);
+    } catch (error) {
+      console.error("Error fetching today's shoots:", error);
+      res.status(500).json({ error: "Failed to fetch shoots" });
+    }
+  });
+
+  app.get("/api/projects-with-briefs", async (req, res) => {
+    try {
+      const role = req.headers["x-usena-role"] as string;
+      if (!briefReadRoles.includes(role)) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+      const projectIds = await storage.getProjectsWithBriefs();
+      res.json(projectIds);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch brief status" });
+    }
+  });
+
+  app.get("/api/shoot-briefs/:projectId", async (req, res) => {
+    try {
+      const role = req.headers["x-usena-role"] as string;
+      if (!briefReadRoles.includes(role)) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+      const brief = await storage.getShootBrief(req.params.projectId);
+      if (!brief) {
+        return res.status(404).json({ error: "Brief not found" });
+      }
+      const images = await storage.getShootBriefImages(brief.id);
+      res.json({ ...brief, images });
+    } catch (error) {
+      console.error("Error fetching shoot brief:", error);
+      res.status(500).json({ error: "Failed to fetch brief" });
+    }
+  });
+
+  app.post("/api/shoot-briefs/:projectId", async (req, res) => {
+    try {
+      const role = req.headers["x-usena-role"] as string;
+      const userId = req.headers["x-usena-user-id"] as string;
+      if (!briefWriteRoles.includes(role)) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+      const existing = await storage.getShootBrief(req.params.projectId);
+      if (existing) {
+        return res.status(409).json({ error: "Brief already exists for this project" });
+      }
+      const brief = await storage.createShootBrief({
+        projectId: req.params.projectId,
+        notes: req.body.notes || null,
+        createdBy: userId || "admin",
+      });
+      res.json(brief);
+    } catch (error) {
+      console.error("Error creating shoot brief:", error);
+      res.status(500).json({ error: "Failed to create brief" });
+    }
+  });
+
+  app.patch("/api/shoot-briefs/:projectId", async (req, res) => {
+    try {
+      const role = req.headers["x-usena-role"] as string;
+      if (!briefWriteRoles.includes(role)) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+      const updated = await storage.updateShootBrief(req.params.projectId, {
+        notes: req.body.notes,
+        createdBy: req.body.createdBy,
+      });
+      if (!updated) {
+        return res.status(404).json({ error: "Brief not found" });
+      }
+      res.json(updated);
+    } catch (error) {
+      console.error("Error updating shoot brief:", error);
+      res.status(500).json({ error: "Failed to update brief" });
+    }
+  });
+
+  app.delete("/api/shoot-briefs/:projectId", async (req, res) => {
+    try {
+      const role = req.headers["x-usena-role"] as string;
+      if (!briefWriteRoles.includes(role)) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+      const deleted = await storage.deleteShootBrief(req.params.projectId);
+      res.json({ success: deleted });
+    } catch (error) {
+      console.error("Error deleting shoot brief:", error);
+      res.status(500).json({ error: "Failed to delete brief" });
+    }
+  });
+
+  app.post("/api/shoot-briefs/:projectId/images/upload",
+    express.raw({ type: ["image/*", "application/octet-stream"], limit: "50mb" }),
+    async (req: express.Request, res: express.Response) => {
+    try {
+      const role = req.headers["x-usena-role"] as string;
+      if (!briefWriteRoles.includes(role)) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+
+      const imageType = req.query.imageType as string;
+      const caption = req.query.caption as string || null;
+      const contentType = req.headers["content-type"] || "application/octet-stream";
+
+      if (!imageType || !['reference', 'inspiration'].includes(imageType)) {
+        return res.status(400).json({ error: "imageType must be 'reference' or 'inspiration'" });
+      }
+
+      if (!req.body || req.body.length === 0) {
+        return res.status(400).json({ error: "No file data received" });
+      }
+
+      let brief = await storage.getShootBrief(req.params.projectId);
+      if (!brief) {
+        const userId = req.headers["x-usena-user-id"] as string;
+        brief = await storage.createShootBrief({
+          projectId: req.params.projectId,
+          notes: null,
+          createdBy: userId || "admin",
+        });
+      }
+
+      const objectStorageService = new ObjectStorageService();
+      const storageKey = await objectStorageService.uploadPrivateBuffer(
+        req.body as Buffer,
+        contentType
+      );
+
+      const existingImages = await storage.getShootBriefImages(brief.id);
+      const typeImages = existingImages.filter(img => img.imageType === imageType);
+      const nextOrder = typeImages.length > 0
+        ? Math.max(...typeImages.map(img => img.sortOrder)) + 1
+        : 0;
+
+      const image = await storage.addShootBriefImage({
+        briefId: brief.id,
+        imageType,
+        storageKey,
+        caption,
+        sortOrder: nextOrder,
+      });
+
+      res.json(image);
+    } catch (error) {
+      console.error("Error uploading shoot brief image:", error);
+      res.status(500).json({ error: "Failed to upload image" });
+    }
+  });
+
+  app.patch("/api/shoot-brief-images/:imageId", async (req, res) => {
+    try {
+      const role = req.headers["x-usena-role"] as string;
+      if (!briefWriteRoles.includes(role)) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+      const updated = await storage.updateShootBriefImageCaption(
+        req.params.imageId,
+        req.body.caption || ""
+      );
+      if (!updated) {
+        return res.status(404).json({ error: "Image not found" });
+      }
+      res.json(updated);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to update image caption" });
+    }
+  });
+
+  app.delete("/api/shoot-brief-images/:imageId", async (req, res) => {
+    try {
+      const role = req.headers["x-usena-role"] as string;
+      if (!briefWriteRoles.includes(role)) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+      const deleted = await storage.deleteShootBriefImage(req.params.imageId);
+      res.json({ success: deleted });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to delete image" });
     }
   });
 
