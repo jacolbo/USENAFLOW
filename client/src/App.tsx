@@ -19,7 +19,6 @@ import AiBrainPage from "@/pages/ai-brain";
 import GalleriesPage from "@/pages/galleries";
 import GalleryDetailPage from "@/pages/gallery-detail";
 import ClientGalleryPage from "@/pages/client-gallery";
-import ShootBriefsPage from "@/pages/shoot-briefs";
 import NotFound from "@/pages/not-found";
 
 function Router() {
@@ -40,7 +39,6 @@ function Router() {
       <Route path="/galleries" component={GalleriesPage} />
       <Route path="/galleries/:id" component={GalleryDetailPage} />
       <Route path="/g/:slug" component={ClientGalleryPage} />
-      <Route path="/shoot-briefs" component={ShootBriefsPage} />
       <Route component={NotFound} />
     </Switch>
   );

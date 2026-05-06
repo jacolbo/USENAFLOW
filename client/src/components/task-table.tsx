@@ -46,17 +46,6 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
     queryKey: ['/api/complaints'],
     enabled: hasRetouchingAbilities(user.role),
   });
-
-  const { data: projectsWithBriefs = [] } = useQuery<string[]>({
-    queryKey: ['/api/projects-with-briefs'],
-    queryFn: async () => {
-      const res = await fetch('/api/projects-with-briefs', {
-        headers: { "X-Usena-Role": user.role },
-      });
-      if (!res.ok) return [];
-      return res.json();
-    },
-  });
   
   // Helper function to get complaint status for a project
   const getProjectComplaintStatus = (projectId: string) => {
@@ -1564,16 +1553,6 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
                                             {getBonusIndicator(project) && (
                                               <Gift className="h-2.5 w-2.5 text-amber-600 dark:text-amber-400 ml-0.5" />
                                             )}
-                                            <span
-                                              onClick={(e) => {
-                                                e.stopPropagation();
-                                                window.location.href = `/shoot-briefs?projectId=${project.id}`;
-                                              }}
-                                              className="cursor-pointer ml-0.5"
-                                              title={projectsWithBriefs.includes(project.id) ? "Brief logged" : "No brief"}
-                                            >
-                                              <Camera className={`h-2.5 w-2.5 ${projectsWithBriefs.includes(project.id) ? "text-green-600 dark:text-green-400" : "text-gray-400 dark:text-gray-600"}`} />
-                                            </span>
                                           </motion.span>
                                         </Badge>
                                       </motion.div>

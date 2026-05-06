@@ -1,4 +1,4 @@
-import { type User, type InsertUser, type Project, type InsertProject, type UpdateProject, type ProjectNote, type InsertProjectNote, type UpdateProjectNote, type TradeOffer, type InsertTradeOffer, type UpdateTradeOffer, type WranglerCommission, type InsertWranglerCommission, type ProjectEvent, type InsertProjectEvent, type Complaint, type InsertComplaint, type ShoottrackerMeta, type InsertShoottrackerMeta, type UpdateShoottrackerMeta, type AppSetting, type CalendarEventStaging, type InsertCalendarEventStaging, type UpdateCalendarEventStaging, type ClientAuthToken, type InsertClientAuthToken, type ClientMessage, type InsertClientMessage, type DashboardPreferences, type InsertDashboardPreferences, type SneakPeek, type InsertSneakPeek, type Survey, type InsertSurvey, type Referral, type InsertReferral, type ClientProfile, type InsertClientProfile, type RewardClaim, type InsertRewardClaim, type EmailTemplate, type InsertEmailTemplate, type PushSubscription, type InsertPushSubscription, type StatusTransition, type InsertStatusTransition, type LeaveRequest, type InsertLeaveRequest, type AiTeamMessage, type InsertAiTeamMessage, type AiMemory, type InsertAiMemory, type AiAdminInstruction, type InsertAiAdminInstruction, type ShootBrief, type InsertShootBrief, type UpdateShootBrief, type ShootBriefImage, type InsertShootBriefImage, ProjectStatus, TradeOfferStatus, StagingStatus, users, projects, projectNotes, tradeOffers, wranglerCommissions, projectEvents, complaints, shoottrackerMeta, appSettings, calendarEventsStaging, clientAuthTokens, clientMessages, dashboardPreferences, sneakPeeks, clientSurveys, referrals, clientProfiles, referralRewardClaims, emailTemplates, pushSubscriptions, chatEncryptionKeys, projectStatusTransitions, leaveRequests, aiTeamMessages, aiMemory, aiAdminInstructions, shootBriefs, shootBriefImages } from "@shared/schema";
+import { type User, type InsertUser, type Project, type InsertProject, type UpdateProject, type ProjectNote, type InsertProjectNote, type UpdateProjectNote, type TradeOffer, type InsertTradeOffer, type UpdateTradeOffer, type WranglerCommission, type InsertWranglerCommission, type ProjectEvent, type InsertProjectEvent, type Complaint, type InsertComplaint, type ShoottrackerMeta, type InsertShoottrackerMeta, type UpdateShoottrackerMeta, type AppSetting, type CalendarEventStaging, type InsertCalendarEventStaging, type UpdateCalendarEventStaging, type ClientAuthToken, type InsertClientAuthToken, type ClientMessage, type InsertClientMessage, type DashboardPreferences, type InsertDashboardPreferences, type SneakPeek, type InsertSneakPeek, type Survey, type InsertSurvey, type Referral, type InsertReferral, type ClientProfile, type InsertClientProfile, type RewardClaim, type InsertRewardClaim, type EmailTemplate, type InsertEmailTemplate, type PushSubscription, type InsertPushSubscription, type StatusTransition, type InsertStatusTransition, type LeaveRequest, type InsertLeaveRequest, type AiTeamMessage, type InsertAiTeamMessage, type AiMemory, type InsertAiMemory, type AiAdminInstruction, type InsertAiAdminInstruction, ProjectStatus, TradeOfferStatus, StagingStatus, users, projects, projectNotes, tradeOffers, wranglerCommissions, projectEvents, complaints, shoottrackerMeta, appSettings, calendarEventsStaging, clientAuthTokens, clientMessages, dashboardPreferences, sneakPeeks, clientSurveys, referrals, clientProfiles, referralRewardClaims, emailTemplates, pushSubscriptions, chatEncryptionKeys, projectStatusTransitions, leaveRequests, aiTeamMessages, aiMemory, aiAdminInstructions } from "@shared/schema";
 import { db } from "./db";
 import { eq, sql, asc, and, ilike } from "drizzle-orm";
 import { randomUUID } from "crypto";
@@ -160,17 +160,6 @@ export interface IStorage {
   getActiveAdminInstructions(retoucherName?: string): Promise<AiAdminInstruction[]>;
   updateAdminInstruction(id: string, updates: Partial<AiAdminInstruction>): Promise<AiAdminInstruction | undefined>;
   deleteAdminInstruction(id: string): Promise<boolean>;
-
-  // Shoot Brief methods
-  getShootBrief(projectId: string): Promise<ShootBrief | undefined>;
-  createShootBrief(brief: InsertShootBrief): Promise<ShootBrief>;
-  updateShootBrief(projectId: string, updates: UpdateShootBrief): Promise<ShootBrief | undefined>;
-  deleteShootBrief(projectId: string): Promise<boolean>;
-  getShootBriefImages(briefId: string): Promise<ShootBriefImage[]>;
-  addShootBriefImage(image: InsertShootBriefImage): Promise<ShootBriefImage>;
-  updateShootBriefImageCaption(imageId: string, caption: string): Promise<ShootBriefImage | undefined>;
-  deleteShootBriefImage(imageId: string): Promise<boolean>;
-  getProjectsWithBriefs(): Promise<string[]>;
 }
 
 export class MemStorage implements IStorage {
@@ -995,16 +984,6 @@ export class MemStorage implements IStorage {
   async deleteAdminInstruction(id: string): Promise<boolean> {
     return this.adminInstructions.delete(id);
   }
-
-  async getShootBrief(_projectId: string): Promise<ShootBrief | undefined> { return undefined; }
-  async createShootBrief(_brief: InsertShootBrief): Promise<ShootBrief> { throw new Error("Not implemented"); }
-  async updateShootBrief(_projectId: string, _updates: UpdateShootBrief): Promise<ShootBrief | undefined> { return undefined; }
-  async deleteShootBrief(_projectId: string): Promise<boolean> { return false; }
-  async getShootBriefImages(_briefId: string): Promise<ShootBriefImage[]> { return []; }
-  async addShootBriefImage(_image: InsertShootBriefImage): Promise<ShootBriefImage> { throw new Error("Not implemented"); }
-  async updateShootBriefImageCaption(_imageId: string, _caption: string): Promise<ShootBriefImage | undefined> { return undefined; }
-  async deleteShootBriefImage(_imageId: string): Promise<boolean> { return false; }
-  async getProjectsWithBriefs(): Promise<string[]> { return []; }
 }
 
 // Database Storage Implementation
@@ -2079,58 +2058,6 @@ export class DatabaseStorage implements IStorage {
   async deleteAdminInstruction(id: string): Promise<boolean> {
     const result = await db.delete(aiAdminInstructions).where(eq(aiAdminInstructions.id, id)).returning();
     return result.length > 0;
-  }
-
-  async getShootBrief(projectId: string): Promise<ShootBrief | undefined> {
-    const [brief] = await db.select().from(shootBriefs).where(eq(shootBriefs.projectId, projectId));
-    return brief || undefined;
-  }
-
-  async createShootBrief(brief: InsertShootBrief): Promise<ShootBrief> {
-    const [created] = await db.insert(shootBriefs).values(brief).returning();
-    return created;
-  }
-
-  async updateShootBrief(projectId: string, updates: UpdateShootBrief): Promise<ShootBrief | undefined> {
-    const [updated] = await db.update(shootBriefs)
-      .set({ ...updates, updatedAt: new Date() })
-      .where(eq(shootBriefs.projectId, projectId))
-      .returning();
-    return updated || undefined;
-  }
-
-  async deleteShootBrief(projectId: string): Promise<boolean> {
-    const result = await db.delete(shootBriefs).where(eq(shootBriefs.projectId, projectId)).returning();
-    return result.length > 0;
-  }
-
-  async getShootBriefImages(briefId: string): Promise<ShootBriefImage[]> {
-    return await db.select().from(shootBriefImages)
-      .where(eq(shootBriefImages.briefId, briefId))
-      .orderBy(asc(shootBriefImages.sortOrder));
-  }
-
-  async addShootBriefImage(image: InsertShootBriefImage): Promise<ShootBriefImage> {
-    const [created] = await db.insert(shootBriefImages).values(image).returning();
-    return created;
-  }
-
-  async updateShootBriefImageCaption(imageId: string, caption: string): Promise<ShootBriefImage | undefined> {
-    const [updated] = await db.update(shootBriefImages)
-      .set({ caption })
-      .where(eq(shootBriefImages.id, imageId))
-      .returning();
-    return updated || undefined;
-  }
-
-  async deleteShootBriefImage(imageId: string): Promise<boolean> {
-    const result = await db.delete(shootBriefImages).where(eq(shootBriefImages.id, imageId)).returning();
-    return result.length > 0;
-  }
-
-  async getProjectsWithBriefs(): Promise<string[]> {
-    const results = await db.select({ projectId: shootBriefs.projectId }).from(shootBriefs);
-    return results.map(r => r.projectId);
   }
 }
 
