@@ -3,6 +3,7 @@ import { DEFAULT_SHOOTTRACKER_SETTINGS, shoottrackerSettingsSchema, Shoottracker
 import { 
   normalizeEvent, 
   shouldExclude, 
+  extractClientEmail,
 } from "./services/shoottrackerEngine";
 import { fetchCalendarEvents } from "./services/googleCalendar";
 
@@ -73,9 +74,21 @@ async function performAutoSync(): Promise<void> {
             }
             
             const existing = await storage.getStagedEventByCalendarEventId(event.id);
-            
+
+            const clientEmail = extractClientEmail(event.description, event.location, event.attendeeEmails);
+
             if (existing) {
-              if (existing.status === StagingStatus.IGNORED || existing.status === StagingStatus.PROMOTED) {
+              if (existing.status === StagingStatus.IGNORED) {
+                continue;
+              }
+              if (existing.status === StagingStatus.PROMOTED) {
+                if (clientEmail && existing.promotedProjectId) {
+                  const promotedProject = await storage.getProject(existing.promotedProjectId);
+                  if (promotedProject && !promotedProject.clientEmail) {
+                    await storage.updateProject(existing.promotedProjectId, { clientEmail });
+                    console.log(`📅 [AutoSync] Backfilled email ${clientEmail} to promoted project "${event.title}"`);
+                  }
+                }
                 continue;
               }
               await storage.updateStagedEvent(existing.id, {
@@ -85,6 +98,7 @@ async function performAutoSync(): Promise<void> {
                 eventStart: event.start,
                 eventEnd: event.end,
                 rawPayload: event.rawPayload,
+                clientEmail,
               });
               stats.updated++;
             } else {
@@ -98,6 +112,7 @@ async function performAutoSync(): Promise<void> {
                 eventEnd: event.end,
                 status: StagingStatus.PENDING,
                 rawPayload: event.rawPayload,
+                clientEmail,
               });
               stats.staged++;
             }

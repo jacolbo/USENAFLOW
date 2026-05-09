@@ -366,7 +366,13 @@ export function registerShoottrackerRoutes(app: Express): void {
       );
       
       const clientName = parseClientNameFromTitle(stagedEvent.title);
-      
+
+      // Safety net: if staging row was created before email-extraction was added,
+      // try to extract from description/location at promote time.
+      const resolvedClientEmail = stagedEvent.clientEmail
+        || extractClientEmail(stagedEvent.description || '', stagedEvent.location || '', [])
+        || null;
+
       const newProject = await storage.createProject({
         clientName,
         packageCount: stagedEvent.packagePhotos || 0,
@@ -379,7 +385,7 @@ export function registerShoottrackerRoutes(app: Express): void {
         calendarEventId: stagedEvent.calendarEventId,
         lastSyncedAt: new Date(),
         createdFrom: "CALENDAR",
-        clientEmail: stagedEvent.clientEmail || null,
+        clientEmail: resolvedClientEmail,
       });
       
       await storage.createShoottrackerMeta({
