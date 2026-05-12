@@ -107,7 +107,7 @@ export function WranglerNotesDialog({ open, onOpenChange, projectId, projectName
   });
 
   const updateNote = useMutation({
-    mutationFn: async ({ id, updates }: { id: string; updates: any }) => {
+    mutationFn: async ({ id, updates }: { id: string; updates: Partial<Pick<WranglerNote, "caption" | "body" | "sortOrder">> }) => {
       const r = await fetch(`/api/wrangler-notes/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json", ...headers },
