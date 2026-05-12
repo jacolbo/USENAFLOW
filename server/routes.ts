@@ -2088,7 +2088,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .replace(/&/g, "\\u0026")
         .replace(/\u2028/g, "\\u2028")
         .replace(/\u2029/g, "\\u2029");
-      const googleUrlJson = JSON.stringify(`/r/google/${req.params.token}`).replace(/</g, "\\u003C");
+      const googleUrlJson = JSON.stringify(GOOGLE_REVIEW_URL).replace(/</g, "\\u003C");
       const html = `<!doctype html>
 <html><head><meta charset="utf-8"><title>Copying review…</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -2107,7 +2107,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     <p class="ok">Now paste it on Google.</p>
     <div class="feedback" id="fb"></div>
     <p>If the copy didn't work, tap below to copy manually, then paste on Google.</p>
-    <a class="btn" href="/r/google/${req.params.token}" id="goBtn">Open Google review page</a>
+    <a class="btn" href="${GOOGLE_REVIEW_URL}" id="goBtn">Open Google review page</a>
   </div>
 <script>
   var text = ${feedbackJson};
