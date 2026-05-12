@@ -118,6 +118,13 @@ export interface IStorage {
     byRetoucher: Array<{ label: string; promptsSent: number; googleClicks: number; clickThroughRate: number }>;
     byTier: Array<{ label: string; promptsSent: number; googleClicks: number; clickThroughRate: number }>;
   }>;
+  getReviewToBookingConversion(windowDays: number): Promise<{
+    windowDays: number;
+    reviewersTotal: number;
+    reviewersWithRepeat: number;
+    conversionRate: number;
+    byTier: Array<{ label: string; reviewers: number; reviewersWithRepeat: number; conversionRate: number }>;
+  }>;
   
   // Referral methods
   createReferral(referral: InsertReferral): Promise<Referral>;
@@ -861,6 +868,15 @@ export class MemStorage implements IStorage {
     return {
       windowDays,
       byRetoucher: [],
+      byTier: [],
+    };
+  }
+  async getReviewToBookingConversion(windowDays: number) {
+    return {
+      windowDays,
+      reviewersTotal: 0,
+      reviewersWithRepeat: 0,
+      conversionRate: 0,
       byTier: [],
     };
   }
@@ -1856,6 +1872,93 @@ export class DatabaseStorage implements IStorage {
       windowDays: safeWindow,
       byRetoucher: normalize(retoucherRows, "Unassigned"),
       byTier: normalize(tierRows, "Unknown"),
+    };
+  }
+
+  async getReviewToBookingConversion(windowDays: number) {
+    const safeWindow = Math.max(1, Math.min(365, Math.floor(windowDays)));
+    const cutoff = new Date(Date.now() - safeWindow * 24 * 60 * 60 * 1000);
+
+    const toDate = (v: Date | string | null): Date | null => {
+      if (v === null || v === undefined) return null;
+      return v instanceof Date ? v : new Date(v);
+    };
+
+    // Earliest google click per client email (normalized) within the window
+    const reviewerRows = await db
+      .select({
+        clientEmailLower: sql<string>`LOWER(${clientSurveys.clientEmail})`,
+        firstClickAt: sql<Date | string>`MIN(${clientSurveys.googleClickedAt})`,
+        vipTier: sql<string | null>`MAX(${clientProfiles.vipTier})`,
+      })
+      .from(clientSurveys)
+      .leftJoin(clientProfiles, sql`LOWER(${clientSurveys.clientEmail}) = LOWER(${clientProfiles.clientEmail})`)
+      .where(sql`${clientSurveys.googleClickedAt} IS NOT NULL AND ${clientSurveys.googleClickedAt} >= ${cutoff}`)
+      .groupBy(sql`LOWER(${clientSurveys.clientEmail})`);
+
+    if (reviewerRows.length === 0) {
+      return {
+        windowDays: safeWindow,
+        reviewersTotal: 0,
+        reviewersWithRepeat: 0,
+        conversionRate: 0,
+        byTier: [],
+      };
+    }
+
+    const emails = reviewerRows.map((r) => r.clientEmailLower);
+    const projectRows = await db
+      .select({
+        clientEmailLower: sql<string | null>`LOWER(${projects.clientEmail})`,
+        createdAt: sql<Date | string>`${projects.createdAt}`,
+      })
+      .from(projects)
+      .where(sql`LOWER(${projects.clientEmail}) = ANY(${emails})`);
+
+    const projectsByEmail = new Map<string, Date[]>();
+    for (const p of projectRows) {
+      if (!p.clientEmailLower) continue;
+      const created = toDate(p.createdAt);
+      if (!created) continue;
+      const list = projectsByEmail.get(p.clientEmailLower) || [];
+      list.push(created);
+      projectsByEmail.set(p.clientEmailLower, list);
+    }
+
+    let reviewersWithRepeat = 0;
+    const tierCounts = new Map<string, { reviewers: number; repeats: number }>();
+    for (const r of reviewerRows) {
+      const click = toDate(r.firstClickAt);
+      if (!click) continue;
+      const list = projectsByEmail.get(r.clientEmailLower) || [];
+      const hasRepeat = list.some((d) => d.getTime() > click.getTime());
+      const tier = (r.vipTier && String(r.vipTier).trim()) || "Standard";
+      const bucket = tierCounts.get(tier) || { reviewers: 0, repeats: 0 };
+      bucket.reviewers += 1;
+      if (hasRepeat) {
+        bucket.repeats += 1;
+        reviewersWithRepeat += 1;
+      }
+      tierCounts.set(tier, bucket);
+    }
+
+    const reviewersTotal = reviewerRows.length;
+    const conversionRate = reviewersTotal > 0 ? reviewersWithRepeat / reviewersTotal : 0;
+    const byTier = Array.from(tierCounts.entries())
+      .map(([label, v]) => ({
+        label,
+        reviewers: v.reviewers,
+        reviewersWithRepeat: v.repeats,
+        conversionRate: v.reviewers > 0 ? v.repeats / v.reviewers : 0,
+      }))
+      .sort((a, b) => b.reviewers - a.reviewers);
+
+    return {
+      windowDays: safeWindow,
+      reviewersTotal,
+      reviewersWithRepeat,
+      conversionRate,
+      byTier,
     };
   }
 

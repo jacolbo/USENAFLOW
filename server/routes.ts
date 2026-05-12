@@ -2093,6 +2093,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get("/api/google-review/repeat-bookings", async (req, res) => {
+    try {
+      const role = req.headers["x-usena-role"] as string;
+      if (role !== "Admin") {
+        return res.status(403).json({ error: "Admin access required" });
+      }
+      const rawWindow = parseInt((req.query.windowDays as string) || "90", 10);
+      const windowDays = Number.isFinite(rawWindow) ? rawWindow : 90;
+      const stats = await storage.getReviewToBookingConversion(windowDays);
+      res.json(stats);
+    } catch (error: any) {
+      console.error("[GoogleReviewRepeat] Failed:", error?.message);
+      res.status(500).json({ error: "Failed to load repeat-booking stats" });
+    }
+  });
+
   app.get("/api/google-review/breakdown", async (req, res) => {
     try {
       const role = req.headers["x-usena-role"] as string;

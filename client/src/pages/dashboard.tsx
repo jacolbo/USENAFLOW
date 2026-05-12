@@ -479,6 +479,26 @@ function GoogleReviewFunnelWidget({ userRole, userId }: { userRole: string; user
     refetchOnWindowFocus: false,
   });
 
+  type RepeatTierRow = { label: string; reviewers: number; reviewersWithRepeat: number; conversionRate: number };
+  const { data: repeatStats } = useQuery<{
+    windowDays: number;
+    reviewersTotal: number;
+    reviewersWithRepeat: number;
+    conversionRate: number;
+    byTier: RepeatTierRow[];
+  }>({
+    queryKey: ["/api/google-review/repeat-bookings", windowDays],
+    queryFn: async () => {
+      const res = await fetch(`/api/google-review/repeat-bookings?windowDays=${windowDays}`, {
+        headers: getAdminHeaders(userRole, userId),
+      });
+      if (!res.ok) throw new Error("Failed to load repeat-booking stats");
+      return res.json();
+    },
+    staleTime: 60 * 1000,
+    refetchOnWindowFocus: false,
+  });
+
   const ctrPct = data ? (data.clickThroughRate * 100).toFixed(1) : "0.0";
 
   const renderBreakdownTable = (title: string, rows: BreakdownRow[] | undefined, nameHeader: string) => (
@@ -574,6 +594,19 @@ function GoogleReviewFunnelWidget({ userRole, userId }: { userRole: string; user
                 {ctrPct}%
               </div>
             </div>
+            <div className="mt-3 flex items-center justify-between bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-100 dark:border-emerald-900/40 rounded-lg px-4 py-3">
+              <div>
+                <div className="text-sm text-gray-700 dark:text-gray-300">
+                  Reviewers who booked again
+                </div>
+                <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                  {repeatStats?.reviewersWithRepeat ?? 0} of {repeatStats?.reviewersTotal ?? 0} clients who clicked the Google link came back for another booking
+                </div>
+              </div>
+              <div className="text-lg font-semibold text-emerald-700 dark:text-emerald-300">
+                {repeatStats ? (repeatStats.conversionRate * 100).toFixed(1) : "0.0"}%
+              </div>
+            </div>
             <div className="mt-3 flex justify-end">
               <button
                 onClick={() => setShowBreakdown(true)}
@@ -607,6 +640,39 @@ function GoogleReviewFunnelWidget({ userRole, userId }: { userRole: string; user
             <div className="space-y-6">
               {renderBreakdownTable("By retoucher", breakdown?.byRetoucher, "Retoucher")}
               {renderBreakdownTable("By client tier", breakdown?.byTier, "Tier")}
+              <div>
+                <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-2">
+                  Repeat bookings by tier
+                </h3>
+                {!repeatStats?.byTier || repeatStats.byTier.length === 0 ? (
+                  <div className="text-sm text-gray-500 dark:text-gray-400 py-3">No reviewers in this window.</div>
+                ) : (
+                  <div className="overflow-hidden rounded-md border border-gray-200 dark:border-gray-700">
+                    <table className="min-w-full text-sm">
+                      <thead className="bg-gray-50 dark:bg-gray-700/40 text-gray-600 dark:text-gray-300">
+                        <tr>
+                          <th className="text-left px-3 py-2 font-medium">Tier</th>
+                          <th className="text-right px-3 py-2 font-medium">Reviewers</th>
+                          <th className="text-right px-3 py-2 font-medium">Re-booked</th>
+                          <th className="text-right px-3 py-2 font-medium">Conversion</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                        {repeatStats.byTier.map((r, idx) => (
+                          <tr key={`repeat-${r.label}-${idx}`} className="text-gray-800 dark:text-gray-200">
+                            <td className="px-3 py-2">{r.label}</td>
+                            <td className="px-3 py-2 text-right">{r.reviewers}</td>
+                            <td className="px-3 py-2 text-right">{r.reviewersWithRepeat}</td>
+                            <td className="px-3 py-2 text-right font-medium text-emerald-700 dark:text-emerald-300">
+                              {(r.conversionRate * 100).toFixed(1)}%
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
             </div>
           )}
         </DialogContent>
