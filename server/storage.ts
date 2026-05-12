@@ -1660,7 +1660,11 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getAllSurveys(): Promise<Survey[]> {
-    return await db.select().from(clientSurveys).orderBy(desc(clientSurveys.createdAt));
+    // Newest-first by completedAt for completed surveys; pending fall back to createdAt
+    return await db.select().from(clientSurveys).orderBy(
+      desc(clientSurveys.completedAt),
+      desc(clientSurveys.createdAt),
+    );
   }
 
   async getSurveysAwaitingGooglePrompt(maxAgeMs: number): Promise<Survey[]> {

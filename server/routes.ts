@@ -2140,8 +2140,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/admin/surveys", async (req, res) => {
     try {
       const role = req.headers["x-usena-role"] as string;
-      if (!role || !["Admin", "Sales", "LeadRetoucher"].includes(role)) {
-        return res.status(403).json({ error: "Unauthorized" });
+      const userId = req.headers["x-usena-user-id"] as string;
+      if (!role || !userId) {
+        return res.status(401).json({ error: "Unauthorized: Missing user identification" });
+      }
+      if (!["Admin", "Sales", "LeadRetoucher"].includes(role)) {
+        return res.status(403).json({ error: "Forbidden: Admin, Sales, or Lead Retoucher access required" });
       }
       const surveys = await storage.getAllSurveys();
       const projectMap = new Map<string, any>();
