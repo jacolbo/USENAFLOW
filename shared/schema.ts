@@ -1050,4 +1050,5 @@ export const AVAILABLE_WIDGETS: WidgetConfig[] = [
   { id: "workload_forecast", name: "Workload Forecast", description: "AI-powered capacity planning for upcoming weeks", icon: "BarChart3", defaultEnabled: true, roles: ["Admin", "LeadRetoucher"] },
   { id: "predictive_risk", name: "Risk Alerts", description: "AI predictions for projects likely to go overdue", icon: "Sparkles", defaultEnabled: true, roles: ["Admin", "LeadRetoucher"] },
   { id: "gallery_activity", name: "Gallery Activity", description: "Recent client gallery selections and downloads", icon: "Image", defaultEnabled: true, roles: ["Admin", "LeadRetoucher", "Retoucher1", "Retoucher2", "Retoucher3", "DataWrangler", "Evans"] },
+  { id: "google_review_funnel", name: "Google Review Funnel", description: "Prompts, reminders, copy-helper opens & Google clicks", icon: "Star", defaultEnabled: true, roles: ["Admin"] },
 ];

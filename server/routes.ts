@@ -2057,6 +2057,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get("/api/google-review/stats", async (req, res) => {
+    try {
+      const role = req.headers["x-usena-role"] as string;
+      if (role !== "Admin") {
+        return res.status(403).json({ error: "Admin access required" });
+      }
+      const rawWindow = parseInt((req.query.windowDays as string) || "30", 10);
+      const windowDays = Number.isFinite(rawWindow) ? rawWindow : 30;
+      const stats = await storage.getGoogleReviewFunnelStats(windowDays);
+      res.json(stats);
+    } catch (error: any) {
+      console.error("[GoogleReviewStats] Failed:", error?.message);
+      res.status(500).json({ error: "Failed to load Google review stats" });
+    }
+  });
+
   // Click-tracking redirect for the Google review button (works in survey page + email)
   const GOOGLE_REVIEW_URL = "https://g.page/r/CZmxAdbD8i6uEAE/review";
 

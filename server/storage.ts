@@ -103,6 +103,14 @@ export interface IStorage {
   getAllSurveys(): Promise<Survey[]>;
   getSurveysAwaitingGooglePrompt(maxAgeMs: number): Promise<Survey[]>;
   getSurveysAwaitingReminder(): Promise<Survey[]>;
+  getGoogleReviewFunnelStats(windowDays: number): Promise<{
+    windowDays: number;
+    promptsSent: number;
+    remindersSent: number;
+    copyClicks: number;
+    googleClicks: number;
+    clickThroughRate: number;
+  }>;
   
   // Referral methods
   createReferral(referral: InsertReferral): Promise<Referral>;
@@ -810,6 +818,16 @@ export class MemStorage implements IStorage {
   }
   async getSurveysAwaitingReminder(): Promise<Survey[]> {
     return [];
+  }
+  async getGoogleReviewFunnelStats(windowDays: number) {
+    return {
+      windowDays,
+      promptsSent: 0,
+      remindersSent: 0,
+      copyClicks: 0,
+      googleClicks: 0,
+      clickThroughRate: 0,
+    };
   }
   async createReferral(referral: InsertReferral): Promise<Referral> {
     throw new Error("Not implemented in MemStorage");
@@ -1688,6 +1706,32 @@ export class DatabaseStorage implements IStorage {
         isNull(clientSurveys.googleClickedAt),
       )
     );
+  }
+
+  async getGoogleReviewFunnelStats(windowDays: number) {
+    const safeWindow = Math.max(1, Math.min(365, Math.floor(windowDays)));
+    const cutoff = new Date(Date.now() - safeWindow * 24 * 60 * 60 * 1000);
+    const [row] = await db
+      .select({
+        promptsSent: sql<number>`COUNT(*) FILTER (WHERE ${clientSurveys.googlePromptSentAt} IS NOT NULL AND ${clientSurveys.googlePromptSentAt} >= ${cutoff})`,
+        remindersSent: sql<number>`COALESCE(SUM(${clientSurveys.googlePromptRemindersSent}) FILTER (WHERE ${clientSurveys.googlePromptSentAt} IS NOT NULL AND ${clientSurveys.googlePromptSentAt} >= ${cutoff}), 0)`,
+        copyClicks: sql<number>`COUNT(*) FILTER (WHERE ${clientSurveys.copyClickedAt} IS NOT NULL AND ${clientSurveys.copyClickedAt} >= ${cutoff})`,
+        googleClicks: sql<number>`COUNT(*) FILTER (WHERE ${clientSurveys.googleClickedAt} IS NOT NULL AND ${clientSurveys.googleClickedAt} >= ${cutoff})`,
+      })
+      .from(clientSurveys);
+    const promptsSent = Number(row?.promptsSent ?? 0);
+    const remindersSent = Number(row?.remindersSent ?? 0);
+    const copyClicks = Number(row?.copyClicks ?? 0);
+    const googleClicks = Number(row?.googleClicks ?? 0);
+    const clickThroughRate = promptsSent > 0 ? googleClicks / promptsSent : 0;
+    return {
+      windowDays: safeWindow,
+      promptsSent,
+      remindersSent,
+      copyClicks,
+      googleClicks,
+      clickThroughRate,
+    };
   }
 
   async createReferral(referral: InsertReferral): Promise<Referral> {

@@ -437,6 +437,96 @@ function PredictiveRiskWidget({ userRole, userId }: { userRole: string; userId: 
   );
 }
 
+function GoogleReviewFunnelWidget({ userRole, userId }: { userRole: string; userId: string }) {
+  const [windowDays, setWindowDays] = useState<number>(30);
+  const { data, isLoading } = useQuery<{
+    windowDays: number;
+    promptsSent: number;
+    remindersSent: number;
+    copyClicks: number;
+    googleClicks: number;
+    clickThroughRate: number;
+  }>({
+    queryKey: ["/api/google-review/stats", windowDays],
+    queryFn: async () => {
+      const res = await fetch(`/api/google-review/stats?windowDays=${windowDays}`, {
+        headers: getAdminHeaders(userRole, userId),
+      });
+      if (!res.ok) throw new Error("Failed to load stats");
+      return res.json();
+    },
+    staleTime: 60 * 1000,
+    refetchOnWindowFocus: false,
+  });
+
+  const ctrPct = data ? (data.clickThroughRate * 100).toFixed(1) : "0.0";
+
+  return (
+    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm">
+      <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <Star className="h-5 w-5 text-yellow-500" />
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Google Review Funnel</h2>
+            <span className="text-sm text-gray-500 dark:text-gray-400">Last {windowDays} days</span>
+          </div>
+          <div className="flex items-center gap-1">
+            {[7, 30, 90].map((d) => (
+              <button
+                key={d}
+                onClick={() => setWindowDays(d)}
+                className={`text-xs px-2 py-1 rounded ${
+                  windowDays === d
+                    ? "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-300"
+                    : "text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700"
+                }`}
+              >
+                {d}d
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+      <div className="px-6 py-4">
+        {isLoading ? (
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 animate-pulse">
+            {[1, 2, 3, 4].map((i) => (
+              <div key={i} className="h-20 bg-gray-200 dark:bg-gray-600 rounded" />
+            ))}
+          </div>
+        ) : (
+          <>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <div className="bg-gray-50 dark:bg-gray-700/40 rounded-lg p-3">
+                <div className="text-xs text-gray-500 dark:text-gray-400">Prompts sent</div>
+                <div className="text-2xl font-semibold text-gray-900 dark:text-gray-100">{data?.promptsSent ?? 0}</div>
+              </div>
+              <div className="bg-gray-50 dark:bg-gray-700/40 rounded-lg p-3">
+                <div className="text-xs text-gray-500 dark:text-gray-400">Reminders sent</div>
+                <div className="text-2xl font-semibold text-gray-900 dark:text-gray-100">{data?.remindersSent ?? 0}</div>
+              </div>
+              <div className="bg-gray-50 dark:bg-gray-700/40 rounded-lg p-3">
+                <div className="text-xs text-gray-500 dark:text-gray-400">Copy-helper opens</div>
+                <div className="text-2xl font-semibold text-gray-900 dark:text-gray-100">{data?.copyClicks ?? 0}</div>
+              </div>
+              <div className="bg-gray-50 dark:bg-gray-700/40 rounded-lg p-3">
+                <div className="text-xs text-gray-500 dark:text-gray-400">Google clicks</div>
+                <div className="text-2xl font-semibold text-gray-900 dark:text-gray-100">{data?.googleClicks ?? 0}</div>
+              </div>
+            </div>
+            <div className="mt-4 flex items-center justify-between bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-100 dark:border-yellow-900/40 rounded-lg px-4 py-3">
+              <div className="text-sm text-gray-700 dark:text-gray-300">Click-through rate</div>
+              <div className="text-lg font-semibold text-yellow-700 dark:text-yellow-300">
+                {ctrPct}%
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function GalleryActivityWidget({ userRole, userId }: { userRole: string; userId: string }) {
   const [, setLocation] = useLocation();
   const { data: galleries = [], isLoading } = useQuery<Array<{ id: string; name: string; status: string; photoCount: number; favListCount: number }>>({
@@ -3397,6 +3487,12 @@ export default function Dashboard() {
             if (widgetId === "gallery_activity" && isWidgetVisible("gallery_activity") && !showArchive && 
                 !showCommissions && !showExtraPhotosSales && !showComplaints && !showRewards && !showReferrals && !showVipClients && !showDriveManager) {
               return <GalleryActivityWidget key={widgetId} userRole={user.role} userId={user.name || user.id || ''} />;
+            }
+
+            if (widgetId === "google_review_funnel" && isWidgetVisible("google_review_funnel") && !showArchive &&
+                !showCommissions && !showExtraPhotosSales && !showComplaints && !showRewards && !showReferrals && !showVipClients && !showDriveManager &&
+                user.role === "Admin") {
+              return <GoogleReviewFunnelWidget key={widgetId} userRole={user.role} userId={user.name || user.id || ''} />;
             }
 
             return null;
