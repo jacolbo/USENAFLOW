@@ -3,6 +3,9 @@ import { storage } from "./storage";
 import { sendGoogleReviewPromptEmail } from "./services/emailService";
 import { clientSurveys } from "@shared/schema";
 import { eq, and, isNull } from "drizzle-orm";
+import { isEnabled, recordFired } from "./services/automationRegistry";
+
+const AUTOMATION_ID = "bg_google_review_prompt";
 
 const FIVE_MINUTES_MS = 5 * 60 * 1000;
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -19,6 +22,7 @@ let reminderInFlight = false;
 
 async function processGooglePrompts() {
   if (promptInFlight) return;
+  if (!isEnabled(AUTOMATION_ID)) return;
   promptInFlight = true;
   try {
     const candidates = await storage.getSurveysAwaitingGooglePrompt(FIVE_MINUTES_MS);
@@ -55,6 +59,8 @@ async function processGooglePrompts() {
             .set({ googlePromptSentAt: null })
             .where(eq(clientSurveys.id, s.id));
           console.warn(`[GoogleReviewScheduler] Prompt send failed, rolled back: ${s.id}`);
+        } else {
+          recordFired(AUTOMATION_ID, `Prompt email sent to ${s.clientName} <${s.clientEmail}>`);
         }
       } catch (err: any) {
         console.error(`[GoogleReviewScheduler] Prompt error for ${s.id}:`, err.message);
@@ -69,6 +75,7 @@ async function processGooglePrompts() {
 
 async function processReminders() {
   if (reminderInFlight) return;
+  if (!isEnabled(AUTOMATION_ID)) return;
   reminderInFlight = true;
   try {
     const surveys = await storage.getSurveysAwaitingReminder();
@@ -114,6 +121,11 @@ async function processReminders() {
             .set({ googlePromptRemindersSent: sentCount, lastReminderSentAt: s.lastReminderSentAt })
             .where(eq(clientSurveys.id, s.id));
           console.warn(`[GoogleReviewScheduler] Reminder #${nextCount} send failed, rolled back: ${s.id}`);
+        } else {
+          recordFired(
+            AUTOMATION_ID,
+            `Reminder #${nextCount} (day ${offsetDays}) sent to ${s.clientName} <${s.clientEmail}>`,
+          );
         }
       } catch (err: any) {
         console.error(`[GoogleReviewScheduler] Reminder error for ${s.id}:`, err.message);

@@ -2065,6 +2065,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const survey = await storage.getSurveyByToken(req.params.token);
       if (survey && !survey.googleClickedAt) {
         await storage.updateSurvey(survey.id, { googleClickedAt: new Date() });
+        try {
+          const { recordFired } = await import('./services/automationRegistry');
+          recordFired('bg_google_review_prompt', `Google review link clicked by ${survey.clientName} <${survey.clientEmail}>`);
+        } catch (logErr: any) {
+          console.warn("[ReviewTrack] failed to record google click activity:", logErr?.message);
+        }
       }
     } catch (err: any) {
       console.error("[ReviewTrack] google click error:", err.message);
@@ -2080,6 +2086,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       if (!survey.copyClickedAt) {
         await storage.updateSurvey(survey.id, { copyClickedAt: new Date() });
+        try {
+          const { recordFired } = await import('./services/automationRegistry');
+          recordFired('bg_google_review_prompt', `Copy-helper opened by ${survey.clientName} <${survey.clientEmail}>`);
+        } catch (logErr: any) {
+          console.warn("[ReviewTrack] failed to record copy-helper activity:", logErr?.message);
+        }
       }
       // Safely encode feedback as a JS string literal AND neutralize </script> sequences
       const feedbackJson = JSON.stringify(survey.feedback || "")

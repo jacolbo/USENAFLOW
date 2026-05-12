@@ -153,6 +153,22 @@ register({
   connectsTo: ['ai_insights'],
 });
 
+register({
+  id: 'bg_google_review_prompt',
+  name: 'Google Review Prompt + Reminder Loop',
+  description: 'Sends the 5★ Google review prompt email 5 minutes after a satisfied client completes the survey, then up to 3 reminders on day 3, 7, and 14. Stops as soon as the client clicks the Google link.',
+  type: 'background',
+  category: 'Scheduled Processes',
+  trigger: 'Prompts checked every 60s, reminders every hour',
+  actions: [
+    'Send initial Google review prompt email',
+    'Send reminder emails on day 3, 7, 14 from the prompt',
+    'Track Google review link clicks (stops the loop)',
+    'Track copy-helper clicks from the email/survey',
+  ],
+  connectsTo: ['ai_email_variation'],
+});
+
 // --- DRIVE MONITOR TRIGGERED ---
 register({
   id: 'dm_detect_upload',
