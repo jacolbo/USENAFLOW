@@ -1510,50 +1510,113 @@ export async function sendGoogleReviewPromptEmail(
   const copyUrl = `${baseUrl}/r/copy/${surveyToken}`;
   const googleUrl = `${baseUrl}/r/google/${surveyToken}`;
 
-  const reminderLabel = isReminder
-    ? (reminderNumber === 1 ? 'a quick reminder' : reminderNumber === 2 ? 'one more nudge' : 'last reminder')
-    : '';
+  // Subject lines
+  let subject: string;
+  if (!isReminder) {
+    subject = "A personal note from Jepson";
+  } else if (reminderNumber === 1) {
+    subject = "Just a gentle nudge from Jepson";
+  } else if (reminderNumber === 2) {
+    subject = "A quick note while it's still fresh";
+  } else {
+    subject = "One last note from Jepson";
+  }
 
-  const subject = isReminder
-    ? `Just ${reminderLabel} — your Google review for Jepson Myles`
-    : `Thanks ${firstName}! Would you share this on Google?`;
+  // Body copy
+  let bodyOpening: string;
+  let askLine: string;
+  if (!isReminder) {
+    bodyOpening = `It's Jepson here. I want to say thank you for your kind words. Voices like yours help the next person decide to trust us with their own moments — and that means more to us than you know.`;
+    askLine = `Would you mind sharing it on Google? It would mean the world to us — takes about 30 seconds.`;
+  } else if (reminderNumber === 1) {
+    bodyOpening = `Jepson here again — I know inboxes get busy. Your kind words really did land with me, and I haven't forgotten them.`;
+    askLine = `If you have a spare 30 seconds today, would you share them on Google? It honestly helps the next person trust us with their moments.`;
+  } else if (reminderNumber === 2) {
+    bodyOpening = `It's Jepson — popping in one more time. No pressure at all, I just wanted to make this easy in case you'd been meaning to.`;
+    askLine = `Your review is ready below. One tap to copy, one tap to paste on Google, and you're done.`;
+  } else {
+    bodyOpening = `Jepson here, and this is my last little note on this — promise. Whether or not you share it on Google, your kind words have already made our week.`;
+    askLine = `If you'd still like to post it, the buttons below are all set. Otherwise, no worries at all — and thank you again.`;
+  }
 
-  const opener = isReminder
-    ? `Hi ${firstName}, just ${reminderLabel} — we'd still love your kind words on Google. Takes 30 seconds.`
-    : `Hi ${firstName}, thank you so much for your 5-star feedback! Would you mind sharing it on Google? It would mean the world to us — takes about 30 seconds.`;
+  // Google-style review card
+  const placeholderFeedback = "Loved working with Jepson Myles Studio.";
+  const reviewText = (feedback && feedback.trim()) ? feedback : placeholderFeedback;
+  const escapedReview = reviewText
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/\n/g, "<br>");
+  const escapedName = (clientName || firstName || "Client")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+  const initial = (firstName || clientName || "C").charAt(0).toUpperCase();
 
-  const feedbackBlock = feedback
-    ? `
-        <div style="background: #faf7f0; border-left: 4px solid #c9a961; padding: 18px 20px; margin: 24px 0; border-radius: 6px;">
-          <p style="color: #2c2c2c; font-size: 15px; line-height: 1.6; margin: 0; font-style: italic;">"${feedback.replace(/"/g, '&quot;').replace(/\n/g, '<br>')}"</p>
-        </div>
-        <p style="color: #555; font-size: 14px; line-height: 1.5; margin: 0 0 24px 0;">Tap <strong>Copy review</strong>, then <strong>Leave Google review</strong> and paste.</p>
-      `
-    : `<p style="color: #555; font-size: 14px; line-height: 1.5; margin: 0 0 24px 0;">Tap <strong>Leave Google review</strong> below — write a quick line about your experience and you're done.</p>`;
+  const stars = `
+    <span style="color: #FBBC04; font-size: 16px; letter-spacing: 1px;">&#9733;&#9733;&#9733;&#9733;&#9733;</span>
+  `;
 
-  const copyButton = feedback
-    ? `<a href="${copyUrl}" style="display: inline-block; background: #4CAF7D; color: white; text-decoration: none; padding: 14px 36px; border-radius: 8px; font-weight: 600; font-size: 16px; margin: 6px 4px;">Copy review</a>`
-    : '';
+  const reviewCard = `
+    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background: #ffffff; border: 1px solid #e0e0e0; border-radius: 8px; margin: 24px 0;">
+      <tr>
+        <td style="padding: 20px;">
+          <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
+            <tr>
+              <td width="44" valign="top" style="padding-right: 12px;">
+                <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="44" height="44" style="background: #1A73E8; border-radius: 22px;">
+                  <tr>
+                    <td align="center" valign="middle" style="color: #ffffff; font-family: Arial, sans-serif; font-size: 20px; font-weight: 700; height: 44px; line-height: 44px;">${initial}</td>
+                  </tr>
+                </table>
+              </td>
+              <td valign="top">
+                <div style="font-family: Arial, sans-serif; font-size: 15px; font-weight: 600; color: #202124; line-height: 1.2;">${escapedName}</div>
+                <div style="margin-top: 4px;">
+                  ${stars}
+                  <span style="color: #70757a; font-family: Arial, sans-serif; font-size: 13px; margin-left: 6px;">a moment ago</span>
+                </div>
+              </td>
+            </tr>
+            <tr>
+              <td colspan="2" style="padding-top: 14px;">
+                <p style="color: #202124; font-family: Arial, sans-serif; font-size: 15px; line-height: 1.6; margin: 0;">${escapedReview}</p>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  `;
+
+  const helperLine = `<p style="color: #555; font-family: Arial, sans-serif; font-size: 14px; line-height: 1.5; margin: 0 0 18px 0;">Tap <strong>Copy review</strong>, then <strong>Leave Google review</strong> and paste.</p>`;
+
+  const buttons = `
+    <div style="text-align: center; margin: 24px 0 8px 0;">
+      <a href="${copyUrl}" style="display: inline-block; background: #4CAF7D; color: #ffffff; text-decoration: none; padding: 14px 32px; border-radius: 8px; font-family: Arial, sans-serif; font-weight: 600; font-size: 16px; margin: 6px 4px;">Copy review</a>
+      <a href="${googleUrl}" style="display: inline-block; background: #2563EB; color: #ffffff; text-decoration: none; padding: 14px 32px; border-radius: 8px; font-family: Arial, sans-serif; font-weight: 600; font-size: 16px; margin: 6px 4px;">Leave Google review</a>
+    </div>
+  `;
 
   const htmlContent = `
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; background: #fff;">
-      ${getEmailHeader('Share Your Experience')}
+      ${getEmailHeader('A personal note')}
 
-      <p style="color: #2c2c2c; font-size: 16px; line-height: 1.6; margin: 0 0 16px 0;">${opener}</p>
+      <p style="color: #2c2c2c; font-size: 16px; line-height: 1.6; margin: 0 0 16px 0;">Hi ${firstName},</p>
 
-      ${feedbackBlock}
+      <p style="color: #2c2c2c; font-size: 16px; line-height: 1.6; margin: 0 0 16px 0;">${bodyOpening}</p>
 
-      <div style="text-align: center; margin: 28px 0;">
-        ${copyButton}
-        <a href="${googleUrl}" style="display: inline-block; background: #2563EB; color: white; text-decoration: none; padding: 14px 36px; border-radius: 8px; font-weight: 600; font-size: 16px; margin: 6px 4px;">Leave Google review</a>
-      </div>
+      <p style="color: #2c2c2c; font-size: 16px; line-height: 1.6; margin: 0 0 8px 0;">${askLine}</p>
 
-      <p style="color: #2c2c2c; font-size: 15px; line-height: 1.6;">Thanks again for choosing Jepson Myles Studio.</p>
+      ${reviewCard}
 
-      <p style="color: #2c2c2c; font-size: 15px; line-height: 1.6;">Cheers,<br><strong>Jepson Myles Team</strong></p>
+      ${helperLine}
 
-      <hr style="border: none; border-top: 1px solid #eee; margin: 28px 0;">
-      <p style="color: #999; font-size: 12px; text-align: center;">This is an automated message from Jepson Myles Studio.</p>
+      ${buttons}
+
+      <p style="color: #2c2c2c; font-size: 15px; line-height: 1.6; margin: 28px 0 4px 0;">With gratitude,</p>
+      <p style="color: #2c2c2c; font-size: 15px; line-height: 1.6; margin: 0;"><strong>Jepson</strong></p>
     </div>
   `;
 
