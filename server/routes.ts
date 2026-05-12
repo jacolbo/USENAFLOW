@@ -2057,6 +2057,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get("/api/google-places/summary", async (req, res) => {
+    try {
+      const role = req.headers["x-usena-role"] as string;
+      if (!["Admin", "Sales", "LeadRetoucher"].includes(role)) {
+        return res.status(403).json({ error: "Not authorised" });
+      }
+      const { fetchGooglePlaceSummary } = await import("./services/googlePlacesService");
+      const force = req.query.refresh === "1";
+      const summary = await fetchGooglePlaceSummary(force);
+      res.json(summary);
+    } catch (error: any) {
+      console.error("[GooglePlaces] Failed:", error?.message);
+      res.status(500).json({ error: "Failed to load Google reviews" });
+    }
+  });
+
   app.get("/api/google-review/stats", async (req, res) => {
     try {
       const role = req.headers["x-usena-role"] as string;

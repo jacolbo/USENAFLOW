@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import DOMPurify from "dompurify";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 import { motion, AnimatePresence } from "framer-motion";
 import { useToast } from "@/hooks/use-toast";
 import { LoginForm } from "@/components/login-form";
@@ -519,6 +519,170 @@ function GoogleReviewFunnelWidget({ userRole, userId }: { userRole: string; user
               <div className="text-lg font-semibold text-yellow-700 dark:text-yellow-300">
                 {ctrPct}%
               </div>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function GooglePlaceReviewsWidget({ userRole, userId }: { userRole: string; userId: string }) {
+  const { data, isLoading, error, refetch, isRefetching } = useQuery<{
+    placeName: string;
+    rating: number;
+    totalRatings: number;
+    url?: string;
+    fetchedAt: number;
+    reviews: Array<{
+      authorName: string;
+      authorPhotoUrl?: string;
+      rating: number;
+      text: string;
+      relativeTime: string;
+      time: number;
+    }>;
+  }>({
+    queryKey: ["/api/google-places/summary"],
+    queryFn: async ({ meta }) => {
+      const force = (meta as any)?.force ? "?refresh=1" : "";
+      const res = await fetch(`/api/google-places/summary${force}`, {
+        headers: getAdminHeaders(userRole, userId),
+      });
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        throw new Error(j.error || "Failed to load Google reviews");
+      }
+      return res.json();
+    },
+    staleTime: 10 * 60 * 1000,
+    refetchOnWindowFocus: false,
+    retry: false,
+  });
+
+  const renderStars = (rating: number) => {
+    const full = Math.round(rating);
+    return (
+      <span className="text-yellow-500" aria-label={`${rating} out of 5`}>
+        {"★".repeat(full)}
+        <span className="text-gray-300 dark:text-gray-600">{"★".repeat(Math.max(0, 5 - full))}</span>
+      </span>
+    );
+  };
+
+  return (
+    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm">
+      <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <Star className="h-5 w-5 text-yellow-500" />
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Live Google Reviews</h2>
+            {data && (
+              <span className="text-sm text-gray-500 dark:text-gray-400">{data.placeName}</span>
+            )}
+          </div>
+          <button
+            onClick={async () => {
+              const res = await fetch("/api/google-places/summary?refresh=1", {
+                headers: getAdminHeaders(userRole, userId),
+              });
+              if (res.ok) {
+                const json = await res.json();
+                queryClient.setQueryData(["/api/google-places/summary"], json);
+              } else {
+                refetch();
+              }
+            }}
+            disabled={isRefetching}
+            className="text-xs px-2 py-1 rounded text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700 disabled:opacity-50"
+          >
+            {isRefetching ? "Refreshing…" : "Refresh"}
+          </button>
+        </div>
+      </div>
+      <div className="px-6 py-4">
+        {isLoading ? (
+          <div className="animate-pulse space-y-3">
+            <div className="h-10 bg-gray-200 dark:bg-gray-600 rounded w-1/2" />
+            <div className="h-16 bg-gray-200 dark:bg-gray-600 rounded" />
+            <div className="h-16 bg-gray-200 dark:bg-gray-600 rounded" />
+          </div>
+        ) : error ? (
+          <div className="text-sm text-red-600 dark:text-red-400">
+            Couldn't load Google reviews: {(error as Error).message}.
+            <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+              Check that the Places API is enabled and that GOOGLE_PLACE_ID matches your business.
+            </div>
+          </div>
+        ) : !data ? null : (
+          <>
+            <div className="flex items-end justify-between mb-4">
+              <div>
+                <div className="flex items-baseline gap-2">
+                  <span className="text-3xl font-semibold text-gray-900 dark:text-gray-100">
+                    {data.rating.toFixed(1)}
+                  </span>
+                  <span className="text-lg">{renderStars(data.rating)}</span>
+                </div>
+                <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  {data.totalRatings.toLocaleString()} total reviews
+                </div>
+              </div>
+              {data.url && (
+                <a
+                  href={data.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-xs text-blue-600 dark:text-blue-400 hover:underline"
+                >
+                  View on Google →
+                </a>
+              )}
+            </div>
+
+            {data.reviews.length === 0 ? (
+              <div className="text-sm text-gray-500 dark:text-gray-400">No reviews yet.</div>
+            ) : (
+              <div className="space-y-3">
+                {data.reviews.map((rev, i) => (
+                  <div key={`${rev.authorName}-${rev.time}-${i}`} className="border border-gray-100 dark:border-gray-700 rounded-lg p-3">
+                    <div className="flex items-start gap-3">
+                      {rev.authorPhotoUrl ? (
+                        <img
+                          src={rev.authorPhotoUrl}
+                          alt={rev.authorName}
+                          className="w-9 h-9 rounded-full"
+                          referrerPolicy="no-referrer"
+                        />
+                      ) : (
+                        <div className="w-9 h-9 rounded-full bg-blue-600 text-white text-sm font-semibold flex items-center justify-center">
+                          {(rev.authorName || "?").charAt(0).toUpperCase()}
+                        </div>
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between">
+                          <div className="font-medium text-sm text-gray-900 dark:text-gray-100 truncate">
+                            {rev.authorName}
+                          </div>
+                          <div className="text-xs text-gray-400 dark:text-gray-500 ml-2 shrink-0">
+                            {rev.relativeTime}
+                          </div>
+                        </div>
+                        <div className="text-sm">{renderStars(rev.rating)}</div>
+                        {rev.text && (
+                          <p className="text-sm text-gray-700 dark:text-gray-300 mt-1 whitespace-pre-line">
+                            {rev.text}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="mt-3 text-xs text-gray-400 dark:text-gray-500 text-right">
+              Updated {new Date(data.fetchedAt).toLocaleTimeString()} · Google shows the 5 most recent reviews
             </div>
           </>
         )}
@@ -3493,6 +3657,12 @@ export default function Dashboard() {
                 !showCommissions && !showExtraPhotosSales && !showComplaints && !showRewards && !showReferrals && !showVipClients && !showDriveManager &&
                 user.role === "Admin") {
               return <GoogleReviewFunnelWidget key={widgetId} userRole={user.role} userId={user.name || user.id || ''} />;
+            }
+
+            if (widgetId === "google_place_reviews" && isWidgetVisible("google_place_reviews") && !showArchive &&
+                !showCommissions && !showExtraPhotosSales && !showComplaints && !showRewards && !showReferrals && !showVipClients && !showDriveManager &&
+                ["Admin", "Sales", "LeadRetoucher"].includes(user.role)) {
+              return <GooglePlaceReviewsWidget key={widgetId} userRole={user.role} userId={user.name || user.id || ''} />;
             }
 
             return null;

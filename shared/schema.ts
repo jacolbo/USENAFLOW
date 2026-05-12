@@ -1052,4 +1052,5 @@ export const AVAILABLE_WIDGETS: WidgetConfig[] = [
   { id: "predictive_risk", name: "Risk Alerts", description: "AI predictions for projects likely to go overdue", icon: "Sparkles", defaultEnabled: true, roles: ["Admin", "LeadRetoucher"] },
   { id: "gallery_activity", name: "Gallery Activity", description: "Recent client gallery selections and downloads", icon: "Image", defaultEnabled: true, roles: ["Admin", "LeadRetoucher", "Retoucher1", "Retoucher2", "Retoucher3", "DataWrangler", "Evans"] },
   { id: "google_review_funnel", name: "Google Review Funnel", description: "Prompts, reminders, copy-helper opens & Google clicks", icon: "Star", defaultEnabled: true, roles: ["Admin"] },
+  { id: "google_place_reviews", name: "Live Google Reviews", description: "Live rating and the 5 most recent reviews from Google", icon: "Star", defaultEnabled: true, roles: ["Admin", "Sales", "LeadRetoucher"] },
 ];
