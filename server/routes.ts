@@ -11,7 +11,7 @@ import { registerObjectStorageRoutes } from "./replit_integrations/object_storag
 import type { Notification, WebSocketMessage } from "@shared/schema";
 import { triggerManualRollover, performManualRolloverToNextWeek, performManualRollbackFromNextWeek } from "./rolloverScheduler";
 import { registerShoottrackerRoutes } from "./shoottrackerRoutes";
-import { sendChatLinkEmail, sendGalleryDeliveryEmail, sendSneakPeekEmail, sendSatisfactionSurveyEmail, sendSchedulingNotificationEmail, sendManualDelayNoticeEmail, generateToken, sendGoogleReviewPromptEmail } from "./services/emailService";
+import { sendChatLinkEmail, sendGalleryDeliveryEmail, sendSneakPeekEmail, sendSatisfactionSurveyEmail, sendSchedulingNotificationEmail, sendManualDelayNoticeEmail, generateToken } from "./services/emailService";
 import { evaluateLeaveRequest, aiTeamChat, generateDailySummaryForAdmin } from "./services/aiService";
 import { appSettings } from "@shared/schema";
 import { insertLeaveRequestSchema } from "@shared/schema";

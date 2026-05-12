@@ -31,7 +31,11 @@ async function processGooglePrompts() {
         const claimed = await db
           .update(clientSurveys)
           .set({ googlePromptSentAt: now })
-          .where(and(eq(clientSurveys.id, s.id), isNull(clientSurveys.googlePromptSentAt)))
+          .where(and(
+            eq(clientSurveys.id, s.id),
+            isNull(clientSurveys.googlePromptSentAt),
+            isNull(clientSurveys.googleClickedAt),
+          ))
           .returning({ id: clientSurveys.id });
         if (claimed.length === 0) continue;
 
