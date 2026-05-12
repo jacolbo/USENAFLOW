@@ -1539,6 +1539,22 @@ export async function sendGoogleReviewPromptEmail(
     askLine = `If you'd still like to post it, the buttons below are all set. Otherwise, no worries at all — and thank you again.`;
   }
 
+  const safeFeedback = feedback
+    ? feedback.replace(/"/g, '&quot;').replace(/\n/g, '<br>')
+    : '';
+
+  const variables: Record<string, string> = {
+    firstName,
+    feedback: safeFeedback,
+    copyUrl,
+    googleUrl,
+    emailHeader: getEmailHeader('A personal note'),
+  };
+
+  const templateKey = isReminder
+    ? `google_review_reminder_${reminderNumber}`
+    : 'google_review_prompt';
+
   // Google-style review card
   const placeholderFeedback = "Loved working with Jepson Myles Studio.";
   const reviewText = (feedback && feedback.trim()) ? feedback : placeholderFeedback;
@@ -1603,9 +1619,9 @@ export async function sendGoogleReviewPromptEmail(
     </div>
   `;
 
-  const htmlContent = `
+  let htmlContent = `
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; background: #fff;">
-      ${getEmailHeader('A personal note')}
+      ${variables.emailHeader}
 
       <p style="color: #2c2c2c; font-size: 16px; line-height: 1.6; margin: 0 0 16px 0;">Hi ${firstName},</p>
 
@@ -1623,6 +1639,12 @@ export async function sendGoogleReviewPromptEmail(
       <p style="color: #2c2c2c; font-size: 15px; line-height: 1.6; margin: 0;"><strong>Jepson</strong></p>
     </div>
   `;
+
+  const dbTemplate = await getTemplate(templateKey);
+  if (dbTemplate) {
+    subject = renderTemplate(dbTemplate.subject, variables);
+    htmlContent = renderTemplate(dbTemplate.htmlBody, variables);
+  }
 
   const emailType = isReminder ? EmailType.GOOGLE_REVIEW_REMINDER : EmailType.GOOGLE_REVIEW_PROMPT;
   try {

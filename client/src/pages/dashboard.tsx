@@ -2191,6 +2191,10 @@ function EmailTemplatesEditor() {
   const getPreviewHtml = () => {
     const sampleVars: Record<string, string> = {
       clientName: "Jane",
+      firstName: "Jane",
+      feedback: "The team was wonderful and the photos turned out beautifully. Highly recommend!",
+      copyUrl: "#",
+      googleUrl: "#",
       shootDate: "Saturday, January 15, 2026",
       deliveryWeek: "Week of February 2, 2026",
       packageCount: "50",

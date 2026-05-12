@@ -244,6 +244,106 @@ export const DEFAULT_EMAIL_TEMPLATES: InsertEmailTemplate[] = [
     isCustomized: false,
   },
   {
+    templateKey: "google_review_prompt",
+    name: "Google Review Prompt",
+    subject: "A personal note from Jepson",
+    htmlBody: `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; background: #fff;">
+  {{emailHeader}}
+  <p style="color: #2c2c2c; font-size: 16px; line-height: 1.6; margin: 0 0 16px 0;">Hi {{firstName}},</p>
+  <p style="color: #2c2c2c; font-size: 16px; line-height: 1.6; margin: 0 0 16px 0;">It's Jepson here. I want to say thank you for your kind words. Voices like yours help the next person decide to trust us with their own moments — and that means more to us than you know.</p>
+  <p style="color: #2c2c2c; font-size: 16px; line-height: 1.6; margin: 0 0 8px 0;">Would you mind sharing it on Google? It would mean the world to us — takes about 30 seconds.</p>
+  <div style="background: #ffffff; border: 1px solid #e0e0e0; border-radius: 8px; padding: 20px; margin: 24px 0;">
+    <div style="color: #202124; font-size: 15px; font-weight: 600;">{{firstName}}</div>
+    <div style="margin-top: 4px;"><span style="color: #FBBC04; font-size: 16px; letter-spacing: 1px;">&#9733;&#9733;&#9733;&#9733;&#9733;</span><span style="color: #70757a; font-size: 13px; margin-left: 6px;">a moment ago</span></div>
+    <p style="color: #202124; font-size: 15px; line-height: 1.6; margin: 14px 0 0 0;">&ldquo;{{feedback}}&rdquo;</p>
+  </div>
+  <p style="color: #555; font-size: 14px; line-height: 1.5; margin: 0 0 18px 0;">Tap <strong>Copy review</strong>, then <strong>Leave Google review</strong> and paste.</p>
+  <div style="text-align: center; margin: 24px 0 8px 0;">
+    <a href="{{copyUrl}}" style="display: inline-block; background: #4CAF7D; color: #ffffff; text-decoration: none; padding: 14px 32px; border-radius: 8px; font-weight: 600; font-size: 16px; margin: 6px 4px;">Copy review</a>
+    <a href="{{googleUrl}}" style="display: inline-block; background: #2563EB; color: #ffffff; text-decoration: none; padding: 14px 32px; border-radius: 8px; font-weight: 600; font-size: 16px; margin: 6px 4px;">Leave Google review</a>
+  </div>
+  <p style="color: #2c2c2c; font-size: 15px; line-height: 1.6; margin: 28px 0 4px 0;">With gratitude,</p>
+  <p style="color: #2c2c2c; font-size: 15px; line-height: 1.6; margin: 0;"><strong>Jepson</strong></p>
+</div>`,
+    availableVariables: ["firstName", "feedback", "copyUrl", "googleUrl", "emailHeader"],
+    isCustomized: false,
+  },
+  {
+    templateKey: "google_review_reminder_1",
+    name: "Google Review Reminder #1",
+    subject: "Just a gentle nudge from Jepson",
+    htmlBody: `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; background: #fff;">
+  {{emailHeader}}
+  <p style="color: #2c2c2c; font-size: 16px; line-height: 1.6; margin: 0 0 16px 0;">Hi {{firstName}},</p>
+  <p style="color: #2c2c2c; font-size: 16px; line-height: 1.6; margin: 0 0 16px 0;">Jepson here again — I know inboxes get busy. Your kind words really did land with me, and I haven't forgotten them.</p>
+  <p style="color: #2c2c2c; font-size: 16px; line-height: 1.6; margin: 0 0 8px 0;">If you have a spare 30 seconds today, would you share them on Google? It honestly helps the next person trust us with their moments.</p>
+  <div style="background: #ffffff; border: 1px solid #e0e0e0; border-radius: 8px; padding: 20px; margin: 24px 0;">
+    <div style="color: #202124; font-size: 15px; font-weight: 600;">{{firstName}}</div>
+    <div style="margin-top: 4px;"><span style="color: #FBBC04; font-size: 16px; letter-spacing: 1px;">&#9733;&#9733;&#9733;&#9733;&#9733;</span><span style="color: #70757a; font-size: 13px; margin-left: 6px;">a moment ago</span></div>
+    <p style="color: #202124; font-size: 15px; line-height: 1.6; margin: 14px 0 0 0;">&ldquo;{{feedback}}&rdquo;</p>
+  </div>
+  <p style="color: #555; font-size: 14px; line-height: 1.5; margin: 0 0 18px 0;">Tap <strong>Copy review</strong>, then <strong>Leave Google review</strong> and paste.</p>
+  <div style="text-align: center; margin: 24px 0 8px 0;">
+    <a href="{{copyUrl}}" style="display: inline-block; background: #4CAF7D; color: #ffffff; text-decoration: none; padding: 14px 32px; border-radius: 8px; font-weight: 600; font-size: 16px; margin: 6px 4px;">Copy review</a>
+    <a href="{{googleUrl}}" style="display: inline-block; background: #2563EB; color: #ffffff; text-decoration: none; padding: 14px 32px; border-radius: 8px; font-weight: 600; font-size: 16px; margin: 6px 4px;">Leave Google review</a>
+  </div>
+  <p style="color: #2c2c2c; font-size: 15px; line-height: 1.6; margin: 28px 0 4px 0;">With gratitude,</p>
+  <p style="color: #2c2c2c; font-size: 15px; line-height: 1.6; margin: 0;"><strong>Jepson</strong></p>
+</div>`,
+    availableVariables: ["firstName", "feedback", "copyUrl", "googleUrl", "emailHeader"],
+    isCustomized: false,
+  },
+  {
+    templateKey: "google_review_reminder_2",
+    name: "Google Review Reminder #2",
+    subject: "A quick note while it's still fresh",
+    htmlBody: `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; background: #fff;">
+  {{emailHeader}}
+  <p style="color: #2c2c2c; font-size: 16px; line-height: 1.6; margin: 0 0 16px 0;">Hi {{firstName}},</p>
+  <p style="color: #2c2c2c; font-size: 16px; line-height: 1.6; margin: 0 0 16px 0;">It's Jepson — popping in one more time. No pressure at all, I just wanted to make this easy in case you'd been meaning to.</p>
+  <p style="color: #2c2c2c; font-size: 16px; line-height: 1.6; margin: 0 0 8px 0;">Your review is ready below. One tap to copy, one tap to paste on Google, and you're done.</p>
+  <div style="background: #ffffff; border: 1px solid #e0e0e0; border-radius: 8px; padding: 20px; margin: 24px 0;">
+    <div style="color: #202124; font-size: 15px; font-weight: 600;">{{firstName}}</div>
+    <div style="margin-top: 4px;"><span style="color: #FBBC04; font-size: 16px; letter-spacing: 1px;">&#9733;&#9733;&#9733;&#9733;&#9733;</span><span style="color: #70757a; font-size: 13px; margin-left: 6px;">a moment ago</span></div>
+    <p style="color: #202124; font-size: 15px; line-height: 1.6; margin: 14px 0 0 0;">&ldquo;{{feedback}}&rdquo;</p>
+  </div>
+  <p style="color: #555; font-size: 14px; line-height: 1.5; margin: 0 0 18px 0;">Tap <strong>Copy review</strong>, then <strong>Leave Google review</strong> and paste.</p>
+  <div style="text-align: center; margin: 24px 0 8px 0;">
+    <a href="{{copyUrl}}" style="display: inline-block; background: #4CAF7D; color: #ffffff; text-decoration: none; padding: 14px 32px; border-radius: 8px; font-weight: 600; font-size: 16px; margin: 6px 4px;">Copy review</a>
+    <a href="{{googleUrl}}" style="display: inline-block; background: #2563EB; color: #ffffff; text-decoration: none; padding: 14px 32px; border-radius: 8px; font-weight: 600; font-size: 16px; margin: 6px 4px;">Leave Google review</a>
+  </div>
+  <p style="color: #2c2c2c; font-size: 15px; line-height: 1.6; margin: 28px 0 4px 0;">With gratitude,</p>
+  <p style="color: #2c2c2c; font-size: 15px; line-height: 1.6; margin: 0;"><strong>Jepson</strong></p>
+</div>`,
+    availableVariables: ["firstName", "feedback", "copyUrl", "googleUrl", "emailHeader"],
+    isCustomized: false,
+  },
+  {
+    templateKey: "google_review_reminder_3",
+    name: "Google Review Reminder #3 (Last)",
+    subject: "One last note from Jepson",
+    htmlBody: `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; background: #fff;">
+  {{emailHeader}}
+  <p style="color: #2c2c2c; font-size: 16px; line-height: 1.6; margin: 0 0 16px 0;">Hi {{firstName}},</p>
+  <p style="color: #2c2c2c; font-size: 16px; line-height: 1.6; margin: 0 0 16px 0;">Jepson here, and this is my last little note on this — promise. Whether or not you share it on Google, your kind words have already made our week.</p>
+  <p style="color: #2c2c2c; font-size: 16px; line-height: 1.6; margin: 0 0 8px 0;">If you'd still like to post it, the buttons below are all set. Otherwise, no worries at all — and thank you again.</p>
+  <div style="background: #ffffff; border: 1px solid #e0e0e0; border-radius: 8px; padding: 20px; margin: 24px 0;">
+    <div style="color: #202124; font-size: 15px; font-weight: 600;">{{firstName}}</div>
+    <div style="margin-top: 4px;"><span style="color: #FBBC04; font-size: 16px; letter-spacing: 1px;">&#9733;&#9733;&#9733;&#9733;&#9733;</span><span style="color: #70757a; font-size: 13px; margin-left: 6px;">a moment ago</span></div>
+    <p style="color: #202124; font-size: 15px; line-height: 1.6; margin: 14px 0 0 0;">&ldquo;{{feedback}}&rdquo;</p>
+  </div>
+  <p style="color: #555; font-size: 14px; line-height: 1.5; margin: 0 0 18px 0;">Tap <strong>Copy review</strong>, then <strong>Leave Google review</strong> and paste.</p>
+  <div style="text-align: center; margin: 24px 0 8px 0;">
+    <a href="{{copyUrl}}" style="display: inline-block; background: #4CAF7D; color: #ffffff; text-decoration: none; padding: 14px 32px; border-radius: 8px; font-weight: 600; font-size: 16px; margin: 6px 4px;">Copy review</a>
+    <a href="{{googleUrl}}" style="display: inline-block; background: #2563EB; color: #ffffff; text-decoration: none; padding: 14px 32px; border-radius: 8px; font-weight: 600; font-size: 16px; margin: 6px 4px;">Leave Google review</a>
+  </div>
+  <p style="color: #2c2c2c; font-size: 15px; line-height: 1.6; margin: 28px 0 4px 0;">With gratitude,</p>
+  <p style="color: #2c2c2c; font-size: 15px; line-height: 1.6; margin: 0;"><strong>Jepson</strong></p>
+</div>`,
+    availableVariables: ["firstName", "feedback", "copyUrl", "googleUrl", "emailHeader"],
+    isCustomized: false,
+  },
+  {
     templateKey: "gallery_preview",
     name: "Gallery Preview (Pre-Delivery)",
     subject: "Your Photos Are Almost Ready! - Jepson Myles Studio",
