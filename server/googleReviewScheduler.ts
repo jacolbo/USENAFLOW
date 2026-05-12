@@ -4,8 +4,27 @@ import { sendGoogleReviewPromptEmail } from "./services/emailService";
 import { clientSurveys } from "@shared/schema";
 import { eq, and, isNull } from "drizzle-orm";
 import { isEnabled, recordFired } from "./services/automationRegistry";
+import { findMatchForClient } from "./services/googlePlacesService";
 
 const AUTOMATION_ID = "bg_google_review_prompt";
+const SUPPRESS_AUTOMATION_ID = "bg_google_review_suppress_existing";
+
+async function suppressIfAlreadyReviewed(s: { id: string; clientName: string; clientEmail: string }): Promise<boolean> {
+  if (!isEnabled(SUPPRESS_AUTOMATION_ID)) return false;
+  try {
+    const match = await findMatchForClient(s.clientName);
+    if (!match) return false;
+    await storage.markSurveyAlreadyReviewed(s.id, 'auto', match.authorName);
+    recordFired(
+      SUPPRESS_AUTOMATION_ID,
+      `Auto-suppressed ${s.clientName} <${s.clientEmail}> — matched Google review by "${match.authorName}"`,
+    );
+    return true;
+  } catch (err: any) {
+    console.warn(`[GoogleReviewScheduler] suppress check failed for ${s.id}:`, err?.message);
+    return false;
+  }
+}
 
 const FIVE_MINUTES_MS = 5 * 60 * 1000;
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -30,6 +49,8 @@ async function processGooglePrompts() {
       try {
         // Defence in depth: never send for surveys completed before launch
         if (!s.completedAt || s.completedAt < FEATURE_LAUNCH_AT) continue;
+        // Skip if client already has a Google review (auto-match against live Places API)
+        if (await suppressIfAlreadyReviewed(s)) continue;
         const now = new Date();
         // Atomic claim: only proceed if googlePromptSentAt is still NULL
         const claimed = await db
@@ -39,6 +60,7 @@ async function processGooglePrompts() {
             eq(clientSurveys.id, s.id),
             isNull(clientSurveys.googlePromptSentAt),
             isNull(clientSurveys.googleClickedAt),
+            eq(clientSurveys.alreadyReviewedOnGoogle, false),
           ))
           .returning({ id: clientSurveys.id });
         if (claimed.length === 0) continue;
@@ -85,6 +107,8 @@ async function processReminders() {
         const sentCount = s.googlePromptRemindersSent || 0;
         if (sentCount >= MAX_REMINDERS) continue;
         if (!s.googlePromptSentAt) continue;
+        // Skip reminder if client now appears in live Google reviews
+        if (await suppressIfAlreadyReviewed(s)) continue;
 
         // Cumulative offsets from the original prompt: day 3, day 7, day 14
         const offsetDays = REMINDER_OFFSETS_DAYS[sentCount];
@@ -101,6 +125,7 @@ async function processReminders() {
             eq(clientSurveys.id, s.id),
             eq(clientSurveys.googlePromptRemindersSent, sentCount),
             isNull(clientSurveys.googleClickedAt),
+            eq(clientSurveys.alreadyReviewedOnGoogle, false),
           ))
           .returning({ id: clientSurveys.id });
         if (claimed.length === 0) continue;

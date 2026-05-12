@@ -170,6 +170,22 @@ register({
 });
 
 register({
+  id: 'bg_google_review_suppress_existing',
+  name: 'Skip Review Prompt for Existing Reviewers',
+  description: 'Before sending each Google review prompt or reminder, checks the live Google Places API (5 most recent reviews) and suppresses the email if the client name fuzzy-matches a Google review author. Auto-matches set a persistent flag so the suppression survives the API window scrolling.',
+  type: 'background',
+  category: 'Scheduled Processes',
+  trigger: 'Each scheduled prompt/reminder tick (case-insensitive name match on cached Places data)',
+  actions: [
+    'Fuzzy-match client name against authorName on the 5 most recent Google reviews',
+    'Mark survey alreadyReviewedOnGoogle on match (source = auto)',
+    'Skip the outgoing prompt/reminder email',
+    'Exclude suppressed surveys from the funnel "Prompts sent" count',
+  ],
+  connectsTo: ['bg_google_review_prompt'],
+});
+
+register({
   id: 'comm_google_review_thanks',
   name: 'Google Review Thank-You Email',
   description: 'Sends a personal thank-you email from Jepson the first time a client clicks the Google review link, closing the loop after they post.',

@@ -575,6 +575,10 @@ export const clientSurveys = pgTable("client_surveys", {
   copyClickedAt: timestamp("copy_clicked_at"),
   googlePromptRemindersSent: integer("google_prompt_reminders_sent").notNull().default(0),
   lastReminderSentAt: timestamp("last_reminder_sent_at"),
+  alreadyReviewedOnGoogle: boolean("already_reviewed_on_google").notNull().default(false),
+  alreadyReviewedAt: timestamp("already_reviewed_at"),
+  alreadyReviewedSource: text("already_reviewed_source"),
+  alreadyReviewedMatchedAuthor: text("already_reviewed_matched_author"),
 });
 
 export const insertSurveySchema = createInsertSchema(clientSurveys).omit({

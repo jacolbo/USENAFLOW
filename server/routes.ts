@@ -2234,6 +2234,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Admin: manually mark a survey as already-reviewed-on-Google (or clear)
+  app.post("/api/admin/surveys/:id/already-reviewed", async (req, res) => {
+    try {
+      const role = req.headers["x-usena-role"] as string;
+      if (role !== "Admin") {
+        return res.status(403).json({ error: "Admin access required" });
+      }
+      const { value } = req.body || {};
+      const updated = value === false
+        ? await storage.clearSurveyAlreadyReviewed(req.params.id)
+        : await storage.markSurveyAlreadyReviewed(req.params.id, 'manual', null);
+      if (!updated) return res.status(404).json({ error: "Survey not found" });
+      try {
+        const { recordFired } = await import('./services/automationRegistry');
+        recordFired(
+          'bg_google_review_suppress_existing',
+          value === false
+            ? `Manual override cleared for ${updated.clientName} <${updated.clientEmail}>`
+            : `Manually marked already-reviewed: ${updated.clientName} <${updated.clientEmail}>`,
+        );
+      } catch {}
+      res.json(updated);
+    } catch (error: any) {
+      console.error("[AdminSurveys] already-reviewed:", error);
+      res.status(500).json({ error: "Failed to update survey" });
+    }
+  });
+
   // Referral endpoints
   app.get("/api/referrals", async (req, res) => {
     try {

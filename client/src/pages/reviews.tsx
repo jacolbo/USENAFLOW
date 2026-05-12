@@ -7,7 +7,9 @@ import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Star, ArrowLeft, Download, Check, X, Mail, Search, Loader2, MessageSquare } from "lucide-react";
+import { Star, ArrowLeft, Download, Check, X, Mail, Search, Loader2, MessageSquare, ShieldCheck, Undo2 } from "lucide-react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useToast } from "@/hooks/use-toast";
 
 type SurveyRow = {
   id: string;
@@ -25,6 +27,10 @@ type SurveyRow = {
   copyClickedAt: string | null;
   googlePromptRemindersSent: number;
   lastReminderSentAt: string | null;
+  alreadyReviewedOnGoogle: boolean;
+  alreadyReviewedAt: string | null;
+  alreadyReviewedSource: string | null;
+  alreadyReviewedMatchedAuthor: string | null;
   projectName: string;
   projectAssignedTo: string | null;
 };
@@ -76,6 +82,31 @@ export default function ReviewsPage() {
   });
 
   const allowed = ["Admin", "Sales", "LeadRetoucher"].includes(role);
+  const isAdmin = role === "Admin";
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  const markReviewedMutation = useMutation({
+    mutationFn: async ({ id, value }: { id: string; value: boolean }) => {
+      const res = await fetch(`/api/admin/surveys/${id}/already-reviewed`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-usena-role": role, "x-usena-user-id": userId },
+        body: JSON.stringify({ value }),
+      });
+      if (!res.ok) throw new Error(`${res.status}`);
+      return res.json();
+    },
+    onSuccess: (_data, vars) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/surveys"] });
+      toast({
+        title: vars.value ? "Marked as already reviewed" : "Override cleared",
+        description: vars.value
+          ? "No more Google review prompts will be sent to this client."
+          : "Client may receive Google review prompts again if eligible.",
+      });
+    },
+    onError: () => toast({ title: "Update failed", variant: "destructive" }),
+  });
 
   const completed = useMemo(() => (surveys || []).filter((s) => !!s.completedAt), [surveys]);
   const pending = useMemo(() => (surveys || []).filter((s) => !s.completedAt), [surveys]);
@@ -249,7 +280,17 @@ export default function ReviewsPage() {
                     <div className="mt-3 flex flex-wrap items-center gap-2">
                       {s.wouldRecommend === true && <Badge className="bg-green-100 text-green-800 hover:bg-green-100">Would recommend</Badge>}
                       {s.wouldRecommend === false && <Badge variant="secondary">Would not recommend</Badge>}
-                      {showTracking && (
+                      {s.alreadyReviewedOnGoogle && (
+                        <Badge className="bg-blue-100 text-blue-800 hover:bg-blue-100 gap-1">
+                          <ShieldCheck className="h-3 w-3" />
+                          Already reviewed on Google
+                          {s.alreadyReviewedSource === 'auto' && s.alreadyReviewedMatchedAuthor && (
+                            <span className="ml-1 font-normal opacity-80">— {s.alreadyReviewedMatchedAuthor}</span>
+                          )}
+                          {s.alreadyReviewedSource === 'manual' && <span className="ml-1 font-normal opacity-80">— manual</span>}
+                        </Badge>
+                      )}
+                      {showTracking && !s.alreadyReviewedOnGoogle && (
                         <>
                           <Badge variant="outline" className="gap-1">
                             {s.copyClickedAt ? <Check className="h-3 w-3 text-green-600" /> : <X className="h-3 w-3 text-gray-400" />}
@@ -266,6 +307,29 @@ export default function ReviewsPage() {
                             <span className="text-xs text-gray-500">Prompt sent {fmtDate(s.googlePromptSentAt)}</span>
                           )}
                         </>
+                      )}
+                      {isAdmin && showTracking && (
+                        s.alreadyReviewedOnGoogle ? (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-7 px-2 text-xs"
+                            disabled={markReviewedMutation.isPending}
+                            onClick={() => markReviewedMutation.mutate({ id: s.id, value: false })}
+                          >
+                            <Undo2 className="h-3 w-3 mr-1" /> Clear
+                          </Button>
+                        ) : (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-7 px-2 text-xs"
+                            disabled={markReviewedMutation.isPending}
+                            onClick={() => markReviewedMutation.mutate({ id: s.id, value: true })}
+                          >
+                            <ShieldCheck className="h-3 w-3 mr-1" /> Mark as already reviewed
+                          </Button>
+                        )
                       )}
                     </div>
                   </CardContent>
