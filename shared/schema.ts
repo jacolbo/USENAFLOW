@@ -177,6 +177,7 @@ export const clientMessages = pgTable("client_messages", {
   attachmentType: text("attachment_type"), // 'image', 'video', 'audio', 'file'
   attachmentName: text("attachment_name"),
   readAt: timestamp("read_at"),
+  tag: text("tag"), // optional tag like 'post_review_reply' to surface special replies
 });
 
 // Client authentication tokens for chat access

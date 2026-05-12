@@ -35,6 +35,7 @@ interface ProjectWithUnread {
   unreadCount: number;
   lastMessageAt: string | null;
   lastSenderType: string | null;
+  hasPostReviewReply?: boolean;
 }
 
 const ALLOWED_ROLES = [UserRoles.ADMIN, UserRoles.LEAD_RETOUCHER, UserRoles.RETOUCHER_1, UserRoles.RETOUCHER_2, UserRoles.RETOUCHER_3, UserRoles.EVANS];
@@ -110,6 +111,7 @@ export default function EditorChat() {
   const [messageText, setMessageText] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [showArchived, setShowArchived] = useState(false);
+  const [postReviewOnly, setPostReviewOnly] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [showSuggestion, setShowSuggestion] = useState(false);
   const [suggestedText, setSuggestedText] = useState("");
@@ -159,10 +161,10 @@ export default function EditorChat() {
   });
 
   const projectsQuery = useQuery<ProjectWithUnread[]>({
-    queryKey: ["/api/admin/chat/projects", { archived: showArchived }],
+    queryKey: ["/api/admin/chat/projects", { archived: showArchived, postReviewOnly }],
     queryFn: async () => {
       const headers = getAdminHeaders(userRole, userId);
-      const response = await fetch(`/api/admin/chat/projects?archived=${showArchived}&_t=${Date.now()}`, { 
+      const response = await fetch(`/api/admin/chat/projects?archived=${showArchived}&postReviewOnly=${postReviewOnly}&_t=${Date.now()}`, { 
         headers,
         cache: 'no-store'
       });
@@ -568,6 +570,18 @@ export default function EditorChat() {
                 Archived
               </button>
             </div>
+            <button
+              onClick={() => { setPostReviewOnly(v => !v); setSelectedProjectId(null); }}
+              className={`w-full text-xs font-medium py-1.5 rounded-md transition-colors border ${
+                postReviewOnly
+                  ? "bg-amber-100 text-amber-900 border-amber-300 dark:bg-amber-900/30 dark:text-amber-200 dark:border-amber-700"
+                  : "bg-background text-muted-foreground border-border hover:text-foreground"
+              }`}
+              data-testid="button-filter-post-review"
+              title="Show only chats where the client replied to the Google review thank-you email"
+            >
+              {postReviewOnly ? "Showing post-review replies" : "Filter: Post-review replies"}
+            </button>
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
@@ -600,7 +614,7 @@ export default function EditorChat() {
               </div>
             ) : (
               <div className="divide-y">
-                {filteredProjects.map(({ project, unreadCount, lastMessageAt, lastSenderType }) => {
+                {filteredProjects.map(({ project, unreadCount, lastMessageAt, lastSenderType, hasPostReviewReply }) => {
                   const nameColor = unreadCount > 0
                     ? "text-green-500 font-semibold"
                     : lastSenderType === "client"
@@ -615,7 +629,19 @@ export default function EditorChat() {
                     onClick={() => setSelectedProjectId(project.id)}
                   >
                     <div className="flex-1 min-w-0">
-                      <div className={`truncate ${nameColor}`}>{project.clientName}</div>
+                      <div className={`truncate flex items-center gap-1.5 ${nameColor}`}>
+                        <span className="truncate">{project.clientName}</span>
+                        {hasPostReviewReply && (
+                          <Badge
+                            variant="outline"
+                            className="text-[10px] px-1.5 py-0 h-4 border-amber-400 text-amber-700 bg-amber-50 dark:bg-amber-900/30 dark:text-amber-200 dark:border-amber-700 flex-shrink-0"
+                            title="Client replied after the Google review thank-you email"
+                            data-testid={`badge-post-review-${project.id}`}
+                          >
+                            Replied to thank-you
+                          </Badge>
+                        )}
+                      </div>
                       <div className="text-sm text-muted-foreground truncate">
                         {project.clientEmail}
                       </div>

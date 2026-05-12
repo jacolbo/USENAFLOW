@@ -12,6 +12,7 @@ import {
   getEmailBody,
   markAsRead 
 } from './gmailService';
+import { wasGoogleReviewThanksRecentlySent } from './emailService';
 
 // Track processed email IDs to avoid duplicates
 const processedEmails = new Set<string>();
@@ -161,12 +162,17 @@ async function processEmailReply(emailId: string): Promise<boolean> {
       return false;
     }
     
+    // Tag replies that arrive shortly after a Google review thank-you email,
+    // so admins can spot warm leads in the inbox.
+    const isPostReviewReply = await wasGoogleReviewThanksRecentlySent(projectId);
+
     // Add the message to the chat
     await db.insert(clientMessages).values({
       projectId,
       message: parsed.content,
       senderType: 'client',
       senderEmail: parsed.clientEmail,
+      tag: isPostReviewReply ? 'post_review_reply' : null,
     });
     
     console.log(`[GmailMonitor] Added client reply to project ${projectId}: "${parsed.content.substring(0, 50)}..."`);

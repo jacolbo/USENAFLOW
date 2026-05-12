@@ -40,6 +40,7 @@ import {
   sendChatLinkEmail,
   sendMessageNotificationEmail,
   generateToken,
+  wasGoogleReviewThanksRecentlySent,
 } from "./services/emailService";
 import { 
   sendDelayNotifications, 
@@ -1075,12 +1076,13 @@ export function registerShoottrackerRoutes(app: Express): void {
       const role = req.headers["x-usena-role"] as string;
       const userId = req.headers["x-usena-user-id"] as string;
       const archived = req.query.archived === 'true';
+      const postReviewOnly = req.query.postReviewOnly === 'true';
       
       // Admins and Lead Retouchers can see all projects, retouchers only their own
       const isAdmin = [UserRoles.ADMIN, UserRoles.LEAD_RETOUCHER].includes(role as any);
       const assignedTo = isAdmin ? undefined : userId;
       
-      const projectsWithCounts = await storage.getProjectsWithUnreadCounts(assignedTo, archived);
+      const projectsWithCounts = await storage.getProjectsWithUnreadCounts(assignedTo, archived, postReviewOnly);
       // Disable caching to ensure unread counts are always fresh
       res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
       res.set('Pragma', 'no-cache');
@@ -1447,6 +1449,10 @@ export function registerShoottrackerRoutes(app: Express): void {
         return res.status(400).json({ error: "No message content found" });
       }
       
+      // Tag replies that arrive shortly after a Google review thank-you,
+      // so they surface as warm leads in the admin inbox.
+      const isPostReviewReply = await wasGoogleReviewThanksRecentlySent(projectId);
+
       // Store the message
       const newMessage = await storage.createClientMessage({
         projectId,
@@ -1454,6 +1460,7 @@ export function registerShoottrackerRoutes(app: Express): void {
         senderEmail: cleanSenderEmail.toLowerCase(),
         message: messageContent,
         isRead: false,
+        tag: isPostReviewReply ? 'post_review_reply' : null,
       });
       
       console.log(`[Email Webhook] Message saved for project ${projectId} from ${cleanSenderEmail}: "${messageContent.substring(0, 50)}..."`);

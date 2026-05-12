@@ -2,7 +2,7 @@
 import { Resend } from 'resend';
 import { db } from '../db';
 import { emailLogs, projects, EmailType, type EmailTypeValue } from '@shared/schema';
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { formatDateYMD } from './shoottrackerEngine';
 import { sendEmail as sendGmailEmail, getMyEmailAddress } from './gmailService';
 
@@ -116,6 +116,32 @@ export async function getResendClient() {
 // Generate project-specific reply-to address for Resend inbound emails
 export function getProjectReplyToEmail(projectId: string): string {
   return `reply+${projectId}@email.jepsonmyles.co.za`;
+}
+
+// Number of days a client reply is considered a "post-review reply"
+// after a Google review thank-you email was sent.
+export const POST_REVIEW_REPLY_WINDOW_DAYS = 14;
+
+// Returns true if a GOOGLE_REVIEW_THANKS email was sent for the given project
+// within the post-review reply window. Used to tag inbound replies.
+export async function wasGoogleReviewThanksRecentlySent(projectId: string): Promise<boolean> {
+  try {
+    const cutoff = new Date(Date.now() - POST_REVIEW_REPLY_WINDOW_DAYS * 24 * 60 * 60 * 1000);
+    const rows = await db
+      .select({ id: emailLogs.id })
+      .from(emailLogs)
+      .where(
+        sql`${emailLogs.projectId} = ${projectId}
+            AND ${emailLogs.emailType} = ${EmailType.GOOGLE_REVIEW_THANKS}
+            AND ${emailLogs.status} = 'sent'
+            AND ${emailLogs.createdAt} >= ${cutoff}`
+      )
+      .limit(1);
+    return rows.length > 0;
+  } catch (err) {
+    console.error('[PostReviewReply] Failed to check recent thank-you email:', err);
+    return false;
+  }
 }
 
 interface EmailResult {
