@@ -20,6 +20,7 @@ import GalleriesPage from "@/pages/galleries";
 import GalleryDetailPage from "@/pages/gallery-detail";
 import ClientGalleryPage from "@/pages/client-gallery";
 import ReviewsPage from "@/pages/reviews";
+import TodayShoots from "@/pages/today-shoots";
 import NotFound from "@/pages/not-found";
 
 function Router() {
@@ -41,6 +42,7 @@ function Router() {
       <Route path="/galleries/:id" component={GalleryDetailPage} />
       <Route path="/g/:slug" component={ClientGalleryPage} />
       <Route path="/reviews" component={ReviewsPage} />
+      <Route path="/today" component={TodayShoots} />
       <Route component={NotFound} />
     </Switch>
   );

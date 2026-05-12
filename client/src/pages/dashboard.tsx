@@ -2863,6 +2863,17 @@ export default function Dashboard() {
   // Widget customization state - use user.id for stable per-user persistence
   // user.id is set during login from userCredentials.id (e.g., "earl", "admin", "lucky")
   const widgetUserId = user?.id || "";
+
+  // Photographer always lands on Today's Shoots — redirect immediately
+  // and short-circuit rendering to avoid flashing project data.
+  useEffect(() => {
+    if (user?.role === "Photographer") {
+      setLocation("/today");
+    }
+  }, [user?.role, setLocation]);
+  if (user?.role === "Photographer") {
+    return null;
+  }
   const { 
     widgetOrder, 
     hiddenWidgets, 

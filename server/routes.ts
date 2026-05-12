@@ -3231,6 +3231,231 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // ============================================
+  // Photographer Inspos & Wrangler Notes (Task #27)
+  // ============================================
+  const inspoCanUpload = (role: string) => ["Admin", "Photographer"].includes(role);
+  const inspoCanView = (role: string) => ["Admin", "Photographer", "DataWrangler", "LeadRetoucher", "Retoucher1", "Retoucher2", "Retoucher3", "Evans"].includes(role);
+  const wnCanWrite = (role: string) => ["Admin", "DataWrangler"].includes(role);
+  const wnCanView = inspoCanView;
+
+  function reqRole(req: any): string {
+    return (req.headers["x-usena-role"] as string) || "";
+  }
+  function reqUserName(req: any): string {
+    return (req.headers["x-usena-user-id"] as string) || (req.headers["x-usena-role"] as string) || "unknown";
+  }
+
+  // Today's Shoots (Photographer landing page)
+  app.get("/api/today-shoots", async (req, res) => {
+    try {
+      const role = reqRole(req);
+      if (!inspoCanView(role)) return res.status(403).json({ error: "Access denied" });
+      const dateParam = (req.query.date as string) || "";
+      const target = dateParam ? new Date(dateParam) : new Date();
+      const start = new Date(target.getFullYear(), target.getMonth(), target.getDate());
+      const end = new Date(start.getTime() + 24 * 60 * 60 * 1000);
+      const all = await storage.getAllProjects();
+      const todays = all.filter(p => {
+        if (!p.shootDate) return false;
+        const d = new Date(p.shootDate);
+        return d >= start && d < end;
+      });
+      const counts = await storage.getInspoCountsByProject(todays.map(p => p.id));
+      res.json(todays.map(p => ({ project: p, inspoCount: counts[p.id] || 0 })));
+    } catch (err: any) {
+      console.error("[Inspos] today-shoots:", err);
+      res.status(500).json({ error: err.message || "Failed" });
+    }
+  });
+
+  // Counts for chat header indicators (single project)
+  app.get("/api/projects/:id/inspos-count", async (req, res) => {
+    try {
+      const role = reqRole(req);
+      if (!inspoCanView(role)) return res.status(403).json({ error: "Access denied" });
+      const counts = await storage.getInspoCountsByProject([req.params.id]);
+      const meta = await storage.getProjectInspoMeta(req.params.id);
+      res.json({
+        count: counts[req.params.id] || 0,
+        hasInstructions: !!(meta?.overallInstructions && meta.overallInstructions.trim()),
+      });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // Batch counts (avoids N+1 in task-table)
+  app.get("/api/wrangler-notes/all-counts", async (req, res) => {
+    try {
+      const role = reqRole(req);
+      if (!wnCanView(role)) return res.status(403).json({ error: "Access denied" });
+      const all = await storage.getAllProjects();
+      const counts = await storage.getWranglerNoteCountsByProject(all.map(p => p.id));
+      res.json(counts);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.get("/api/projects/:id/wrangler-notes-count", async (req, res) => {
+    try {
+      const role = reqRole(req);
+      if (!wnCanView(role)) return res.status(403).json({ error: "Access denied" });
+      const counts = await storage.getWranglerNoteCountsByProject([req.params.id]);
+      res.json({ count: counts[req.params.id] || 0 });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // Inspos CRUD
+  app.get("/api/projects/:id/inspos", async (req, res) => {
+    try {
+      const role = reqRole(req);
+      if (!inspoCanView(role)) return res.status(403).json({ error: "Access denied" });
+      const list = await storage.getProjectInspos(req.params.id);
+      const meta = await storage.getProjectInspoMeta(req.params.id);
+      res.json({ inspos: list, overallInstructions: meta?.overallInstructions || "" });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post("/api/projects/:id/inspos", async (req, res) => {
+    try {
+      const role = reqRole(req);
+      if (!inspoCanUpload(role)) return res.status(403).json({ error: "Access denied" });
+      const { storageKey, caption } = req.body || {};
+      if (!storageKey) return res.status(400).json({ error: "storageKey required" });
+      const objectStorage = new ObjectStorageService();
+      const normalized = objectStorage.normalizeObjectEntityPath(storageKey);
+      const existing = await storage.getProjectInspos(req.params.id);
+      const sortOrder = existing.length;
+      const inspo = await storage.createProjectInspo({
+        projectId: req.params.id,
+        storageKey: normalized,
+        caption: caption || null,
+        sortOrder,
+        uploadedBy: reqUserName(req),
+      } as any);
+      res.json(inspo);
+    } catch (err: any) {
+      console.error("[Inspos] create:", err);
+      res.status(500).json({ error: err.message || "Failed" });
+    }
+  });
+
+  app.patch("/api/inspos/:id", async (req, res) => {
+    try {
+      const role = reqRole(req);
+      if (!inspoCanUpload(role)) return res.status(403).json({ error: "Access denied" });
+      const { caption, sortOrder } = req.body || {};
+      const updates: any = {};
+      if (caption !== undefined) updates.caption = caption;
+      if (sortOrder !== undefined) updates.sortOrder = sortOrder;
+      const updated = await storage.updateProjectInspo(req.params.id, updates);
+      if (!updated) return res.status(404).json({ error: "Not found" });
+      res.json(updated);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.delete("/api/inspos/:id", async (req, res) => {
+    try {
+      const role = reqRole(req);
+      if (!inspoCanUpload(role)) return res.status(403).json({ error: "Access denied" });
+      const ok = await storage.deleteProjectInspo(req.params.id);
+      res.json({ ok });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.put("/api/projects/:id/inspo-meta", async (req, res) => {
+    try {
+      const role = reqRole(req);
+      if (!inspoCanUpload(role)) return res.status(403).json({ error: "Access denied" });
+      const { overallInstructions } = req.body || {};
+      const meta = await storage.upsertProjectInspoMeta(req.params.id, overallInstructions || "", reqUserName(req));
+      res.json(meta);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // Wrangler Notes CRUD
+  app.get("/api/projects/:id/wrangler-notes", async (req, res) => {
+    try {
+      const role = reqRole(req);
+      if (!wnCanView(role)) return res.status(403).json({ error: "Access denied" });
+      const notes = await storage.getProjectWranglerNotes(req.params.id);
+      res.json(notes);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post("/api/projects/:id/wrangler-notes", async (req, res) => {
+    try {
+      const role = reqRole(req);
+      if (!wnCanWrite(role)) return res.status(403).json({ error: "Access denied" });
+      const { kind, storageKey, caption, body } = req.body || {};
+      if (kind !== "photo" && kind !== "text") return res.status(400).json({ error: "Invalid kind" });
+      if (kind === "photo" && !storageKey) return res.status(400).json({ error: "storageKey required" });
+      if (kind === "text" && !body) return res.status(400).json({ error: "body required" });
+      let normalizedKey: string | null = null;
+      if (kind === "photo") {
+        const objectStorage = new ObjectStorageService();
+        normalizedKey = objectStorage.normalizeObjectEntityPath(storageKey);
+      }
+      const existing = await storage.getProjectWranglerNotes(req.params.id);
+      const sortOrder = existing.length;
+      const note = await storage.createProjectWranglerNote({
+        projectId: req.params.id,
+        kind,
+        storageKey: normalizedKey,
+        caption: caption || null,
+        body: body || null,
+        sortOrder,
+        createdBy: reqUserName(req),
+      } as any);
+      res.json(note);
+    } catch (err: any) {
+      console.error("[WranglerNotes] create:", err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.patch("/api/wrangler-notes/:id", async (req, res) => {
+    try {
+      const role = reqRole(req);
+      if (!wnCanWrite(role)) return res.status(403).json({ error: "Access denied" });
+      const { caption, body, sortOrder } = req.body || {};
+      const updates: any = {};
+      if (caption !== undefined) updates.caption = caption;
+      if (body !== undefined) updates.body = body;
+      if (sortOrder !== undefined) updates.sortOrder = sortOrder;
+      const updated = await storage.updateProjectWranglerNote(req.params.id, updates);
+      if (!updated) return res.status(404).json({ error: "Not found" });
+      res.json(updated);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.delete("/api/wrangler-notes/:id", async (req, res) => {
+    try {
+      const role = reqRole(req);
+      if (!wnCanWrite(role)) return res.status(403).json({ error: "Access denied" });
+      const ok = await storage.deleteProjectWranglerNote(req.params.id);
+      res.json({ ok });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ============================================
   // ShootTracker Engine Routes
   // ============================================
   

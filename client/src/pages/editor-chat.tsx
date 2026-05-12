@@ -11,10 +11,90 @@ import { useUpload } from "@/hooks/use-upload";
 import { queryClient } from "@/lib/queryClient";
 import { getAdminHeaders } from "@/lib/adminAuth";
 import { UserRoles, type Project } from "@shared/schema";
-import { ArrowLeft, Send, MessageCircle, User, Clock, Loader2, Search, X, Paperclip, Mic, Video, Image, FileText, Play, Pause, Download, Bot, Wand2, Phone, Archive, ArchiveRestore } from "lucide-react";
+import { ArrowLeft, Send, MessageCircle, User, Clock, Loader2, Search, X, Paperclip, Mic, Video, Image, FileText, Play, Pause, Download, Bot, Wand2, Phone, Archive, ArchiveRestore, Camera, StickyNote } from "lucide-react";
 import { format, formatDistanceToNow } from "date-fns";
 import { getOrCreateKey, storeKeyFromRemote, getExportedKey, encryptMessage, decryptMessage, isEncrypted } from "@/lib/e2ee";
 import VoiceCall from "@/components/voice-call";
+import { InsposViewerDialog } from "@/components/inspos-panel";
+import { WranglerNotesDialog } from "@/components/wrangler-notes-dialog";
+
+function ChatHeaderInsposButton({ projectId, projectName, userRole, userId }: { projectId: string; projectName: string; userRole: string; userId: string }) {
+  const [open, setOpen] = useState(false);
+  const canEdit = ["Admin", "Photographer"].includes(userRole);
+  const countQuery = useQuery<{ count: number; hasInstructions: boolean }>({
+    queryKey: ["/api/projects", projectId, "inspos-count"],
+    queryFn: async () => {
+      const r = await fetch(`/api/projects/${projectId}/inspos-count`, { headers: getAdminHeaders(userRole, userId) });
+      if (!r.ok) return { count: 0, hasInstructions: false };
+      return r.json();
+    },
+  });
+  const has = (countQuery.data?.count || 0) > 0 || !!countQuery.data?.hasInstructions;
+  return (
+    <>
+      <Button
+        variant="ghost"
+        size="icon"
+        onClick={() => setOpen(true)}
+        title={has ? `Photographer inspos (${countQuery.data?.count || 0})` : "No inspos yet"}
+        className={has ? "text-green-600 hover:text-green-700 hover:bg-green-50" : "text-gray-400 hover:text-gray-600"}
+        data-testid="button-chat-inspos"
+      >
+        <Camera className="h-5 w-5" />
+      </Button>
+      {open && (
+        <InsposViewerDialog
+          open={open}
+          onOpenChange={setOpen}
+          projectId={projectId}
+          projectName={projectName}
+          userRole={userRole}
+          userId={userId}
+          canEdit={canEdit}
+        />
+      )}
+    </>
+  );
+}
+
+function ChatHeaderNotesButton({ projectId, projectName, userRole, userId }: { projectId: string; projectName: string; userRole: string; userId: string }) {
+  const [open, setOpen] = useState(false);
+  const canEdit = ["Admin", "DataWrangler"].includes(userRole);
+  const countQuery = useQuery<{ count: number }>({
+    queryKey: ["/api/projects", projectId, "wrangler-notes-count"],
+    queryFn: async () => {
+      const r = await fetch(`/api/projects/${projectId}/wrangler-notes-count`, { headers: getAdminHeaders(userRole, userId) });
+      if (!r.ok) return { count: 0 };
+      return r.json();
+    },
+  });
+  const has = (countQuery.data?.count || 0) > 0;
+  return (
+    <>
+      <Button
+        variant="ghost"
+        size="icon"
+        onClick={() => setOpen(true)}
+        title={has ? `Wrangler notes (${countQuery.data?.count || 0})` : "No wrangler notes"}
+        className={has ? "text-green-600 hover:text-green-700 hover:bg-green-50" : "text-gray-400 hover:text-gray-600"}
+        data-testid="button-chat-wrangler-notes"
+      >
+        <StickyNote className="h-5 w-5" />
+      </Button>
+      {open && (
+        <WranglerNotesDialog
+          open={open}
+          onOpenChange={setOpen}
+          projectId={projectId}
+          projectName={projectName}
+          userRole={userRole}
+          userId={userId}
+          canEdit={canEdit}
+        />
+      )}
+    </>
+  );
+}
 
 interface Message {
   id: string;
@@ -712,6 +792,8 @@ export default function EditorChat() {
                   >
                     {showArchived ? <ArchiveRestore className="h-5 w-5" /> : <Archive className="h-5 w-5" />}
                   </Button>
+                  <ChatHeaderInsposButton projectId={selectedProject.project.id} projectName={selectedProject.project.clientName} userRole={userRole} userId={userId} />
+                  <ChatHeaderNotesButton projectId={selectedProject.project.id} projectName={selectedProject.project.clientName} userRole={userRole} userId={userId} />
                   <Button
                     variant="ghost"
                     size="icon"

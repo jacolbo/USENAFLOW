@@ -357,6 +357,7 @@ export const UserRoles = {
   RETOUCHER_2: "Retoucher2",
   RETOUCHER_3: "Retoucher3",
   EVANS: "Evans",
+  PHOTOGRAPHER: "Photographer",
 } as const;
 
 export const ProjectStatus = {
@@ -1036,6 +1037,48 @@ export const GalleryStatus = {
   HIDDEN: "hidden",
   EXPIRED: "expired",
 } as const;
+
+// =====================================================
+// Photographer Inspos & Wrangler Notes (Task #27)
+// =====================================================
+export const projectInspos = pgTable("project_inspos", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  projectId: varchar("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
+  storageKey: text("storage_key").notNull(),
+  caption: text("caption"),
+  sortOrder: integer("sort_order").notNull().default(0),
+  uploadedBy: text("uploaded_by").notNull(),
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+});
+
+export const projectInspoMeta = pgTable("project_inspo_meta", {
+  projectId: varchar("project_id").primaryKey().references(() => projects.id, { onDelete: "cascade" }),
+  overallInstructions: text("overall_instructions").notNull().default(""),
+  updatedAt: timestamp("updated_at").notNull().default(sql`now()`),
+  updatedBy: text("updated_by"),
+});
+
+export const projectWranglerNotes = pgTable("project_wrangler_notes", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  projectId: varchar("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
+  kind: text("kind").notNull(), // 'photo' | 'text'
+  storageKey: text("storage_key"),
+  caption: text("caption"),
+  body: text("body"),
+  sortOrder: integer("sort_order").notNull().default(0),
+  createdBy: text("created_by").notNull(),
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+});
+
+export const insertProjectInspoSchema = createInsertSchema(projectInspos).omit({ id: true, createdAt: true });
+export type ProjectInspo = typeof projectInspos.$inferSelect;
+export type InsertProjectInspo = z.infer<typeof insertProjectInspoSchema>;
+
+export const insertProjectWranglerNoteSchema = createInsertSchema(projectWranglerNotes).omit({ id: true, createdAt: true });
+export type ProjectWranglerNote = typeof projectWranglerNotes.$inferSelect;
+export type InsertProjectWranglerNote = z.infer<typeof insertProjectWranglerNoteSchema>;
+
+export type ProjectInspoMeta = typeof projectInspoMeta.$inferSelect;
 
 export const GalleryPermissions = {
   FULL: ["Admin", "Evans", "Retoucher1", "Retoucher2", "Retoucher3", "DataWrangler"],

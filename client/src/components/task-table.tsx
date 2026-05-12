@@ -6,6 +6,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Input } from "@/components/ui/input";
 import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import { ProjectNotes } from "./project-notes";
+import { WranglerNotesButton } from "./wrangler-notes-dialog";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -1894,13 +1895,16 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
                               )}
                             </TableCell>
                             <TableCell>
-                              <ErrorBoundary fallback={<div className="text-sm text-gray-500">Notes unavailable</div>}>
-                                <ProjectNotes 
-                                  projectId={project.id} 
-                                  userRole={user.role} 
-                                  hasNotes={(allNotesQuery.data?.[project.id] || 0) > 0}
-                                />
-                              </ErrorBoundary>
+                              <div className="flex items-center gap-1 flex-wrap">
+                                <ErrorBoundary fallback={<div className="text-sm text-gray-500">Notes unavailable</div>}>
+                                  <ProjectNotes 
+                                    projectId={project.id} 
+                                    userRole={user.role} 
+                                    hasNotes={(allNotesQuery.data?.[project.id] || 0) > 0}
+                                  />
+                                </ErrorBoundary>
+                                <WranglerNotesButton projectId={project.id} projectName={project.clientName} userRole={user.role} userId={user.name || user.id} />
+                              </div>
                             </TableCell>
                           </>
                         ) : user.role === 'DataWrangler' ? (
@@ -1982,13 +1986,16 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
                               </div>
                             </TableCell>
                             <TableCell>
-                              <ErrorBoundary fallback={<div className="text-sm text-gray-500">Notes unavailable</div>}>
-                                <ProjectNotes 
-                                  projectId={project.id} 
-                                  userRole={user.role} 
-                                  hasNotes={(allNotesQuery.data?.[project.id] || 0) > 0}
-                                />
-                              </ErrorBoundary>
+                              <div className="flex items-center gap-1 flex-wrap">
+                                <ErrorBoundary fallback={<div className="text-sm text-gray-500">Notes unavailable</div>}>
+                                  <ProjectNotes 
+                                    projectId={project.id} 
+                                    userRole={user.role} 
+                                    hasNotes={(allNotesQuery.data?.[project.id] || 0) > 0}
+                                  />
+                                </ErrorBoundary>
+                                <WranglerNotesButton projectId={project.id} projectName={project.clientName} userRole={user.role} userId={user.name || user.id} />
+                              </div>
                             </TableCell>
                           </>
                         ) : (
@@ -2077,13 +2084,16 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
                               </div>
                             </TableCell>
                             <TableCell>
-                              <ErrorBoundary fallback={<div className="text-sm text-gray-500">Notes unavailable</div>}>
-                                <ProjectNotes 
-                                  projectId={project.id} 
-                                  userRole={user.role} 
-                                  hasNotes={(allNotesQuery.data?.[project.id] || 0) > 0}
-                                />
-                              </ErrorBoundary>
+                              <div className="flex items-center gap-1 flex-wrap">
+                                <ErrorBoundary fallback={<div className="text-sm text-gray-500">Notes unavailable</div>}>
+                                  <ProjectNotes 
+                                    projectId={project.id} 
+                                    userRole={user.role} 
+                                    hasNotes={(allNotesQuery.data?.[project.id] || 0) > 0}
+                                  />
+                                </ErrorBoundary>
+                                <WranglerNotesButton projectId={project.id} projectName={project.clientName} userRole={user.role} userId={user.name || user.id} />
+                              </div>
                             </TableCell>
                           </>
                         )}
