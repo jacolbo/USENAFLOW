@@ -101,11 +101,11 @@ export interface IStorage {
   getSurveyByProjectId(projectId: string): Promise<Survey | undefined>;
   updateSurvey(id: string, updates: Partial<Survey>): Promise<Survey | undefined>;
   getAllSurveys(): Promise<Survey[]>;
-  getSurveysAwaitingGooglePrompt(maxAgeMs: number): Promise<Survey[]>;
-  getSurveysAwaitingReminder(): Promise<Survey[]>;
+  getSurveysAwaitingGooglePrompt(maxAgeMs: number, respectAlreadyReviewedFlag?: boolean): Promise<Survey[]>;
+  getSurveysAwaitingReminder(respectAlreadyReviewedFlag?: boolean): Promise<Survey[]>;
   markSurveyAlreadyReviewed(id: string, source: 'auto' | 'manual', matchedAuthor?: string | null): Promise<Survey | undefined>;
   clearSurveyAlreadyReviewed(id: string): Promise<Survey | undefined>;
-  getGoogleReviewFunnelStats(windowDays: number): Promise<{
+  getGoogleReviewFunnelStats(windowDays: number, respectAlreadyReviewedFlag?: boolean): Promise<{
     windowDays: number;
     promptsSent: number;
     remindersSent: number;
@@ -1693,29 +1693,31 @@ export class DatabaseStorage implements IStorage {
     );
   }
 
-  async getSurveysAwaitingGooglePrompt(maxAgeMs: number): Promise<Survey[]> {
+  async getSurveysAwaitingGooglePrompt(maxAgeMs: number, respectAlreadyReviewedFlag: boolean = true): Promise<Survey[]> {
     const cutoff = new Date(Date.now() - maxAgeMs);
-    return await db.select().from(clientSurveys).where(
-      and(
-        eq(clientSurveys.rating, 5),
-        isNotNull(clientSurveys.completedAt),
-        isNull(clientSurveys.googlePromptSentAt),
-        isNull(clientSurveys.googleClickedAt),
-        eq(clientSurveys.alreadyReviewedOnGoogle, false),
-        lte(clientSurveys.completedAt, cutoff),
-      )
-    );
+    const conditions = [
+      eq(clientSurveys.rating, 5),
+      isNotNull(clientSurveys.completedAt),
+      isNull(clientSurveys.googlePromptSentAt),
+      isNull(clientSurveys.googleClickedAt),
+      lte(clientSurveys.completedAt, cutoff),
+    ];
+    if (respectAlreadyReviewedFlag) {
+      conditions.push(eq(clientSurveys.alreadyReviewedOnGoogle, false));
+    }
+    return await db.select().from(clientSurveys).where(and(...conditions));
   }
 
-  async getSurveysAwaitingReminder(): Promise<Survey[]> {
-    return await db.select().from(clientSurveys).where(
-      and(
-        eq(clientSurveys.rating, 5),
-        isNotNull(clientSurveys.googlePromptSentAt),
-        isNull(clientSurveys.googleClickedAt),
-        eq(clientSurveys.alreadyReviewedOnGoogle, false),
-      )
-    );
+  async getSurveysAwaitingReminder(respectAlreadyReviewedFlag: boolean = true): Promise<Survey[]> {
+    const conditions = [
+      eq(clientSurveys.rating, 5),
+      isNotNull(clientSurveys.googlePromptSentAt),
+      isNull(clientSurveys.googleClickedAt),
+    ];
+    if (respectAlreadyReviewedFlag) {
+      conditions.push(eq(clientSurveys.alreadyReviewedOnGoogle, false));
+    }
+    return await db.select().from(clientSurveys).where(and(...conditions));
   }
 
   async markSurveyAlreadyReviewed(id: string, source: 'auto' | 'manual', matchedAuthor?: string | null): Promise<Survey | undefined> {
@@ -1744,13 +1746,16 @@ export class DatabaseStorage implements IStorage {
     return updated || undefined;
   }
 
-  async getGoogleReviewFunnelStats(windowDays: number) {
+  async getGoogleReviewFunnelStats(windowDays: number, respectAlreadyReviewedFlag: boolean = true) {
     const safeWindow = Math.max(1, Math.min(365, Math.floor(windowDays)));
     const cutoff = new Date(Date.now() - safeWindow * 24 * 60 * 60 * 1000);
+    const suppressClause = respectAlreadyReviewedFlag
+      ? sql` AND ${clientSurveys.alreadyReviewedOnGoogle} = false`
+      : sql``;
     const [row] = await db
       .select({
-        promptsSent: sql<number>`COUNT(*) FILTER (WHERE ${clientSurveys.googlePromptSentAt} IS NOT NULL AND ${clientSurveys.googlePromptSentAt} >= ${cutoff} AND ${clientSurveys.alreadyReviewedOnGoogle} = false)`,
-        remindersSent: sql<number>`COALESCE(SUM(${clientSurveys.googlePromptRemindersSent}) FILTER (WHERE ${clientSurveys.googlePromptSentAt} IS NOT NULL AND ${clientSurveys.googlePromptSentAt} >= ${cutoff} AND ${clientSurveys.alreadyReviewedOnGoogle} = false), 0)`,
+        promptsSent: sql<number>`COUNT(*) FILTER (WHERE ${clientSurveys.googlePromptSentAt} IS NOT NULL AND ${clientSurveys.googlePromptSentAt} >= ${cutoff}${suppressClause})`,
+        remindersSent: sql<number>`COALESCE(SUM(${clientSurveys.googlePromptRemindersSent}) FILTER (WHERE ${clientSurveys.googlePromptSentAt} IS NOT NULL AND ${clientSurveys.googlePromptSentAt} >= ${cutoff}${suppressClause}), 0)`,
         copyClicks: sql<number>`COUNT(*) FILTER (WHERE ${clientSurveys.copyClickedAt} IS NOT NULL AND ${clientSurveys.copyClickedAt} >= ${cutoff})`,
         googleClicks: sql<number>`COUNT(*) FILTER (WHERE ${clientSurveys.googleClickedAt} IS NOT NULL AND ${clientSurveys.googleClickedAt} >= ${cutoff})`,
       })

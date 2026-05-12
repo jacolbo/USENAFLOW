@@ -44,24 +44,32 @@ async function processGooglePrompts() {
   if (!isEnabled(AUTOMATION_ID)) return;
   promptInFlight = true;
   try {
-    const candidates = await storage.getSurveysAwaitingGooglePrompt(FIVE_MINUTES_MS);
+    const suppressionEnabled = isEnabled(SUPPRESS_AUTOMATION_ID);
+    const candidates = await storage.getSurveysAwaitingGooglePrompt(FIVE_MINUTES_MS, suppressionEnabled);
     for (const s of candidates) {
       try {
         // Defence in depth: never send for surveys completed before launch
         if (!s.completedAt || s.completedAt < FEATURE_LAUNCH_AT) continue;
         // Skip if client already has a Google review (auto-match against live Places API)
-        if (await suppressIfAlreadyReviewed(s)) continue;
+        // Only runs when the suppress automation is enabled.
+        if (suppressionEnabled && await suppressIfAlreadyReviewed(s)) continue;
         const now = new Date();
-        // Atomic claim: only proceed if googlePromptSentAt is still NULL
+        // Atomic claim: only proceed if googlePromptSentAt is still NULL.
+        // When suppression is enabled, also require alreadyReviewedOnGoogle=false
+        // to close the last-second race window. When disabled, the flag is ignored
+        // so disabling the toggle re-enables sends to previously-suppressed clients.
+        const claimConditions = [
+          eq(clientSurveys.id, s.id),
+          isNull(clientSurveys.googlePromptSentAt),
+          isNull(clientSurveys.googleClickedAt),
+        ];
+        if (suppressionEnabled) {
+          claimConditions.push(eq(clientSurveys.alreadyReviewedOnGoogle, false));
+        }
         const claimed = await db
           .update(clientSurveys)
           .set({ googlePromptSentAt: now })
-          .where(and(
-            eq(clientSurveys.id, s.id),
-            isNull(clientSurveys.googlePromptSentAt),
-            isNull(clientSurveys.googleClickedAt),
-            eq(clientSurveys.alreadyReviewedOnGoogle, false),
-          ))
+          .where(and(...claimConditions))
           .returning({ id: clientSurveys.id });
         if (claimed.length === 0) continue;
 
@@ -100,7 +108,8 @@ async function processReminders() {
   if (!isEnabled(AUTOMATION_ID)) return;
   reminderInFlight = true;
   try {
-    const surveys = await storage.getSurveysAwaitingReminder();
+    const suppressionEnabled = isEnabled(SUPPRESS_AUTOMATION_ID);
+    const surveys = await storage.getSurveysAwaitingReminder(suppressionEnabled);
     const now = Date.now();
     for (const s of surveys) {
       try {
@@ -108,7 +117,8 @@ async function processReminders() {
         if (sentCount >= MAX_REMINDERS) continue;
         if (!s.googlePromptSentAt) continue;
         // Skip reminder if client now appears in live Google reviews
-        if (await suppressIfAlreadyReviewed(s)) continue;
+        // (only when the suppress automation is enabled).
+        if (suppressionEnabled && await suppressIfAlreadyReviewed(s)) continue;
 
         // Cumulative offsets from the original prompt: day 3, day 7, day 14
         const offsetDays = REMINDER_OFFSETS_DAYS[sentCount];
@@ -118,15 +128,18 @@ async function processReminders() {
         // Atomic claim: only advance if reminder count hasn't moved
         const nextCount = sentCount + 1;
         const reminderTime = new Date();
+        const reminderClaimConditions = [
+          eq(clientSurveys.id, s.id),
+          eq(clientSurveys.googlePromptRemindersSent, sentCount),
+          isNull(clientSurveys.googleClickedAt),
+        ];
+        if (suppressionEnabled) {
+          reminderClaimConditions.push(eq(clientSurveys.alreadyReviewedOnGoogle, false));
+        }
         const claimed = await db
           .update(clientSurveys)
           .set({ googlePromptRemindersSent: nextCount, lastReminderSentAt: reminderTime })
-          .where(and(
-            eq(clientSurveys.id, s.id),
-            eq(clientSurveys.googlePromptRemindersSent, sentCount),
-            isNull(clientSurveys.googleClickedAt),
-            eq(clientSurveys.alreadyReviewedOnGoogle, false),
-          ))
+          .where(and(...reminderClaimConditions))
           .returning({ id: clientSurveys.id });
         if (claimed.length === 0) continue;
 

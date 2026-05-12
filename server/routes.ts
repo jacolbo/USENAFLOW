@@ -2081,7 +2081,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       const rawWindow = parseInt((req.query.windowDays as string) || "30", 10);
       const windowDays = Number.isFinite(rawWindow) ? rawWindow : 30;
-      const stats = await storage.getGoogleReviewFunnelStats(windowDays);
+      const { isEnabled } = await import('./services/automationRegistry');
+      const stats = await storage.getGoogleReviewFunnelStats(
+        windowDays,
+        isEnabled('bg_google_review_suppress_existing'),
+      );
       res.json(stats);
     } catch (error: any) {
       console.error("[GoogleReviewStats] Failed:", error?.message);
