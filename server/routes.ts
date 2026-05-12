@@ -2093,6 +2093,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get("/api/google-review/breakdown", async (req, res) => {
+    try {
+      const role = req.headers["x-usena-role"] as string;
+      if (role !== "Admin") {
+        return res.status(403).json({ error: "Admin access required" });
+      }
+      const rawWindow = parseInt((req.query.windowDays as string) || "30", 10);
+      const windowDays = Number.isFinite(rawWindow) ? rawWindow : 30;
+      const breakdown = await storage.getGoogleReviewFunnelBreakdown(windowDays);
+      res.json(breakdown);
+    } catch (error: any) {
+      console.error("[GoogleReviewBreakdown] Failed:", error?.message);
+      res.status(500).json({ error: "Failed to load Google review breakdown" });
+    }
+  });
+
   // Click-tracking redirect for the Google review button (works in survey page + email)
   const GOOGLE_REVIEW_URL = "https://g.page/r/CZmxAdbD8i6uEAE/review";
 

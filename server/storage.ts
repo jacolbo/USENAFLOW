@@ -113,6 +113,11 @@ export interface IStorage {
     googleClicks: number;
     clickThroughRate: number;
   }>;
+  getGoogleReviewFunnelBreakdown(windowDays: number): Promise<{
+    windowDays: number;
+    byRetoucher: Array<{ label: string; promptsSent: number; googleClicks: number; clickThroughRate: number }>;
+    byTier: Array<{ label: string; promptsSent: number; googleClicks: number; clickThroughRate: number }>;
+  }>;
   
   // Referral methods
   createReferral(referral: InsertReferral): Promise<Referral>;
@@ -835,6 +840,13 @@ export class MemStorage implements IStorage {
       copyClicks: 0,
       googleClicks: 0,
       clickThroughRate: 0,
+    };
+  }
+  async getGoogleReviewFunnelBreakdown(windowDays: number) {
+    return {
+      windowDays,
+      byRetoucher: [],
+      byTier: [],
     };
   }
   async createReferral(referral: InsertReferral): Promise<Referral> {
@@ -1772,6 +1784,55 @@ export class DatabaseStorage implements IStorage {
       copyClicks,
       googleClicks,
       clickThroughRate,
+    };
+  }
+
+  async getGoogleReviewFunnelBreakdown(windowDays: number) {
+    const safeWindow = Math.max(1, Math.min(365, Math.floor(windowDays)));
+    const cutoff = new Date(Date.now() - safeWindow * 24 * 60 * 60 * 1000);
+
+    const retoucherRows = await db
+      .select({
+        label: sql<string | null>`${projects.assignedTo}`,
+        promptsSent: sql<number>`COUNT(*) FILTER (WHERE ${clientSurveys.googlePromptSentAt} IS NOT NULL AND ${clientSurveys.googlePromptSentAt} >= ${cutoff})`,
+        googleClicks: sql<number>`COUNT(*) FILTER (WHERE ${clientSurveys.googleClickedAt} IS NOT NULL AND ${clientSurveys.googleClickedAt} >= ${cutoff})`,
+      })
+      .from(clientSurveys)
+      .leftJoin(projects, eq(clientSurveys.projectId, projects.id))
+      .where(sql`${clientSurveys.googlePromptSentAt} IS NOT NULL AND ${clientSurveys.googlePromptSentAt} >= ${cutoff}`)
+      .groupBy(projects.assignedTo);
+
+    const tierRows = await db
+      .select({
+        label: sql<string | null>`${clientProfiles.vipTier}`,
+        promptsSent: sql<number>`COUNT(*) FILTER (WHERE ${clientSurveys.googlePromptSentAt} IS NOT NULL AND ${clientSurveys.googlePromptSentAt} >= ${cutoff})`,
+        googleClicks: sql<number>`COUNT(*) FILTER (WHERE ${clientSurveys.googleClickedAt} IS NOT NULL AND ${clientSurveys.googleClickedAt} >= ${cutoff})`,
+      })
+      .from(clientSurveys)
+      .leftJoin(clientProfiles, eq(clientSurveys.clientEmail, clientProfiles.clientEmail))
+      .where(sql`${clientSurveys.googlePromptSentAt} IS NOT NULL AND ${clientSurveys.googlePromptSentAt} >= ${cutoff}`)
+      .groupBy(clientProfiles.vipTier);
+
+    type RawBreakdownRow = { label: string | null; promptsSent: number | string | null; googleClicks: number | string | null };
+    const normalize = (rows: RawBreakdownRow[], fallback: string) =>
+      rows
+        .map((r) => {
+          const promptsSent = Number(r.promptsSent ?? 0);
+          const googleClicks = Number(r.googleClicks ?? 0);
+          return {
+            label: (r.label && String(r.label).trim()) || fallback,
+            promptsSent,
+            googleClicks,
+            clickThroughRate: promptsSent > 0 ? googleClicks / promptsSent : 0,
+          };
+        })
+        .filter((r) => r.promptsSent > 0)
+        .sort((a, b) => b.promptsSent - a.promptsSent);
+
+    return {
+      windowDays: safeWindow,
+      byRetoucher: normalize(retoucherRows, "Unassigned"),
+      byTier: normalize(tierRows, "Unknown"),
     };
   }
 

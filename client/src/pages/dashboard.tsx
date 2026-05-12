@@ -439,6 +439,7 @@ function PredictiveRiskWidget({ userRole, userId }: { userRole: string; userId: 
 
 function GoogleReviewFunnelWidget({ userRole, userId }: { userRole: string; userId: string }) {
   const [windowDays, setWindowDays] = useState<number>(30);
+  const [showBreakdown, setShowBreakdown] = useState(false);
   const { data, isLoading } = useQuery<{
     windowDays: number;
     promptsSent: number;
@@ -459,7 +460,60 @@ function GoogleReviewFunnelWidget({ userRole, userId }: { userRole: string; user
     refetchOnWindowFocus: false,
   });
 
+  type BreakdownRow = { label: string; promptsSent: number; googleClicks: number; clickThroughRate: number };
+  const { data: breakdown, isLoading: isBreakdownLoading } = useQuery<{
+    windowDays: number;
+    byRetoucher: BreakdownRow[];
+    byTier: BreakdownRow[];
+  }>({
+    queryKey: ["/api/google-review/breakdown", windowDays],
+    queryFn: async () => {
+      const res = await fetch(`/api/google-review/breakdown?windowDays=${windowDays}`, {
+        headers: getAdminHeaders(userRole, userId),
+      });
+      if (!res.ok) throw new Error("Failed to load breakdown");
+      return res.json();
+    },
+    enabled: showBreakdown,
+    staleTime: 60 * 1000,
+    refetchOnWindowFocus: false,
+  });
+
   const ctrPct = data ? (data.clickThroughRate * 100).toFixed(1) : "0.0";
+
+  const renderBreakdownTable = (title: string, rows: BreakdownRow[] | undefined, nameHeader: string) => (
+    <div>
+      <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-2">{title}</h3>
+      {!rows || rows.length === 0 ? (
+        <div className="text-sm text-gray-500 dark:text-gray-400 py-3">No prompts sent in this window.</div>
+      ) : (
+        <div className="overflow-hidden rounded-md border border-gray-200 dark:border-gray-700">
+          <table className="min-w-full text-sm">
+            <thead className="bg-gray-50 dark:bg-gray-700/40 text-gray-600 dark:text-gray-300">
+              <tr>
+                <th className="text-left px-3 py-2 font-medium">{nameHeader}</th>
+                <th className="text-right px-3 py-2 font-medium">Prompts</th>
+                <th className="text-right px-3 py-2 font-medium">Google clicks</th>
+                <th className="text-right px-3 py-2 font-medium">CTR</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+              {rows.map((r, idx) => (
+                <tr key={`${title}-${r.label}-${idx}`} className="text-gray-800 dark:text-gray-200">
+                  <td className="px-3 py-2">{r.label}</td>
+                  <td className="px-3 py-2 text-right">{r.promptsSent}</td>
+                  <td className="px-3 py-2 text-right">{r.googleClicks}</td>
+                  <td className="px-3 py-2 text-right font-medium text-yellow-700 dark:text-yellow-300">
+                    {(r.clickThroughRate * 100).toFixed(1)}%
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
 
   return (
     <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm">
@@ -520,9 +574,43 @@ function GoogleReviewFunnelWidget({ userRole, userId }: { userRole: string; user
                 {ctrPct}%
               </div>
             </div>
+            <div className="mt-3 flex justify-end">
+              <button
+                onClick={() => setShowBreakdown(true)}
+                className="text-xs px-3 py-1.5 rounded border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/50"
+                data-testid="button-google-review-breakdown"
+              >
+                View breakdown by retoucher & tier
+              </button>
+            </div>
           </>
         )}
       </div>
+
+      <Dialog open={showBreakdown} onOpenChange={setShowBreakdown}>
+        <DialogContent className="sm:max-w-2xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Star className="h-5 w-5 text-yellow-500" />
+              Google review funnel breakdown
+              <span className="text-sm font-normal text-gray-500 dark:text-gray-400">
+                Last {windowDays} days
+              </span>
+            </DialogTitle>
+          </DialogHeader>
+          {isBreakdownLoading ? (
+            <div className="space-y-3 animate-pulse">
+              <div className="h-24 bg-gray-200 dark:bg-gray-700 rounded" />
+              <div className="h-24 bg-gray-200 dark:bg-gray-700 rounded" />
+            </div>
+          ) : (
+            <div className="space-y-6">
+              {renderBreakdownTable("By retoucher", breakdown?.byRetoucher, "Retoucher")}
+              {renderBreakdownTable("By client tier", breakdown?.byTier, "Tier")}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
