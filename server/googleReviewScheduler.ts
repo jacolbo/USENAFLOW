@@ -8,6 +8,9 @@ const FIVE_MINUTES_MS = 5 * 60 * 1000;
 const DAY_MS = 24 * 60 * 60 * 1000;
 const REMINDER_OFFSETS_DAYS = [3, 7, 14] as const;
 const MAX_REMINDERS = REMINDER_OFFSETS_DAYS.length;
+// Feature launch date — surveys completed BEFORE this are excluded from
+// the Google review prompt automation (no retroactive emails).
+const FEATURE_LAUNCH_AT = new Date("2026-05-12T00:00:00Z");
 
 let promptIntervalHandle: NodeJS.Timeout | null = null;
 let reminderIntervalHandle: NodeJS.Timeout | null = null;
@@ -21,6 +24,8 @@ async function processGooglePrompts() {
     const candidates = await storage.getSurveysAwaitingGooglePrompt(FIVE_MINUTES_MS);
     for (const s of candidates) {
       try {
+        // Defence in depth: never send for surveys completed before launch
+        if (!s.completedAt || s.completedAt < FEATURE_LAUNCH_AT) continue;
         const now = new Date();
         // Atomic claim: only proceed if googlePromptSentAt is still NULL
         const claimed = await db
