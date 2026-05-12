@@ -2932,7 +2932,7 @@ export default function Dashboard() {
     enabled: !!user && user.role === "Evans",
   });
 
-  const chatRoles = ['Admin', 'LeadRetoucher', 'Retoucher1', 'Retoucher2', 'Retoucher3', 'Evans'];
+  const chatRoles = ['Admin', 'LeadRetoucher', 'Retoucher1', 'Retoucher2', 'Retoucher3', 'Evans', 'DataWrangler', 'Photographer'];
   const { data: chatProjects = [] } = useQuery<{ project: any; unreadCount: number }[]>({
     queryKey: ["/api/admin/chat/projects"],
     queryFn: async () => {

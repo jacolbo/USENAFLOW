@@ -1091,7 +1091,7 @@ export const AVAILABLE_WIDGETS: WidgetConfig[] = [
   { id: "my_tasks", name: "My Tasks", description: "Projects assigned to you", icon: "User", defaultEnabled: true, roles: ["Admin", "Retoucher1", "Retoucher2", "Retoucher3"] },
   { id: "shoottracker", name: "ShootTracker", description: "Upcoming shoots and at-risk projects", icon: "Camera", defaultEnabled: true, roles: ["Admin", "Sales", "LeadRetoucher", "DataWrangler"] },
   { id: "team_analytics", name: "Team Analytics", description: "Team performance charts", icon: "BarChart3", defaultEnabled: true, roles: ["Admin", "LeadRetoucher", "Retoucher1", "Retoucher2", "Retoucher3", "DataWrangler", "Sales"] },
-  { id: "project_table", name: "Project Table", description: "All projects overview", icon: "Table", defaultEnabled: true, roles: ["Admin", "LeadRetoucher", "Retoucher1", "Retoucher2", "Retoucher3", "DataWrangler"] },
+  { id: "project_table", name: "Project Table", description: "All projects overview", icon: "Table", defaultEnabled: true, roles: ["Admin", "LeadRetoucher", "Retoucher1", "Retoucher2", "Retoucher3", "DataWrangler", "Photographer"] },
   { id: "pending_payments", name: "Pending Payments", description: "Projects awaiting payment", icon: "DollarSign", defaultEnabled: true, roles: ["Sales"] },
   { id: "ready_delivery", name: "Ready for Delivery", description: "Projects ready to deliver", icon: "Package", defaultEnabled: true, roles: ["Sales"] },
   { id: "ai_insights", name: "AI Insights", description: "AI-powered project trends and recommendations", icon: "Sparkles", defaultEnabled: true, roles: ["Admin", "LeadRetoucher", "DataWrangler", "Sales"] },

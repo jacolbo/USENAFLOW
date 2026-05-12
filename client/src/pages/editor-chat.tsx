@@ -30,7 +30,8 @@ function ChatHeaderInsposButton({ projectId, projectName, userRole, userId }: { 
     },
   });
   const count = countQuery.data?.count || 0;
-  const has = count > 0 || !!countQuery.data?.hasInstructions;
+  // Spec: green when at least one inspo photo exists.
+  const has = count > 0;
   return (
     <>
       <Button
