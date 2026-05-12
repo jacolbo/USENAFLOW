@@ -4,6 +4,7 @@ import { setupVite, serveStatic, log } from "./vite";
 import { seed } from "./seed";
 import { startRolloverScheduler } from "./rolloverScheduler";
 import { startAutoSync } from "./autoSyncScheduler";
+import { startGoogleReviewScheduler } from "./googleReviewScheduler";
 
 const app = express();
 app.use(express.json({ limit: "10mb" }));
@@ -77,5 +78,8 @@ app.use((req, res, next) => {
     
     // Start ShootTracker auto-sync scheduler (respects settings toggle for actual syncing)
     startAutoSync();
+
+    // Start Google review prompt + reminder scheduler
+    startGoogleReviewScheduler();
   });
 })();

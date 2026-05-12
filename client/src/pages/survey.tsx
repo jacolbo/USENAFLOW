@@ -6,7 +6,13 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Star, ExternalLink, Loader2, Copy, Check } from "lucide-react";
-import logoImage from "@assets/USENA-FLOW_1754522507856.png";
+import logoImage from "@assets/image_1778577290029.png";
+
+function getFirstName(full: string): string {
+  if (!full) return "";
+  const cleaned = full.replace(/\([^)]*\)/g, "").trim();
+  return cleaned.split(/\s+/)[0] || cleaned;
+}
 
 export default function SurveyPage() {
   const [, params] = useRoute("/survey/:token");
@@ -14,8 +20,6 @@ export default function SurveyPage() {
 
   const [rating, setRating] = useState(0);
   const [hoveredRating, setHoveredRating] = useState(0);
-  const [communicationRating, setCommunicationRating] = useState(0);
-  const [hoveredCommRating, setHoveredCommRating] = useState(0);
   const [feedback, setFeedback] = useState("");
   const [wouldRecommend, setWouldRecommend] = useState<boolean | null>(null);
   const [submitted, setSubmitted] = useState(false);
@@ -31,7 +35,6 @@ export default function SurveyPage() {
     mutationFn: async () => {
       const res = await apiRequest("POST", `/api/survey/${token}`, {
         rating,
-        communicationRating: communicationRating || undefined,
         feedback,
         wouldRecommend,
       });
@@ -43,17 +46,19 @@ export default function SurveyPage() {
     },
   });
 
+  const firstName = getFirstName((survey as any)?.clientName || "");
+
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-pink-600" />
+      <div className="min-h-screen bg-[#faf7f0] flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-[#c9a961]" />
       </div>
     );
   }
 
   if (error || !survey) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+      <div className="min-h-screen bg-[#faf7f0] flex items-center justify-center p-4">
         <Card className="max-w-md w-full">
           <CardContent className="pt-6 text-center">
             <p className="text-gray-500">Survey not found or has expired.</p>
@@ -65,7 +70,7 @@ export default function SurveyPage() {
 
   if ((survey as any).completedAt && !submitted) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+      <div className="min-h-screen bg-[#faf7f0] flex items-center justify-center p-4">
         <Card className="max-w-md w-full">
           <CardContent className="pt-6 text-center">
             <div className="mb-4">
@@ -80,7 +85,7 @@ export default function SurveyPage() {
 
   if (submitted) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+      <div className="min-h-screen bg-[#faf7f0] flex items-center justify-center p-4">
         <Card className="max-w-md w-full">
           <CardContent className="pt-8 pb-8 text-center space-y-4">
             <div className="mb-4">
@@ -91,21 +96,22 @@ export default function SurveyPage() {
               We truly appreciate your feedback. It helps us continue delivering the best experience possible.
             </p>
             {showGoogleReview && (
-              <div className="mt-6 rounded-xl border-2 border-amber-300 bg-amber-50 p-5 space-y-4">
+              <div className="mt-6 rounded-xl border border-[#e8dcc0] bg-white p-5 space-y-4 shadow-sm">
                 <div className="text-center space-y-1">
-                  <p className="text-base font-semibold text-amber-900">
-                    We'd love this on Google—just copy below and paste there, takes 30 seconds.
+                  <p className="text-base font-semibold text-gray-800">
+                    Would you mind sharing this on Google? It would mean the world to us.
                   </p>
+                  <p className="text-xs text-gray-500">Takes 30 seconds.</p>
                 </div>
                 {feedback && (
-                  <div className="bg-white rounded-lg p-4 border border-amber-200 shadow-sm">
+                  <div className="bg-[#faf7f0] rounded-lg p-4 border-l-4 border-[#c9a961]">
                     <p className="text-sm text-gray-700 italic leading-relaxed">"{feedback}"</p>
                   </div>
                 )}
                 {feedback && (
                   <Button
                     variant="outline"
-                    className={`w-full border-2 transition-all ${copied ? "border-green-500 text-green-700 bg-green-50" : "border-amber-400 text-amber-800 hover:bg-amber-100"}`}
+                    className={`w-full border-2 transition-all ${copied ? "border-[#4CAF7D] text-[#2f7f57] bg-[#eaf6ee]" : "border-[#4CAF7D] text-[#2f7f57] hover:bg-[#eaf6ee]"}`}
                     onClick={() => {
                       navigator.clipboard.writeText(feedback);
                       setCopied(true);
@@ -113,26 +119,25 @@ export default function SurveyPage() {
                   >
                     {copied ? (
                       <>
-                        <Check className="h-4 w-4 mr-2 text-green-600" />
+                        <Check className="h-4 w-4 mr-2" />
                         Copied!
                       </>
                     ) : (
                       <>
                         <Copy className="h-4 w-4 mr-2" />
-                        Copy Review
+                        Copy review
                       </>
                     )}
                   </Button>
                 )}
                 <Button
-                  className="w-full bg-pink-600 hover:bg-pink-700 disabled:opacity-40 disabled:cursor-not-allowed"
-                  disabled={feedback ? !copied : false}
+                  className="w-full bg-[#2563EB] hover:bg-[#1d4ed8] text-white"
                   onClick={() => {
-                    window.open("https://g.page/r/CZmxAdbD8i6uEAE/review", "_blank", "noopener,noreferrer");
+                    window.location.href = `/r/google/${token}`;
                   }}
                 >
                   <ExternalLink className="h-4 w-4 mr-2" />
-                  Paste review on Google
+                  Leave Google review
                 </Button>
               </div>
             )}
@@ -143,7 +148,7 @@ export default function SurveyPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-[#faf7f0] flex items-center justify-center p-4">
       <Card className="max-w-lg w-full">
         <CardHeader className="text-center">
           <div className="mb-4">
@@ -151,13 +156,13 @@ export default function SurveyPage() {
           </div>
           <CardTitle className="text-2xl text-gray-900">How Was Your Experience?</CardTitle>
           <p className="text-gray-500 mt-2">
-            Hi {(survey as any).clientName}, we'd love to hear your feedback!
+            Hi {firstName || "there"}, we'd love to hear your feedback!
           </p>
         </CardHeader>
         <CardContent className="space-y-6">
           <div className="space-y-2">
-            <label className="text-sm font-medium text-gray-700">Quality of work</label>
-            <p className="text-xs text-gray-500">How would you rate the quality of your photos?</p>
+            <label className="text-sm font-medium text-gray-700">Rate our service</label>
+            <p className="text-xs text-gray-500">How would you rate your overall experience with Jepson Myles Studio?</p>
             <div className="flex gap-2 justify-center">
               {[1, 2, 3, 4, 5].map((star) => (
                 <button
@@ -190,40 +195,6 @@ export default function SurveyPage() {
           </div>
 
           <div className="space-y-2">
-            <label className="text-sm font-medium text-gray-700">Communication</label>
-            <p className="text-xs text-gray-500">How was the communication with your retoucher?</p>
-            <div className="flex gap-2 justify-center">
-              {[1, 2, 3, 4, 5].map((star) => (
-                <button
-                  key={star}
-                  type="button"
-                  onClick={() => setCommunicationRating(star)}
-                  onMouseEnter={() => setHoveredCommRating(star)}
-                  onMouseLeave={() => setHoveredCommRating(0)}
-                  className="p-1 transition-transform hover:scale-110"
-                >
-                  <Star
-                    className={`h-10 w-10 ${
-                      star <= (hoveredCommRating || communicationRating)
-                        ? "fill-blue-400 text-blue-400"
-                        : "text-gray-300"
-                    }`}
-                  />
-                </button>
-              ))}
-            </div>
-            {communicationRating > 0 && (
-              <p className="text-center text-sm text-gray-500">
-                {communicationRating === 1 && "Poor"}
-                {communicationRating === 2 && "Fair"}
-                {communicationRating === 3 && "Good"}
-                {communicationRating === 4 && "Great"}
-                {communicationRating === 5 && "Excellent!"}
-              </p>
-            )}
-          </div>
-
-          <div className="space-y-2">
             <label className="text-sm font-medium text-gray-700">
               Tell us more about your experience (optional)
             </label>
@@ -244,7 +215,7 @@ export default function SurveyPage() {
                 type="button"
                 variant={wouldRecommend === true ? "default" : "outline"}
                 onClick={() => setWouldRecommend(true)}
-                className={wouldRecommend === true ? "bg-green-600 hover:bg-green-700" : ""}
+                className={wouldRecommend === true ? "bg-[#4CAF7D] hover:bg-[#3f9669]" : ""}
               >
                 Yes, definitely!
               </Button>
@@ -262,7 +233,7 @@ export default function SurveyPage() {
           <Button
             onClick={() => submitMutation.mutate()}
             disabled={rating === 0 || submitMutation.isPending}
-            className="w-full bg-pink-600 hover:bg-pink-700"
+            className="w-full bg-[#2563EB] hover:bg-[#1d4ed8] text-white"
           >
             {submitMutation.isPending ? (
               <>

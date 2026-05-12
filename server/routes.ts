@@ -11,7 +11,7 @@ import { registerObjectStorageRoutes } from "./replit_integrations/object_storag
 import type { Notification, WebSocketMessage } from "@shared/schema";
 import { triggerManualRollover, performManualRolloverToNextWeek, performManualRollbackFromNextWeek } from "./rolloverScheduler";
 import { registerShoottrackerRoutes } from "./shoottrackerRoutes";
-import { sendChatLinkEmail, sendGalleryDeliveryEmail, sendSneakPeekEmail, sendSatisfactionSurveyEmail, sendSchedulingNotificationEmail, sendManualDelayNoticeEmail, generateToken } from "./services/emailService";
+import { sendChatLinkEmail, sendGalleryDeliveryEmail, sendSneakPeekEmail, sendSatisfactionSurveyEmail, sendSchedulingNotificationEmail, sendManualDelayNoticeEmail, generateToken, sendGoogleReviewPromptEmail } from "./services/emailService";
 import { evaluateLeaveRequest, aiTeamChat, generateDailySummaryForAdmin } from "./services/aiService";
 import { appSettings } from "@shared/schema";
 import { insertLeaveRequestSchema } from "@shared/schema";
@@ -2029,7 +2029,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         wouldRecommend: wouldRecommend ?? null,
         completedAt: new Date(),
       });
-      const googleReviewPrompt = rating >= 4;
+      const googleReviewPrompt = rating === 5;
 
       try {
         const { storeMemory } = await import("./services/aiMemoryService");
@@ -2054,6 +2054,112 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({ ...updated, googleReviewPrompt });
     } catch (error) {
       res.status(500).json({ error: "Failed to submit survey" });
+    }
+  });
+
+  // Click-tracking redirect for the Google review button (works in survey page + email)
+  const GOOGLE_REVIEW_URL = "https://g.page/r/CZmxAdbD8i6uEAE/review";
+
+  app.get("/r/google/:token", async (req, res) => {
+    try {
+      const survey = await storage.getSurveyByToken(req.params.token);
+      if (survey && !survey.googleClickedAt) {
+        await storage.updateSurvey(survey.id, { googleClickedAt: new Date() });
+      }
+    } catch (err: any) {
+      console.error("[ReviewTrack] google click error:", err.message);
+    }
+    res.redirect(302, GOOGLE_REVIEW_URL);
+  });
+
+  app.get("/r/copy/:token", async (req, res) => {
+    try {
+      const survey = await storage.getSurveyByToken(req.params.token);
+      if (!survey) {
+        return res.status(404).send("<h1>Link expired</h1>");
+      }
+      if (!survey.copyClickedAt) {
+        await storage.updateSurvey(survey.id, { copyClickedAt: new Date() });
+      }
+      // Safely encode feedback as a JS string literal AND neutralize </script> sequences
+      const feedbackJson = JSON.stringify(survey.feedback || "")
+        .replace(/</g, "\\u003C")
+        .replace(/>/g, "\\u003E")
+        .replace(/&/g, "\\u0026")
+        .replace(/\u2028/g, "\\u2028")
+        .replace(/\u2029/g, "\\u2029");
+      const googleUrlJson = JSON.stringify(GOOGLE_REVIEW_URL).replace(/</g, "\\u003C");
+      const html = `<!doctype html>
+<html><head><meta charset="utf-8"><title>Copying review…</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  body { font-family: Arial, sans-serif; background: #faf7f0; color: #2c2c2c; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; padding: 20px; }
+  .card { background: white; border-radius: 12px; padding: 32px; max-width: 460px; width: 100%; box-shadow: 0 4px 20px rgba(0,0,0,0.08); text-align: center; }
+  h1 { color: #2c2c2c; font-size: 22px; margin: 0 0 12px; }
+  p { color: #555; line-height: 1.6; margin: 8px 0; }
+  .feedback { background: #faf7f0; border-left: 4px solid #c9a961; padding: 14px 16px; margin: 16px 0; text-align: left; font-style: italic; border-radius: 6px; white-space: pre-wrap; }
+  .btn { display: inline-block; background: #2563EB; color: white; text-decoration: none; padding: 14px 36px; border-radius: 8px; font-weight: 600; margin-top: 16px; }
+  .ok { color: #4CAF7D; font-weight: 600; }
+</style></head>
+<body>
+  <div class="card">
+    <h1>Your review is copied! &#10003;</h1>
+    <p class="ok">Now paste it on Google.</p>
+    <div class="feedback" id="fb"></div>
+    <p>If the copy didn't work, tap below to copy manually, then paste on Google.</p>
+    <a class="btn" href="${GOOGLE_REVIEW_URL}" id="goBtn">Open Google review page</a>
+  </div>
+<script>
+  var text = ${feedbackJson};
+  var goUrl = ${googleUrlJson};
+  document.getElementById('fb').textContent = '"' + text + '"';
+  function doCopy() {
+    if (navigator.clipboard && window.isSecureContext) {
+      return navigator.clipboard.writeText(text);
+    }
+    var ta = document.createElement('textarea');
+    ta.value = text; document.body.appendChild(ta); ta.select();
+    try { document.execCommand('copy'); } catch(e) {}
+    document.body.removeChild(ta);
+    return Promise.resolve();
+  }
+  doCopy().finally(function(){
+    setTimeout(function(){ window.location.href = goUrl; }, 1800);
+  });
+</script>
+</body></html>`;
+      res.setHeader("Content-Type", "text/html; charset=utf-8");
+      res.send(html);
+    } catch (err: any) {
+      console.error("[ReviewTrack] copy click error:", err.message);
+      res.redirect(302, GOOGLE_REVIEW_URL);
+    }
+  });
+
+  // Admin: list all surveys (completed + pending)
+  app.get("/api/admin/surveys", async (req, res) => {
+    try {
+      const role = req.headers["x-usena-role"] as string;
+      if (!role || !["Admin", "Sales", "LeadRetoucher"].includes(role)) {
+        return res.status(403).json({ error: "Unauthorized" });
+      }
+      const surveys = await storage.getAllSurveys();
+      const projectMap = new Map<string, any>();
+      const allProjects = await storage.getAllProjects();
+      for (const p of allProjects) projectMap.set(p.id, p);
+      const enriched = surveys.map((s) => {
+        const p = projectMap.get(s.projectId);
+        return {
+          ...s,
+          projectName: p?.clientName || s.clientName,
+          projectAssignedTo: p?.assignedTo || null,
+          projectDeliveredAt: p?.deliveredAt || null,
+        };
+      });
+      res.json(enriched);
+    } catch (error: any) {
+      console.error("[AdminSurveys]", error);
+      res.status(500).json({ error: "Failed to load surveys" });
     }
   });
 

@@ -2998,6 +2998,13 @@ export default function Dashboard() {
                           </DropdownMenuItem>
                         )}
 
+                        {['Admin', 'Sales', 'LeadRetoucher'].includes(user.role) && (
+                          <DropdownMenuItem onClick={() => setLocation('/reviews')}>
+                            <Star className="h-4 w-4 mr-2" />
+                            Reviews
+                          </DropdownMenuItem>
+                        )}
+
                         {user.role === 'Admin' && (
                           <DropdownMenuItem onClick={() => setLocation('/ai-brain')}>
                             <Brain className="h-4 w-4 mr-2" />

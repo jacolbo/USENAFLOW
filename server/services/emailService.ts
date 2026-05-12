@@ -1495,3 +1495,90 @@ export async function sendSatisfactionSurveyEmail(
     return { success: false, error: error.message };
   }
 }
+
+export async function sendGoogleReviewPromptEmail(
+  clientEmail: string,
+  clientName: string,
+  surveyToken: string,
+  feedback: string | null,
+  projectId: string,
+  isReminder: boolean = false,
+  reminderNumber: number = 0,
+): Promise<EmailResult> {
+  const firstName = getFirstName(clientName);
+  const baseUrl = getAppBaseUrl();
+  const copyUrl = `${baseUrl}/r/copy/${surveyToken}`;
+  const googleUrl = `${baseUrl}/r/google/${surveyToken}`;
+
+  const reminderLabel = isReminder
+    ? (reminderNumber === 1 ? 'a quick reminder' : reminderNumber === 2 ? 'one more nudge' : 'last reminder')
+    : '';
+
+  const subject = isReminder
+    ? `Just ${reminderLabel} — your Google review for Jepson Myles`
+    : `Thanks ${firstName}! Would you share this on Google?`;
+
+  const opener = isReminder
+    ? `Hi ${firstName}, just ${reminderLabel} — we'd still love your kind words on Google. Takes 30 seconds.`
+    : `Hi ${firstName}, thank you so much for your 5-star feedback! Would you mind sharing it on Google? It would mean the world to us — takes about 30 seconds.`;
+
+  const feedbackBlock = feedback
+    ? `
+        <div style="background: #faf7f0; border-left: 4px solid #c9a961; padding: 18px 20px; margin: 24px 0; border-radius: 6px;">
+          <p style="color: #2c2c2c; font-size: 15px; line-height: 1.6; margin: 0; font-style: italic;">"${feedback.replace(/"/g, '&quot;').replace(/\n/g, '<br>')}"</p>
+        </div>
+        <p style="color: #555; font-size: 14px; line-height: 1.5; margin: 0 0 24px 0;">Tap <strong>Copy review</strong>, then <strong>Leave Google review</strong> and paste.</p>
+      `
+    : `<p style="color: #555; font-size: 14px; line-height: 1.5; margin: 0 0 24px 0;">Tap <strong>Leave Google review</strong> below — write a quick line about your experience and you're done.</p>`;
+
+  const copyButton = feedback
+    ? `<a href="${copyUrl}" style="display: inline-block; background: #4CAF7D; color: white; text-decoration: none; padding: 14px 36px; border-radius: 8px; font-weight: 600; font-size: 16px; margin: 6px 4px;">Copy review</a>`
+    : '';
+
+  const htmlContent = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; background: #fff;">
+      ${getEmailHeader('Share Your Experience')}
+
+      <p style="color: #2c2c2c; font-size: 16px; line-height: 1.6; margin: 0 0 16px 0;">${opener}</p>
+
+      ${feedbackBlock}
+
+      <div style="text-align: center; margin: 28px 0;">
+        ${copyButton}
+        <a href="${googleUrl}" style="display: inline-block; background: #2563EB; color: white; text-decoration: none; padding: 14px 36px; border-radius: 8px; font-weight: 600; font-size: 16px; margin: 6px 4px;">Leave Google review</a>
+      </div>
+
+      <p style="color: #2c2c2c; font-size: 15px; line-height: 1.6;">Thanks again for choosing Jepson Myles Studio.</p>
+
+      <p style="color: #2c2c2c; font-size: 15px; line-height: 1.6;">Cheers,<br><strong>Jepson Myles Team</strong></p>
+
+      <hr style="border: none; border-top: 1px solid #eee; margin: 28px 0;">
+      <p style="color: #999; font-size: 12px; text-align: center;">This is an automated message from Jepson Myles Studio.</p>
+    </div>
+  `;
+
+  const emailType = isReminder ? EmailType.GOOGLE_REVIEW_REMINDER : EmailType.GOOGLE_REVIEW_PROMPT;
+  try {
+    const { client, fromEmail } = await getResendClient();
+    const replyTo = getProjectReplyToEmail(projectId);
+    const response = await client.emails.send({
+      from: fromEmail,
+      replyTo,
+      to: clientEmail,
+      subject,
+      html: htmlContent,
+    });
+    if (response.data?.id) {
+      await logEmail(projectId, emailType, clientEmail, subject, 'sent', response.data.id);
+      console.log(`[Resend] Google review ${isReminder ? 'reminder #' + reminderNumber : 'prompt'} sent to ${clientEmail} for project ${projectId}`);
+      return { success: true, messageId: response.data.id };
+    }
+    const errorMsg = response.error?.message || 'Unknown error';
+    await logEmail(projectId, emailType, clientEmail, subject, 'failed', undefined, errorMsg);
+    return { success: false, error: errorMsg };
+  } catch (error: any) {
+    console.error(`[Email] Failed to send Google review prompt:`, error);
+    await logEmail(projectId, emailType, clientEmail, subject, 'failed', undefined, error.message);
+    return { success: false, error: error.message };
+  }
+}

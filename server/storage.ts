@@ -1,6 +1,6 @@
 import { type User, type InsertUser, type Project, type InsertProject, type UpdateProject, type ProjectNote, type InsertProjectNote, type UpdateProjectNote, type TradeOffer, type InsertTradeOffer, type UpdateTradeOffer, type WranglerCommission, type InsertWranglerCommission, type ProjectEvent, type InsertProjectEvent, type Complaint, type InsertComplaint, type ShoottrackerMeta, type InsertShoottrackerMeta, type UpdateShoottrackerMeta, type AppSetting, type CalendarEventStaging, type InsertCalendarEventStaging, type UpdateCalendarEventStaging, type ClientAuthToken, type InsertClientAuthToken, type ClientMessage, type InsertClientMessage, type DashboardPreferences, type InsertDashboardPreferences, type SneakPeek, type InsertSneakPeek, type Survey, type InsertSurvey, type Referral, type InsertReferral, type ClientProfile, type InsertClientProfile, type RewardClaim, type InsertRewardClaim, type EmailTemplate, type InsertEmailTemplate, type PushSubscription, type InsertPushSubscription, type StatusTransition, type InsertStatusTransition, type LeaveRequest, type InsertLeaveRequest, type AiTeamMessage, type InsertAiTeamMessage, type AiMemory, type InsertAiMemory, type AiAdminInstruction, type InsertAiAdminInstruction, ProjectStatus, TradeOfferStatus, StagingStatus, users, projects, projectNotes, tradeOffers, wranglerCommissions, projectEvents, complaints, shoottrackerMeta, appSettings, calendarEventsStaging, clientAuthTokens, clientMessages, dashboardPreferences, sneakPeeks, clientSurveys, referrals, clientProfiles, referralRewardClaims, emailTemplates, pushSubscriptions, chatEncryptionKeys, projectStatusTransitions, leaveRequests, aiTeamMessages, aiMemory, aiAdminInstructions } from "@shared/schema";
 import { db } from "./db";
-import { eq, sql, asc, and, ilike } from "drizzle-orm";
+import { eq, sql, asc, and, ilike, isNotNull, isNull, lte, desc } from "drizzle-orm";
 import { randomUUID } from "crypto";
 
 export interface IStorage {
@@ -100,6 +100,9 @@ export interface IStorage {
   getSurveyByToken(token: string): Promise<Survey | undefined>;
   getSurveyByProjectId(projectId: string): Promise<Survey | undefined>;
   updateSurvey(id: string, updates: Partial<Survey>): Promise<Survey | undefined>;
+  getAllSurveys(): Promise<Survey[]>;
+  getSurveysAwaitingGooglePrompt(maxAgeMs: number): Promise<Survey[]>;
+  getSurveysAwaitingReminder(): Promise<Survey[]>;
   
   // Referral methods
   createReferral(referral: InsertReferral): Promise<Referral>;
@@ -798,6 +801,15 @@ export class MemStorage implements IStorage {
   }
   async updateSurvey(id: string, updates: Partial<Survey>): Promise<Survey | undefined> {
     return undefined;
+  }
+  async getAllSurveys(): Promise<Survey[]> {
+    return [];
+  }
+  async getSurveysAwaitingGooglePrompt(maxAgeMs: number): Promise<Survey[]> {
+    return [];
+  }
+  async getSurveysAwaitingReminder(): Promise<Survey[]> {
+    return [];
   }
   async createReferral(referral: InsertReferral): Promise<Referral> {
     throw new Error("Not implemented in MemStorage");
@@ -1645,6 +1657,33 @@ export class DatabaseStorage implements IStorage {
   async updateSurvey(id: string, updates: Partial<Survey>): Promise<Survey | undefined> {
     const [updated] = await db.update(clientSurveys).set(updates).where(eq(clientSurveys.id, id)).returning();
     return updated || undefined;
+  }
+
+  async getAllSurveys(): Promise<Survey[]> {
+    return await db.select().from(clientSurveys).orderBy(desc(clientSurveys.createdAt));
+  }
+
+  async getSurveysAwaitingGooglePrompt(maxAgeMs: number): Promise<Survey[]> {
+    const cutoff = new Date(Date.now() - maxAgeMs);
+    return await db.select().from(clientSurveys).where(
+      and(
+        eq(clientSurveys.rating, 5),
+        isNotNull(clientSurveys.completedAt),
+        isNull(clientSurveys.googlePromptSentAt),
+        isNull(clientSurveys.googleClickedAt),
+        lte(clientSurveys.completedAt, cutoff),
+      )
+    );
+  }
+
+  async getSurveysAwaitingReminder(): Promise<Survey[]> {
+    return await db.select().from(clientSurveys).where(
+      and(
+        eq(clientSurveys.rating, 5),
+        isNotNull(clientSurveys.googlePromptSentAt),
+        isNull(clientSurveys.googleClickedAt),
+      )
+    );
   }
 
   async createReferral(referral: InsertReferral): Promise<Referral> {

@@ -570,6 +570,11 @@ export const clientSurveys = pgTable("client_surveys", {
   surveyToken: text("survey_token").notNull().unique(),
   completedAt: timestamp("completed_at"),
   createdAt: timestamp("created_at").notNull().default(sql`now()`),
+  googlePromptSentAt: timestamp("google_prompt_sent_at"),
+  googleClickedAt: timestamp("google_clicked_at"),
+  copyClickedAt: timestamp("copy_clicked_at"),
+  googlePromptRemindersSent: integer("google_prompt_reminders_sent").notNull().default(0),
+  lastReminderSentAt: timestamp("last_reminder_sent_at"),
 });
 
 export const insertSurveySchema = createInsertSchema(clientSurveys).omit({
@@ -693,6 +698,8 @@ export const EmailType = {
   SCHEDULING_NOTIFICATION: "scheduling_notification",
   MANUAL_DELAY_NOTICE: "manual_delay_notice",
   GALLERY_PREVIEW: "gallery_preview",
+  GOOGLE_REVIEW_PROMPT: "google_review_prompt",
+  GOOGLE_REVIEW_REMINDER: "google_review_reminder",
 } as const;
 
 export type EmailTypeValue = typeof EmailType[keyof typeof EmailType];
