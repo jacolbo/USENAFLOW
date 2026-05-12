@@ -130,7 +130,7 @@ interface ProjectWithUnread {
   hasPostReviewReply?: boolean;
 }
 
-const ALLOWED_ROLES = [UserRoles.ADMIN, UserRoles.LEAD_RETOUCHER, UserRoles.RETOUCHER_1, UserRoles.RETOUCHER_2, UserRoles.RETOUCHER_3, UserRoles.EVANS];
+const ALLOWED_ROLES = [UserRoles.ADMIN, UserRoles.LEAD_RETOUCHER, UserRoles.RETOUCHER_1, UserRoles.RETOUCHER_2, UserRoles.RETOUCHER_3, UserRoles.EVANS, UserRoles.DATA_WRANGLER, UserRoles.PHOTOGRAPHER];
 
 function AttachmentPreview({ url, type, name }: { url: string; type: string; name?: string }) {
   const [isPlaying, setIsPlaying] = useState(false);

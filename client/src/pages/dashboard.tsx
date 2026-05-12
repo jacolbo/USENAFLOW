@@ -2864,16 +2864,17 @@ export default function Dashboard() {
   // user.id is set during login from userCredentials.id (e.g., "earl", "admin", "lucky")
   const widgetUserId = user?.id || "";
 
-  // Photographer always lands on Today's Shoots — redirect immediately
-  // and short-circuit rendering to avoid flashing project data.
+  // Photographer's default landing is /today, but they can navigate back
+  // to the dashboard manually to read the project list / chats. Only
+  // redirect on first mount (when role becomes available) so that manual
+  // navigation isn't blocked.
+  const photographerLandedRef = useRef(false);
   useEffect(() => {
-    if (user?.role === "Photographer") {
+    if (user?.role === "Photographer" && !photographerLandedRef.current) {
+      photographerLandedRef.current = true;
       setLocation("/today");
     }
   }, [user?.role, setLocation]);
-  if (user?.role === "Photographer") {
-    return null;
-  }
   const { 
     widgetOrder, 
     hiddenWidgets, 
@@ -3335,6 +3336,14 @@ export default function Dashboard() {
                           <DropdownMenuItem onClick={() => setLocation('/shoottracker')}>
                             <Calendar className="h-4 w-4 mr-2" />
                             ShootTracker
+                          </DropdownMenuItem>
+                        )}
+
+                        {/* Today's Shoots - Photographer + Admin/LeadRetoucher/DataWrangler */}
+                        {['Admin', 'LeadRetoucher', 'DataWrangler', 'Photographer'].includes(user.role) && (
+                          <DropdownMenuItem onClick={() => setLocation('/today')} data-testid="menu-today-shoots">
+                            <Camera className="h-4 w-4 mr-2" />
+                            Today's Shoots
                           </DropdownMenuItem>
                         )}
 
