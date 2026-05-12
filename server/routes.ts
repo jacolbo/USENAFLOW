@@ -2087,6 +2087,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
         } catch (logErr: any) {
           console.warn("[ReviewTrack] failed to record google click activity:", logErr?.message);
         }
+        // Fire-and-forget: send personal thank-you email from Jepson
+        (async () => {
+          try {
+            const { isEnabled, recordFired } = await import('./services/automationRegistry');
+            if (!isEnabled('comm_google_review_thanks')) {
+              console.log('[ReviewThanks] Skipped — automation disabled');
+              return;
+            }
+            const { sendGoogleReviewThanksEmail } = await import('./services/emailService');
+            const result = await sendGoogleReviewThanksEmail(
+              survey.clientEmail,
+              survey.clientName,
+              survey.projectId,
+            );
+            if (result.success) {
+              recordFired('comm_google_review_thanks', `Thank-you email sent to ${survey.clientName} <${survey.clientEmail}>`);
+            } else {
+              recordFired('comm_google_review_thanks', `Thank-you email FAILED for ${survey.clientEmail}: ${result.error}`);
+            }
+          } catch (mailErr: any) {
+            console.error('[ReviewThanks] failed to send thank-you email:', mailErr?.message);
+          }
+        })();
       }
     } catch (err: any) {
       console.error("[ReviewTrack] google click error:", err.message);

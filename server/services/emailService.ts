@@ -1671,3 +1671,66 @@ export async function sendGoogleReviewPromptEmail(
     return { success: false, error: error.message };
   }
 }
+
+export async function sendGoogleReviewThanksEmail(
+  clientEmail: string,
+  clientName: string,
+  projectId: string,
+): Promise<EmailResult> {
+  const firstName = getFirstName(clientName);
+
+  let subject = "Thank you — that meant a lot";
+
+  const variables: Record<string, string> = {
+    firstName,
+    clientName,
+    emailHeader: getEmailHeader('A personal thank-you'),
+  };
+
+  let htmlContent = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; background: #fff;">
+      ${variables.emailHeader}
+
+      <p style="color: #2c2c2c; font-size: 16px; line-height: 1.6; margin: 0 0 16px 0;">Hi ${firstName},</p>
+
+      <p style="color: #2c2c2c; font-size: 16px; line-height: 1.6; margin: 0 0 16px 0;">It's Jepson. I just saw that you took the time to leave us a Google review — thank you, that genuinely meant a lot.</p>
+
+      <p style="color: #2c2c2c; font-size: 16px; line-height: 1.6; margin: 0 0 16px 0;">Reviews like yours are the reason new clients trust us with their moments, and they make all the late nights at the editing desk feel worth it. I read every single one, and yours brightened my day.</p>
+
+      <p style="color: #2c2c2c; font-size: 16px; line-height: 1.6; margin: 0 0 16px 0;">If we can ever do anything for you down the line — another shoot, a small favour, anything — just hit reply. We're here.</p>
+
+      <p style="color: #2c2c2c; font-size: 15px; line-height: 1.6; margin: 28px 0 4px 0;">With real gratitude,</p>
+      <p style="color: #2c2c2c; font-size: 15px; line-height: 1.6; margin: 0;"><strong>Jepson</strong></p>
+    </div>
+  `;
+
+  const dbTemplate = await getTemplate('google_review_thanks');
+  if (dbTemplate) {
+    subject = renderTemplate(dbTemplate.subject, variables);
+    htmlContent = renderTemplate(dbTemplate.htmlBody, variables);
+  }
+
+  try {
+    const { client, fromEmail } = await getResendClient();
+    const replyTo = getProjectReplyToEmail(projectId);
+    const response = await client.emails.send({
+      from: fromEmail,
+      replyTo,
+      to: clientEmail,
+      subject,
+      html: htmlContent,
+    });
+    if (response.data?.id) {
+      await logEmail(projectId, EmailType.GOOGLE_REVIEW_THANKS, clientEmail, subject, 'sent', response.data.id);
+      console.log(`[Resend] Google review thank-you sent to ${clientEmail} for project ${projectId}`);
+      return { success: true, messageId: response.data.id };
+    }
+    const errorMsg = response.error?.message || 'Unknown error';
+    await logEmail(projectId, EmailType.GOOGLE_REVIEW_THANKS, clientEmail, subject, 'failed', undefined, errorMsg);
+    return { success: false, error: errorMsg };
+  } catch (error: any) {
+    console.error(`[Email] Failed to send Google review thank-you:`, error);
+    await logEmail(projectId, EmailType.GOOGLE_REVIEW_THANKS, clientEmail, subject, 'failed', undefined, error.message);
+    return { success: false, error: error.message };
+  }
+}

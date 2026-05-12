@@ -344,6 +344,22 @@ export const DEFAULT_EMAIL_TEMPLATES: InsertEmailTemplate[] = [
     isCustomized: false,
   },
   {
+    templateKey: "google_review_thanks",
+    name: "Google Review Thank-You",
+    subject: "Thank you — that meant a lot",
+    htmlBody: `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; background: #fff;">
+  {{emailHeader}}
+  <p style="color: #2c2c2c; font-size: 16px; line-height: 1.6; margin: 0 0 16px 0;">Hi {{firstName}},</p>
+  <p style="color: #2c2c2c; font-size: 16px; line-height: 1.6; margin: 0 0 16px 0;">It's Jepson. I just saw that you took the time to leave us a Google review — thank you, that genuinely meant a lot.</p>
+  <p style="color: #2c2c2c; font-size: 16px; line-height: 1.6; margin: 0 0 16px 0;">Reviews like yours are the reason new clients trust us with their moments, and they make all the late nights at the editing desk feel worth it. I read every single one, and yours brightened my day.</p>
+  <p style="color: #2c2c2c; font-size: 16px; line-height: 1.6; margin: 0 0 16px 0;">If we can ever do anything for you down the line — another shoot, a small favour, anything — just hit reply. We're here.</p>
+  <p style="color: #2c2c2c; font-size: 15px; line-height: 1.6; margin: 28px 0 4px 0;">With real gratitude,</p>
+  <p style="color: #2c2c2c; font-size: 15px; line-height: 1.6; margin: 0;"><strong>Jepson</strong></p>
+</div>`,
+    availableVariables: ["firstName", "clientName", "emailHeader"],
+    isCustomized: false,
+  },
+  {
     templateKey: "gallery_preview",
     name: "Gallery Preview (Pre-Delivery)",
     subject: "Your Photos Are Almost Ready! - Jepson Myles Studio",

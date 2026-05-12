@@ -169,6 +169,20 @@ register({
   connectsTo: ['ai_email_variation'],
 });
 
+register({
+  id: 'comm_google_review_thanks',
+  name: 'Google Review Thank-You Email',
+  description: 'Sends a personal thank-you email from Jepson the first time a client clicks the Google review link, closing the loop after they post.',
+  type: 'communication',
+  category: 'Communication',
+  trigger: 'First click on /r/google/:token (googleClickedAt is recorded)',
+  actions: [
+    'Send branded thank-you email to client',
+    'Log email via email_logs (GOOGLE_REVIEW_THANKS)',
+  ],
+  connectsTo: ['ai_email_variation'],
+});
+
 // --- DRIVE MONITOR TRIGGERED ---
 register({
   id: 'dm_detect_upload',

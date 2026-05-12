@@ -700,6 +700,7 @@ export const EmailType = {
   GALLERY_PREVIEW: "gallery_preview",
   GOOGLE_REVIEW_PROMPT: "google_review_prompt",
   GOOGLE_REVIEW_REMINDER: "google_review_reminder",
+  GOOGLE_REVIEW_THANKS: "google_review_thanks",
 } as const;
 
 export type EmailTypeValue = typeof EmailType[keyof typeof EmailType];
