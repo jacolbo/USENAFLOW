@@ -1552,7 +1552,11 @@ export async function sendGoogleReviewPromptEmail(
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;");
-  const initial = (firstName || clientName || "C").charAt(0).toUpperCase();
+  const initialRaw = (firstName || clientName || "C").charAt(0).toUpperCase();
+  const initial = initialRaw
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
 
   const stars = `
     <span style="color: #FBBC04; font-size: 16px; letter-spacing: 1px;">&#9733;&#9733;&#9733;&#9733;&#9733;</span>
@@ -1581,7 +1585,7 @@ export async function sendGoogleReviewPromptEmail(
             </tr>
             <tr>
               <td colspan="2" style="padding-top: 14px;">
-                <p style="color: #202124; font-family: Arial, sans-serif; font-size: 15px; line-height: 1.6; margin: 0;">${escapedReview}</p>
+                <p style="color: #202124; font-family: Arial, sans-serif; font-size: 15px; line-height: 1.6; margin: 0;">&ldquo;${escapedReview}&rdquo;</p>
               </td>
             </tr>
           </table>
