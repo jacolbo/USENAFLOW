@@ -3,7 +3,7 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { WebSocketServer, WebSocket } from "ws";
 import { storage } from "./storage";
-import { insertProjectSchema, updateProjectSchema, insertProjectNoteSchema, updateProjectNoteSchema, insertTradeOfferSchema, updateTradeOfferSchema, ProjectStatus, TradeOfferStatus, insertUserSchema, loginUserSchema, insertSneakPeekSchema, sneakPeeks as sneakPeeksTable } from "@shared/schema";
+import { insertProjectSchema, updateProjectSchema, insertProjectNoteSchema, updateProjectNoteSchema, insertTradeOfferSchema, updateTradeOfferSchema, ProjectStatus, TradeOfferStatus, insertUserSchema, loginUserSchema, insertSneakPeekSchema, sneakPeeks as sneakPeeksTable, projectInspos, projectWranglerNotes } from "@shared/schema";
 import { db } from "./db";
 import { eq, sql } from "drizzle-orm";
 import { ObjectStorageService, ObjectNotFoundError } from "./objectStorage";
@@ -3337,7 +3337,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         caption: caption || null,
         sortOrder,
         uploadedBy: reqUserName(req),
-      } as any);
+      });
       res.json(inspo);
     } catch (err: any) {
       console.error("[Inspos] create:", err);
@@ -3349,8 +3349,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const role = reqRole(req);
       if (!inspoCanUpload(role)) return res.status(403).json({ error: "Access denied" });
+      const userName = reqUserName(req);
+      // Look up the inspo so we can enforce ownership for Photographers.
+      const all = await db.select().from(projectInspos).where(eq(projectInspos.id, req.params.id));
+      const existing = all[0];
+      if (!existing) return res.status(404).json({ error: "Not found" });
+      if (role === "Photographer" && existing.uploadedBy !== userName) {
+        return res.status(403).json({ error: "Photographers can only edit their own inspos" });
+      }
       const { caption, sortOrder } = req.body || {};
-      const updates: any = {};
+      const updates: { caption?: string; sortOrder?: number } = {};
       if (caption !== undefined) updates.caption = caption;
       if (sortOrder !== undefined) updates.sortOrder = sortOrder;
       const updated = await storage.updateProjectInspo(req.params.id, updates);
@@ -3365,6 +3373,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const role = reqRole(req);
       if (!inspoCanUpload(role)) return res.status(403).json({ error: "Access denied" });
+      const userName = reqUserName(req);
+      const all = await db.select().from(projectInspos).where(eq(projectInspos.id, req.params.id));
+      const existing = all[0];
+      if (!existing) return res.status(404).json({ error: "Not found" });
+      if (role === "Photographer" && existing.uploadedBy !== userName) {
+        return res.status(403).json({ error: "Photographers can only delete their own inspos" });
+      }
       const ok = await storage.deleteProjectInspo(req.params.id);
       res.json({ ok });
     } catch (err: any) {
@@ -3419,7 +3434,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         body: body || null,
         sortOrder,
         createdBy: reqUserName(req),
-      } as any);
+      });
       res.json(note);
     } catch (err: any) {
       console.error("[WranglerNotes] create:", err);
@@ -3431,8 +3446,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const role = reqRole(req);
       if (!wnCanWrite(role)) return res.status(403).json({ error: "Access denied" });
+      const userName = reqUserName(req);
+      const existingRows = await db.select().from(projectWranglerNotes).where(eq(projectWranglerNotes.id, req.params.id));
+      const existing = existingRows[0];
+      if (!existing) return res.status(404).json({ error: "Not found" });
+      // Wranglers can only edit their own notes; Admin can edit any.
+      if (role === "DataWrangler" && existing.createdBy !== userName) {
+        return res.status(403).json({ error: "You can only edit notes you created" });
+      }
       const { caption, body, sortOrder } = req.body || {};
-      const updates: any = {};
+      const updates: { caption?: string; body?: string; sortOrder?: number } = {};
       if (caption !== undefined) updates.caption = caption;
       if (body !== undefined) updates.body = body;
       if (sortOrder !== undefined) updates.sortOrder = sortOrder;
@@ -3448,6 +3471,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const role = reqRole(req);
       if (!wnCanWrite(role)) return res.status(403).json({ error: "Access denied" });
+      const userName = reqUserName(req);
+      const existingRows = await db.select().from(projectWranglerNotes).where(eq(projectWranglerNotes.id, req.params.id));
+      const existing = existingRows[0];
+      if (!existing) return res.status(404).json({ error: "Not found" });
+      if (role === "DataWrangler" && existing.createdBy !== userName) {
+        return res.status(403).json({ error: "You can only delete notes you created" });
+      }
       const ok = await storage.deleteProjectWranglerNote(req.params.id);
       res.json({ ok });
     } catch (err: any) {

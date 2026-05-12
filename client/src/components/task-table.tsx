@@ -1903,7 +1903,9 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
                                     hasNotes={(allNotesQuery.data?.[project.id] || 0) > 0}
                                   />
                                 </ErrorBoundary>
-                                <WranglerNotesButton projectId={project.id} projectName={project.clientName} userRole={user.role} userId={user.name || user.id} />
+                                {['Admin', 'DataWrangler'].includes(user.role) && (
+                                  <WranglerNotesButton projectId={project.id} projectName={project.clientName} userRole={user.role} userId={user.name || user.id} />
+                                )}
                               </div>
                             </TableCell>
                           </>
@@ -1994,7 +1996,9 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
                                     hasNotes={(allNotesQuery.data?.[project.id] || 0) > 0}
                                   />
                                 </ErrorBoundary>
-                                <WranglerNotesButton projectId={project.id} projectName={project.clientName} userRole={user.role} userId={user.name || user.id} />
+                                {['Admin', 'DataWrangler'].includes(user.role) && (
+                                  <WranglerNotesButton projectId={project.id} projectName={project.clientName} userRole={user.role} userId={user.name || user.id} />
+                                )}
                               </div>
                             </TableCell>
                           </>
@@ -2092,7 +2096,9 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
                                     hasNotes={(allNotesQuery.data?.[project.id] || 0) > 0}
                                   />
                                 </ErrorBoundary>
-                                <WranglerNotesButton projectId={project.id} projectName={project.clientName} userRole={user.role} userId={user.name || user.id} />
+                                {['Admin', 'DataWrangler'].includes(user.role) && (
+                                  <WranglerNotesButton projectId={project.id} projectName={project.clientName} userRole={user.role} userId={user.name || user.id} />
+                                )}
                               </div>
                             </TableCell>
                           </>

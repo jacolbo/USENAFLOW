@@ -29,18 +29,24 @@ function ChatHeaderInsposButton({ projectId, projectName, userRole, userId }: { 
       return r.json();
     },
   });
-  const has = (countQuery.data?.count || 0) > 0 || !!countQuery.data?.hasInstructions;
+  const count = countQuery.data?.count || 0;
+  const has = count > 0 || !!countQuery.data?.hasInstructions;
   return (
     <>
       <Button
         variant="ghost"
         size="icon"
         onClick={() => setOpen(true)}
-        title={has ? `Photographer inspos (${countQuery.data?.count || 0})` : "No inspos yet"}
-        className={has ? "text-green-600 hover:text-green-700 hover:bg-green-50" : "text-gray-400 hover:text-gray-600"}
+        title={has ? `Photographer inspos (${count})` : "No inspos yet"}
+        className={`relative ${has ? "text-green-600 hover:text-green-700 hover:bg-green-50" : "text-gray-400 hover:text-gray-600"}`}
         data-testid="button-chat-inspos"
       >
         <Camera className="h-5 w-5" />
+        {count > 0 && (
+          <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-1 rounded-full bg-green-600 text-white text-[10px] flex items-center justify-center" data-testid="badge-chat-inspos-count">
+            {count}
+          </span>
+        )}
       </Button>
       {open && (
         <InsposViewerDialog
@@ -68,18 +74,24 @@ function ChatHeaderNotesButton({ projectId, projectName, userRole, userId }: { p
       return r.json();
     },
   });
-  const has = (countQuery.data?.count || 0) > 0;
+  const count = countQuery.data?.count || 0;
+  const has = count > 0;
   return (
     <>
       <Button
         variant="ghost"
         size="icon"
         onClick={() => setOpen(true)}
-        title={has ? `Wrangler notes (${countQuery.data?.count || 0})` : "No wrangler notes"}
-        className={has ? "text-green-600 hover:text-green-700 hover:bg-green-50" : "text-gray-400 hover:text-gray-600"}
+        title={has ? `Wrangler notes (${count})` : "No wrangler notes"}
+        className={`relative ${has ? "text-green-600 hover:text-green-700 hover:bg-green-50" : "text-gray-400 hover:text-gray-600"}`}
         data-testid="button-chat-wrangler-notes"
       >
         <StickyNote className="h-5 w-5" />
+        {count > 0 && (
+          <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-1 rounded-full bg-green-600 text-white text-[10px] flex items-center justify-center" data-testid="badge-chat-wn-count">
+            {count}
+          </span>
+        )}
       </Button>
       {open && (
         <WranglerNotesDialog
