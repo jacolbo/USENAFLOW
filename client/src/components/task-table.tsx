@@ -1904,7 +1904,7 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
                                   />
                                 </ErrorBoundary>
                                 {['Admin', 'DataWrangler'].includes(user.role) && (
-                                  <WranglerNotesButton projectId={project.id} projectName={project.clientName} userRole={user.role} userId={user.name || user.id} />
+                                  <WranglerNotesButton projectId={project.id} projectName={project.clientName} userRole={user.role} userId={String(user.name || user.id || "")} />
                                 )}
                               </div>
                             </TableCell>
@@ -1997,7 +1997,7 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
                                   />
                                 </ErrorBoundary>
                                 {['Admin', 'DataWrangler'].includes(user.role) && (
-                                  <WranglerNotesButton projectId={project.id} projectName={project.clientName} userRole={user.role} userId={user.name || user.id} />
+                                  <WranglerNotesButton projectId={project.id} projectName={project.clientName} userRole={user.role} userId={String(user.name || user.id || "")} />
                                 )}
                               </div>
                             </TableCell>
@@ -2097,7 +2097,7 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
                                   />
                                 </ErrorBoundary>
                                 {['Admin', 'DataWrangler'].includes(user.role) && (
-                                  <WranglerNotesButton projectId={project.id} projectName={project.clientName} userRole={user.role} userId={user.name || user.id} />
+                                  <WranglerNotesButton projectId={project.id} projectName={project.clientName} userRole={user.role} userId={String(user.name || user.id || "")} />
                                 )}
                               </div>
                             </TableCell>

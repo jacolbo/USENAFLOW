@@ -46,10 +46,18 @@ export function useWranglerNotesAllCounts(userRole: string, userId: string) {
   });
 }
 
+interface PendingPhoto {
+  id: string;
+  file: File;
+  previewUrl: string;
+  caption: string;
+}
+
 export function WranglerNotesDialog({ open, onOpenChange, projectId, projectName, userRole, userId, canEdit }: Props) {
   const { toast } = useToast();
   const fileRef = useRef<HTMLInputElement>(null);
-  const [pendingCaption, setPendingCaption] = useState("");
+  const [pending, setPending] = useState<PendingPhoto[]>([]);
+  const [submitting, setSubmitting] = useState(false);
   const [newText, setNewText] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState("");
@@ -72,22 +80,7 @@ export function WranglerNotesDialog({ open, onOpenChange, projectId, projectName
     queryClient.invalidateQueries({ queryKey: ["/api/wrangler-notes/all-counts"] });
   };
 
-  const { uploadFile, isUploading } = useUpload({
-    onSuccess: async (resp) => {
-      try {
-        const r = await fetch(`/api/projects/${projectId}/wrangler-notes`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json", ...headers },
-          body: JSON.stringify({ kind: "photo", storageKey: resp.objectPath, caption: pendingCaption || null }),
-        });
-        if (!r.ok) throw new Error("Failed to save photo note");
-        setPendingCaption("");
-        invalidateAll();
-        toast({ description: "Photo note added" });
-      } catch (err: any) {
-        toast({ title: "Error", description: err.message, variant: "destructive" });
-      }
-    },
+  const { uploadFile } = useUpload({
     onError: (err) => toast({ title: "Upload failed", description: err.message, variant: "destructive" }),
   });
 
@@ -126,10 +119,54 @@ export function WranglerNotesDialog({ open, onOpenChange, projectId, projectName
     onSuccess: invalidateAll,
   });
 
-  const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
-    for (const f of files) await uploadFile(f);
+    const next: PendingPhoto[] = files.map((f) => ({
+      id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      file: f,
+      previewUrl: URL.createObjectURL(f),
+      caption: "",
+    }));
+    setPending((prev) => [...prev, ...next]);
     if (fileRef.current) fileRef.current.value = "";
+  };
+
+  const removePending = (id: string) => {
+    setPending((prev) => {
+      const target = prev.find((p) => p.id === id);
+      if (target) URL.revokeObjectURL(target.previewUrl);
+      return prev.filter((p) => p.id !== id);
+    });
+  };
+
+  const updatePendingCaption = (id: string, caption: string) => {
+    setPending((prev) => prev.map((p) => (p.id === id ? { ...p, caption } : p)));
+  };
+
+  const submitPending = async () => {
+    if (pending.length === 0) return;
+    setSubmitting(true);
+    let okCount = 0;
+    for (const p of pending) {
+      try {
+        const resp = await uploadFile(p.file);
+        if (!resp) throw new Error("Upload failed");
+        const r = await fetch(`/api/projects/${projectId}/wrangler-notes`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", ...headers },
+          body: JSON.stringify({ kind: "photo", storageKey: resp.objectPath, caption: p.caption.trim() || null }),
+        });
+        if (!r.ok) throw new Error("Save failed");
+        URL.revokeObjectURL(p.previewUrl);
+        okCount++;
+      } catch (err: any) {
+        toast({ title: `Failed: ${p.file.name}`, description: err.message, variant: "destructive" });
+      }
+    }
+    setPending((prev) => prev.slice(okCount));
+    invalidateAll();
+    if (okCount > 0) toast({ description: `Added ${okCount} photo note${okCount === 1 ? "" : "s"}` });
+    setSubmitting(false);
   };
 
   const notes = notesQuery.data || [];
@@ -155,17 +192,38 @@ export function WranglerNotesDialog({ open, onOpenChange, projectId, projectName
               </h3>
               {canEdit && (
                 <div className="border-2 border-dashed rounded-lg p-3 mb-3 space-y-2 bg-muted/30">
-                  <Input
-                    placeholder="Caption for next photo (optional)"
-                    value={pendingCaption}
-                    onChange={(e) => setPendingCaption(e.target.value)}
-                    data-testid="input-wn-caption"
-                  />
                   <input ref={fileRef} type="file" accept="image/*" multiple onChange={handleFile} className="hidden" />
-                  <Button size="sm" onClick={() => fileRef.current?.click()} disabled={isUploading} data-testid="button-wn-upload">
-                    {isUploading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Upload className="h-4 w-4 mr-2" />}
-                    Upload Photo(s)
-                  </Button>
+                  <div className="flex justify-center">
+                    <Button size="sm" variant="outline" onClick={() => fileRef.current?.click()} disabled={submitting} data-testid="button-wn-add-files">
+                      <Plus className="h-4 w-4 mr-2" />
+                      Add Photo(s)
+                    </Button>
+                  </div>
+                  {pending.length > 0 && (
+                    <div className="space-y-2 pt-2">
+                      {pending.map((p) => (
+                        <div key={p.id} className="flex gap-2 items-start border rounded-md p-2 bg-background" data-testid={`pending-wn-${p.id}`}>
+                          <img src={p.previewUrl} alt="" className="w-14 h-14 object-cover rounded" />
+                          <Input
+                            value={p.caption}
+                            onChange={(e) => updatePendingCaption(p.id, e.target.value)}
+                            placeholder="Caption for this photo (optional)"
+                            className="flex-1 h-8 text-xs"
+                            data-testid={`input-wn-pending-caption-${p.id}`}
+                          />
+                          <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => removePending(p.id)} disabled={submitting} aria-label="Remove">
+                            <X className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      ))}
+                      <div className="flex justify-end">
+                        <Button size="sm" onClick={submitPending} disabled={submitting} data-testid="button-wn-upload">
+                          {submitting ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Upload className="h-4 w-4 mr-2" />}
+                          Upload {pending.length} Photo{pending.length === 1 ? "" : "s"}
+                        </Button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
               {photos.length === 0 ? (

@@ -9,7 +9,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useUpload } from "@/hooks/use-upload";
 import { queryClient } from "@/lib/queryClient";
 import { getAdminHeaders } from "@/lib/adminAuth";
-import { Camera, Pencil, Trash2, Loader2, Upload, Check, X } from "lucide-react";
+import { Camera, Pencil, Trash2, Loader2, Upload, Check, X, Plus } from "lucide-react";
 
 export interface Inspo {
   id: string;
@@ -28,10 +28,18 @@ interface InsposEditorProps {
   canEdit: boolean;
 }
 
+interface PendingFile {
+  id: string;
+  file: File;
+  previewUrl: string;
+  caption: string;
+}
+
 export function InsposEditor({ projectId, userRole, userId, canEdit }: InsposEditorProps) {
   const { toast } = useToast();
   const fileRef = useRef<HTMLInputElement>(null);
-  const [pendingCaption, setPendingCaption] = useState("");
+  const [pending, setPending] = useState<PendingFile[]>([]);
+  const [submitting, setSubmitting] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingCaption, setEditingCaption] = useState("");
   const [instructions, setInstructions] = useState<string>("");
@@ -53,24 +61,7 @@ export function InsposEditor({ projectId, userRole, userId, canEdit }: InsposEdi
     },
   });
 
-  const { uploadFile, isUploading } = useUpload({
-    onSuccess: async (resp) => {
-      try {
-        const r = await fetch(`/api/projects/${projectId}/inspos`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json", ...headers },
-          body: JSON.stringify({ storageKey: resp.objectPath, caption: pendingCaption || null }),
-        });
-        if (!r.ok) throw new Error("Failed to save inspo");
-        setPendingCaption("");
-        queryClient.invalidateQueries({ queryKey: ["/api/projects", projectId, "inspos"] });
-        queryClient.invalidateQueries({ queryKey: ["/api/projects", projectId, "inspos-count"] });
-        queryClient.invalidateQueries({ queryKey: ["/api/today-shoots"] });
-        toast({ description: "Inspo uploaded" });
-      } catch (err: any) {
-        toast({ title: "Error", description: err.message, variant: "destructive" });
-      }
-    },
+  const { uploadFile } = useUpload({
     onError: (err) => toast({ title: "Upload failed", description: err.message, variant: "destructive" }),
   });
 
@@ -117,12 +108,56 @@ export function InsposEditor({ projectId, userRole, userId, canEdit }: InsposEdi
     },
   });
 
-  const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
-    for (const f of files) {
-      await uploadFile(f);
-    }
+    const next: PendingFile[] = files.map((f) => ({
+      id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      file: f,
+      previewUrl: URL.createObjectURL(f),
+      caption: "",
+    }));
+    setPending((prev) => [...prev, ...next]);
     if (fileRef.current) fileRef.current.value = "";
+  };
+
+  const removePending = (id: string) => {
+    setPending((prev) => {
+      const target = prev.find((p) => p.id === id);
+      if (target) URL.revokeObjectURL(target.previewUrl);
+      return prev.filter((p) => p.id !== id);
+    });
+  };
+
+  const updatePendingCaption = (id: string, caption: string) => {
+    setPending((prev) => prev.map((p) => (p.id === id ? { ...p, caption } : p)));
+  };
+
+  const submitPending = async () => {
+    if (pending.length === 0) return;
+    setSubmitting(true);
+    let okCount = 0;
+    for (const p of pending) {
+      try {
+        const resp = await uploadFile(p.file);
+        if (!resp) throw new Error("Upload failed");
+        const r = await fetch(`/api/projects/${projectId}/inspos`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", ...headers },
+          body: JSON.stringify({ storageKey: resp.objectPath, caption: p.caption.trim() || null }),
+        });
+        if (!r.ok) throw new Error("Save failed");
+        URL.revokeObjectURL(p.previewUrl);
+        okCount++;
+      } catch (err: any) {
+        toast({ title: `Failed: ${p.file.name}`, description: err.message, variant: "destructive" });
+      }
+    }
+    setPending((prev) => prev.slice(okCount));
+    queryClient.invalidateQueries({ queryKey: ["/api/projects", projectId, "inspos"] });
+    queryClient.invalidateQueries({ queryKey: ["/api/projects", projectId, "inspos-count"] });
+    queryClient.invalidateQueries({ queryKey: ["/api/today-shoots"] });
+    if (okCount > 0) toast({ description: `Uploaded ${okCount} inspo${okCount === 1 ? "" : "s"}` });
+    setSubmitting(false);
   };
 
   if (dataQuery.isLoading) {
@@ -152,27 +187,46 @@ export function InsposEditor({ projectId, userRole, userId, canEdit }: InsposEdi
 
       {canEdit && (
         <div className="border-2 border-dashed rounded-lg p-4 space-y-3 bg-muted/30">
-          <Input
-            placeholder="Caption for next upload (optional)"
-            value={pendingCaption}
-            onChange={(e) => setPendingCaption(e.target.value)}
-            data-testid="input-pending-caption"
+          <input
+            ref={fileRef}
+            type="file"
+            accept="image/*"
+            multiple
+            onChange={handleFile}
+            className="hidden"
+            data-testid="input-inspo-file"
           />
           <div className="flex justify-center">
-            <input
-              ref={fileRef}
-              type="file"
-              accept="image/*"
-              multiple
-              onChange={handleFile}
-              className="hidden"
-              data-testid="input-inspo-file"
-            />
-            <Button onClick={() => fileRef.current?.click()} disabled={isUploading} data-testid="button-upload-inspo">
-              {isUploading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Upload className="h-4 w-4 mr-2" />}
-              Upload Inspo Photo(s)
+            <Button variant="outline" onClick={() => fileRef.current?.click()} disabled={submitting} data-testid="button-add-inspo-files">
+              <Plus className="h-4 w-4 mr-2" />
+              Add Photo(s)
             </Button>
           </div>
+          {pending.length > 0 && (
+            <div className="space-y-2">
+              {pending.map((p) => (
+                <div key={p.id} className="flex gap-2 items-start border rounded-md p-2 bg-background" data-testid={`pending-inspo-${p.id}`}>
+                  <img src={p.previewUrl} alt="" className="w-16 h-16 object-cover rounded" />
+                  <Input
+                    value={p.caption}
+                    onChange={(e) => updatePendingCaption(p.id, e.target.value)}
+                    placeholder="Caption for this photo (optional)"
+                    className="flex-1"
+                    data-testid={`input-pending-caption-${p.id}`}
+                  />
+                  <Button size="icon" variant="ghost" onClick={() => removePending(p.id)} disabled={submitting} aria-label="Remove">
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+              ))}
+              <div className="flex justify-end">
+                <Button onClick={submitPending} disabled={submitting} data-testid="button-upload-inspo">
+                  {submitting ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Upload className="h-4 w-4 mr-2" />}
+                  Upload {pending.length} Photo{pending.length === 1 ? "" : "s"}
+                </Button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
