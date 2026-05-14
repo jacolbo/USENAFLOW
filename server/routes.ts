@@ -3,7 +3,7 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { WebSocketServer, WebSocket } from "ws";
 import { storage } from "./storage";
-import { insertProjectSchema, updateProjectSchema, insertProjectNoteSchema, updateProjectNoteSchema, insertTradeOfferSchema, updateTradeOfferSchema, ProjectStatus, TradeOfferStatus, insertUserSchema, loginUserSchema, insertSneakPeekSchema, sneakPeeks as sneakPeeksTable, projectInspos, projectWranglerNotes } from "@shared/schema";
+import { insertProjectSchema, updateProjectSchema, insertProjectNoteSchema, updateProjectNoteSchema, insertTradeOfferSchema, updateTradeOfferSchema, ProjectStatus, TradeOfferStatus, insertUserSchema, loginUserSchema, insertSneakPeekSchema, sneakPeeks as sneakPeeksTable, projectInspos, projectWranglerNotes, projects, type InsertProject } from "@shared/schema";
 import { db } from "./db";
 import { eq, sql } from "drizzle-orm";
 import { ObjectStorageService, ObjectNotFoundError } from "./objectStorage";
@@ -3372,7 +3372,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
           try {
             const events = await fetchCalendarEvents(calId, start, end);
             for (const ev of events) {
-              // Skip all-day or multi-day events (date-only or >= 23h spans).
+              // Skip all-day, multi-day, or any cross-midnight events. We only
+              // want events that begin and end on the same calendar day so the
+              // "Today's Shoot" tab never shows week-long blockers like
+              // "New Event" (May 11-17) or overnight bookings.
+              if (ev.start.toDateString() !== ev.end.toDateString()) continue;
               const durationMs = ev.end.getTime() - ev.start.getTime();
               if (durationMs >= 23 * 60 * 60 * 1000) continue;
               calendarEvents.push({
@@ -3426,7 +3430,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         calendarEventId: eventId,
         lastSyncedAt: new Date(),
         createdFrom: "CALENDAR",
-      } as any);
+      } satisfies Partial<typeof projects.$inferInsert> as InsertProject);
       res.json({ project: newProject, created: true });
     } catch (err: any) {
       console.error("[today-shoots] from-calendar-event:", err);

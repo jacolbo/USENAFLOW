@@ -12,7 +12,7 @@ import {
   StagingStatus,
   type CalendarEventStaging,
 } from "@shared/schema";
-import { verifyAdminRequest, verifyChatRequest } from "./middleware/adminAuth";
+import { verifyAdminRequest, verifyAdminOrLeadRequest, verifyChatRequest } from "./middleware/adminAuth";
 import { handleClientMessageAutoResponse, clearPendingAutoResponse } from './services/chatAutoResponder';
 import { 
   normalizeEvent, 
@@ -123,7 +123,7 @@ export function registerShoottrackerRoutes(app: Express): void {
     }
   });
 
-  app.put("/api/admin/shoottracker/settings", verifyAdminRequest, async (req: Request, res: Response) => {
+  app.put("/api/admin/shoottracker/settings", verifyAdminOrLeadRequest, async (req: Request, res: Response) => {
     try {
       const validatedSettings = shoottrackerSettingsSchema.parse(req.body);
       await storage.setAppSetting(SETTINGS_KEY, validatedSettings);
@@ -211,7 +211,7 @@ export function registerShoottrackerRoutes(app: Express): void {
   });
 
   // Sync route - stores events in staging table for user to review
-  app.post("/api/admin/shoottracker/sync", verifyAdminRequest, async (req: Request, res: Response) => {
+  app.post("/api/admin/shoottracker/sync", verifyAdminOrLeadRequest, async (req: Request, res: Response) => {
     try {
       const settings = await getSettings();
       const stats = { fetched: 0, staged: 0, updated: 0, excluded: 0, errors: [] as string[] };
@@ -313,7 +313,7 @@ export function registerShoottrackerRoutes(app: Express): void {
   });
 
   // Promote staged event to project
-  app.post("/api/admin/shoottracker/staged/:id/promote", verifyAdminRequest, async (req: Request, res: Response) => {
+  app.post("/api/admin/shoottracker/staged/:id/promote", verifyAdminOrLeadRequest, async (req: Request, res: Response) => {
     try {
       const { id } = req.params;
       const { targetWeekStart } = req.body;
@@ -455,7 +455,7 @@ export function registerShoottrackerRoutes(app: Express): void {
   });
 
   // Ignore staged event
-  app.post("/api/admin/shoottracker/staged/:id/ignore", verifyAdminRequest, async (req: Request, res: Response) => {
+  app.post("/api/admin/shoottracker/staged/:id/ignore", verifyAdminOrLeadRequest, async (req: Request, res: Response) => {
     try {
       const { id } = req.params;
       
@@ -475,7 +475,7 @@ export function registerShoottrackerRoutes(app: Express): void {
   });
 
   // Restore ignored event to pending
-  app.post("/api/admin/shoottracker/staged/:id/restore", verifyAdminRequest, async (req: Request, res: Response) => {
+  app.post("/api/admin/shoottracker/staged/:id/restore", verifyAdminOrLeadRequest, async (req: Request, res: Response) => {
     try {
       const { id } = req.params;
       
@@ -734,7 +734,7 @@ export function registerShoottrackerRoutes(app: Express): void {
   // ============ EMAIL NOTIFICATION ROUTES ============
   
   // Send delivery estimate email to client
-  app.post("/api/admin/shoottracker/project/:id/send-delivery-estimate", verifyAdminRequest, async (req: Request, res: Response) => {
+  app.post("/api/admin/shoottracker/project/:id/send-delivery-estimate", verifyAdminOrLeadRequest, async (req: Request, res: Response) => {
     try {
       const { id } = req.params;
       const project = await storage.getProject(id);
@@ -771,7 +771,7 @@ export function registerShoottrackerRoutes(app: Express): void {
   });
   
   // Send project added email with package info
-  app.post("/api/admin/shoottracker/project/:id/send-project-added", verifyAdminRequest, async (req: Request, res: Response) => {
+  app.post("/api/admin/shoottracker/project/:id/send-project-added", verifyAdminOrLeadRequest, async (req: Request, res: Response) => {
     try {
       const { id } = req.params;
       const project = await storage.getProject(id);
@@ -815,7 +815,7 @@ export function registerShoottrackerRoutes(app: Express): void {
   });
   
   // Send chat link email to client
-  app.post("/api/admin/shoottracker/project/:id/send-chat-link", verifyAdminRequest, async (req: Request, res: Response) => {
+  app.post("/api/admin/shoottracker/project/:id/send-chat-link", verifyAdminOrLeadRequest, async (req: Request, res: Response) => {
     try {
       const { id } = req.params;
       const project = await storage.getProject(id);
@@ -1509,7 +1509,7 @@ export function registerShoottrackerRoutes(app: Express): void {
   });
 
   // POST /api/admin/shoottracker/delay-check/send - Manually trigger delay notifications
-  app.post("/api/admin/shoottracker/delay-check/send", verifyAdminRequest, async (req: Request, res: Response) => {
+  app.post("/api/admin/shoottracker/delay-check/send", verifyAdminOrLeadRequest, async (req: Request, res: Response) => {
     try {
       console.log("[DelayCheck] Manual delay notification triggered");
       const result = await sendDelayNotifications();
