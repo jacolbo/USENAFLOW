@@ -2089,6 +2089,22 @@ function VipClientDashboard({ userRole }: { userRole: string }) {
     },
   });
 
+  const [reviewWindowDays, setReviewWindowDays] = useState<number>(30);
+  const { data: reviewBreakdown, isLoading: isLoadingReviewBreakdown } = useQuery<{
+    windowDays: number;
+    byTier: { label: string; promptsSent: number; googleClicks: number; clickThroughRate: number }[];
+  }>({
+    queryKey: ["/api/google-review/breakdown", reviewWindowDays],
+    queryFn: async () => {
+      const res = await fetch(`/api/google-review/breakdown?windowDays=${reviewWindowDays}`, {
+        headers: { "x-usena-role": userRole },
+      });
+      if (!res.ok) throw new Error("Failed to fetch review breakdown");
+      return res.json();
+    },
+    enabled: userRole === "Admin",
+  });
+
   const updateMutation = useMutation({
     mutationFn: async ({ id, updates }: { id: string; updates: any }) => {
       const res = await fetch(`/api/admin/clients/${id}`, {
@@ -2157,6 +2173,69 @@ function VipClientDashboard({ userRole }: { userRole: string }) {
             Recalculate Tiers
           </Button>
         </div>
+
+        {userRole === "Admin" && (
+          <div className="mb-6 border border-gray-200 rounded-lg p-4 bg-gradient-to-br from-amber-50/40 to-white">
+            <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+              <div>
+                <h3 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
+                  <Star className="h-4 w-4 text-amber-600" /> Google Review Conversion by Tier
+                </h3>
+                <p className="text-xs text-gray-500">
+                  Prompts sent, clicks, and CTR per tier in the last {reviewBreakdown?.windowDays ?? reviewWindowDays} days
+                </p>
+              </div>
+              <select
+                value={reviewWindowDays}
+                onChange={(e) => setReviewWindowDays(parseInt(e.target.value, 10))}
+                className="text-xs border border-gray-300 rounded px-2 py-1 bg-white"
+                data-testid="select-vip-review-window"
+              >
+                <option value={7}>Last 7 days</option>
+                <option value={30}>Last 30 days</option>
+                <option value={90}>Last 90 days</option>
+              </select>
+            </div>
+            {isLoadingReviewBreakdown ? (
+              <div className="text-xs text-gray-500 py-4 text-center">Loading review conversion…</div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                {(["Platinum", "Gold", "Silver", "Standard"] as const).map((tier) => {
+                  const row = reviewBreakdown?.byTier.find((r) => r.label === tier);
+                  const prompts = row?.promptsSent ?? 0;
+                  const clicks = row?.googleClicks ?? 0;
+                  const ctr = row?.clickThroughRate ?? 0;
+                  return (
+                    <div
+                      key={tier}
+                      className={`rounded-lg border p-3 ${tierColors[tier] || tierColors.Standard}`}
+                      data-testid={`card-vip-tier-${tier.toLowerCase()}`}
+                    >
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-sm font-semibold flex items-center gap-1">
+                          {tierIcons[tier]} {tier}
+                        </span>
+                        <span className="text-xs font-bold" data-testid={`text-vip-tier-${tier.toLowerCase()}-ctr`}>
+                          {prompts > 0 ? `${(ctr * 100).toFixed(1)}%` : "—"}
+                        </span>
+                      </div>
+                      <div className="flex justify-between text-xs">
+                        <div>
+                          <div className="font-semibold" data-testid={`text-vip-tier-${tier.toLowerCase()}-prompts`}>{prompts}</div>
+                          <div className="opacity-70">prompts sent</div>
+                        </div>
+                        <div className="text-right">
+                          <div className="font-semibold" data-testid={`text-vip-tier-${tier.toLowerCase()}-clicks`}>{clicks}</div>
+                          <div className="opacity-70">Google clicks</div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
 
         {isLoading ? (
           <div className="text-center py-8 text-gray-500">Loading client profiles...</div>
