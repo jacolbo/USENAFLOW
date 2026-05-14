@@ -27,12 +27,35 @@ export default function TodayShoots() {
   const allowed = ["Admin", "Photographer", "DataWrangler", "LeadRetoucher", "Retoucher1", "Retoucher2", "Retoucher3", "Evans"].includes(userRole);
   const canEdit = ["Admin", "Photographer"].includes(userRole);
 
-  const dateKey = useMemo(() => date.toISOString().slice(0, 10), [date]);
+  // Local-day key (YYYY-MM-DD in the user's timezone) — used purely for cache
+  // keys and "is this today?" checks. The server filter is driven by the
+  // start/end ISO timestamps below.
+  const dateKey = useMemo(() => {
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, "0");
+    const d = String(date.getDate()).padStart(2, "0");
+    return `${y}-${m}-${d}`;
+  }, [date]);
+
+  // Day boundaries in the user's local timezone, expressed as absolute UTC
+  // instants. The server uses these to filter projects whose shootDate falls
+  // within the user's local day.
+  const { startIso, endIso } = useMemo(() => {
+    const start = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    const end = new Date(start.getTime() + 24 * 60 * 60 * 1000);
+    return { startIso: start.toISOString(), endIso: end.toISOString() };
+  }, [date]);
+
+  const todayKey = useMemo(() => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+  }, []);
 
   const shootsQuery = useQuery<TodayItem[]>({
     queryKey: ["/api/today-shoots", dateKey],
     queryFn: async () => {
-      const r = await fetch(`/api/today-shoots?date=${dateKey}`, { headers: getAdminHeaders(userRole, userName) });
+      const url = `/api/today-shoots?start=${encodeURIComponent(startIso)}&end=${encodeURIComponent(endIso)}&date=${dateKey}`;
+      const r = await fetch(url, { headers: getAdminHeaders(userRole, userName) });
       if (!r.ok) throw new Error("Failed to load shoots");
       return r.json();
     },
@@ -59,7 +82,7 @@ export default function TodayShoots() {
     setDate(d);
   };
 
-  const isToday = dateKey === new Date().toISOString().slice(0, 10);
+  const isToday = dateKey === todayKey;
   const items = shootsQuery.data || [];
   const active = items.find(i => i.project.id === activeProjectId);
 
