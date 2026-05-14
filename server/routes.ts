@@ -3317,17 +3317,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
         if (isNaN(start.getTime()) || isNaN(end.getTime())) {
           return res.status(400).json({ error: "Invalid start/end" });
         }
+        if (start >= end) {
+          return res.status(400).json({ error: "start must be before end" });
+        }
       } else {
         const dateParam = (req.query.date as string) || "";
         if (dateParam && /^\d{4}-\d{2}-\d{2}$/.test(dateParam)) {
           // Treat YYYY-MM-DD as a UTC day boundary so it's deterministic
           // regardless of where the server runs.
-          start = new Date(`${dateParam}T00:00:00.000Z`);
-          end = new Date(start.getTime() + 24 * 60 * 60 * 1000);
+          const [y, m, d] = dateParam.split("-").map(Number);
+          start = new Date(Date.UTC(y, m - 1, d));
+          end = new Date(Date.UTC(y, m - 1, d + 1));
         } else {
           const now = new Date();
           start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-          end = new Date(start.getTime() + 24 * 60 * 60 * 1000);
+          // Next local midnight (DST-safe).
+          end = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
         }
       }
       const all = await storage.getAllProjects();

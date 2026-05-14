@@ -41,15 +41,17 @@ export default function TodayShoots() {
   // instants. The server uses these to filter projects whose shootDate falls
   // within the user's local day.
   const { startIso, endIso } = useMemo(() => {
+    // Use next-local-midnight (not +24h) so DST transitions don't shift
+    // the boundary by an hour.
     const start = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-    const end = new Date(start.getTime() + 24 * 60 * 60 * 1000);
+    const end = new Date(date.getFullYear(), date.getMonth(), date.getDate() + 1);
     return { startIso: start.toISOString(), endIso: end.toISOString() };
   }, [date]);
 
-  const todayKey = useMemo(() => {
-    const now = new Date();
-    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
-  }, []);
+  // Recompute every render so "Today" stays accurate after midnight rollover
+  // while the page is left open.
+  const now = new Date();
+  const todayKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
 
   const shootsQuery = useQuery<TodayItem[]>({
     queryKey: ["/api/today-shoots", dateKey],
