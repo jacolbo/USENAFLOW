@@ -3288,7 +3288,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // ============================================
   // Photographer Inspos & Wrangler Notes (Task #27)
   // ============================================
-  const inspoCanUpload = (role: string) => ["Admin", "Photographer"].includes(role);
+  const inspoCanUpload = (role: string) => ["Admin", "Photographer", "DataWrangler"].includes(role);
   const inspoCanView = (role: string) => ["Admin", "Photographer", "DataWrangler", "LeadRetoucher", "Retoucher1", "Retoucher2", "Retoucher3", "Evans"].includes(role);
   const wnCanWrite = (role: string) => ["Admin", "DataWrangler"].includes(role);
   const wnCanView = inspoCanView;

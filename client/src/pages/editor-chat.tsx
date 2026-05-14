@@ -20,7 +20,7 @@ import { WranglerNotesDialog } from "@/components/wrangler-notes-dialog";
 
 function ChatHeaderInsposButton({ projectId, projectName, userRole, userId }: { projectId: string; projectName: string; userRole: string; userId: string }) {
   const [open, setOpen] = useState(false);
-  const canEdit = ["Admin", "Photographer"].includes(userRole);
+  const canEdit = ["Admin", "Photographer", "DataWrangler"].includes(userRole);
   const countQuery = useQuery<{ count: number; hasInstructions: boolean }>({
     queryKey: ["/api/projects", projectId, "inspos-count"],
     queryFn: async () => {

@@ -41,7 +41,7 @@ export default function TodayShoots() {
   const userName = userId;
 
   const allowed = ["Admin", "Photographer", "DataWrangler", "LeadRetoucher", "Retoucher1", "Retoucher2", "Retoucher3", "Evans"].includes(userRole);
-  const canEdit = ["Admin", "Photographer"].includes(userRole);
+  const canEdit = ["Admin", "Photographer", "DataWrangler"].includes(userRole);
 
   // Local-day key (YYYY-MM-DD in the user's timezone) — used purely for cache
   // keys and "is this today?" checks. The server filter is driven by the
