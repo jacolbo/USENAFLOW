@@ -374,31 +374,60 @@ export function registerShoottrackerRoutes(app: Express): void {
         || extractClientEmail(stagedEvent.description || '', stagedEvent.location || '', [])
         || null;
 
-      const newProject = await storage.createProject({
-        clientName,
-        packageCount: stagedEvent.packagePhotos || 0,
-        selectedCount: stagedEvent.selectedPhotos || 0,
-        dueDate: weekStart,
-        assignedTo: null,
-        shootDate,
-        deliveryDueDate,
-        riskLevel,
-        calendarEventId: stagedEvent.calendarEventId,
-        lastSyncedAt: new Date(),
-        createdFrom: "CALENDAR",
-        clientEmail: resolvedClientEmail,
-      });
-      
-      await storage.createShoottrackerMeta({
-        projectId: newProject.id,
-        linkSent: false,
-        delivered: false,
-        turnaroundDays: turnaroundDays,
-        workingDays: settings.working_days,
-        holidays: settings.holidays,
-        lastCalendarSync: new Date(),
-        rawEventPayload: stagedEvent.rawPayload as any,
-      });
+      // Idempotent: if a project already exists for this calendar event
+      // (e.g. created on-the-fly from Today's Shoot so Photographer/DW could
+      // attach inspos before sync), reuse it instead of inserting a new row
+      // (calendar_event_id is unique). Preserve any inspos/notes already
+      // attached and just back-fill the proper ShootTracker fields.
+      const existingForEvent = stagedEvent.calendarEventId
+        ? await storage.getProjectByCalendarEventId(stagedEvent.calendarEventId)
+        : undefined;
+
+      let newProject;
+      if (existingForEvent) {
+        const updated = await storage.updateProject(existingForEvent.id, {
+          clientName,
+          packageCount: stagedEvent.packagePhotos || existingForEvent.packageCount || 0,
+          selectedCount: stagedEvent.selectedPhotos || existingForEvent.selectedCount || 0,
+          dueDate: weekStart,
+          shootDate,
+          deliveryDueDate,
+          riskLevel,
+          lastSyncedAt: new Date(),
+          createdFrom: "CALENDAR",
+          clientEmail: existingForEvent.clientEmail || resolvedClientEmail,
+        });
+        newProject = updated || existingForEvent;
+      } else {
+        newProject = await storage.createProject({
+          clientName,
+          packageCount: stagedEvent.packagePhotos || 0,
+          selectedCount: stagedEvent.selectedPhotos || 0,
+          dueDate: weekStart,
+          assignedTo: null,
+          shootDate,
+          deliveryDueDate,
+          riskLevel,
+          calendarEventId: stagedEvent.calendarEventId,
+          lastSyncedAt: new Date(),
+          createdFrom: "CALENDAR",
+          clientEmail: resolvedClientEmail,
+        });
+      }
+
+      const existingMeta = await storage.getShoottrackerMeta(newProject.id).catch(() => undefined);
+      if (!existingMeta) {
+        await storage.createShoottrackerMeta({
+          projectId: newProject.id,
+          linkSent: false,
+          delivered: false,
+          turnaroundDays: turnaroundDays,
+          workingDays: settings.working_days,
+          holidays: settings.holidays,
+          lastCalendarSync: new Date(),
+          rawEventPayload: stagedEvent.rawPayload as any,
+        });
+      }
       
       await storage.updateStagedEvent(id, {
         status: StagingStatus.PROMOTED,

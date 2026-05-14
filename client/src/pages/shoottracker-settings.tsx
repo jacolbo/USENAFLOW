@@ -17,6 +17,7 @@ import { queryClient } from "@/lib/queryClient";
 import { getAdminHeaders } from "@/lib/adminAuth";
 import { UserRoles, shoottrackerSettingsSchema, type ShoottrackerSettings, StagingStatus, type CalendarEventStaging, type KeywordTurnaroundRule, type Holiday } from "@shared/schema";
 import { ArrowLeft, Calendar, Settings, RefreshCw, Clock, AlertTriangle, CheckCircle, Loader2, CalendarPlus, Eye, EyeOff, Plus, ChevronRight, Search, X, Mail, MessageCircle, Send } from "lucide-react";
+import { WranglerNotesButton } from "@/components/wrangler-notes-dialog";
 import { format, startOfWeek, addWeeks, subWeeks } from "date-fns";
 import {
   Form,
@@ -940,6 +941,14 @@ export default function ShootTrackerSettings() {
                                   {event.status === StagingStatus.PROMOTED && (
                                     <>
                                       <Badge variant="default" className="bg-green-600">Added</Badge>
+                                      {event.promotedProjectId && (
+                                        <WranglerNotesButton
+                                          projectId={event.promotedProjectId}
+                                          projectName={event.title}
+                                          userRole={userRole}
+                                          userId={userId}
+                                        />
+                                      )}
                                       {!isDataWranglerOnly && event.clientEmail && event.promotedProjectId && (
                                         <div className="flex items-center gap-1">
                                           <Button
