@@ -6,13 +6,29 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { getAdminHeaders } from "@/lib/adminAuth";
-import { Camera, ChevronLeft, ChevronRight, Loader2, ArrowLeft } from "lucide-react";
+import { Camera, ChevronLeft, ChevronRight, Loader2, ArrowLeft, CalendarDays, MapPin, Link2Off } from "lucide-react";
 import type { Project } from "@shared/schema";
 import { InsposEditor } from "@/components/inspos-panel";
 
 interface TodayItem {
   project: Project;
   inspoCount: number;
+}
+
+interface CalendarEventItem {
+  id: string;
+  summary: string;
+  start: string;
+  end: string;
+  location: string | null;
+  calendarId: string;
+  projectId: string | null;
+  linkedToProject: boolean;
+}
+
+interface TodayResponse {
+  projects: TodayItem[];
+  calendarEvents: CalendarEventItem[];
 }
 
 export default function TodayShoots() {
@@ -53,13 +69,16 @@ export default function TodayShoots() {
   const now = new Date();
   const todayKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
 
-  const shootsQuery = useQuery<TodayItem[]>({
+  const shootsQuery = useQuery<TodayResponse>({
     queryKey: ["/api/today-shoots", dateKey],
     queryFn: async () => {
       const url = `/api/today-shoots?start=${encodeURIComponent(startIso)}&end=${encodeURIComponent(endIso)}&date=${dateKey}`;
       const r = await fetch(url, { headers: getAdminHeaders(userRole, userName) });
       if (!r.ok) throw new Error("Failed to load shoots");
-      return r.json();
+      const data = await r.json();
+      // Backwards-compat: server used to return a bare array.
+      if (Array.isArray(data)) return { projects: data as TodayItem[], calendarEvents: [] };
+      return data as TodayResponse;
     },
     enabled: allowed,
   });
@@ -85,8 +104,18 @@ export default function TodayShoots() {
   };
 
   const isToday = dateKey === todayKey;
-  const items = shootsQuery.data || [];
+  const items = shootsQuery.data?.projects || [];
+  const calendarEvents = shootsQuery.data?.calendarEvents || [];
+  // Hide calendar events that already correspond to a project we're showing
+  // above so the same shoot doesn't appear twice.
+  const projectEventIds = new Set(items.map(i => (i.project as any).calendarEventId).filter(Boolean));
+  const unmatchedEvents = calendarEvents.filter(ev => !projectEventIds.has(ev.id));
   const active = items.find(i => i.project.id === activeProjectId);
+
+  const fmtTime = (iso: string) => {
+    try { return new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }); }
+    catch { return ""; }
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -113,14 +142,17 @@ export default function TodayShoots() {
           <Button variant="outline" size="sm" onClick={() => shiftDay(1)} data-testid="button-next-day">
             <ChevronRight className="h-4 w-4" />
           </Button>
-          <span className="ml-auto text-xs text-muted-foreground">{items.length} shoot{items.length === 1 ? "" : "s"}</span>
+          <span className="ml-auto text-xs text-muted-foreground">
+            {items.length} shoot{items.length === 1 ? "" : "s"}
+            {unmatchedEvents.length > 0 && ` · ${unmatchedEvents.length} calendar event${unmatchedEvents.length === 1 ? "" : "s"}`}
+          </span>
         </div>
       </header>
 
-      <main className="max-w-3xl mx-auto p-4">
+      <main className="max-w-3xl mx-auto p-4 space-y-6">
         {shootsQuery.isLoading ? (
           <div className="flex justify-center py-12"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>
-        ) : items.length === 0 ? (
+        ) : items.length === 0 && unmatchedEvents.length === 0 ? (
           <Card>
             <CardContent className="py-12 text-center text-muted-foreground">
               <Camera className="h-12 w-12 mx-auto mb-3 opacity-30" />
@@ -157,6 +189,42 @@ export default function TodayShoots() {
               </Card>
             ))}
           </div>
+        )}
+
+        {unmatchedEvents.length > 0 && (
+          <section className="space-y-2">
+            <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+              <CalendarDays className="h-4 w-4" />
+              From Google Calendar
+              <span className="text-xs">({unmatchedEvents.length})</span>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              These events are on the calendar but don't have a project record yet. Sync ShootTracker to turn them into projects.
+            </p>
+            <div className="space-y-2">
+              {unmatchedEvents.map((ev) => (
+                <Card key={ev.id} data-testid={`card-cal-event-${ev.id}`}>
+                  <CardContent className="p-4 flex items-center gap-3">
+                    <CalendarDays className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium truncate">{ev.summary || "(untitled event)"}</div>
+                      <div className="text-xs text-muted-foreground flex items-center gap-2 flex-wrap">
+                        <span>{fmtTime(ev.start)}{ev.end ? ` – ${fmtTime(ev.end)}` : ""}</span>
+                        {ev.location && (
+                          <span className="flex items-center gap-1 truncate">
+                            <MapPin className="h-3 w-3" /> {ev.location}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <Badge variant="outline" className="flex items-center gap-1">
+                      <Link2Off className="h-3 w-3" /> No project
+                    </Badge>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </section>
         )}
       </main>
 

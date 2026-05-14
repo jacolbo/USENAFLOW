@@ -3343,7 +3343,55 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return d >= start && d < end;
       });
       const counts = await storage.getInspoCountsByProject(todays.map(p => p.id));
-      res.json(todays.map(p => ({ project: p, inspoCount: counts[p.id] || 0 })));
+      const projects = todays.map(p => ({ project: p, inspoCount: counts[p.id] || 0 }));
+
+      // Also pull live calendar events for the same window so users see what's
+      // happening today even if no project record exists yet.
+      let calendarEvents: any[] = [];
+      try {
+        const { fetchCalendarEvents } = await import("./services/googleCalendar");
+        const { DEFAULT_SHOOTTRACKER_SETTINGS, shoottrackerSettingsSchema } = await import("@shared/schema");
+        const setting = await storage.getAppSetting("shoottracker_settings");
+        let calendarIds: string[] = [];
+        if (setting) {
+          try {
+            const parsed = shoottrackerSettingsSchema.parse(setting.value);
+            calendarIds = parsed.selected_calendar_ids || [];
+          } catch {
+            calendarIds = DEFAULT_SHOOTTRACKER_SETTINGS.selected_calendar_ids || [];
+          }
+        }
+        if (calendarIds.length === 0) calendarIds = ["primary"];
+        const linkedIds = new Set(
+          all.filter(p => p.calendarEventId).map(p => p.calendarEventId as string)
+        );
+        const projectByEventId = new Map<string, string>();
+        all.forEach(p => { if (p.calendarEventId) projectByEventId.set(p.calendarEventId, p.id); });
+
+        for (const calId of calendarIds) {
+          try {
+            const events = await fetchCalendarEvents(calId, start, end);
+            for (const ev of events) {
+              calendarEvents.push({
+                id: ev.id,
+                summary: ev.summary,
+                start: ev.start,
+                end: ev.end,
+                location: ev.location || null,
+                calendarId: calId,
+                projectId: projectByEventId.get(ev.id) || null,
+                linkedToProject: linkedIds.has(ev.id),
+              });
+            }
+          } catch (calErr: any) {
+            console.warn(`[today-shoots] calendar ${calId} fetch failed:`, calErr.message);
+          }
+        }
+      } catch (err: any) {
+        console.warn("[today-shoots] calendar fetch skipped:", err.message);
+      }
+
+      res.json({ projects, calendarEvents });
     } catch (err: any) {
       console.error("[Inspos] today-shoots:", err);
       res.status(500).json({ error: err.message || "Failed" });
