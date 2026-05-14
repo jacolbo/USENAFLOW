@@ -641,7 +641,7 @@ export function registerShoottrackerRoutes(app: Express): void {
     }
   });
 
-  app.patch("/api/shoottracker/project/:id/link-sent", async (req: Request, res: Response) => {
+  app.patch("/api/shoottracker/project/:id/link-sent", verifyAdminRequest, async (req: Request, res: Response) => {
     try {
       const { id } = req.params;
       const { link_sent } = req.body;
@@ -674,7 +674,7 @@ export function registerShoottrackerRoutes(app: Express): void {
     }
   });
 
-  app.patch("/api/shoottracker/project/:id/delivered", async (req: Request, res: Response) => {
+  app.patch("/api/shoottracker/project/:id/delivered", verifyAdminRequest, async (req: Request, res: Response) => {
     try {
       const { id } = req.params;
       const { delivered } = req.body;
@@ -956,7 +956,7 @@ export function registerShoottrackerRoutes(app: Express): void {
   });
   
   // Update client email on project
-  app.patch("/api/admin/shoottracker/project/:id/client-email", verifyAdminRequest, async (req: Request, res: Response) => {
+  app.patch("/api/admin/shoottracker/project/:id/client-email", verifyAdminOrLeadRequest, async (req: Request, res: Response) => {
     try {
       const { id } = req.params;
       const { clientEmail } = req.body;
