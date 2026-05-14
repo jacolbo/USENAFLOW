@@ -8,7 +8,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useUpload } from "@/hooks/use-upload";
 import { queryClient } from "@/lib/queryClient";
 import { getAdminHeaders } from "@/lib/adminAuth";
-import { Camera, Pencil, Trash2, Loader2, Upload, Check, X, Plus, MessageSquare, Image as ImageIcon, StickyNote } from "lucide-react";
+import { Pencil, Trash2, Loader2, Upload, Check, X, Plus, StickyNote } from "lucide-react";
 
 export interface Inspo {
   id: string;
@@ -190,9 +190,7 @@ export function InsposEditor({ projectId, userRole, userId, canEdit }: InsposEdi
     return <div className="flex items-center justify-center py-8"><Loader2 className="h-6 w-6 animate-spin" /></div>;
   }
 
-  const inspos = dataQuery.data?.inspos || [];
-  const photos = inspos.filter(i => i.kind === "photo");
-  const texts = inspos.filter(i => i.kind === "text");
+  const inspos = (dataQuery.data?.inspos || []).slice().sort((a, b) => a.sortOrder - b.sortOrder);
 
   return (
     <div className="space-y-6">
@@ -214,65 +212,77 @@ export function InsposEditor({ projectId, userRole, userId, canEdit }: InsposEdi
         />
       </div>
 
-      {/* Photos section */}
-      <section>
-        <h3 className="text-sm font-semibold mb-2 flex items-center gap-2">
-          <ImageIcon className="h-4 w-4" /> Photos ({photos.length})
-        </h3>
-        {canEdit && (
-          <div className="border-2 border-dashed rounded-lg p-4 space-y-3 bg-muted/30 mb-3">
-            <input
-              ref={fileRef}
-              type="file"
-              accept="image/*"
-              multiple
-              onChange={handleFile}
-              className="hidden"
-              data-testid="input-inspo-file"
-            />
-            <div className="flex justify-center">
-              <Button variant="outline" onClick={() => fileRef.current?.click()} disabled={submitting} data-testid="button-add-inspo-files">
-                <Plus className="h-4 w-4 mr-2" />
-                Add Photo(s)
+      {/* Add controls (photos + quick text note) */}
+      {canEdit && (
+        <div className="border-2 border-dashed rounded-lg p-4 space-y-3 bg-muted/30">
+          <input
+            ref={fileRef}
+            type="file"
+            accept="image/*"
+            multiple
+            onChange={handleFile}
+            className="hidden"
+            data-testid="input-inspo-file"
+          />
+          <div className="flex flex-wrap gap-2 items-start">
+            <Button variant="outline" onClick={() => fileRef.current?.click()} disabled={submitting} data-testid="button-add-inspo-files">
+              <Plus className="h-4 w-4 mr-2" />
+              Add Photo(s)
+            </Button>
+            <div className="flex-1 min-w-[200px] flex gap-2">
+              <Textarea
+                placeholder="Add a quick note..."
+                value={newText}
+                onChange={(e) => setNewText(e.target.value)}
+                rows={1}
+                className="min-h-[36px]"
+                data-testid="textarea-inspo-new-note"
+              />
+              <Button onClick={() => newText.trim() && addText.mutate(newText.trim())} disabled={!newText.trim() || addText.isPending} data-testid="button-add-inspo-text">
+                <Plus className="h-4 w-4" />
               </Button>
             </div>
-            {pending.length > 0 && (
-              <div className="space-y-2">
-                {pending.map((p) => (
-                  <div key={p.id} className="flex gap-2 items-start border rounded-md p-2 bg-background" data-testid={`pending-inspo-${p.id}`}>
-                    <img src={p.previewUrl} alt="" className="w-16 h-16 object-cover rounded" />
-                    <Input
-                      value={p.caption}
-                      onChange={(e) => updatePendingCaption(p.id, e.target.value)}
-                      placeholder="Caption for this photo (optional)"
-                      className="flex-1"
-                      data-testid={`input-pending-caption-${p.id}`}
-                    />
-                    <Button size="icon" variant="ghost" onClick={() => removePending(p.id)} disabled={submitting} aria-label="Remove">
-                      <X className="h-4 w-4" />
-                    </Button>
-                  </div>
-                ))}
-                <div className="flex justify-end">
-                  <Button onClick={submitPending} disabled={submitting} data-testid="button-upload-inspo">
-                    {submitting ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Upload className="h-4 w-4 mr-2" />}
-                    Upload {pending.length} Photo{pending.length === 1 ? "" : "s"}
+          </div>
+          {pending.length > 0 && (
+            <div className="space-y-2">
+              {pending.map((p) => (
+                <div key={p.id} className="flex gap-2 items-start border rounded-md p-2 bg-background" data-testid={`pending-inspo-${p.id}`}>
+                  <img src={p.previewUrl} alt="" className="w-16 h-16 object-cover rounded" />
+                  <Input
+                    value={p.caption}
+                    onChange={(e) => updatePendingCaption(p.id, e.target.value)}
+                    placeholder="Caption for this photo (optional)"
+                    className="flex-1"
+                    data-testid={`input-pending-caption-${p.id}`}
+                  />
+                  <Button size="icon" variant="ghost" onClick={() => removePending(p.id)} disabled={submitting} aria-label="Remove">
+                    <X className="h-4 w-4" />
                   </Button>
                 </div>
+              ))}
+              <div className="flex justify-end">
+                <Button onClick={submitPending} disabled={submitting} data-testid="button-upload-inspo">
+                  {submitting ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Upload className="h-4 w-4 mr-2" />}
+                  Upload {pending.length} Photo{pending.length === 1 ? "" : "s"}
+                </Button>
               </div>
-            )}
-          </div>
-        )}
-        {photos.length === 0 ? (
-          <p className="text-xs text-muted-foreground text-center py-4">No photos yet</p>
-        ) : (
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-            {photos.map((i) => (
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Unified mixed grid sorted by sortOrder */}
+      {inspos.length === 0 ? (
+        <p className="text-xs text-muted-foreground text-center py-6">No inspos or notes yet</p>
+      ) : (
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3" data-testid="inspos-grid">
+          {inspos.map((i) => (
+            i.kind === "photo" ? (
               <div key={i.id} className="border rounded-lg overflow-hidden bg-card" data-testid={`inspo-${i.id}`}>
                 <a href={i.storageKey || "#"} target="_blank" rel="noreferrer" className="block">
                   <img src={i.storageKey || ""} alt={i.caption || "Inspo"} className="w-full h-32 object-cover" />
                 </a>
-                <div className="p-2 space-y-1">
+                <div className="p-2">
                   {editingId === i.id ? (
                     <div className="flex gap-1">
                       <Input
@@ -293,18 +303,10 @@ export function InsposEditor({ projectId, userRole, userId, canEdit }: InsposEdi
                       <p className="text-xs text-muted-foreground flex-1 break-words">{i.caption || <span className="italic">no caption</span>}</p>
                       {canEdit && (
                         <>
-                          <button
-                            onClick={() => { setEditingId(i.id); setEditValue(i.caption || ""); }}
-                            className="text-muted-foreground hover:text-foreground"
-                            data-testid={`button-edit-inspo-${i.id}`}
-                          >
+                          <button onClick={() => { setEditingId(i.id); setEditValue(i.caption || ""); }} className="text-muted-foreground hover:text-foreground" data-testid={`button-edit-inspo-${i.id}`}>
                             <Pencil className="h-3 w-3" />
                           </button>
-                          <button
-                            onClick={() => { if (confirm("Delete this photo?")) deleteInspo.mutate(i.id); }}
-                            className="text-muted-foreground hover:text-destructive"
-                            data-testid={`button-delete-inspo-${i.id}`}
-                          >
+                          <button onClick={() => { if (confirm("Delete this photo?")) deleteInspo.mutate(i.id); }} className="text-muted-foreground hover:text-destructive" data-testid={`button-delete-inspo-${i.id}`}>
                             <Trash2 className="h-3 w-3" />
                           </button>
                         </>
@@ -313,55 +315,27 @@ export function InsposEditor({ projectId, userRole, userId, canEdit }: InsposEdi
                   )}
                 </div>
               </div>
-            ))}
-          </div>
-        )}
-      </section>
-
-      {/* Text notes section */}
-      <section>
-        <h3 className="text-sm font-semibold mb-2 flex items-center gap-2">
-          <MessageSquare className="h-4 w-4" /> Notes ({texts.length})
-        </h3>
-        {canEdit && (
-          <div className="flex gap-2 mb-3">
-            <Textarea
-              placeholder="Add a quick note..."
-              value={newText}
-              onChange={(e) => setNewText(e.target.value)}
-              rows={2}
-              data-testid="textarea-inspo-new-note"
-            />
-            <Button onClick={() => newText.trim() && addText.mutate(newText.trim())} disabled={!newText.trim() || addText.isPending} data-testid="button-add-inspo-text">
-              <Plus className="h-4 w-4" />
-            </Button>
-          </div>
-        )}
-        {texts.length === 0 ? (
-          <p className="text-xs text-muted-foreground text-center py-4">No notes yet</p>
-        ) : (
-          <div className="space-y-2">
-            {texts.map((t) => (
-              <div key={t.id} className="border rounded-lg p-3 bg-muted/30" data-testid={`inspo-text-${t.id}`}>
-                {editingId === t.id ? (
-                  <div className="space-y-2">
-                    <Textarea value={editValue} onChange={(e) => setEditValue(e.target.value)} rows={3} autoFocus />
+            ) : (
+              <div key={i.id} className="border rounded-lg p-3 bg-amber-50 dark:bg-amber-950/30 flex flex-col" data-testid={`inspo-text-${i.id}`}>
+                {editingId === i.id ? (
+                  <div className="space-y-2 flex-1">
+                    <Textarea value={editValue} onChange={(e) => setEditValue(e.target.value)} rows={4} autoFocus />
                     <div className="flex gap-2 justify-end">
                       <Button size="sm" variant="ghost" onClick={() => setEditingId(null)}>Cancel</Button>
-                      <Button size="sm" onClick={() => updateInspo.mutate({ id: t.id, updates: { body: editValue } })}>Save</Button>
+                      <Button size="sm" onClick={() => updateInspo.mutate({ id: i.id, updates: { body: editValue } })}>Save</Button>
                     </div>
                   </div>
                 ) : (
                   <>
-                    <p className="text-sm whitespace-pre-wrap">{t.body}</p>
+                    <p className="text-sm whitespace-pre-wrap flex-1">{i.body}</p>
                     <div className="flex items-center justify-between mt-2">
-                      <span className="text-[10px] text-muted-foreground">{t.uploadedBy} · {new Date(t.createdAt).toLocaleString()}</span>
+                      <span className="text-[10px] text-muted-foreground">{i.uploadedBy}</span>
                       {canEdit && (
                         <div className="flex gap-1">
-                          <button onClick={() => { setEditingId(t.id); setEditValue(t.body || ""); }} className="text-muted-foreground hover:text-foreground" data-testid={`button-edit-inspo-text-${t.id}`}>
+                          <button onClick={() => { setEditingId(i.id); setEditValue(i.body || ""); }} className="text-muted-foreground hover:text-foreground" data-testid={`button-edit-inspo-text-${i.id}`}>
                             <Pencil className="h-3 w-3" />
                           </button>
-                          <button onClick={() => { if (confirm("Delete this note?")) deleteInspo.mutate(t.id); }} className="text-muted-foreground hover:text-destructive" data-testid={`button-delete-inspo-text-${t.id}`}>
+                          <button onClick={() => { if (confirm("Delete this note?")) deleteInspo.mutate(i.id); }} className="text-muted-foreground hover:text-destructive" data-testid={`button-delete-inspo-text-${i.id}`}>
                             <Trash2 className="h-3 w-3" />
                           </button>
                         </div>
@@ -370,10 +344,10 @@ export function InsposEditor({ projectId, userRole, userId, canEdit }: InsposEdi
                   </>
                 )}
               </div>
-            ))}
-          </div>
-        )}
-      </section>
+            )
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -429,7 +403,7 @@ export function InsposButton({ projectId, projectName, userRole, userId, count: 
         data-testid={`button-inspos-${projectId}`}
       >
         <StickyNote className="h-3 w-3 mr-1" />
-        Inspos
+        Inspos / Notes
         {has && <span className="ml-1 inline-flex items-center justify-center min-w-[16px] h-4 px-1 rounded-full bg-green-600 text-white text-[10px]">{count}</span>}
       </Button>
       {open && (
