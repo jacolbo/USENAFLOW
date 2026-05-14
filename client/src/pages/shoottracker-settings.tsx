@@ -139,6 +139,7 @@ export default function ShootTrackerSettings() {
   const userId = user?.id || "";
 
   const hasAccess = ALLOWED_ROLES.includes(userRole as any);
+  const isDataWranglerOnly = userRole === UserRoles.DATA_WRANGLER;
 
   const settingsQuery = useQuery<ShoottrackerSettings>({
     queryKey: ["/api/admin/shoottracker/settings"],
@@ -743,15 +744,17 @@ export default function ShootTrackerSettings() {
         </div>
 
         <Tabs defaultValue="projects" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-2">
+          <TabsList className={`grid w-full ${isDataWranglerOnly ? "grid-cols-1" : "grid-cols-2"}`}>
             <TabsTrigger value="projects" className="flex items-center gap-2">
               <CalendarPlus className="h-4 w-4" />
               Calendar Projects
             </TabsTrigger>
-            <TabsTrigger value="settings" className="flex items-center gap-2">
-              <Settings className="h-4 w-4" />
-              Settings
-            </TabsTrigger>
+            {!isDataWranglerOnly && (
+              <TabsTrigger value="settings" className="flex items-center gap-2">
+                <Settings className="h-4 w-4" />
+                Settings
+              </TabsTrigger>
+            )}
           </TabsList>
 
           <TabsContent value="projects" className="space-y-4">
@@ -767,27 +770,29 @@ export default function ShootTrackerSettings() {
                       Review synced calendar events and add them to your project schedule
                     </CardDescription>
                   </div>
-                  <div className="flex gap-2">
-                    <Button 
-                      variant="outline" 
-                      size="sm"
-                      onClick={() => setShowIgnored(!showIgnored)}
-                    >
-                      {showIgnored ? <Eye className="h-4 w-4 mr-1" /> : <EyeOff className="h-4 w-4 mr-1" />}
-                      {showIgnored ? "Hide Ignored" : "Show Ignored"}
-                    </Button>
-                    <Button 
-                      size="sm"
-                      onClick={() => syncMutation.mutate()} 
-                      disabled={syncMutation.isPending}
-                    >
-                      {syncMutation.isPending ? (
-                        <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Syncing...</>
-                      ) : (
-                        <><RefreshCw className="h-4 w-4 mr-2" /> Sync Now</>
-                      )}
-                    </Button>
-                  </div>
+                  {!isDataWranglerOnly && (
+                    <div className="flex gap-2">
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        onClick={() => setShowIgnored(!showIgnored)}
+                      >
+                        {showIgnored ? <Eye className="h-4 w-4 mr-1" /> : <EyeOff className="h-4 w-4 mr-1" />}
+                        {showIgnored ? "Hide Ignored" : "Show Ignored"}
+                      </Button>
+                      <Button 
+                        size="sm"
+                        onClick={() => syncMutation.mutate()} 
+                        disabled={syncMutation.isPending}
+                      >
+                        {syncMutation.isPending ? (
+                          <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Syncing...</>
+                        ) : (
+                          <><RefreshCw className="h-4 w-4 mr-2" /> Sync Now</>
+                        )}
+                      </Button>
+                    </div>
+                  )}
                 </div>
               </CardHeader>
               <CardContent>
@@ -841,7 +846,7 @@ export default function ShootTrackerSettings() {
                   </div>
                 </div>
 
-                {stagedEventsQuery.data && stagedEventsQuery.data.filter(e => e.status === StagingStatus.PENDING).length > 0 && (
+                {!isDataWranglerOnly && stagedEventsQuery.data && stagedEventsQuery.data.filter(e => e.status === StagingStatus.PENDING).length > 0 && (
                   <div className="mb-4 p-3 bg-muted rounded-lg flex items-center justify-between flex-wrap gap-2">
                     <div className="flex items-center gap-3">
                       <Button
@@ -921,7 +926,7 @@ export default function ShootTrackerSettings() {
                           }`}
                         >
                           <div className="flex items-start gap-3">
-                            {event.status === StagingStatus.PENDING && (
+                            {!isDataWranglerOnly && event.status === StagingStatus.PENDING && (
                               <Checkbox
                                 checked={selectedEvents.has(event.id)}
                                 onCheckedChange={() => toggleEventSelection(event.id)}
@@ -935,7 +940,7 @@ export default function ShootTrackerSettings() {
                                   {event.status === StagingStatus.PROMOTED && (
                                     <>
                                       <Badge variant="default" className="bg-green-600">Added</Badge>
-                                      {event.clientEmail && event.promotedProjectId && (
+                                      {!isDataWranglerOnly && event.clientEmail && event.promotedProjectId && (
                                         <div className="flex items-center gap-1">
                                           <Button
                                             size="sm"
@@ -971,17 +976,19 @@ export default function ShootTrackerSettings() {
                                   {event.status === StagingStatus.IGNORED && (
                                     <>
                                       <Badge variant="secondary">Ignored</Badge>
-                                      <Button
-                                        size="sm"
-                                        variant="ghost"
-                                        onClick={() => restoreMutation.mutate(event.id)}
-                                        disabled={restoreMutation.isPending}
-                                      >
-                                        Restore
-                                      </Button>
+                                      {!isDataWranglerOnly && (
+                                        <Button
+                                          size="sm"
+                                          variant="ghost"
+                                          onClick={() => restoreMutation.mutate(event.id)}
+                                          disabled={restoreMutation.isPending}
+                                        >
+                                          Restore
+                                        </Button>
+                                      )}
                                     </>
                                   )}
-                                  {event.status === StagingStatus.PENDING && (
+                                  {!isDataWranglerOnly && event.status === StagingStatus.PENDING && (
                                     <Button
                                       size="sm"
                                       variant="ghost"
@@ -1035,20 +1042,22 @@ export default function ShootTrackerSettings() {
                                       className="h-8 mt-1"
                                     />
                                   </div>
-                                  <div className="col-span-2 sm:col-span-1">
-                                    <Label className="text-xs text-muted-foreground">Add to Week</Label>
-                                    <div className="flex gap-1 mt-1">
-                                      <Button
-                                        size="sm"
-                                        className="h-8 w-full"
-                                        onClick={() => promoteMutation.mutate(event.id)}
-                                        disabled={promoteMutation.isPending}
-                                      >
-                                        <Plus className="h-3 w-3 mr-1" />
-                                        Add to Due Week
-                                      </Button>
+                                  {!isDataWranglerOnly && (
+                                    <div className="col-span-2 sm:col-span-1">
+                                      <Label className="text-xs text-muted-foreground">Add to Week</Label>
+                                      <div className="flex gap-1 mt-1">
+                                        <Button
+                                          size="sm"
+                                          className="h-8 w-full"
+                                          onClick={() => promoteMutation.mutate(event.id)}
+                                          disabled={promoteMutation.isPending}
+                                        >
+                                          <Plus className="h-3 w-3 mr-1" />
+                                          Add to Due Week
+                                        </Button>
+                                      </div>
                                     </div>
-                                  </div>
+                                  )}
                                 </div>
                               )}
                             </div>

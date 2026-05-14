@@ -5,8 +5,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
+import { useToast } from "@/hooks/use-toast";
+import { queryClient } from "@/lib/queryClient";
 import { getAdminHeaders } from "@/lib/adminAuth";
-import { Camera, ChevronLeft, ChevronRight, Loader2, ArrowLeft, CalendarDays, MapPin, Link2Off } from "lucide-react";
+import { Camera, ChevronLeft, ChevronRight, Loader2, ArrowLeft, CalendarDays, MapPin } from "lucide-react";
 import type { Project } from "@shared/schema";
 import { InsposEditor } from "@/components/inspos-panel";
 
@@ -33,8 +35,11 @@ interface TodayResponse {
 
 export default function TodayShoots() {
   const [, navigate] = useLocation();
+  const { toast } = useToast();
   const [date, setDate] = useState<Date>(() => new Date());
   const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
+  const [activeProjectName, setActiveProjectName] = useState<string>("");
+  const [openingEventId, setOpeningEventId] = useState<string | null>(null);
 
   const userRole = localStorage.getItem("usena_role") || "";
   const userId = localStorage.getItem("usena_user_id") || "";
@@ -81,7 +86,38 @@ export default function TodayShoots() {
       return data as TodayResponse;
     },
     enabled: allowed,
+    refetchInterval: 60000,
+    refetchOnWindowFocus: true,
   });
+
+  const openCalendarEvent = async (ev: CalendarEventItem) => {
+    if (ev.projectId) {
+      setActiveProjectId(ev.projectId);
+      setActiveProjectName(ev.summary || "");
+      return;
+    }
+    if (!canEdit) {
+      toast({ description: "No project linked yet — ask the photographer or data wrangler to add inspos.", variant: "destructive" });
+      return;
+    }
+    setOpeningEventId(ev.id);
+    try {
+      const r = await fetch("/api/today-shoots/from-calendar-event", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...getAdminHeaders(userRole, userName) },
+        body: JSON.stringify({ eventId: ev.id, summary: ev.summary, start: ev.start }),
+      });
+      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || "Failed");
+      const data = await r.json();
+      setActiveProjectId(data.project.id);
+      setActiveProjectName(data.project.clientName || ev.summary || "");
+      queryClient.invalidateQueries({ queryKey: ["/api/today-shoots"] });
+    } catch (err: any) {
+      toast({ title: "Couldn't open event", description: err.message, variant: "destructive" });
+    } finally {
+      setOpeningEventId(null);
+    }
+  };
 
   if (!allowed) {
     return (
@@ -111,6 +147,7 @@ export default function TodayShoots() {
   const projectEventIds = new Set(items.map(i => (i.project as any).calendarEventId).filter(Boolean));
   const unmatchedEvents = calendarEvents.filter(ev => !projectEventIds.has(ev.id));
   const active = items.find(i => i.project.id === activeProjectId);
+  const dialogTitle = active?.project.clientName || activeProjectName || "Shoot";
 
   const fmtTime = (iso: string) => {
     try { return new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }); }
@@ -165,7 +202,7 @@ export default function TodayShoots() {
               <Card
                 key={project.id}
                 className="cursor-pointer hover:shadow-md transition-shadow"
-                onClick={() => setActiveProjectId(project.id)}
+                onClick={() => { setActiveProjectId(project.id); setActiveProjectName(project.clientName); }}
                 data-testid={`card-shoot-${project.id}`}
               >
                 <CardContent className="p-4 flex items-center gap-3">
@@ -201,41 +238,54 @@ export default function TodayShoots() {
             <p className="text-xs text-muted-foreground">
               These events are on the calendar but don't have a project record yet. Sync ShootTracker to turn them into projects.
             </p>
+            <p className="text-xs text-muted-foreground">
+              Tap any event to add inspos and a shoot plan, even if no project record exists yet.
+            </p>
             <div className="space-y-2">
-              {unmatchedEvents.map((ev) => (
-                <Card key={ev.id} data-testid={`card-cal-event-${ev.id}`}>
-                  <CardContent className="p-4 flex items-center gap-3">
-                    <CalendarDays className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                    <div className="flex-1 min-w-0">
-                      <div className="font-medium truncate">{ev.summary || "(untitled event)"}</div>
-                      <div className="text-xs text-muted-foreground flex items-center gap-2 flex-wrap">
-                        <span>{fmtTime(ev.start)}{ev.end ? ` – ${fmtTime(ev.end)}` : ""}</span>
-                        {ev.location && (
-                          <span className="flex items-center gap-1 truncate">
-                            <MapPin className="h-3 w-3" /> {ev.location}
-                          </span>
-                        )}
+              {unmatchedEvents.map((ev) => {
+                const isOpening = openingEventId === ev.id;
+                return (
+                  <Card
+                    key={ev.id}
+                    className={canEdit ? "cursor-pointer hover:shadow-md transition-shadow" : ""}
+                    onClick={() => !isOpening && openCalendarEvent(ev)}
+                    data-testid={`card-cal-event-${ev.id}`}
+                  >
+                    <CardContent className="p-4 flex items-center gap-3">
+                      <CalendarDays className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <div className="font-medium truncate">{ev.summary || "(untitled event)"}</div>
+                        <div className="text-xs text-muted-foreground flex items-center gap-2 flex-wrap">
+                          <span>{fmtTime(ev.start)}{ev.end ? ` – ${fmtTime(ev.end)}` : ""}</span>
+                          {ev.location && (
+                            <span className="flex items-center gap-1 truncate">
+                              <MapPin className="h-3 w-3" /> {ev.location}
+                            </span>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                    <Badge variant="outline" className="flex items-center gap-1">
-                      <Link2Off className="h-3 w-3" /> No project
-                    </Badge>
-                  </CardContent>
-                </Card>
-              ))}
+                      {isOpening ? (
+                        <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                      ) : (
+                        <Badge variant="outline">From calendar</Badge>
+                      )}
+                    </CardContent>
+                  </Card>
+                );
+              })}
             </div>
           </section>
         )}
       </main>
 
-      <Dialog open={!!activeProjectId} onOpenChange={(o) => !o && setActiveProjectId(null)}>
+      <Dialog open={!!activeProjectId} onOpenChange={(o) => { if (!o) { setActiveProjectId(null); setActiveProjectName(""); } }}>
         <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto" data-testid="dialog-inspo-editor">
           <DialogHeader>
-            <DialogTitle>Inspo Editor — {active?.project.clientName}</DialogTitle>
+            <DialogTitle>Inspo & Shoot Plan — {dialogTitle}</DialogTitle>
           </DialogHeader>
-          {active && (
+          {activeProjectId && (
             <InsposEditor
-              projectId={active.project.id}
+              projectId={activeProjectId}
               userRole={userRole}
               userId={userName}
               canEdit={canEdit}

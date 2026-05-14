@@ -3372,6 +3372,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
           try {
             const events = await fetchCalendarEvents(calId, start, end);
             for (const ev of events) {
+              // Skip all-day or multi-day events (date-only or >= 23h spans).
+              const durationMs = ev.end.getTime() - ev.start.getTime();
+              if (durationMs >= 23 * 60 * 60 * 1000) continue;
               calendarEvents.push({
                 id: ev.id,
                 summary: ev.summary,
@@ -3394,6 +3397,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({ projects, calendarEvents });
     } catch (err: any) {
       console.error("[Inspos] today-shoots:", err);
+      res.status(500).json({ error: err.message || "Failed" });
+    }
+  });
+
+  // Create-or-find a project for a Google Calendar event so inspos can attach
+  // even before ShootTracker has formally promoted the event.
+  app.post("/api/today-shoots/from-calendar-event", async (req, res) => {
+    try {
+      const role = reqRole(req);
+      if (!inspoCanUpload(role)) return res.status(403).json({ error: "Access denied" });
+      const { eventId, summary, start } = req.body || {};
+      if (!eventId || !start) return res.status(400).json({ error: "eventId and start required" });
+      const existing = await storage.getProjectByCalendarEventId(eventId);
+      if (existing) return res.json({ project: existing, created: false });
+      const shootDate = new Date(start);
+      if (isNaN(shootDate.getTime())) return res.status(400).json({ error: "Invalid start" });
+      const deliveryDueDate = new Date(shootDate);
+      deliveryDueDate.setDate(deliveryDueDate.getDate() + 5);
+      const newProject = await storage.createProject({
+        clientName: (summary || "(untitled shoot)").trim(),
+        packageCount: 0,
+        selectedCount: 0,
+        dueDate: deliveryDueDate,
+        shootDate,
+        deliveryDueDate,
+        riskLevel: "SAFE",
+        calendarEventId: eventId,
+        lastSyncedAt: new Date(),
+        createdFrom: "CALENDAR",
+      } as any);
+      res.json({ project: newProject, created: true });
+    } catch (err: any) {
+      console.error("[today-shoots] from-calendar-event:", err);
       res.status(500).json({ error: err.message || "Failed" });
     }
   });
