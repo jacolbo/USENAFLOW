@@ -234,6 +234,24 @@ export const calendarEventsStaging = pgTable("calendar_events_staging", {
   selectedPhotos: integer("selected_photos").notNull().default(0),
   // Client email extracted from calendar notes
   clientEmail: text("client_email"),
+  // Shoot Plan / overall instructions logged against the staging event before
+  // promotion. Migrated into project_inspo_meta when the event is promoted.
+  insposOverallInstructions: text("inspos_overall_instructions").notNull().default(""),
+});
+
+// Inspos / notes attached to a calendar staging event before it has been
+// promoted to a project. On promotion these rows are migrated into
+// project_inspos for the new project (see migrateStagingInsposToProject).
+export const stagingEventInspos = pgTable("staging_event_inspos", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  stagingEventId: varchar("staging_event_id").notNull().references(() => calendarEventsStaging.id, { onDelete: "cascade" }),
+  kind: text("kind").notNull().default("photo"), // 'photo' | 'text'
+  storageKey: text("storage_key"),
+  caption: text("caption"),
+  body: text("body"),
+  sortOrder: integer("sort_order").notNull().default(0),
+  uploadedBy: text("uploaded_by").notNull(),
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
 });
 
 // Complaints system for Evans to manage retoucher reports
@@ -510,6 +528,10 @@ export const updateCalendarEventStagingSchema = createInsertSchema(calendarEvent
 export type CalendarEventStaging = typeof calendarEventsStaging.$inferSelect;
 export type InsertCalendarEventStaging = z.infer<typeof insertCalendarEventStagingSchema>;
 export type UpdateCalendarEventStaging = z.infer<typeof updateCalendarEventStagingSchema>;
+
+export const insertStagingEventInspoSchema = createInsertSchema(stagingEventInspos).omit({ id: true, createdAt: true });
+export type StagingEventInspo = typeof stagingEventInspos.$inferSelect;
+export type InsertStagingEventInspo = z.infer<typeof insertStagingEventInspoSchema>;
 
 // Client messages schemas
 export const insertClientMessageSchema = createInsertSchema(clientMessages).omit({

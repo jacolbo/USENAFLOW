@@ -36,46 +36,50 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-const ALLOWED_ROLES = [UserRoles.ADMIN, UserRoles.DATA_WRANGLER, UserRoles.LEAD_RETOUCHER];
+const ALLOWED_ROLES = [UserRoles.ADMIN, UserRoles.DATA_WRANGLER, UserRoles.LEAD_RETOUCHER, UserRoles.PHOTOGRAPHER];
 
+/**
+ * Inspos / Notes button for a calendar staging event (pending event that has
+ * NOT yet been promoted to a project). Talks directly to the staging-event
+ * scoped inspos endpoints — no early project creation. On promotion, those
+ * rows are migrated server-side into project_inspos.
+ */
 function StagedInsposButton({
   stagingEventId,
+  promotedProjectId,
   eventTitle,
   userRole,
   userId,
 }: {
   stagingEventId: string;
+  promotedProjectId: string | null;
   eventTitle: string;
   userRole: string;
   userId: string;
 }) {
-  const { toast } = useToast();
   const [open, setOpen] = useState(false);
-  const [projectId, setProjectId] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
   const canEdit = ["Admin", "Photographer", "DataWrangler"].includes(userRole);
 
-  const handleClick = async () => {
-    if (projectId) {
-      setOpen(true);
-      return;
-    }
-    setLoading(true);
-    try {
-      const r = await fetch(`/api/admin/shoottracker/staged/${stagingEventId}/ensure-project`, {
-        method: "POST",
-        headers: getAdminHeaders(userRole, userId),
-      });
-      if (!r.ok) throw new Error("Failed to prepare notes");
-      const data = (await r.json()) as { projectId: string };
-      setProjectId(data.projectId);
-      setOpen(true);
-    } catch (err: any) {
-      toast({ title: "Error", description: err.message, variant: "destructive" });
-    } finally {
-      setLoading(false);
-    }
-  };
+  // Once the event has been promoted, the inspos live on the project. Before
+  // promotion, they live on the staging event.
+  const usingProject = !!promotedProjectId;
+  const countUrl = usingProject
+    ? `/api/projects/${promotedProjectId}/inspos-count`
+    : `/api/staging-events/${stagingEventId}/inspos-count`;
+  const countQueryKey = usingProject
+    ? ["/api/projects", promotedProjectId, "inspos-count"]
+    : ["/api/staging-events", stagingEventId, "inspos-count"];
+
+  const countQuery = useQuery<{ count: number; hasInstructions: boolean }>({
+    queryKey: countQueryKey,
+    queryFn: async () => {
+      const r = await fetch(countUrl, { headers: getAdminHeaders(userRole, userId) });
+      if (!r.ok) return { count: 0, hasInstructions: false };
+      return r.json();
+    },
+  });
+  const count = countQuery.data?.count ?? 0;
+  const has = count > 0 || countQuery.data?.hasInstructions;
 
   return (
     <>
@@ -83,20 +87,21 @@ function StagedInsposButton({
         type="button"
         size="sm"
         variant="outline"
-        className="h-7 px-2 text-xs text-gray-600 border-gray-300"
-        onClick={handleClick}
-        disabled={loading}
+        className={`h-7 px-2 text-xs ${has ? "bg-green-50 hover:bg-green-100 text-green-700 border-green-300 dark:bg-green-900/30 dark:text-green-300 dark:border-green-700" : "text-gray-600 border-gray-300"}`}
+        onClick={() => setOpen(true)}
         title="Inspos & notes"
         data-testid={`button-staged-inspos-${stagingEventId}`}
       >
-        {loading ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <StickyNote className="h-3 w-3 mr-1" />}
+        <StickyNote className="h-3 w-3 mr-1" />
         Inspos / Notes
+        {count > 0 && <span className="ml-1 inline-flex items-center justify-center min-w-[16px] h-4 px-1 rounded-full bg-green-600 text-white text-[10px]">{count}</span>}
       </Button>
-      {projectId && (
+      {open && (
         <InsposViewerDialog
           open={open}
           onOpenChange={setOpen}
-          projectId={projectId}
+          projectId={usingProject ? promotedProjectId! : undefined}
+          stagingEventId={usingProject ? undefined : stagingEventId}
           projectName={eventTitle}
           userRole={userRole}
           userId={userId}
@@ -209,7 +214,15 @@ export default function ShootTrackerSettings() {
   const userId = user?.id || "";
 
   const hasAccess = ALLOWED_ROLES.includes(userRole as any);
-  const isDataWranglerOnly = userRole === UserRoles.DATA_WRANGLER;
+  // DataWrangler and Photographer share the limited view (no Settings tab,
+  // no Sync controls, no Ignore action). Photographer additionally lacks the
+  // bulk "Add to Due Week" capability — but the Inspos / Notes button is
+  // available for both so they can attach inspos in real time on shoot day.
+  const isDataWranglerOnly = userRole === UserRoles.DATA_WRANGLER || userRole === UserRoles.PHOTOGRAPHER;
+  const isPhotographer = userRole === UserRoles.PHOTOGRAPHER;
+  // Admin / Lead / DataWrangler may promote (Add to Due Week). Photographer
+  // can only attach inspos in real time on shoot day — they cannot promote.
+  const canPromote = userRole === UserRoles.ADMIN || userRole === UserRoles.LEAD_RETOUCHER || userRole === UserRoles.DATA_WRANGLER;
 
   const settingsQuery = useQuery<ShoottrackerSettings>({
     queryKey: ["/api/admin/shoottracker/settings"],
@@ -948,14 +961,16 @@ export default function ShootTrackerSettings() {
                             Ignore Selected
                           </Button>
                         )}
-                        <Button
-                          size="sm"
-                          onClick={promoteSelectedEvents}
-                          disabled={promoteMutation.isPending}
-                        >
-                          <Plus className="h-4 w-4 mr-1" />
-                          Add to Due Weeks
-                        </Button>
+                        {canPromote && (
+                          <Button
+                            size="sm"
+                            onClick={promoteSelectedEvents}
+                            disabled={promoteMutation.isPending}
+                          >
+                            <Plus className="h-4 w-4 mr-1" />
+                            Add to Due Weeks
+                          </Button>
+                        )}
                       </div>
                     )}
                   </div>
@@ -1071,6 +1086,7 @@ export default function ShootTrackerSettings() {
                                   {event.status === StagingStatus.PENDING && (
                                     <StagedInsposButton
                                       stagingEventId={event.id}
+                                      promotedProjectId={null}
                                       eventTitle={event.title}
                                       userRole={userRole}
                                       userId={userId}
@@ -1130,20 +1146,22 @@ export default function ShootTrackerSettings() {
                                       className="h-8 mt-1"
                                     />
                                   </div>
-                                  <div className="col-span-2 sm:col-span-1">
-                                    <Label className="text-xs text-muted-foreground">Add to Week</Label>
-                                    <div className="flex gap-1 mt-1">
-                                      <Button
-                                        size="sm"
-                                        className="h-8 w-full"
-                                        onClick={() => promoteMutation.mutate(event.id)}
-                                        disabled={promoteMutation.isPending}
-                                      >
-                                        <Plus className="h-3 w-3 mr-1" />
-                                        Add to Due Week
-                                      </Button>
+                                  {canPromote && (
+                                    <div className="col-span-2 sm:col-span-1">
+                                      <Label className="text-xs text-muted-foreground">Add to Week</Label>
+                                      <div className="flex gap-1 mt-1">
+                                        <Button
+                                          size="sm"
+                                          className="h-8 w-full"
+                                          onClick={() => promoteMutation.mutate(event.id)}
+                                          disabled={promoteMutation.isPending}
+                                        >
+                                          <Plus className="h-3 w-3 mr-1" />
+                                          Add to Due Week
+                                        </Button>
+                                      </div>
                                     </div>
-                                  </div>
+                                  )}
                                 </div>
                               )}
                             </div>

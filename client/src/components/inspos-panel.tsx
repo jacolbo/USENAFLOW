@@ -23,7 +23,9 @@ export interface Inspo {
 }
 
 interface InsposEditorProps {
-  projectId: string;
+  /** Either projectId (post-promotion) or stagingEventId (pre-promotion) must be set. */
+  projectId?: string;
+  stagingEventId?: string;
   userRole: string;
   userId: string;
   canEdit: boolean;
@@ -50,7 +52,7 @@ export function useInsposAllCounts(userRole: string, userId: string) {
   });
 }
 
-export function InsposEditor({ projectId, userRole, userId, canEdit }: InsposEditorProps) {
+export function InsposEditor({ projectId, stagingEventId, userRole, userId, canEdit }: InsposEditorProps) {
   const { toast } = useToast();
   const fileRef = useRef<HTMLInputElement>(null);
   const [pending, setPending] = useState<PendingFile[]>([]);
@@ -63,10 +65,30 @@ export function InsposEditor({ projectId, userRole, userId, canEdit }: InsposEdi
 
   const headers = getAdminHeaders(userRole, userId);
 
+  // Compute endpoint base + cache keys depending on whether we're editing a
+  // promoted-project's inspos or a pre-promotion calendar staging event's
+  // inspos. Both backends return the same shape.
+  const isStaging = !!stagingEventId && !projectId;
+  const targetId = (isStaging ? stagingEventId : projectId) as string;
+  const listUrl = isStaging
+    ? `/api/staging-events/${targetId}/inspos`
+    : `/api/projects/${targetId}/inspos`;
+  const createUrl = listUrl;
+  const metaUrl = isStaging
+    ? `/api/staging-events/${targetId}/inspo-meta`
+    : `/api/projects/${targetId}/inspo-meta`;
+  const itemUrl = (id: string) => isStaging
+    ? `/api/staging-event-inspos/${id}`
+    : `/api/inspos/${id}`;
+  const cacheRoot = isStaging ? "/api/staging-events" : "/api/projects";
+  const countCacheKey = isStaging
+    ? ["/api/staging-events", targetId, "inspos-count"]
+    : ["/api/projects", targetId, "inspos-count"];
+
   const dataQuery = useQuery<{ inspos: Inspo[]; overallInstructions: string }>({
-    queryKey: ["/api/projects", projectId, "inspos"],
+    queryKey: [cacheRoot, targetId, "inspos"],
     queryFn: async () => {
-      const res = await fetch(`/api/projects/${projectId}/inspos`, { headers });
+      const res = await fetch(listUrl, { headers });
       if (!res.ok) throw new Error("Failed to load inspos");
       const data = await res.json();
       if (!instructionsLoaded) {
@@ -78,10 +100,13 @@ export function InsposEditor({ projectId, userRole, userId, canEdit }: InsposEdi
   });
 
   const invalidateAll = () => {
-    queryClient.invalidateQueries({ queryKey: ["/api/projects", projectId, "inspos"] });
-    queryClient.invalidateQueries({ queryKey: ["/api/projects", projectId, "inspos-count"] });
+    queryClient.invalidateQueries({ queryKey: [cacheRoot, targetId, "inspos"] });
+    queryClient.invalidateQueries({ queryKey: countCacheKey });
     queryClient.invalidateQueries({ queryKey: ["/api/inspos/all-counts"] });
     queryClient.invalidateQueries({ queryKey: ["/api/today-shoots"] });
+    if (isStaging) {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/shoottracker/staged"] });
+    }
   };
 
   const { uploadFile } = useUpload({
@@ -90,7 +115,7 @@ export function InsposEditor({ projectId, userRole, userId, canEdit }: InsposEdi
 
   const updateInspo = useMutation({
     mutationFn: async ({ id, updates }: { id: string; updates: Partial<Pick<Inspo, "caption" | "body" | "sortOrder">> }) => {
-      const r = await fetch(`/api/inspos/${id}`, {
+      const r = await fetch(itemUrl(id), {
         method: "PATCH",
         headers: { "Content-Type": "application/json", ...headers },
         body: JSON.stringify(updates),
@@ -102,7 +127,7 @@ export function InsposEditor({ projectId, userRole, userId, canEdit }: InsposEdi
 
   const deleteInspo = useMutation({
     mutationFn: async (id: string) => {
-      const r = await fetch(`/api/inspos/${id}`, { method: "DELETE", headers });
+      const r = await fetch(itemUrl(id), { method: "DELETE", headers });
       if (!r.ok) throw new Error("Failed to delete");
     },
     onSuccess: invalidateAll,
@@ -110,7 +135,7 @@ export function InsposEditor({ projectId, userRole, userId, canEdit }: InsposEdi
 
   const addText = useMutation({
     mutationFn: async (body: string) => {
-      const r = await fetch(`/api/projects/${projectId}/inspos`, {
+      const r = await fetch(createUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...headers },
         body: JSON.stringify({ kind: "text", body }),
@@ -122,7 +147,7 @@ export function InsposEditor({ projectId, userRole, userId, canEdit }: InsposEdi
 
   const saveInstructions = useMutation({
     mutationFn: async (text: string) => {
-      const r = await fetch(`/api/projects/${projectId}/inspo-meta`, {
+      const r = await fetch(metaUrl, {
         method: "PUT",
         headers: { "Content-Type": "application/json", ...headers },
         body: JSON.stringify({ overallInstructions: text }),
@@ -130,8 +155,8 @@ export function InsposEditor({ projectId, userRole, userId, canEdit }: InsposEdi
       if (!r.ok) throw new Error("Failed to save instructions");
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/projects", projectId, "inspos"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/projects", projectId, "inspos-count"] });
+      queryClient.invalidateQueries({ queryKey: [cacheRoot, targetId, "inspos"] });
+      queryClient.invalidateQueries({ queryKey: countCacheKey });
       toast({ description: "Shoot plan saved" });
     },
   });
@@ -168,7 +193,7 @@ export function InsposEditor({ projectId, userRole, userId, canEdit }: InsposEdi
       try {
         const resp = await uploadFile(p.file);
         if (!resp) throw new Error("Upload failed");
-        const r = await fetch(`/api/projects/${projectId}/inspos`, {
+        const r = await fetch(createUrl, {
           method: "POST",
           headers: { "Content-Type": "application/json", ...headers },
           body: JSON.stringify({ kind: "photo", storageKey: resp.objectPath, caption: p.caption.trim() || null }),
@@ -355,22 +380,23 @@ export function InsposEditor({ projectId, userRole, userId, canEdit }: InsposEdi
 interface InsposViewerDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  projectId: string;
+  projectId?: string;
+  stagingEventId?: string;
   projectName?: string;
   userRole: string;
   userId: string;
   canEdit?: boolean;
 }
 
-export function InsposViewerDialog({ open, onOpenChange, projectId, projectName, userRole, userId, canEdit }: InsposViewerDialogProps) {
+export function InsposViewerDialog({ open, onOpenChange, projectId, stagingEventId, projectName, userRole, userId, canEdit }: InsposViewerDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto" data-testid="dialog-inspos">
         <DialogHeader>
           <DialogTitle>Inspos & Notes{projectName ? ` — ${projectName}` : ""}</DialogTitle>
-          <DialogDescription>Photos, notes, and the shoot plan for this project.</DialogDescription>
+          <DialogDescription>Photos, notes, and the shoot plan for this {stagingEventId && !projectId ? "calendar event" : "project"}.</DialogDescription>
         </DialogHeader>
-        <InsposEditor projectId={projectId} userRole={userRole} userId={userId} canEdit={!!canEdit} />
+        <InsposEditor projectId={projectId} stagingEventId={stagingEventId} userRole={userRole} userId={userId} canEdit={!!canEdit} />
       </DialogContent>
     </Dialog>
   );

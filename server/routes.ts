@@ -19,7 +19,7 @@ import { seedDefaultTemplates } from "./services/defaultEmailTemplates";
 import { VipTier } from "@shared/schema";
 import { sendStatusUpdateMessage } from './services/chatAutoResponder';
 import { scheduleEmail } from './services/emailQueue';
-import { verifyAdminRequest } from './middleware/adminAuth';
+import { verifyAdminRequest, verifyShootViewRequest } from './middleware/adminAuth';
 
 // Global WebSocket connections store
 const wsConnections = new Map<string, { ws: WebSocket, userId?: string }>();
@@ -3563,6 +3563,134 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { overallInstructions } = req.body || {};
       const meta = await storage.upsertProjectInspoMeta(req.params.id, overallInstructions || "", reqUserName(req));
       res.json(meta);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ============================================
+  // Staging-event scoped inspos (Task #44)
+  // Lets Photographer / DataWrangler / Admin attach inspos + overall
+  // instructions to a PENDING calendar staging event before it has been
+  // promoted to a project. On promotion, rows are migrated into
+  // project_inspos and overall instructions copied into project_inspo_meta
+  // (see storage.migrateStagingInsposToProject).
+  // ============================================
+  app.get("/api/staging-events/:id/inspos", verifyShootViewRequest, async (req, res) => {
+    try {
+      const role = reqRole(req);
+      if (!inspoCanView(role)) return res.status(403).json({ error: "Access denied" });
+      const event = await storage.getStagedEventById(req.params.id);
+      if (!event) return res.status(404).json({ error: "Staging event not found" });
+      const list = await storage.getStagingEventInspos(req.params.id);
+      res.json({ inspos: list, overallInstructions: event.insposOverallInstructions || "" });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.get("/api/staging-events/:id/inspos-count", verifyShootViewRequest, async (req, res) => {
+    try {
+      const role = reqRole(req);
+      if (!inspoCanView(role)) return res.status(403).json({ error: "Access denied" });
+      const event = await storage.getStagedEventById(req.params.id);
+      if (!event) return res.status(404).json({ error: "Staging event not found" });
+      const list = await storage.getStagingEventInspos(req.params.id);
+      res.json({
+        count: list.length,
+        hasInstructions: !!(event.insposOverallInstructions && event.insposOverallInstructions.trim()),
+      });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post("/api/staging-events/:id/inspos", verifyShootViewRequest, async (req, res) => {
+    try {
+      const role = reqRole(req);
+      if (!inspoCanUpload(role)) return res.status(403).json({ error: "Access denied" });
+      const event = await storage.getStagedEventById(req.params.id);
+      if (!event) return res.status(404).json({ error: "Staging event not found" });
+      const { storageKey, caption, body } = req.body || {};
+      const rawKind = req.body?.kind ?? "photo";
+      if (rawKind !== "photo" && rawKind !== "text") {
+        return res.status(400).json({ error: "kind must be 'photo' or 'text'" });
+      }
+      const kind: "photo" | "text" = rawKind;
+      if (kind === "photo" && !storageKey) return res.status(400).json({ error: "storageKey required" });
+      if (kind === "text" && (!body || !String(body).trim())) return res.status(400).json({ error: "body required" });
+      let normalizedKey: string | null = null;
+      if (kind === "photo") {
+        const objectStorage = new ObjectStorageService();
+        normalizedKey = objectStorage.normalizeObjectEntityPath(storageKey);
+      }
+      const existing = await storage.getStagingEventInspos(req.params.id);
+      const sortOrder = existing.length;
+      const inspo = await storage.createStagingEventInspo({
+        stagingEventId: req.params.id,
+        kind,
+        storageKey: normalizedKey,
+        caption: caption || null,
+        body: kind === "text" ? String(body).trim() : null,
+        sortOrder,
+        uploadedBy: reqUserName(req),
+      });
+      res.json(inspo);
+    } catch (err: any) {
+      console.error("[StagingInspos] create:", err);
+      res.status(500).json({ error: err.message || "Failed" });
+    }
+  });
+
+  app.patch("/api/staging-event-inspos/:id", verifyShootViewRequest, async (req, res) => {
+    try {
+      const role = reqRole(req);
+      if (!inspoCanUpload(role)) return res.status(403).json({ error: "Access denied" });
+      const userName = reqUserName(req);
+      const existing = await storage.getStagingEventInspoById(req.params.id);
+      if (!existing) return res.status(404).json({ error: "Not found" });
+      if (role === "Photographer" && existing.uploadedBy !== userName) {
+        return res.status(403).json({ error: "Photographers can only edit their own inspos" });
+      }
+      const { caption, body, sortOrder } = req.body || {};
+      const updates: { caption?: string; body?: string; sortOrder?: number } = {};
+      if (caption !== undefined) updates.caption = caption;
+      if (body !== undefined) updates.body = body;
+      if (sortOrder !== undefined) updates.sortOrder = sortOrder;
+      const updated = await storage.updateStagingEventInspo(req.params.id, updates);
+      if (!updated) return res.status(404).json({ error: "Not found" });
+      res.json(updated);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.delete("/api/staging-event-inspos/:id", verifyShootViewRequest, async (req, res) => {
+    try {
+      const role = reqRole(req);
+      if (!inspoCanUpload(role)) return res.status(403).json({ error: "Access denied" });
+      const userName = reqUserName(req);
+      const existing = await storage.getStagingEventInspoById(req.params.id);
+      if (!existing) return res.status(404).json({ error: "Not found" });
+      if (role === "Photographer" && existing.uploadedBy !== userName) {
+        return res.status(403).json({ error: "Photographers can only delete their own inspos" });
+      }
+      const ok = await storage.deleteStagingEventInspo(req.params.id);
+      res.json({ ok });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.put("/api/staging-events/:id/inspo-meta", verifyShootViewRequest, async (req, res) => {
+    try {
+      const role = reqRole(req);
+      if (!inspoCanUpload(role)) return res.status(403).json({ error: "Access denied" });
+      const event = await storage.getStagedEventById(req.params.id);
+      if (!event) return res.status(404).json({ error: "Staging event not found" });
+      const { overallInstructions } = req.body || {};
+      await storage.setStagingEventInsposOverallInstructions(req.params.id, overallInstructions || "");
+      res.json({ ok: true });
     } catch (err: any) {
       res.status(500).json({ error: err.message });
     }

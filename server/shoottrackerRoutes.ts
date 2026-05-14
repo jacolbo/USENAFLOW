@@ -12,7 +12,7 @@ import {
   StagingStatus,
   type CalendarEventStaging,
 } from "@shared/schema";
-import { verifyAdminRequest, verifyAdminOrLeadRequest, verifyChatRequest } from "./middleware/adminAuth";
+import { verifyAdminRequest, verifyAdminOrLeadRequest, verifyChatRequest, verifyShootViewRequest } from "./middleware/adminAuth";
 import { handleClientMessageAutoResponse, clearPendingAutoResponse } from './services/chatAutoResponder';
 import { 
   normalizeEvent, 
@@ -301,7 +301,7 @@ export function registerShoottrackerRoutes(app: Express): void {
   });
 
   // Get staged events (pending calendar events)
-  app.get("/api/admin/shoottracker/staged", verifyAdminRequest, async (req: Request, res: Response) => {
+  app.get("/api/admin/shoottracker/staged", verifyShootViewRequest, async (req: Request, res: Response) => {
     try {
       const { status } = req.query;
       const events = await storage.getStagedEvents(status as string | undefined);
@@ -309,54 +309,6 @@ export function registerShoottrackerRoutes(app: Express): void {
     } catch (error: any) {
       console.error("Error fetching staged events:", error);
       res.status(500).json({ error: "Failed to fetch staged events" });
-    }
-  });
-
-  // Ensure a draft project exists for a staging event (so inspos / notes can
-  // attach before the wrangler formally promotes it). Returns the project id
-  // for either the existing project (if calendar_event_id already linked) or
-  // a freshly-created draft. Promote is idempotent on calendar_event_id, so
-  // the draft becomes the real project when the wrangler hits "Add to Week".
-  app.post("/api/admin/shoottracker/staged/:id/ensure-project", verifyAdminRequest, async (req: Request, res: Response) => {
-    try {
-      const { id } = req.params;
-      const stagedEvent = await storage.getStagedEvents().then(events => events.find(e => e.id === id));
-      if (!stagedEvent) return res.status(404).json({ error: "Staged event not found" });
-
-      if (stagedEvent.promotedProjectId) {
-        return res.json({ projectId: stagedEvent.promotedProjectId, created: false });
-      }
-
-      const existing = stagedEvent.calendarEventId
-        ? await storage.getProjectByCalendarEventId(stagedEvent.calendarEventId)
-        : undefined;
-      if (existing) {
-        return res.json({ projectId: existing.id, created: false });
-      }
-
-      const shootDate = stagedEvent.eventStart;
-      const deliveryDueDate = new Date(shootDate);
-      deliveryDueDate.setDate(deliveryDueDate.getDate() + 5);
-      const clientName = parseClientNameFromTitle(stagedEvent.title);
-
-      const draft = await storage.createProject({
-        clientName,
-        packageCount: stagedEvent.packagePhotos || 0,
-        selectedCount: stagedEvent.selectedPhotos || 0,
-        dueDate: deliveryDueDate,
-        shootDate,
-        deliveryDueDate,
-        riskLevel: "SAFE",
-        calendarEventId: stagedEvent.calendarEventId,
-        lastSyncedAt: new Date(),
-        createdFrom: "CALENDAR",
-        clientEmail: stagedEvent.clientEmail || null,
-      } as any);
-
-      res.json({ projectId: draft.id, created: true });
-    } catch (error: any) {
-      console.error("Error ensuring draft project for staged event:", error);
-      res.status(500).json({ error: error.message || "Failed to ensure project" });
     }
   });
 
@@ -477,6 +429,20 @@ export function registerShoottrackerRoutes(app: Express): void {
         });
       }
       
+      // Migrate any inspos / overall instructions logged against the staging
+      // event into the newly-created (or back-filled) project. Done in a
+      // transaction inside the storage layer; safe to call even if there are
+      // no staged inspos.
+      //
+      // We intentionally do NOT swallow errors here: if migration fails the
+      // promote must fail too, leaving the staging row PENDING so the user
+      // can retry. createProject above is idempotent on calendar_event_id
+      // (the existingForEvent branch reuses it), so retrying is safe.
+      const migrated = await storage.migrateStagingInsposToProject(stagedEvent.id, newProject.id, userId);
+      if (migrated.moved > 0 || migrated.instructions) {
+        console.log(`📎 Migrated ${migrated.moved} inspos${migrated.instructions ? " + overall instructions" : ""} from staging event ${stagedEvent.id} → project ${newProject.id}`);
+      }
+
       await storage.updateStagedEvent(id, {
         status: StagingStatus.PROMOTED,
         promotedProjectId: newProject.id,

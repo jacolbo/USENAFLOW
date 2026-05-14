@@ -1,4 +1,4 @@
-import { type User, type InsertUser, type Project, type InsertProject, type UpdateProject, type ProjectNote, type InsertProjectNote, type UpdateProjectNote, type TradeOffer, type InsertTradeOffer, type UpdateTradeOffer, type WranglerCommission, type InsertWranglerCommission, type ProjectEvent, type InsertProjectEvent, type Complaint, type InsertComplaint, type ShoottrackerMeta, type InsertShoottrackerMeta, type UpdateShoottrackerMeta, type AppSetting, type CalendarEventStaging, type InsertCalendarEventStaging, type UpdateCalendarEventStaging, type ClientAuthToken, type InsertClientAuthToken, type ClientMessage, type InsertClientMessage, type DashboardPreferences, type InsertDashboardPreferences, type SneakPeek, type InsertSneakPeek, type Survey, type InsertSurvey, type Referral, type InsertReferral, type ClientProfile, type InsertClientProfile, type RewardClaim, type InsertRewardClaim, type EmailTemplate, type InsertEmailTemplate, type PushSubscription, type InsertPushSubscription, type StatusTransition, type InsertStatusTransition, type LeaveRequest, type InsertLeaveRequest, type AiTeamMessage, type InsertAiTeamMessage, type AiMemory, type InsertAiMemory, type AiAdminInstruction, type InsertAiAdminInstruction, type ProjectInspo, type InsertProjectInspo, type ProjectInspoMeta, ProjectStatus, TradeOfferStatus, StagingStatus, users, projects, projectNotes, tradeOffers, wranglerCommissions, projectEvents, complaints, shoottrackerMeta, appSettings, calendarEventsStaging, clientAuthTokens, clientMessages, dashboardPreferences, sneakPeeks, clientSurveys, referrals, clientProfiles, referralRewardClaims, emailTemplates, pushSubscriptions, chatEncryptionKeys, projectStatusTransitions, leaveRequests, aiTeamMessages, aiMemory, aiAdminInstructions, projectInspos, projectInspoMeta } from "@shared/schema";
+import { type User, type InsertUser, type Project, type InsertProject, type UpdateProject, type ProjectNote, type InsertProjectNote, type UpdateProjectNote, type TradeOffer, type InsertTradeOffer, type UpdateTradeOffer, type WranglerCommission, type InsertWranglerCommission, type ProjectEvent, type InsertProjectEvent, type Complaint, type InsertComplaint, type ShoottrackerMeta, type InsertShoottrackerMeta, type UpdateShoottrackerMeta, type AppSetting, type CalendarEventStaging, type InsertCalendarEventStaging, type UpdateCalendarEventStaging, type ClientAuthToken, type InsertClientAuthToken, type ClientMessage, type InsertClientMessage, type DashboardPreferences, type InsertDashboardPreferences, type SneakPeek, type InsertSneakPeek, type Survey, type InsertSurvey, type Referral, type InsertReferral, type ClientProfile, type InsertClientProfile, type RewardClaim, type InsertRewardClaim, type EmailTemplate, type InsertEmailTemplate, type PushSubscription, type InsertPushSubscription, type StatusTransition, type InsertStatusTransition, type LeaveRequest, type InsertLeaveRequest, type AiTeamMessage, type InsertAiTeamMessage, type AiMemory, type InsertAiMemory, type AiAdminInstruction, type InsertAiAdminInstruction, type ProjectInspo, type InsertProjectInspo, type ProjectInspoMeta, type StagingEventInspo, type InsertStagingEventInspo, ProjectStatus, TradeOfferStatus, StagingStatus, users, projects, projectNotes, tradeOffers, wranglerCommissions, projectEvents, complaints, shoottrackerMeta, appSettings, calendarEventsStaging, clientAuthTokens, clientMessages, dashboardPreferences, sneakPeeks, clientSurveys, referrals, clientProfiles, referralRewardClaims, emailTemplates, pushSubscriptions, chatEncryptionKeys, projectStatusTransitions, leaveRequests, aiTeamMessages, aiMemory, aiAdminInstructions, projectInspos, projectInspoMeta, stagingEventInspos } from "@shared/schema";
 import { db } from "./db";
 import { eq, sql, asc, and, ilike, isNotNull, isNull, lte, desc } from "drizzle-orm";
 import { randomUUID } from "crypto";
@@ -63,11 +63,21 @@ export interface IStorage {
   
   // Calendar events staging methods
   getStagedEvents(status?: string): Promise<CalendarEventStaging[]>;
+  getStagedEventById(id: string): Promise<CalendarEventStaging | undefined>;
   getStagedEventByCalendarEventId(calendarEventId: string): Promise<CalendarEventStaging | undefined>;
   createStagedEvent(event: InsertCalendarEventStaging): Promise<CalendarEventStaging>;
   updateStagedEvent(id: string, updates: UpdateCalendarEventStaging): Promise<CalendarEventStaging | undefined>;
   upsertStagedEvent(event: InsertCalendarEventStaging): Promise<CalendarEventStaging>;
   deleteStagedEvent(id: string): Promise<boolean>;
+
+  // Staging-event scoped inspos (notes attached before promotion)
+  getStagingEventInspos(stagingEventId: string): Promise<StagingEventInspo[]>;
+  createStagingEventInspo(inspo: InsertStagingEventInspo): Promise<StagingEventInspo>;
+  updateStagingEventInspo(id: string, updates: Partial<{ caption: string; body: string; sortOrder: number }>): Promise<StagingEventInspo | undefined>;
+  deleteStagingEventInspo(id: string): Promise<boolean>;
+  getStagingEventInspoById(id: string): Promise<StagingEventInspo | undefined>;
+  setStagingEventInsposOverallInstructions(stagingEventId: string, instructions: string): Promise<void>;
+  migrateStagingInsposToProject(stagingEventId: string, projectId: string, migratedBy: string): Promise<{ moved: number; instructions: string }>;
   
   // Client auth token methods
   createClientAuthToken(token: InsertClientAuthToken): Promise<ClientAuthToken>;
@@ -740,6 +750,10 @@ export class MemStorage implements IStorage {
     return [];
   }
 
+  async getStagedEventById(id: string): Promise<CalendarEventStaging | undefined> {
+    return undefined;
+  }
+
   async getStagedEventByCalendarEventId(calendarEventId: string): Promise<CalendarEventStaging | undefined> {
     return undefined;
   }
@@ -759,6 +773,15 @@ export class MemStorage implements IStorage {
   async deleteStagedEvent(id: string): Promise<boolean> {
     return false;
   }
+
+  // Staging-event scoped inspos (Not implemented for MemStorage)
+  async getStagingEventInspos(): Promise<StagingEventInspo[]> { return []; }
+  async createStagingEventInspo(): Promise<StagingEventInspo> { throw new Error("Not implemented in MemStorage"); }
+  async updateStagingEventInspo(): Promise<StagingEventInspo | undefined> { return undefined; }
+  async deleteStagingEventInspo(): Promise<boolean> { return false; }
+  async getStagingEventInspoById(): Promise<StagingEventInspo | undefined> { return undefined; }
+  async setStagingEventInsposOverallInstructions(): Promise<void> { /* no-op */ }
+  async migrateStagingInsposToProject(): Promise<{ moved: number; instructions: string }> { return { moved: 0, instructions: "" }; }
 
   // Client auth token methods (Not implemented for MemStorage)
   async createClientAuthToken(token: InsertClientAuthToken): Promise<ClientAuthToken> {
@@ -1475,6 +1498,11 @@ export class DatabaseStorage implements IStorage {
       return db.select().from(calendarEventsStaging).where(eq(calendarEventsStaging.status, status)).orderBy(asc(calendarEventsStaging.eventStart));
     }
     return db.select().from(calendarEventsStaging).orderBy(asc(calendarEventsStaging.eventStart));
+  }
+
+  async getStagedEventById(id: string): Promise<CalendarEventStaging | undefined> {
+    const [event] = await db.select().from(calendarEventsStaging).where(eq(calendarEventsStaging.id, id));
+    return event || undefined;
   }
 
   async getStagedEventByCalendarEventId(calendarEventId: string): Promise<CalendarEventStaging | undefined> {
@@ -2448,6 +2476,91 @@ export class DatabaseStorage implements IStorage {
     }
     const [row] = await db.insert(projectInspoMeta).values({ projectId, overallInstructions, updatedBy }).returning();
     return row;
+  }
+
+  // ===== Staging-event scoped inspos (Task #44) =====
+  async getStagingEventInspos(stagingEventId: string): Promise<StagingEventInspo[]> {
+    return await db.select().from(stagingEventInspos)
+      .where(eq(stagingEventInspos.stagingEventId, stagingEventId))
+      .orderBy(asc(stagingEventInspos.sortOrder), asc(stagingEventInspos.createdAt));
+  }
+
+  async createStagingEventInspo(inspo: InsertStagingEventInspo): Promise<StagingEventInspo> {
+    const [row] = await db.insert(stagingEventInspos).values(inspo).returning();
+    return row;
+  }
+
+  async updateStagingEventInspo(id: string, updates: Partial<{ caption: string; body: string; sortOrder: number }>): Promise<StagingEventInspo | undefined> {
+    const [row] = await db.update(stagingEventInspos).set(updates).where(eq(stagingEventInspos.id, id)).returning();
+    return row || undefined;
+  }
+
+  async deleteStagingEventInspo(id: string): Promise<boolean> {
+    const r = await db.delete(stagingEventInspos).where(eq(stagingEventInspos.id, id)).returning();
+    return r.length > 0;
+  }
+
+  async getStagingEventInspoById(id: string): Promise<StagingEventInspo | undefined> {
+    const [row] = await db.select().from(stagingEventInspos).where(eq(stagingEventInspos.id, id));
+    return row || undefined;
+  }
+
+  async setStagingEventInsposOverallInstructions(stagingEventId: string, instructions: string): Promise<void> {
+    await db.update(calendarEventsStaging)
+      .set({ insposOverallInstructions: instructions })
+      .where(eq(calendarEventsStaging.id, stagingEventId));
+  }
+
+  async migrateStagingInsposToProject(stagingEventId: string, projectId: string, migratedBy: string): Promise<{ moved: number; instructions: string }> {
+    return await db.transaction(async (tx) => {
+      const [stagingRow] = await tx.select().from(calendarEventsStaging).where(eq(calendarEventsStaging.id, stagingEventId));
+      const overallInstructions = stagingRow?.insposOverallInstructions || "";
+
+      const stagingRows = await tx.select().from(stagingEventInspos)
+        .where(eq(stagingEventInspos.stagingEventId, stagingEventId))
+        .orderBy(asc(stagingEventInspos.sortOrder), asc(stagingEventInspos.createdAt));
+
+      let moved = 0;
+      if (stagingRows.length > 0) {
+        // COALESCE returns -1 when there are no existing inspos for this
+        // project, so +1 yields 0 as the first sortOrder. Avoid the falsy
+        // `|| -1` trick because Number(0) is falsy and would collide with
+        // an existing row at sortOrder 0.
+        const [{ maxSort }] = await tx.select({
+          maxSort: sql<number>`COALESCE(MAX(${projectInspos.sortOrder}), -1)::int`,
+        }).from(projectInspos).where(eq(projectInspos.projectId, projectId));
+        let nextSort = Number(maxSort) + 1;
+
+        const values = stagingRows.map((r) => ({
+          projectId,
+          kind: r.kind,
+          storageKey: r.storageKey,
+          caption: r.caption,
+          body: r.body,
+          sortOrder: nextSort++,
+          uploadedBy: r.uploadedBy,
+        }));
+        const inserted = await tx.insert(projectInspos).values(values).returning({ id: projectInspos.id });
+        moved = inserted.length;
+
+        await tx.delete(stagingEventInspos).where(eq(stagingEventInspos.stagingEventId, stagingEventId));
+      }
+
+      if (overallInstructions.trim()) {
+        const [existingMeta] = await tx.select().from(projectInspoMeta).where(eq(projectInspoMeta.projectId, projectId));
+        if (existingMeta) {
+          if (!existingMeta.overallInstructions || !existingMeta.overallInstructions.trim()) {
+            await tx.update(projectInspoMeta)
+              .set({ overallInstructions, updatedBy: migratedBy, updatedAt: new Date() })
+              .where(eq(projectInspoMeta.projectId, projectId));
+          }
+        } else {
+          await tx.insert(projectInspoMeta).values({ projectId, overallInstructions, updatedBy: migratedBy });
+        }
+      }
+
+      return { moved, instructions: overallInstructions };
+    });
   }
 
 }
