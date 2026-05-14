@@ -82,9 +82,16 @@ export async function generateRetoucherAdvice(retoucherData: {
   avgRating: number | null;
   recentRatings: number[];
   avgTurnaroundDays: number | null;
+  reviewFunnel?: {
+    windowDays: number;
+    promptsSent: number;
+    googleClicks: number;
+    clickThroughRate: number;
+    teamAvgClickThroughRate: number;
+  } | null;
 }): Promise<{ advice: string[]; encouragement: string }> {
   const advice: string[] = [];
-  const { name, completedProjects, activeProjects, overdueProjects, avgRating, recentRatings, avgTurnaroundDays } = retoucherData;
+  const { name, completedProjects, activeProjects, overdueProjects, avgRating, recentRatings, avgTurnaroundDays, reviewFunnel } = retoucherData;
 
   if (overdueProjects > 2) {
     advice.push(`You have ${overdueProjects} overdue projects. Tackle the oldest ones first to clear the backlog.`);
@@ -119,6 +126,22 @@ export async function generateRetoucherAdvice(retoucherData: {
 
   if (activeProjects > 6) {
     advice.push(`You have ${activeProjects} active projects — sort by due date and flag any capacity concerns early.`);
+  }
+
+  if (reviewFunnel && reviewFunnel.promptsSent >= 3) {
+    const ctrPct = Math.round(reviewFunnel.clickThroughRate * 100);
+    const teamPct = Math.round(reviewFunnel.teamAvgClickThroughRate * 100);
+    const diff = reviewFunnel.clickThroughRate - reviewFunnel.teamAvgClickThroughRate;
+    const window = reviewFunnel.windowDays;
+    if (diff <= -0.05) {
+      advice.push(`Your last-${window}-day Google review CTR is ${ctrPct}% (${reviewFunnel.googleClicks}/${reviewFunnel.promptsSent}) vs team average ${teamPct}%. Try delivering a personal note with the gallery and asking clients to share a quick line about their experience to lift conversions.`);
+    } else if (diff >= 0.05) {
+      advice.push(`Strong work — your last-${window}-day Google review CTR is ${ctrPct}% (${reviewFunnel.googleClicks}/${reviewFunnel.promptsSent}), well above the team average of ${teamPct}%. Keep doing what you're doing.`);
+    } else {
+      advice.push(`Your last-${window}-day Google review CTR is ${ctrPct}% (${reviewFunnel.googleClicks}/${reviewFunnel.promptsSent}), in line with the team average of ${teamPct}%.`);
+    }
+  } else if (reviewFunnel && reviewFunnel.promptsSent > 0) {
+    advice.push(`Only ${reviewFunnel.promptsSent} review prompt(s) went out on your projects in the last ${reviewFunnel.windowDays} days — not enough data yet to judge your conversion rate.`);
   }
 
   if (advice.length === 0) {

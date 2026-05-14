@@ -558,6 +558,43 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ? Math.round((turnarounds.reduce((a, b) => a + b, 0) / turnarounds.length) * 10) / 10
         : null;
 
+      let reviewFunnel: {
+        windowDays: number;
+        promptsSent: number;
+        googleClicks: number;
+        clickThroughRate: number;
+        teamAvgClickThroughRate: number;
+      } | null = null;
+      try {
+        const funnelWindowDays = 30;
+        const breakdown = await storage.getGoogleReviewFunnelBreakdown(funnelWindowDays);
+        const mine = breakdown.byRetoucher.find(
+          (r) => r.label.toLowerCase() === retoucherName.toLowerCase()
+        );
+        const totalPrompts = breakdown.byRetoucher.reduce((sum, r) => sum + r.promptsSent, 0);
+        const totalClicks = breakdown.byRetoucher.reduce((sum, r) => sum + r.googleClicks, 0);
+        const teamAvgCtr = totalPrompts > 0 ? totalClicks / totalPrompts : 0;
+        if (mine) {
+          reviewFunnel = {
+            windowDays: breakdown.windowDays,
+            promptsSent: mine.promptsSent,
+            googleClicks: mine.googleClicks,
+            clickThroughRate: mine.clickThroughRate,
+            teamAvgClickThroughRate: teamAvgCtr,
+          };
+        } else {
+          reviewFunnel = {
+            windowDays: breakdown.windowDays,
+            promptsSent: 0,
+            googleClicks: 0,
+            clickThroughRate: 0,
+            teamAvgClickThroughRate: teamAvgCtr,
+          };
+        }
+      } catch (funnelError) {
+        console.error("Failed to fetch review funnel breakdown for retoucher coach:", funnelError);
+      }
+
       const { generateRetoucherAdvice } = await import("./services/aiService");
       const result = await generateRetoucherAdvice({
         name: retoucherName,
@@ -567,6 +604,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         avgRating,
         recentRatings,
         avgTurnaroundDays,
+        reviewFunnel,
       });
 
       res.json({ ...result, generatedAt: new Date().toISOString() });
