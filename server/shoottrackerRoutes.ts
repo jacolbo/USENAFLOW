@@ -312,8 +312,56 @@ export function registerShoottrackerRoutes(app: Express): void {
     }
   });
 
+  // Ensure a draft project exists for a staging event (so inspos / notes can
+  // attach before the wrangler formally promotes it). Returns the project id
+  // for either the existing project (if calendar_event_id already linked) or
+  // a freshly-created draft. Promote is idempotent on calendar_event_id, so
+  // the draft becomes the real project when the wrangler hits "Add to Week".
+  app.post("/api/admin/shoottracker/staged/:id/ensure-project", verifyAdminRequest, async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+      const stagedEvent = await storage.getStagedEvents().then(events => events.find(e => e.id === id));
+      if (!stagedEvent) return res.status(404).json({ error: "Staged event not found" });
+
+      if (stagedEvent.promotedProjectId) {
+        return res.json({ projectId: stagedEvent.promotedProjectId, created: false });
+      }
+
+      const existing = stagedEvent.calendarEventId
+        ? await storage.getProjectByCalendarEventId(stagedEvent.calendarEventId)
+        : undefined;
+      if (existing) {
+        return res.json({ projectId: existing.id, created: false });
+      }
+
+      const shootDate = stagedEvent.eventStart;
+      const deliveryDueDate = new Date(shootDate);
+      deliveryDueDate.setDate(deliveryDueDate.getDate() + 5);
+      const clientName = parseClientNameFromTitle(stagedEvent.title);
+
+      const draft = await storage.createProject({
+        clientName,
+        packageCount: stagedEvent.packagePhotos || 0,
+        selectedCount: stagedEvent.selectedPhotos || 0,
+        dueDate: deliveryDueDate,
+        shootDate,
+        deliveryDueDate,
+        riskLevel: "SAFE",
+        calendarEventId: stagedEvent.calendarEventId,
+        lastSyncedAt: new Date(),
+        createdFrom: "CALENDAR",
+        clientEmail: stagedEvent.clientEmail || null,
+      } as any);
+
+      res.json({ projectId: draft.id, created: true });
+    } catch (error: any) {
+      console.error("Error ensuring draft project for staged event:", error);
+      res.status(500).json({ error: error.message || "Failed to ensure project" });
+    }
+  });
+
   // Promote staged event to project
-  app.post("/api/admin/shoottracker/staged/:id/promote", verifyAdminOrLeadRequest, async (req: Request, res: Response) => {
+  app.post("/api/admin/shoottracker/staged/:id/promote", verifyAdminRequest, async (req: Request, res: Response) => {
     try {
       const { id } = req.params;
       const { targetWeekStart } = req.body;

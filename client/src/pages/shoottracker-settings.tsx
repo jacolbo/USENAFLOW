@@ -16,8 +16,8 @@ import { useToast } from "@/hooks/use-toast";
 import { queryClient } from "@/lib/queryClient";
 import { getAdminHeaders } from "@/lib/adminAuth";
 import { UserRoles, shoottrackerSettingsSchema, type ShoottrackerSettings, StagingStatus, type CalendarEventStaging, type KeywordTurnaroundRule, type Holiday } from "@shared/schema";
-import { ArrowLeft, Calendar, Settings, RefreshCw, Clock, AlertTriangle, CheckCircle, Loader2, CalendarPlus, Eye, EyeOff, Plus, ChevronRight, Search, X, Mail, MessageCircle, Send } from "lucide-react";
-import { InsposButton } from "@/components/inspos-panel";
+import { ArrowLeft, Calendar, Settings, RefreshCw, Clock, AlertTriangle, CheckCircle, Loader2, CalendarPlus, Eye, EyeOff, Plus, ChevronRight, Search, X, Mail, MessageCircle, Send, StickyNote } from "lucide-react";
+import { InsposButton, InsposViewerDialog } from "@/components/inspos-panel";
 import { format, startOfWeek, addWeeks, subWeeks } from "date-fns";
 import {
   Form,
@@ -37,6 +37,75 @@ import {
 } from "@/components/ui/select";
 
 const ALLOWED_ROLES = [UserRoles.ADMIN, UserRoles.DATA_WRANGLER, UserRoles.LEAD_RETOUCHER];
+
+function StagedInsposButton({
+  stagingEventId,
+  eventTitle,
+  userRole,
+  userId,
+}: {
+  stagingEventId: string;
+  eventTitle: string;
+  userRole: string;
+  userId: string;
+}) {
+  const { toast } = useToast();
+  const [open, setOpen] = useState(false);
+  const [projectId, setProjectId] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const canEdit = ["Admin", "Photographer", "DataWrangler"].includes(userRole);
+
+  const handleClick = async () => {
+    if (projectId) {
+      setOpen(true);
+      return;
+    }
+    setLoading(true);
+    try {
+      const r = await fetch(`/api/admin/shoottracker/staged/${stagingEventId}/ensure-project`, {
+        method: "POST",
+        headers: getAdminHeaders(userRole, userId),
+      });
+      if (!r.ok) throw new Error("Failed to prepare notes");
+      const data = (await r.json()) as { projectId: string };
+      setProjectId(data.projectId);
+      setOpen(true);
+    } catch (err: any) {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <>
+      <Button
+        type="button"
+        size="sm"
+        variant="outline"
+        className="h-7 px-2 text-xs text-gray-600 border-gray-300"
+        onClick={handleClick}
+        disabled={loading}
+        title="Inspos & notes"
+        data-testid={`button-staged-inspos-${stagingEventId}`}
+      >
+        {loading ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <StickyNote className="h-3 w-3 mr-1" />}
+        Inspos / Notes
+      </Button>
+      {projectId && (
+        <InsposViewerDialog
+          open={open}
+          onOpenChange={setOpen}
+          projectId={projectId}
+          projectName={eventTitle}
+          userRole={userRole}
+          userId={userId}
+          canEdit={canEdit}
+        />
+      )}
+    </>
+  );
+}
 
 function InlineNumberInput({ 
   value, 
@@ -847,7 +916,7 @@ export default function ShootTrackerSettings() {
                   </div>
                 </div>
 
-                {!isDataWranglerOnly && stagedEventsQuery.data && stagedEventsQuery.data.filter(e => e.status === StagingStatus.PENDING).length > 0 && (
+                {stagedEventsQuery.data && stagedEventsQuery.data.filter(e => e.status === StagingStatus.PENDING).length > 0 && (
                   <div className="mb-4 p-3 bg-muted rounded-lg flex items-center justify-between flex-wrap gap-2">
                     <div className="flex items-center gap-3">
                       <Button
@@ -868,15 +937,17 @@ export default function ShootTrackerSettings() {
                     </div>
                     {selectedEvents.size > 0 && (
                       <div className="flex items-center gap-2 flex-wrap">
-                        <Button
-                          size="sm"
-                          variant="destructive"
-                          onClick={ignoreSelectedEvents}
-                          disabled={ignoreMutation.isPending}
-                        >
-                          <EyeOff className="h-4 w-4 mr-1" />
-                          Ignore Selected
-                        </Button>
+                        {!isDataWranglerOnly && (
+                          <Button
+                            size="sm"
+                            variant="destructive"
+                            onClick={ignoreSelectedEvents}
+                            disabled={ignoreMutation.isPending}
+                          >
+                            <EyeOff className="h-4 w-4 mr-1" />
+                            Ignore Selected
+                          </Button>
+                        )}
                         <Button
                           size="sm"
                           onClick={promoteSelectedEvents}
@@ -927,7 +998,7 @@ export default function ShootTrackerSettings() {
                           }`}
                         >
                           <div className="flex items-start gap-3">
-                            {!isDataWranglerOnly && event.status === StagingStatus.PENDING && (
+                            {event.status === StagingStatus.PENDING && (
                               <Checkbox
                                 checked={selectedEvents.has(event.id)}
                                 onCheckedChange={() => toggleEventSelection(event.id)}
@@ -997,6 +1068,14 @@ export default function ShootTrackerSettings() {
                                       )}
                                     </>
                                   )}
+                                  {event.status === StagingStatus.PENDING && (
+                                    <StagedInsposButton
+                                      stagingEventId={event.id}
+                                      eventTitle={event.title}
+                                      userRole={userRole}
+                                      userId={userId}
+                                    />
+                                  )}
                                   {!isDataWranglerOnly && event.status === StagingStatus.PENDING && (
                                     <Button
                                       size="sm"
@@ -1051,22 +1130,20 @@ export default function ShootTrackerSettings() {
                                       className="h-8 mt-1"
                                     />
                                   </div>
-                                  {!isDataWranglerOnly && (
-                                    <div className="col-span-2 sm:col-span-1">
-                                      <Label className="text-xs text-muted-foreground">Add to Week</Label>
-                                      <div className="flex gap-1 mt-1">
-                                        <Button
-                                          size="sm"
-                                          className="h-8 w-full"
-                                          onClick={() => promoteMutation.mutate(event.id)}
-                                          disabled={promoteMutation.isPending}
-                                        >
-                                          <Plus className="h-3 w-3 mr-1" />
-                                          Add to Due Week
-                                        </Button>
-                                      </div>
+                                  <div className="col-span-2 sm:col-span-1">
+                                    <Label className="text-xs text-muted-foreground">Add to Week</Label>
+                                    <div className="flex gap-1 mt-1">
+                                      <Button
+                                        size="sm"
+                                        className="h-8 w-full"
+                                        onClick={() => promoteMutation.mutate(event.id)}
+                                        disabled={promoteMutation.isPending}
+                                      >
+                                        <Plus className="h-3 w-3 mr-1" />
+                                        Add to Due Week
+                                      </Button>
                                     </div>
-                                  )}
+                                  </div>
                                 </div>
                               )}
                             </div>
