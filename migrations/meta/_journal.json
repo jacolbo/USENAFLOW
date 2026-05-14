@@ -43,6 +43,13 @@
       "when": 1778748625004,
       "tag": "0005_smiling_supreme_intelligence",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1778753912308,
+      "tag": "0006_workable_bill_hollister",
+      "breakpoints": true
     }
   ]
 }
