@@ -113,6 +113,9 @@ export interface IStorage {
     copyClicks: number;
     googleClicks: number;
     clickThroughRate: number;
+    suppressedTotal: number;
+    suppressedAuto: number;
+    suppressedManual: number;
   }>;
   getGoogleReviewFunnelBreakdown(windowDays: number): Promise<{
     windowDays: number;
@@ -866,6 +869,9 @@ export class MemStorage implements IStorage {
       copyClicks: 0,
       googleClicks: 0,
       clickThroughRate: 0,
+      suppressedTotal: 0,
+      suppressedAuto: 0,
+      suppressedManual: 0,
     };
   }
   async getGoogleReviewFunnelBreakdown(windowDays: number) {
@@ -1821,12 +1827,18 @@ export class DatabaseStorage implements IStorage {
         remindersSent: sql<number>`COALESCE(SUM(${clientSurveys.googlePromptRemindersSent}) FILTER (WHERE ${clientSurveys.googlePromptSentAt} IS NOT NULL AND ${clientSurveys.googlePromptSentAt} >= ${cutoff}${suppressClause}), 0)`,
         copyClicks: sql<number>`COUNT(*) FILTER (WHERE ${clientSurveys.copyClickedAt} IS NOT NULL AND ${clientSurveys.copyClickedAt} >= ${cutoff})`,
         googleClicks: sql<number>`COUNT(*) FILTER (WHERE ${clientSurveys.googleClickedAt} IS NOT NULL AND ${clientSurveys.googleClickedAt} >= ${cutoff})`,
+        suppressedTotal: sql<number>`COUNT(*) FILTER (WHERE ${clientSurveys.alreadyReviewedOnGoogle} = true AND COALESCE(${clientSurveys.alreadyReviewedAt}, ${clientSurveys.createdAt}) >= ${cutoff})`,
+        suppressedAuto: sql<number>`COUNT(*) FILTER (WHERE ${clientSurveys.alreadyReviewedOnGoogle} = true AND ${clientSurveys.alreadyReviewedSource} = 'auto' AND COALESCE(${clientSurveys.alreadyReviewedAt}, ${clientSurveys.createdAt}) >= ${cutoff})`,
+        suppressedManual: sql<number>`COUNT(*) FILTER (WHERE ${clientSurveys.alreadyReviewedOnGoogle} = true AND ${clientSurveys.alreadyReviewedSource} = 'manual' AND COALESCE(${clientSurveys.alreadyReviewedAt}, ${clientSurveys.createdAt}) >= ${cutoff})`,
       })
       .from(clientSurveys);
     const promptsSent = Number(row?.promptsSent ?? 0);
     const remindersSent = Number(row?.remindersSent ?? 0);
     const copyClicks = Number(row?.copyClicks ?? 0);
     const googleClicks = Number(row?.googleClicks ?? 0);
+    const suppressedTotal = Number(row?.suppressedTotal ?? 0);
+    const suppressedAuto = Number(row?.suppressedAuto ?? 0);
+    const suppressedManual = Number(row?.suppressedManual ?? 0);
     const clickThroughRate = promptsSent > 0 ? googleClicks / promptsSent : 0;
     return {
       windowDays: safeWindow,
@@ -1835,6 +1847,9 @@ export class DatabaseStorage implements IStorage {
       copyClicks,
       googleClicks,
       clickThroughRate,
+      suppressedTotal,
+      suppressedAuto,
+      suppressedManual,
     };
   }
 

@@ -448,6 +448,9 @@ function GoogleReviewFunnelWidget({ userRole, userId }: { userRole: string; user
     copyClicks: number;
     googleClicks: number;
     clickThroughRate: number;
+    suppressedTotal: number;
+    suppressedAuto: number;
+    suppressedManual: number;
   }>({
     queryKey: ["/api/google-review/stats", windowDays],
     queryFn: async () => {
@@ -587,6 +590,26 @@ function GoogleReviewFunnelWidget({ userRole, userId }: { userRole: string; user
               <div className="bg-gray-50 dark:bg-gray-700/40 rounded-lg p-3">
                 <div className="text-xs text-gray-500 dark:text-gray-400">Google clicks</div>
                 <div className="text-2xl font-semibold text-gray-900 dark:text-gray-100">{data?.googleClicks ?? 0}</div>
+              </div>
+            </div>
+            <div className="mt-3 grid grid-cols-1">
+              <div
+                className="bg-gray-50 dark:bg-gray-700/40 rounded-lg p-3 flex items-center justify-between cursor-help"
+                title={`Auto-detected: ${data?.suppressedAuto ?? 0}\nMarked manually: ${data?.suppressedManual ?? 0}`}
+                data-testid="tile-google-review-suppressed"
+              >
+                <div>
+                  <div className="text-xs text-gray-500 dark:text-gray-400">Suppressed (already reviewed)</div>
+                  <div className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">
+                    Clients we skipped because they already left a Google review
+                  </div>
+                </div>
+                <div className="text-right">
+                  <div className="text-2xl font-semibold text-gray-900 dark:text-gray-100">{data?.suppressedTotal ?? 0}</div>
+                  <div className="text-xs text-gray-500 dark:text-gray-400">
+                    {data?.suppressedAuto ?? 0} auto · {data?.suppressedManual ?? 0} manual
+                  </div>
+                </div>
               </div>
             </div>
             <div className="mt-4 flex items-center justify-between bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-100 dark:border-yellow-900/40 rounded-lg px-4 py-3">
