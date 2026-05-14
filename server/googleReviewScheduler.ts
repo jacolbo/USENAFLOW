@@ -36,8 +36,10 @@ const FEATURE_LAUNCH_AT = new Date("2026-05-12T00:00:00Z");
 
 let promptIntervalHandle: NodeJS.Timeout | null = null;
 let reminderIntervalHandle: NodeJS.Timeout | null = null;
+let sweepIntervalHandle: NodeJS.Timeout | null = null;
 let promptInFlight = false;
 let reminderInFlight = false;
+let sweepInFlight = false;
 
 async function processGooglePrompts() {
   if (promptInFlight) return;
@@ -176,11 +178,44 @@ async function processReminders() {
   }
 }
 
+async function processExistingReviewSweep() {
+  if (sweepInFlight) return;
+  if (!isEnabled(SUPPRESS_AUTOMATION_ID)) return;
+  sweepInFlight = true;
+  try {
+    const surveys = await storage.getSurveysForExistingReviewSweep();
+    let matched = 0;
+    for (const s of surveys) {
+      try {
+        const match = await findMatchForClient(s.clientName);
+        if (!match) continue;
+        await storage.markSurveyAlreadyReviewed(s.id, 'auto', match.authorName);
+        recordFired(
+          SUPPRESS_AUTOMATION_ID,
+          `Sweep auto-suppressed ${s.clientName} <${s.clientEmail}> — matched Google review by "${match.authorName}"`,
+        );
+        matched++;
+      } catch (err: any) {
+        console.warn(`[GoogleReviewScheduler] sweep check failed for ${s.id}:`, err?.message);
+      }
+    }
+    if (surveys.length > 0) {
+      console.log(`[GoogleReviewScheduler] Sweep scanned ${surveys.length} surveys, marked ${matched} as already reviewed`);
+    }
+  } catch (err: any) {
+    console.error("[GoogleReviewScheduler] processExistingReviewSweep:", err.message);
+  } finally {
+    sweepInFlight = false;
+  }
+}
+
 export function startGoogleReviewScheduler() {
-  if (promptIntervalHandle || reminderIntervalHandle) return;
-  console.log("[GoogleReviewScheduler] Starting (prompts every 60s, reminders every hour, cadence 3/7/14d from prompt)");
+  if (promptIntervalHandle || reminderIntervalHandle || sweepIntervalHandle) return;
+  console.log("[GoogleReviewScheduler] Starting (prompts every 60s, reminders every hour, sweep daily, cadence 3/7/14d from prompt)");
   promptIntervalHandle = setInterval(processGooglePrompts, 60 * 1000);
   reminderIntervalHandle = setInterval(processReminders, 60 * 60 * 1000);
+  sweepIntervalHandle = setInterval(processExistingReviewSweep, DAY_MS);
   setTimeout(processGooglePrompts, 10_000);
   setTimeout(processReminders, 30_000);
+  setTimeout(processExistingReviewSweep, 60_000);
 }

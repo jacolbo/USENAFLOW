@@ -103,6 +103,7 @@ export interface IStorage {
   getAllSurveys(): Promise<Survey[]>;
   getSurveysAwaitingGooglePrompt(maxAgeMs: number, respectAlreadyReviewedFlag?: boolean): Promise<Survey[]>;
   getSurveysAwaitingReminder(respectAlreadyReviewedFlag?: boolean): Promise<Survey[]>;
+  getSurveysForExistingReviewSweep(): Promise<Survey[]>;
   markSurveyAlreadyReviewed(id: string, source: 'auto' | 'manual', matchedAuthor?: string | null): Promise<Survey | undefined>;
   clearSurveyAlreadyReviewed(id: string): Promise<Survey | undefined>;
   getGoogleReviewFunnelStats(windowDays: number, respectAlreadyReviewedFlag?: boolean): Promise<{
@@ -846,6 +847,9 @@ export class MemStorage implements IStorage {
     return [];
   }
   async getSurveysAwaitingReminder(): Promise<Survey[]> {
+    return [];
+  }
+  async getSurveysForExistingReviewSweep(): Promise<Survey[]> {
     return [];
   }
   async markSurveyAlreadyReviewed(): Promise<Survey | undefined> {
@@ -1769,6 +1773,14 @@ export class DatabaseStorage implements IStorage {
       conditions.push(eq(clientSurveys.alreadyReviewedOnGoogle, false));
     }
     return await db.select().from(clientSurveys).where(and(...conditions));
+  }
+
+  async getSurveysForExistingReviewSweep(): Promise<Survey[]> {
+    return await db.select().from(clientSurveys).where(and(
+      eq(clientSurveys.rating, 5),
+      isNotNull(clientSurveys.completedAt),
+      eq(clientSurveys.alreadyReviewedOnGoogle, false),
+    ));
   }
 
   async markSurveyAlreadyReviewed(id: string, source: 'auto' | 'manual', matchedAuthor?: string | null): Promise<Survey | undefined> {
