@@ -3779,10 +3779,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!template) {
         return res.status(404).json({ error: "Template not found" });
       }
+      const lastEditedBy = (req.headers["x-usena-user-id"] as string) || (req.headers["x-usena-role"] as string) || "unknown";
       const updated = await storage.updateEmailTemplate(template.id, {
         subject: subject || template.subject,
         htmlBody: htmlBody || template.htmlBody,
         isCustomized: true,
+        lastEditedBy,
       });
       res.json(updated);
     } catch (error: any) {
@@ -3803,10 +3805,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!defaultTemplate) {
         return res.status(404).json({ error: "Default template not found" });
       }
+      const lastEditedBy = (req.headers["x-usena-user-id"] as string) || (req.headers["x-usena-role"] as string) || "unknown";
       const updated = await storage.updateEmailTemplate(template.id, {
         subject: defaultTemplate.subject,
         htmlBody: defaultTemplate.htmlBody,
         isCustomized: false,
+        lastEditedBy,
       });
       res.json(updated);
     } catch (error: any) {

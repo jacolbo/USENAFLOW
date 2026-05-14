@@ -19,6 +19,7 @@ import { DriveManager } from "@/components/drive-manager";
 import { WRUButton } from "@/components/WRUButton";
 import { useSSE } from "@/hooks/use-sse";
 import { User } from "@/lib/types";
+import { formatDistanceToNow } from "date-fns";
 import { Project } from "@shared/schema";
 import { User as UserIcon, LogOut, Settings, Archive, ArrowRightLeft, DollarSign, AlertTriangle, Calendar, CalendarDays, MessageCircle, LayoutDashboard, Gift, Crown, RefreshCw, Mail, MoreHorizontal, Wrench, Trophy, Star, HardDrive, Sparkles, Brain, Bot, Zap, Image, Camera, Trash2 } from "lucide-react";
 import { useLocation } from "wouter";
@@ -2433,9 +2434,29 @@ function DelayAlertBanner({ projects, user }: { projects: Project[]; user: User 
   );
 }
 
-function EmailTemplatesEditor() {
+function EmailTemplatesEditor({ currentUser }: { currentUser: User }) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const adminHeaders = getAdminHeaders(currentUser.role, currentUser.id || "");
+  const adminJsonHeaders = { "Content-Type": "application/json", ...adminHeaders };
+  const { data: allUsers = [] } = useQuery<User[]>({
+    queryKey: ["/api/users"],
+    queryFn: async () => {
+      const res = await fetch("/api/users", { headers: adminHeaders });
+      return res.json();
+    },
+  });
+  const userNameById = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const u of allUsers) {
+      if (u.id) map.set(u.id, u.name);
+    }
+    return map;
+  }, [allUsers]);
+  const formatEditor = (id: string | null | undefined) => {
+    if (!id) return null;
+    return userNameById.get(id) || id;
+  };
   const [editingTemplate, setEditingTemplate] = useState<any>(null);
   const [editSubject, setEditSubject] = useState("");
   const [editBody, setEditBody] = useState("");
@@ -2546,7 +2567,7 @@ function EmailTemplatesEditor() {
     queryKey: ["/api/admin/email-templates"],
     queryFn: async () => {
       const res = await fetch("/api/admin/email-templates", {
-        headers: { "X-Usena-Role": "Admin" },
+        headers: adminHeaders,
       });
       return res.json();
     },
@@ -2556,7 +2577,7 @@ function EmailTemplatesEditor() {
     mutationFn: async ({ key, subject, htmlBody }: { key: string; subject: string; htmlBody: string }) => {
       const res = await fetch(`/api/admin/email-templates/${key}`, {
         method: "PUT",
-        headers: { "Content-Type": "application/json", "X-Usena-Role": "Admin" },
+        headers: adminJsonHeaders,
         body: JSON.stringify({ subject, htmlBody }),
       });
       return res.json();
@@ -2572,7 +2593,7 @@ function EmailTemplatesEditor() {
     mutationFn: async (key: string) => {
       const res = await fetch(`/api/admin/email-templates/${key}/reset`, {
         method: "POST",
-        headers: { "X-Usena-Role": "Admin" },
+        headers: adminHeaders,
       });
       return res.json();
     },
@@ -2891,10 +2912,16 @@ function EmailTemplatesEditor() {
               onClick={() => openEditor(tmpl)}
             >
               <div className="flex-1">
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                   <span className="font-medium text-gray-900">{tmpl.name}</span>
                   {tmpl.isCustomized && (
                     <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">Customized</span>
+                  )}
+                  {tmpl.updatedAt && (
+                    <span className="text-xs text-gray-500" data-testid={`text-template-last-edited-${tmpl.templateKey}`}>
+                      Edited {formatDistanceToNow(new Date(tmpl.updatedAt), { addSuffix: true })}
+                      {formatEditor(tmpl.lastEditedBy) ? ` by ${formatEditor(tmpl.lastEditedBy)}` : ""}
+                    </span>
                   )}
                 </div>
                 <p className="text-sm text-gray-500 mt-1 truncate max-w-lg">{tmpl.subject}</p>
@@ -3904,7 +3931,7 @@ export default function Dashboard() {
                 <DialogHeader>
                   <DialogTitle>Email Templates</DialogTitle>
                 </DialogHeader>
-                <EmailTemplatesEditor />
+                <EmailTemplatesEditor currentUser={user} />
               </DialogContent>
             </Dialog>
           )}

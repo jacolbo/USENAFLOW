@@ -1,0 +1,1 @@
+ALTER TABLE "email_templates" ADD COLUMN "last_edited_by" text;

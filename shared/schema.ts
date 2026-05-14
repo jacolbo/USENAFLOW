@@ -751,6 +751,7 @@ export const emailTemplates = pgTable("email_templates", {
   availableVariables: jsonb("available_variables").notNull().default(sql`'[]'::jsonb`),
   isCustomized: boolean("is_customized").notNull().default(false),
   updatedAt: timestamp("updated_at").notNull().default(sql`now()`),
+  lastEditedBy: text("last_edited_by"),
 });
 
 export const insertEmailTemplateSchema = createInsertSchema(emailTemplates).omit({
