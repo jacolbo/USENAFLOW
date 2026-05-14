@@ -126,6 +126,7 @@ async function seedDefaultUsers() {
     { id: "asa", username: "asa", password: "asa123", role: "Retoucher2", name: "Dr Asa", abbreviation: "ASA" },
     { id: "lucky", username: "lucky", password: "lucky123", role: "Retoucher3", name: "Lucky", abbreviation: "LM" },
     { id: "evans", username: "evans", password: "evans123", role: "Evans", name: "Evans", abbreviation: "EV" },
+    { id: "photographer", username: "photographer", password: "photo123", role: "Photographer", name: "Photographer", abbreviation: "PH" },
   ];
 
   for (const userData of defaultUsers) {
