@@ -17,7 +17,7 @@ import { queryClient } from "@/lib/queryClient";
 import { getAdminHeaders } from "@/lib/adminAuth";
 import { UserRoles, shoottrackerSettingsSchema, type ShoottrackerSettings, StagingStatus, type CalendarEventStaging, type KeywordTurnaroundRule, type Holiday } from "@shared/schema";
 import { ArrowLeft, Calendar, Settings, RefreshCw, Clock, AlertTriangle, CheckCircle, Loader2, CalendarPlus, Eye, EyeOff, Plus, ChevronRight, Search, X, Mail, MessageCircle, Send } from "lucide-react";
-import { WranglerNotesButton } from "@/components/wrangler-notes-dialog";
+import { InsposButton } from "@/components/inspos-panel";
 import { format, startOfWeek, addWeeks, subWeeks } from "date-fns";
 import {
   Form,
@@ -942,7 +942,7 @@ export default function ShootTrackerSettings() {
                                     <>
                                       <Badge variant="default" className="bg-green-600">Added</Badge>
                                       {event.promotedProjectId && (
-                                        <WranglerNotesButton
+                                        <InsposButton
                                           projectId={event.promotedProjectId}
                                           projectName={event.title}
                                           userRole={userRole}

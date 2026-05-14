@@ -16,7 +16,6 @@ import { format, formatDistanceToNow } from "date-fns";
 import { getOrCreateKey, storeKeyFromRemote, getExportedKey, encryptMessage, decryptMessage, isEncrypted } from "@/lib/e2ee";
 import VoiceCall from "@/components/voice-call";
 import { InsposViewerDialog } from "@/components/inspos-panel";
-import { WranglerNotesDialog } from "@/components/wrangler-notes-dialog";
 
 function ChatHeaderInsposButton({ projectId, projectName, userRole, userId }: { projectId: string; projectName: string; userRole: string; userId: string }) {
   const [open, setOpen] = useState(false);
@@ -38,7 +37,7 @@ function ChatHeaderInsposButton({ projectId, projectName, userRole, userId }: { 
         variant="ghost"
         size="icon"
         onClick={() => setOpen(true)}
-        title={has ? `Photographer inspos (${count})` : "No inspos yet"}
+        title={has ? `Inspos & notes (${count})` : "No inspos or notes yet"}
         className={`relative ${has ? "text-green-600 hover:text-green-700 hover:bg-green-50" : "text-gray-400 hover:text-gray-600"}`}
         data-testid="button-chat-inspos"
       >
@@ -51,51 +50,6 @@ function ChatHeaderInsposButton({ projectId, projectName, userRole, userId }: { 
       </Button>
       {open && (
         <InsposViewerDialog
-          open={open}
-          onOpenChange={setOpen}
-          projectId={projectId}
-          projectName={projectName}
-          userRole={userRole}
-          userId={userId}
-          canEdit={canEdit}
-        />
-      )}
-    </>
-  );
-}
-
-function ChatHeaderNotesButton({ projectId, projectName, userRole, userId }: { projectId: string; projectName: string; userRole: string; userId: string }) {
-  const [open, setOpen] = useState(false);
-  const canEdit = ["Admin", "DataWrangler"].includes(userRole);
-  const countQuery = useQuery<{ count: number }>({
-    queryKey: ["/api/projects", projectId, "wrangler-notes-count"],
-    queryFn: async () => {
-      const r = await fetch(`/api/projects/${projectId}/wrangler-notes-count`, { headers: getAdminHeaders(userRole, userId) });
-      if (!r.ok) return { count: 0 };
-      return r.json();
-    },
-  });
-  const count = countQuery.data?.count || 0;
-  const has = count > 0;
-  return (
-    <>
-      <Button
-        variant="ghost"
-        size="icon"
-        onClick={() => setOpen(true)}
-        title={has ? `Wrangler notes (${count})` : "No wrangler notes"}
-        className={`relative ${has ? "text-green-600 hover:text-green-700 hover:bg-green-50" : "text-gray-400 hover:text-gray-600"}`}
-        data-testid="button-chat-wrangler-notes"
-      >
-        <StickyNote className="h-5 w-5" />
-        {count > 0 && (
-          <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-1 rounded-full bg-green-600 text-white text-[10px] flex items-center justify-center" data-testid="badge-chat-wn-count">
-            {count}
-          </span>
-        )}
-      </Button>
-      {open && (
-        <WranglerNotesDialog
           open={open}
           onOpenChange={setOpen}
           projectId={projectId}
@@ -806,7 +760,6 @@ export default function EditorChat() {
                     {showArchived ? <ArchiveRestore className="h-5 w-5" /> : <Archive className="h-5 w-5" />}
                   </Button>
                   <ChatHeaderInsposButton projectId={selectedProject.project.id} projectName={selectedProject.project.clientName} userRole={userRole} userId={userId} />
-                  <ChatHeaderNotesButton projectId={selectedProject.project.id} projectName={selectedProject.project.clientName} userRole={userRole} userId={userId} />
                   <Button
                     variant="ghost"
                     size="icon"

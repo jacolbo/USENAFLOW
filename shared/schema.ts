@@ -1045,8 +1045,10 @@ export const GalleryStatus = {
 export const projectInspos = pgTable("project_inspos", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   projectId: varchar("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
-  storageKey: text("storage_key").notNull(),
+  kind: text("kind").notNull().default("photo"), // 'photo' | 'text'
+  storageKey: text("storage_key"),
   caption: text("caption"),
+  body: text("body"),
   sortOrder: integer("sort_order").notNull().default(0),
   uploadedBy: text("uploaded_by").notNull(),
   createdAt: timestamp("created_at").notNull().default(sql`now()`),

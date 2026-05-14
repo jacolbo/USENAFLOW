@@ -6,7 +6,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Input } from "@/components/ui/input";
 import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import { ProjectNotes } from "./project-notes";
-import { WranglerNotesButton } from "./wrangler-notes-dialog";
+import { InsposButton } from "./inspos-panel";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -1904,7 +1904,7 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
                                   />
                                 </ErrorBoundary>
                                 {['Admin', 'DataWrangler'].includes(user.role) && (
-                                  <WranglerNotesButton projectId={project.id} projectName={project.clientName} userRole={user.role} userId={String(user.name || user.id || "")} />
+                                  <InsposButton projectId={project.id} projectName={project.clientName} userRole={user.role} userId={String(user.name || user.id || "")} />
                                 )}
                               </div>
                             </TableCell>
@@ -1997,7 +1997,7 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
                                   />
                                 </ErrorBoundary>
                                 {['Admin', 'DataWrangler'].includes(user.role) && (
-                                  <WranglerNotesButton projectId={project.id} projectName={project.clientName} userRole={user.role} userId={String(user.name || user.id || "")} />
+                                  <InsposButton projectId={project.id} projectName={project.clientName} userRole={user.role} userId={String(user.name || user.id || "")} />
                                 )}
                               </div>
                             </TableCell>
@@ -2097,7 +2097,7 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
                                   />
                                 </ErrorBoundary>
                                 {['Admin', 'DataWrangler'].includes(user.role) && (
-                                  <WranglerNotesButton projectId={project.id} projectName={project.clientName} userRole={user.role} userId={String(user.name || user.id || "")} />
+                                  <InsposButton projectId={project.id} projectName={project.clientName} userRole={user.role} userId={String(user.name || user.id || "")} />
                                 )}
                               </div>
                             </TableCell>

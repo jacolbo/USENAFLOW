@@ -193,7 +193,7 @@ export interface IStorage {
   // Photographer inspos & wrangler notes (Task #27)
   getProjectInspos(projectId: string): Promise<ProjectInspo[]>;
   createProjectInspo(inspo: InsertProjectInspo): Promise<ProjectInspo>;
-  updateProjectInspo(id: string, updates: Partial<{ caption: string; sortOrder: number }>): Promise<ProjectInspo | undefined>;
+  updateProjectInspo(id: string, updates: Partial<{ caption: string; body: string; sortOrder: number }>): Promise<ProjectInspo | undefined>;
   deleteProjectInspo(id: string): Promise<boolean>;
   getInspoCountsByProject(projectIds: string[]): Promise<Record<string, number>>;
   getProjectInspoMeta(projectId: string): Promise<ProjectInspoMeta | undefined>;
@@ -2414,7 +2414,7 @@ export class DatabaseStorage implements IStorage {
     return row;
   }
 
-  async updateProjectInspo(id: string, updates: Partial<{ caption: string; sortOrder: number }>): Promise<ProjectInspo | undefined> {
+  async updateProjectInspo(id: string, updates: Partial<{ caption: string; body: string; sortOrder: number }>): Promise<ProjectInspo | undefined> {
     const [row] = await db.update(projectInspos).set(updates).where(eq(projectInspos.id, id)).returning();
     return row || undefined;
   }

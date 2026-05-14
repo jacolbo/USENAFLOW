@@ -4,18 +4,19 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { useUpload } from "@/hooks/use-upload";
 import { queryClient } from "@/lib/queryClient";
 import { getAdminHeaders } from "@/lib/adminAuth";
-import { Camera, Pencil, Trash2, Loader2, Upload, Check, X, Plus } from "lucide-react";
+import { Camera, Pencil, Trash2, Loader2, Upload, Check, X, Plus, MessageSquare, Image as ImageIcon, StickyNote } from "lucide-react";
 
 export interface Inspo {
   id: string;
   projectId: string;
-  storageKey: string;
+  kind: "photo" | "text";
+  storageKey: string | null;
   caption: string | null;
+  body: string | null;
   sortOrder: number;
   uploadedBy: string;
   createdAt: string;
@@ -35,13 +36,28 @@ interface PendingFile {
   caption: string;
 }
 
+const VIEW_ROLES = ["Admin", "DataWrangler", "Photographer", "LeadRetoucher", "Retoucher1", "Retoucher2", "Retoucher3", "Evans"];
+
+export function useInsposAllCounts(userRole: string, userId: string) {
+  return useQuery<Record<string, number>>({
+    queryKey: ["/api/inspos/all-counts"],
+    queryFn: async () => {
+      const r = await fetch(`/api/inspos/all-counts`, { headers: getAdminHeaders(userRole, userId) });
+      if (!r.ok) return {};
+      return r.json();
+    },
+    enabled: VIEW_ROLES.includes(userRole),
+  });
+}
+
 export function InsposEditor({ projectId, userRole, userId, canEdit }: InsposEditorProps) {
   const { toast } = useToast();
   const fileRef = useRef<HTMLInputElement>(null);
   const [pending, setPending] = useState<PendingFile[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [editingCaption, setEditingCaption] = useState("");
+  const [editValue, setEditValue] = useState("");
+  const [newText, setNewText] = useState("");
   const [instructions, setInstructions] = useState<string>("");
   const [instructionsLoaded, setInstructionsLoaded] = useState(false);
 
@@ -61,23 +77,27 @@ export function InsposEditor({ projectId, userRole, userId, canEdit }: InsposEdi
     },
   });
 
+  const invalidateAll = () => {
+    queryClient.invalidateQueries({ queryKey: ["/api/projects", projectId, "inspos"] });
+    queryClient.invalidateQueries({ queryKey: ["/api/projects", projectId, "inspos-count"] });
+    queryClient.invalidateQueries({ queryKey: ["/api/inspos/all-counts"] });
+    queryClient.invalidateQueries({ queryKey: ["/api/today-shoots"] });
+  };
+
   const { uploadFile } = useUpload({
     onError: (err) => toast({ title: "Upload failed", description: err.message, variant: "destructive" }),
   });
 
-  const updateCaption = useMutation({
-    mutationFn: async ({ id, caption }: { id: string; caption: string }) => {
+  const updateInspo = useMutation({
+    mutationFn: async ({ id, updates }: { id: string; updates: Partial<Pick<Inspo, "caption" | "body" | "sortOrder">> }) => {
       const r = await fetch(`/api/inspos/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json", ...headers },
-        body: JSON.stringify({ caption }),
+        body: JSON.stringify(updates),
       });
       if (!r.ok) throw new Error("Failed to update");
     },
-    onSuccess: () => {
-      setEditingId(null);
-      queryClient.invalidateQueries({ queryKey: ["/api/projects", projectId, "inspos"] });
-    },
+    onSuccess: () => { setEditingId(null); invalidateAll(); },
   });
 
   const deleteInspo = useMutation({
@@ -85,11 +105,19 @@ export function InsposEditor({ projectId, userRole, userId, canEdit }: InsposEdi
       const r = await fetch(`/api/inspos/${id}`, { method: "DELETE", headers });
       if (!r.ok) throw new Error("Failed to delete");
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/projects", projectId, "inspos"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/projects", projectId, "inspos-count"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/today-shoots"] });
+    onSuccess: invalidateAll,
+  });
+
+  const addText = useMutation({
+    mutationFn: async (body: string) => {
+      const r = await fetch(`/api/projects/${projectId}/inspos`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...headers },
+        body: JSON.stringify({ kind: "text", body }),
+      });
+      if (!r.ok) throw new Error("Failed to add note");
     },
+    onSuccess: () => { setNewText(""); invalidateAll(); },
   });
 
   const saveInstructions = useMutation({
@@ -104,7 +132,7 @@ export function InsposEditor({ projectId, userRole, userId, canEdit }: InsposEdi
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/projects", projectId, "inspos"] });
       queryClient.invalidateQueries({ queryKey: ["/api/projects", projectId, "inspos-count"] });
-      toast({ description: "Instructions saved" });
+      toast({ description: "Shoot plan saved" });
     },
   });
 
@@ -143,7 +171,7 @@ export function InsposEditor({ projectId, userRole, userId, canEdit }: InsposEdi
         const r = await fetch(`/api/projects/${projectId}/inspos`, {
           method: "POST",
           headers: { "Content-Type": "application/json", ...headers },
-          body: JSON.stringify({ storageKey: resp.objectPath, caption: p.caption.trim() || null }),
+          body: JSON.stringify({ kind: "photo", storageKey: resp.objectPath, caption: p.caption.trim() || null }),
         });
         if (!r.ok) throw new Error("Save failed");
         URL.revokeObjectURL(p.previewUrl);
@@ -153,10 +181,8 @@ export function InsposEditor({ projectId, userRole, userId, canEdit }: InsposEdi
       }
     }
     setPending((prev) => prev.slice(okCount));
-    queryClient.invalidateQueries({ queryKey: ["/api/projects", projectId, "inspos"] });
-    queryClient.invalidateQueries({ queryKey: ["/api/projects", projectId, "inspos-count"] });
-    queryClient.invalidateQueries({ queryKey: ["/api/today-shoots"] });
-    if (okCount > 0) toast({ description: `Uploaded ${okCount} inspo${okCount === 1 ? "" : "s"}` });
+    invalidateAll();
+    if (okCount > 0) toast({ description: `Uploaded ${okCount} photo${okCount === 1 ? "" : "s"}` });
     setSubmitting(false);
   };
 
@@ -165,11 +191,14 @@ export function InsposEditor({ projectId, userRole, userId, canEdit }: InsposEdi
   }
 
   const inspos = dataQuery.data?.inspos || [];
+  const photos = inspos.filter(i => i.kind === "photo");
+  const texts = inspos.filter(i => i.kind === "text");
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
+      {/* Shoot Plan */}
       <div>
-        <label className="text-sm font-medium mb-1 block">Overall Instructions</label>
+        <label className="text-sm font-medium mb-1 block">Shoot Plan / Overall Instructions</label>
         <Textarea
           value={instructions}
           onChange={(e) => setInstructions(e.target.value)}
@@ -185,107 +214,166 @@ export function InsposEditor({ projectId, userRole, userId, canEdit }: InsposEdi
         />
       </div>
 
-      {canEdit && (
-        <div className="border-2 border-dashed rounded-lg p-4 space-y-3 bg-muted/30">
-          <input
-            ref={fileRef}
-            type="file"
-            accept="image/*"
-            multiple
-            onChange={handleFile}
-            className="hidden"
-            data-testid="input-inspo-file"
-          />
-          <div className="flex justify-center">
-            <Button variant="outline" onClick={() => fileRef.current?.click()} disabled={submitting} data-testid="button-add-inspo-files">
-              <Plus className="h-4 w-4 mr-2" />
-              Add Photo(s)
-            </Button>
-          </div>
-          {pending.length > 0 && (
-            <div className="space-y-2">
-              {pending.map((p) => (
-                <div key={p.id} className="flex gap-2 items-start border rounded-md p-2 bg-background" data-testid={`pending-inspo-${p.id}`}>
-                  <img src={p.previewUrl} alt="" className="w-16 h-16 object-cover rounded" />
-                  <Input
-                    value={p.caption}
-                    onChange={(e) => updatePendingCaption(p.id, e.target.value)}
-                    placeholder="Caption for this photo (optional)"
-                    className="flex-1"
-                    data-testid={`input-pending-caption-${p.id}`}
-                  />
-                  <Button size="icon" variant="ghost" onClick={() => removePending(p.id)} disabled={submitting} aria-label="Remove">
-                    <X className="h-4 w-4" />
+      {/* Photos section */}
+      <section>
+        <h3 className="text-sm font-semibold mb-2 flex items-center gap-2">
+          <ImageIcon className="h-4 w-4" /> Photos ({photos.length})
+        </h3>
+        {canEdit && (
+          <div className="border-2 border-dashed rounded-lg p-4 space-y-3 bg-muted/30 mb-3">
+            <input
+              ref={fileRef}
+              type="file"
+              accept="image/*"
+              multiple
+              onChange={handleFile}
+              className="hidden"
+              data-testid="input-inspo-file"
+            />
+            <div className="flex justify-center">
+              <Button variant="outline" onClick={() => fileRef.current?.click()} disabled={submitting} data-testid="button-add-inspo-files">
+                <Plus className="h-4 w-4 mr-2" />
+                Add Photo(s)
+              </Button>
+            </div>
+            {pending.length > 0 && (
+              <div className="space-y-2">
+                {pending.map((p) => (
+                  <div key={p.id} className="flex gap-2 items-start border rounded-md p-2 bg-background" data-testid={`pending-inspo-${p.id}`}>
+                    <img src={p.previewUrl} alt="" className="w-16 h-16 object-cover rounded" />
+                    <Input
+                      value={p.caption}
+                      onChange={(e) => updatePendingCaption(p.id, e.target.value)}
+                      placeholder="Caption for this photo (optional)"
+                      className="flex-1"
+                      data-testid={`input-pending-caption-${p.id}`}
+                    />
+                    <Button size="icon" variant="ghost" onClick={() => removePending(p.id)} disabled={submitting} aria-label="Remove">
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ))}
+                <div className="flex justify-end">
+                  <Button onClick={submitPending} disabled={submitting} data-testid="button-upload-inspo">
+                    {submitting ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Upload className="h-4 w-4 mr-2" />}
+                    Upload {pending.length} Photo{pending.length === 1 ? "" : "s"}
                   </Button>
                 </div>
-              ))}
-              <div className="flex justify-end">
-                <Button onClick={submitPending} disabled={submitting} data-testid="button-upload-inspo">
-                  {submitting ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Upload className="h-4 w-4 mr-2" />}
-                  Upload {pending.length} Photo{pending.length === 1 ? "" : "s"}
-                </Button>
               </div>
-            </div>
-          )}
-        </div>
-      )}
+            )}
+          </div>
+        )}
+        {photos.length === 0 ? (
+          <p className="text-xs text-muted-foreground text-center py-4">No photos yet</p>
+        ) : (
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+            {photos.map((i) => (
+              <div key={i.id} className="border rounded-lg overflow-hidden bg-card" data-testid={`inspo-${i.id}`}>
+                <a href={i.storageKey || "#"} target="_blank" rel="noreferrer" className="block">
+                  <img src={i.storageKey || ""} alt={i.caption || "Inspo"} className="w-full h-32 object-cover" />
+                </a>
+                <div className="p-2 space-y-1">
+                  {editingId === i.id ? (
+                    <div className="flex gap-1">
+                      <Input
+                        value={editValue}
+                        onChange={(e) => setEditValue(e.target.value)}
+                        className="h-7 text-xs"
+                        autoFocus
+                      />
+                      <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => updateInspo.mutate({ id: i.id, updates: { caption: editValue } })}>
+                        <Check className="h-3 w-3" />
+                      </Button>
+                      <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => setEditingId(null)}>
+                        <X className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="flex items-start gap-1">
+                      <p className="text-xs text-muted-foreground flex-1 break-words">{i.caption || <span className="italic">no caption</span>}</p>
+                      {canEdit && (
+                        <>
+                          <button
+                            onClick={() => { setEditingId(i.id); setEditValue(i.caption || ""); }}
+                            className="text-muted-foreground hover:text-foreground"
+                            data-testid={`button-edit-inspo-${i.id}`}
+                          >
+                            <Pencil className="h-3 w-3" />
+                          </button>
+                          <button
+                            onClick={() => { if (confirm("Delete this photo?")) deleteInspo.mutate(i.id); }}
+                            className="text-muted-foreground hover:text-destructive"
+                            data-testid={`button-delete-inspo-${i.id}`}
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
 
-      {inspos.length === 0 ? (
-        <div className="text-center py-8 text-muted-foreground">
-          <Camera className="h-10 w-10 mx-auto mb-2 opacity-30" />
-          <p className="text-sm">No inspos yet</p>
-        </div>
-      ) : (
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-          {inspos.map((i) => (
-            <div key={i.id} className="border rounded-lg overflow-hidden bg-card" data-testid={`inspo-${i.id}`}>
-              <a href={i.storageKey} target="_blank" rel="noreferrer" className="block">
-                <img src={i.storageKey} alt={i.caption || "Inspo"} className="w-full h-32 object-cover" />
-              </a>
-              <div className="p-2 space-y-1">
-                {editingId === i.id ? (
-                  <div className="flex gap-1">
-                    <Input
-                      value={editingCaption}
-                      onChange={(e) => setEditingCaption(e.target.value)}
-                      className="h-7 text-xs"
-                      autoFocus
-                    />
-                    <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => updateCaption.mutate({ id: i.id, caption: editingCaption })}>
-                      <Check className="h-3 w-3" />
-                    </Button>
-                    <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => setEditingId(null)}>
-                      <X className="h-3 w-3" />
-                    </Button>
+      {/* Text notes section */}
+      <section>
+        <h3 className="text-sm font-semibold mb-2 flex items-center gap-2">
+          <MessageSquare className="h-4 w-4" /> Notes ({texts.length})
+        </h3>
+        {canEdit && (
+          <div className="flex gap-2 mb-3">
+            <Textarea
+              placeholder="Add a quick note..."
+              value={newText}
+              onChange={(e) => setNewText(e.target.value)}
+              rows={2}
+              data-testid="textarea-inspo-new-note"
+            />
+            <Button onClick={() => newText.trim() && addText.mutate(newText.trim())} disabled={!newText.trim() || addText.isPending} data-testid="button-add-inspo-text">
+              <Plus className="h-4 w-4" />
+            </Button>
+          </div>
+        )}
+        {texts.length === 0 ? (
+          <p className="text-xs text-muted-foreground text-center py-4">No notes yet</p>
+        ) : (
+          <div className="space-y-2">
+            {texts.map((t) => (
+              <div key={t.id} className="border rounded-lg p-3 bg-muted/30" data-testid={`inspo-text-${t.id}`}>
+                {editingId === t.id ? (
+                  <div className="space-y-2">
+                    <Textarea value={editValue} onChange={(e) => setEditValue(e.target.value)} rows={3} autoFocus />
+                    <div className="flex gap-2 justify-end">
+                      <Button size="sm" variant="ghost" onClick={() => setEditingId(null)}>Cancel</Button>
+                      <Button size="sm" onClick={() => updateInspo.mutate({ id: t.id, updates: { body: editValue } })}>Save</Button>
+                    </div>
                   </div>
                 ) : (
-                  <div className="flex items-start gap-1">
-                    <p className="text-xs text-muted-foreground flex-1 break-words">{i.caption || <span className="italic">no caption</span>}</p>
-                    {canEdit && (
-                      <>
-                        <button
-                          onClick={() => { setEditingId(i.id); setEditingCaption(i.caption || ""); }}
-                          className="text-muted-foreground hover:text-foreground"
-                          data-testid={`button-edit-inspo-${i.id}`}
-                        >
-                          <Pencil className="h-3 w-3" />
-                        </button>
-                        <button
-                          onClick={() => { if (confirm("Delete this inspo?")) deleteInspo.mutate(i.id); }}
-                          className="text-muted-foreground hover:text-destructive"
-                          data-testid={`button-delete-inspo-${i.id}`}
-                        >
-                          <Trash2 className="h-3 w-3" />
-                        </button>
-                      </>
-                    )}
-                  </div>
+                  <>
+                    <p className="text-sm whitespace-pre-wrap">{t.body}</p>
+                    <div className="flex items-center justify-between mt-2">
+                      <span className="text-[10px] text-muted-foreground">{t.uploadedBy} · {new Date(t.createdAt).toLocaleString()}</span>
+                      {canEdit && (
+                        <div className="flex gap-1">
+                          <button onClick={() => { setEditingId(t.id); setEditValue(t.body || ""); }} className="text-muted-foreground hover:text-foreground" data-testid={`button-edit-inspo-text-${t.id}`}>
+                            <Pencil className="h-3 w-3" />
+                          </button>
+                          <button onClick={() => { if (confirm("Delete this note?")) deleteInspo.mutate(t.id); }} className="text-muted-foreground hover:text-destructive" data-testid={`button-delete-inspo-text-${t.id}`}>
+                            <Trash2 className="h-3 w-3" />
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </>
                 )}
               </div>
-            </div>
-          ))}
-        </div>
-      )}
+            ))}
+          </div>
+        )}
+      </section>
     </div>
   );
 }
@@ -305,11 +393,56 @@ export function InsposViewerDialog({ open, onOpenChange, projectId, projectName,
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto" data-testid="dialog-inspos">
         <DialogHeader>
-          <DialogTitle>Photographer Inspos{projectName ? ` — ${projectName}` : ""}</DialogTitle>
-          <DialogDescription>Visual references and instructions from the photographer.</DialogDescription>
+          <DialogTitle>Inspos & Notes{projectName ? ` — ${projectName}` : ""}</DialogTitle>
+          <DialogDescription>Photos, notes, and the shoot plan for this project.</DialogDescription>
         </DialogHeader>
         <InsposEditor projectId={projectId} userRole={userRole} userId={userId} canEdit={!!canEdit} />
       </DialogContent>
     </Dialog>
+  );
+}
+
+/**
+ * Compact button with a count badge for use in row-style surfaces (task tables,
+ * Shoot Tracker rows). Replaces the old WranglerNotesButton.
+ */
+export function InsposButton({ projectId, projectName, userRole, userId, count: countProp }: { projectId: string; projectName?: string; userRole: string; userId: string; count?: number }) {
+  const [open, setOpen] = useState(false);
+  const canEdit = ["Admin", "Photographer", "DataWrangler"].includes(userRole);
+  const canView = VIEW_ROLES.includes(userRole);
+
+  const allCountsQuery = useInsposAllCounts(userRole, userId);
+  const count = countProp ?? allCountsQuery.data?.[projectId] ?? 0;
+
+  if (!canView) return null;
+  const has = count > 0;
+
+  return (
+    <>
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        onClick={() => setOpen(true)}
+        className={`h-7 px-2 text-xs ${has ? "bg-green-50 hover:bg-green-100 text-green-700 border-green-300 dark:bg-green-900/30 dark:text-green-300 dark:border-green-700" : "text-gray-600 border-gray-300"}`}
+        title={`Inspos & notes${has ? ` (${count})` : ""}`}
+        data-testid={`button-inspos-${projectId}`}
+      >
+        <StickyNote className="h-3 w-3 mr-1" />
+        Inspos
+        {has && <span className="ml-1 inline-flex items-center justify-center min-w-[16px] h-4 px-1 rounded-full bg-green-600 text-white text-[10px]">{count}</span>}
+      </Button>
+      {open && (
+        <InsposViewerDialog
+          open={open}
+          onOpenChange={setOpen}
+          projectId={projectId}
+          projectName={projectName}
+          userRole={userRole}
+          userId={userId}
+          canEdit={canEdit}
+        />
+      )}
+    </>
   );
 }

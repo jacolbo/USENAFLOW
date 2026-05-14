@@ -5,6 +5,7 @@ import { seed } from "./seed";
 import { startRolloverScheduler } from "./rolloverScheduler";
 import { startAutoSync } from "./autoSyncScheduler";
 import { startGoogleReviewScheduler } from "./googleReviewScheduler";
+import { backfillWranglerNotesToInspos } from "./migrations/backfillWranglerNotesToInspos";
 
 const app = express();
 app.use(express.json({ limit: "10mb" }));
@@ -43,6 +44,7 @@ app.use((req, res, next) => {
 (async () => {
   // Initialize database with sample data on first run
   await seed();
+  await backfillWranglerNotesToInspos();
   const server = await registerRoutes(app);
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
