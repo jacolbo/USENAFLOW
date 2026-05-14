@@ -1,4 +1,4 @@
-import { type User, type InsertUser, type Project, type InsertProject, type UpdateProject, type ProjectNote, type InsertProjectNote, type UpdateProjectNote, type TradeOffer, type InsertTradeOffer, type UpdateTradeOffer, type WranglerCommission, type InsertWranglerCommission, type ProjectEvent, type InsertProjectEvent, type Complaint, type InsertComplaint, type ShoottrackerMeta, type InsertShoottrackerMeta, type UpdateShoottrackerMeta, type AppSetting, type CalendarEventStaging, type InsertCalendarEventStaging, type UpdateCalendarEventStaging, type ClientAuthToken, type InsertClientAuthToken, type ClientMessage, type InsertClientMessage, type DashboardPreferences, type InsertDashboardPreferences, type SneakPeek, type InsertSneakPeek, type Survey, type InsertSurvey, type Referral, type InsertReferral, type ClientProfile, type InsertClientProfile, type RewardClaim, type InsertRewardClaim, type EmailTemplate, type InsertEmailTemplate, type PushSubscription, type InsertPushSubscription, type StatusTransition, type InsertStatusTransition, type LeaveRequest, type InsertLeaveRequest, type AiTeamMessage, type InsertAiTeamMessage, type AiMemory, type InsertAiMemory, type AiAdminInstruction, type InsertAiAdminInstruction, type ProjectInspo, type InsertProjectInspo, type ProjectInspoMeta, type ProjectWranglerNote, type InsertProjectWranglerNote, ProjectStatus, TradeOfferStatus, StagingStatus, users, projects, projectNotes, tradeOffers, wranglerCommissions, projectEvents, complaints, shoottrackerMeta, appSettings, calendarEventsStaging, clientAuthTokens, clientMessages, dashboardPreferences, sneakPeeks, clientSurveys, referrals, clientProfiles, referralRewardClaims, emailTemplates, pushSubscriptions, chatEncryptionKeys, projectStatusTransitions, leaveRequests, aiTeamMessages, aiMemory, aiAdminInstructions, projectInspos, projectInspoMeta, projectWranglerNotes } from "@shared/schema";
+import { type User, type InsertUser, type Project, type InsertProject, type UpdateProject, type ProjectNote, type InsertProjectNote, type UpdateProjectNote, type TradeOffer, type InsertTradeOffer, type UpdateTradeOffer, type WranglerCommission, type InsertWranglerCommission, type ProjectEvent, type InsertProjectEvent, type Complaint, type InsertComplaint, type ShoottrackerMeta, type InsertShoottrackerMeta, type UpdateShoottrackerMeta, type AppSetting, type CalendarEventStaging, type InsertCalendarEventStaging, type UpdateCalendarEventStaging, type ClientAuthToken, type InsertClientAuthToken, type ClientMessage, type InsertClientMessage, type DashboardPreferences, type InsertDashboardPreferences, type SneakPeek, type InsertSneakPeek, type Survey, type InsertSurvey, type Referral, type InsertReferral, type ClientProfile, type InsertClientProfile, type RewardClaim, type InsertRewardClaim, type EmailTemplate, type InsertEmailTemplate, type PushSubscription, type InsertPushSubscription, type StatusTransition, type InsertStatusTransition, type LeaveRequest, type InsertLeaveRequest, type AiTeamMessage, type InsertAiTeamMessage, type AiMemory, type InsertAiMemory, type AiAdminInstruction, type InsertAiAdminInstruction, type ProjectInspo, type InsertProjectInspo, type ProjectInspoMeta, ProjectStatus, TradeOfferStatus, StagingStatus, users, projects, projectNotes, tradeOffers, wranglerCommissions, projectEvents, complaints, shoottrackerMeta, appSettings, calendarEventsStaging, clientAuthTokens, clientMessages, dashboardPreferences, sneakPeeks, clientSurveys, referrals, clientProfiles, referralRewardClaims, emailTemplates, pushSubscriptions, chatEncryptionKeys, projectStatusTransitions, leaveRequests, aiTeamMessages, aiMemory, aiAdminInstructions, projectInspos, projectInspoMeta } from "@shared/schema";
 import { db } from "./db";
 import { eq, sql, asc, and, ilike, isNotNull, isNull, lte, desc } from "drizzle-orm";
 import { randomUUID } from "crypto";
@@ -199,11 +199,6 @@ export interface IStorage {
   getProjectInspoMeta(projectId: string): Promise<ProjectInspoMeta | undefined>;
   upsertProjectInspoMeta(projectId: string, overallInstructions: string, updatedBy: string): Promise<ProjectInspoMeta>;
 
-  getProjectWranglerNotes(projectId: string): Promise<ProjectWranglerNote[]>;
-  createProjectWranglerNote(note: InsertProjectWranglerNote): Promise<ProjectWranglerNote>;
-  updateProjectWranglerNote(id: string, updates: Partial<{ caption: string; body: string; sortOrder: number }>): Promise<ProjectWranglerNote | undefined>;
-  deleteProjectWranglerNote(id: string): Promise<boolean>;
-  getWranglerNoteCountsByProject(projectIds: string[]): Promise<Record<string, number>>;
 }
 
 export class MemStorage implements IStorage {
@@ -2455,39 +2450,6 @@ export class DatabaseStorage implements IStorage {
     return row;
   }
 
-  async getProjectWranglerNotes(projectId: string): Promise<ProjectWranglerNote[]> {
-    return await db.select().from(projectWranglerNotes)
-      .where(eq(projectWranglerNotes.projectId, projectId))
-      .orderBy(asc(projectWranglerNotes.sortOrder), asc(projectWranglerNotes.createdAt));
-  }
-
-  async createProjectWranglerNote(note: InsertProjectWranglerNote): Promise<ProjectWranglerNote> {
-    const [row] = await db.insert(projectWranglerNotes).values(note).returning();
-    return row;
-  }
-
-  async updateProjectWranglerNote(id: string, updates: Partial<{ caption: string; body: string; sortOrder: number }>): Promise<ProjectWranglerNote | undefined> {
-    const [row] = await db.update(projectWranglerNotes).set(updates).where(eq(projectWranglerNotes.id, id)).returning();
-    return row || undefined;
-  }
-
-  async deleteProjectWranglerNote(id: string): Promise<boolean> {
-    const r = await db.delete(projectWranglerNotes).where(eq(projectWranglerNotes.id, id)).returning();
-    return r.length > 0;
-  }
-
-  async getWranglerNoteCountsByProject(projectIds: string[]): Promise<Record<string, number>> {
-    if (projectIds.length === 0) return {};
-    const rows = await db.select({
-      projectId: projectWranglerNotes.projectId,
-      count: sql<number>`count(*)::int`,
-    }).from(projectWranglerNotes)
-      .where(sql`${projectWranglerNotes.projectId} = ANY(${projectIds})`)
-      .groupBy(projectWranglerNotes.projectId);
-    const out: Record<string, number> = {};
-    for (const r of rows) out[r.projectId] = Number(r.count) || 0;
-    return out;
-  }
 }
 
 // Use DatabaseStorage for persistent data across deployments

@@ -36,6 +36,7 @@ export async function backfillWranglerNotesToInspos(): Promise<void> {
       const ts = wn.createdAt instanceof Date ? wn.createdAt.toISOString() : String(wn.createdAt);
       const key = `${wn.projectId}|${ts}`;
       if (existingKeys.has(key)) { skipped++; continue; }
+      existingKeys.add(key);
       await db.insert(projectInspos).values({
         projectId: wn.projectId,
         kind: wn.kind,
