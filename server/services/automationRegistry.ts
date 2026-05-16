@@ -172,7 +172,7 @@ register({
 register({
   id: 'bg_google_review_suppress_existing',
   name: 'Skip Review Prompt for Existing Reviewers',
-  description: 'Before sending each Google review prompt or reminder, checks the live Google Places API (5 most recent reviews) and suppresses the email if the client name fuzzy-matches a Google review author. Auto-matches set a persistent flag so the suppression survives the API window scrolling.',
+  description: 'Before sending each Google review prompt or reminder to any delivered client, checks the live Google Places API (5 most recent reviews) and suppresses the email if the client name fuzzy-matches a Google review author (parenthesised tags and studio shortcodes like "(BIRTHDAY SPECIAL)", "GRAND", "VIP" are stripped before matching; single-token names require email-local-part corroboration). Auto-matches set a persistent flag so the suppression survives the API window scrolling, and a daily sweep retroactively suppresses already-in-cadence clients.',
   type: 'background',
   category: 'Scheduled Processes',
   trigger: 'Each scheduled prompt/reminder tick (case-insensitive name match on cached Places data)',
