@@ -154,44 +154,45 @@ export function findMatchingGoogleReview(
   const rawNorm = Array.from(rawTokens).sort().join(" ");
   const cleanNorm = Array.from(cleanTokens).sort().join(" ");
   const localPart = emailLocalPart(clientEmail);
+  const isSingleToken = cleanTokens.size <= 1;
+  const singleToken = isSingleToken
+    ? (Array.from(cleanTokens)[0] ?? Array.from(rawTokens)[0] ?? "")
+    : "";
 
   for (const r of reviews) {
     const authorTokens = tokenSet(r.authorName);
     if (authorTokens.size === 0) continue;
     const authorNorm = Array.from(authorTokens).sort().join(" ");
-    // Exact normalised match (either raw or cleaned) — accepted at any token count.
+
+    if (isSingleToken) {
+      // For single-token cleaned client names (e.g. "Lerato"), unconditional
+      // exact matches are NOT safe — common first names would auto-suppress
+      // unrelated reviewers. The only accepted match path is email-corroborated:
+      //   - the token is at least 3 chars long
+      //   - the Google author name contains the token
+      //   - the email local-part contains the token (case-insensitive)
+      if (
+        singleToken && singleToken.length >= 3 &&
+        localPart &&
+        localPart.includes(singleToken) &&
+        authorTokens.has(singleToken)
+      ) {
+        return r;
+      }
+      continue;
+    }
+
+    // Multi-token cleaned name:
+    // 1. Exact normalised match (raw or cleaned) — accepted.
     if (authorNorm === rawNorm || authorNorm === cleanNorm) return r;
 
-    // ≥2 token overlap against the CLEANED client tokens, so studio tags
-    // like "(BIRTHDAY SPECIAL)" or "GRAND" no longer count toward overlap.
-    if (cleanTokens.size >= 2 && authorTokens.size >= 2) {
+    // 2. ≥2 token overlap against the CLEANED client tokens, so studio tags
+    //    like "(BIRTHDAY SPECIAL)" or "GRAND" no longer count toward overlap.
+    if (authorTokens.size >= 2) {
       const overlap = Array.from(cleanTokens).filter(t => authorTokens.has(t));
       if (overlap.length >= 2) {
         if (overlap.length === cleanTokens.size) return r;   // client ⊆ author
         if (overlap.length === authorTokens.size) return r;  // author ⊆ client
-      }
-    }
-
-    // Single-token assist: when the client's cleaned name is just one token
-    // (e.g. "Lerato"), allow a match only when ALL of these hold, to keep
-    // false positives down for common first names:
-    //   - the token is at least 3 chars long
-    //   - the Google author name contains the token
-    //   - the email local-part contains the token
-    //   - the Google author has ≥2 tokens and at least ONE other author token
-    //     also appears in the email local-part (e.g. "ramoollalerato" matches
-    //     author "Lerato Ramoolla" because "ramoolla" is in the local-part).
-    if (cleanTokens.size === 1 && localPart && authorTokens.size >= 2) {
-      const [token] = Array.from(cleanTokens);
-      const otherAuthorTokens = Array.from(authorTokens).filter(t => t !== token);
-      const corroborated = otherAuthorTokens.some(t => t.length >= 3 && localPart.includes(t));
-      if (
-        token && token.length >= 3 &&
-        localPart.includes(token) &&
-        authorTokens.has(token) &&
-        corroborated
-      ) {
-        return r;
       }
     }
   }
