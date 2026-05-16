@@ -1779,12 +1779,14 @@ export class DatabaseStorage implements IStorage {
 
   async getSurveysAwaitingGooglePrompt(maxAgeMs: number, respectAlreadyReviewedFlag: boolean = true): Promise<Survey[]> {
     const cutoff = new Date(Date.now() - maxAgeMs);
+    // Eligible for prompt = every delivered project (survey row exists since
+    // delivery creates one). Rating filter removed — we now invite every
+    // delivered client, not just 5★ survey completers. The age cutoff applies
+    // to completedAt when set, otherwise createdAt (5 min after delivery).
     const conditions = [
-      eq(clientSurveys.rating, 5),
-      isNotNull(clientSurveys.completedAt),
       isNull(clientSurveys.googlePromptSentAt),
       isNull(clientSurveys.googleClickedAt),
-      lte(clientSurveys.completedAt, cutoff),
+      sql`COALESCE(${clientSurveys.completedAt}, ${clientSurveys.createdAt}) <= ${cutoff}`,
     ];
     if (respectAlreadyReviewedFlag) {
       conditions.push(eq(clientSurveys.alreadyReviewedOnGoogle, false));
@@ -1794,7 +1796,6 @@ export class DatabaseStorage implements IStorage {
 
   async getSurveysAwaitingReminder(respectAlreadyReviewedFlag: boolean = true): Promise<Survey[]> {
     const conditions = [
-      eq(clientSurveys.rating, 5),
       isNotNull(clientSurveys.googlePromptSentAt),
       isNull(clientSurveys.googleClickedAt),
     ];
@@ -1804,11 +1805,18 @@ export class DatabaseStorage implements IStorage {
     return await db.select().from(clientSurveys).where(and(...conditions));
   }
 
-  async getSurveysForExistingReviewSweep(): Promise<Survey[]> {
+  async getSurveysForExistingReviewSweep(sinceDaysAgo: number = 60): Promise<Survey[]> {
+    // Sweep covers all surveys that are still candidates for a Google review
+    // email — both "awaiting prompt" rows and rows already in the cadence
+    // (prompted but not clicked). This way retroactive suppression catches
+    // clients like Lerato whose match would have been missed by the matcher.
+    // Bounded to recent surveys (default last 60 days) to keep the sweep cheap
+    // — older delivered clients are well past the day-14 reminder anyway.
+    const cutoff = new Date(Date.now() - sinceDaysAgo * 24 * 60 * 60 * 1000);
     return await db.select().from(clientSurveys).where(and(
-      eq(clientSurveys.rating, 5),
-      isNotNull(clientSurveys.completedAt),
+      isNull(clientSurveys.googleClickedAt),
       eq(clientSurveys.alreadyReviewedOnGoogle, false),
+      sql`COALESCE(${clientSurveys.completedAt}, ${clientSurveys.createdAt}) >= ${cutoff}`,
     ));
   }
 

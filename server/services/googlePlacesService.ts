@@ -87,6 +87,19 @@ export function getLastGooglePlacesError(): { message: string; at: number } | nu
   return cacheError;
 }
 
+// Studio tag tokens that are part of internal project naming conventions,
+// not the client's actual name. Stripped before tokenising so the matcher
+// doesn't get confused by e.g. "Lerato (BIRTHDAY SPECIAL)" vs the real
+// Google reviewer name "Lerato".
+const STUDIO_TAG_TOKENS = new Set([
+  "grand", "vip", "tt", "ss", "birthday", "special",
+  "make", "up", "makeup",
+  "christmas", "chrismas", "xmas",
+  "wedding", "engagement", "maternity", "graduation", "matric",
+  "shoot", "session", "package", "deal", "promo", "promotion",
+  "and", "the", "with", "for",
+]);
+
 // Normalise a name for fuzzy comparison: lowercase, strip punctuation,
 // collapse whitespace. Used to match a client's name against the
 // authorName fields on live Google reviews.
@@ -101,8 +114,17 @@ function normaliseName(raw: string): string {
     .trim();
 }
 
-function tokenSet(name: string): Set<string> {
-  return new Set(normaliseName(name).split(" ").filter(Boolean));
+function tokenSet(name: string, dropStudioTags: boolean = false): Set<string> {
+  const tokens = normaliseName(name).split(" ").filter(Boolean);
+  if (!dropStudioTags) return new Set(tokens);
+  return new Set(tokens.filter(t => !STUDIO_TAG_TOKENS.has(t)));
+}
+
+function emailLocalPart(email: string | null | undefined): string {
+  if (!email) return "";
+  const at = email.indexOf("@");
+  const local = at > 0 ? email.slice(0, at) : email;
+  return local.toLowerCase().replace(/[^\p{L}\p{N}]/gu, "");
 }
 
 /**
@@ -121,26 +143,57 @@ function tokenSet(name: string): Set<string> {
 export function findMatchingGoogleReview(
   clientName: string,
   reviews: GooglePlaceReview[],
+  clientEmail?: string | null,
 ): GooglePlaceReview | null {
-  const clientTokens = tokenSet(clientName);
-  if (clientTokens.size === 0) return null;
-  const clientNorm = Array.from(clientTokens).sort().join(" ");
+  // Two views of the client name:
+  //   - rawTokens: original tokenisation (back-compat with the ≥2-overlap rule)
+  //   - cleanTokens: with parenthesised tags + studio shortcodes removed
+  const rawTokens = tokenSet(clientName);
+  const cleanTokens = tokenSet(clientName, true);
+  if (rawTokens.size === 0 && cleanTokens.size === 0) return null;
+  const rawNorm = Array.from(rawTokens).sort().join(" ");
+  const cleanNorm = Array.from(cleanTokens).sort().join(" ");
+  const localPart = emailLocalPart(clientEmail);
 
   for (const r of reviews) {
     const authorTokens = tokenSet(r.authorName);
     if (authorTokens.size === 0) continue;
     const authorNorm = Array.from(authorTokens).sort().join(" ");
-    // Exact normalised match — accepted at any token count.
-    if (authorNorm === clientNorm) return r;
+    // Exact normalised match (either raw or cleaned) — accepted at any token count.
+    if (authorNorm === rawNorm || authorNorm === cleanNorm) return r;
 
-    // Partial / superset matches require AT LEAST 2 overlapping tokens to
-    // avoid auto-suppressing unrelated people who happen to share a single
-    // common first name (e.g. "John" vs "John Smith").
-    if (clientTokens.size < 2 || authorTokens.size < 2) continue;
-    const overlap = Array.from(clientTokens).filter(t => authorTokens.has(t));
-    if (overlap.length < 2) continue;
-    if (overlap.length === clientTokens.size) return r;   // client tokens ⊆ author
-    if (overlap.length === authorTokens.size) return r;   // author tokens ⊆ client
+    // ≥2 token overlap against the CLEANED client tokens, so studio tags
+    // like "(BIRTHDAY SPECIAL)" or "GRAND" no longer count toward overlap.
+    if (cleanTokens.size >= 2 && authorTokens.size >= 2) {
+      const overlap = Array.from(cleanTokens).filter(t => authorTokens.has(t));
+      if (overlap.length >= 2) {
+        if (overlap.length === cleanTokens.size) return r;   // client ⊆ author
+        if (overlap.length === authorTokens.size) return r;  // author ⊆ client
+      }
+    }
+
+    // Single-token assist: when the client's cleaned name is just one token
+    // (e.g. "Lerato"), allow a match only when ALL of these hold, to keep
+    // false positives down for common first names:
+    //   - the token is at least 3 chars long
+    //   - the Google author name contains the token
+    //   - the email local-part contains the token
+    //   - the Google author has ≥2 tokens and at least ONE other author token
+    //     also appears in the email local-part (e.g. "ramoollalerato" matches
+    //     author "Lerato Ramoolla" because "ramoolla" is in the local-part).
+    if (cleanTokens.size === 1 && localPart && authorTokens.size >= 2) {
+      const [token] = Array.from(cleanTokens);
+      const otherAuthorTokens = Array.from(authorTokens).filter(t => t !== token);
+      const corroborated = otherAuthorTokens.some(t => t.length >= 3 && localPart.includes(t));
+      if (
+        token && token.length >= 3 &&
+        localPart.includes(token) &&
+        authorTokens.has(token) &&
+        corroborated
+      ) {
+        return r;
+      }
+    }
   }
   return null;
 }
@@ -150,10 +203,13 @@ export function findMatchingGoogleReview(
  * returns the matching review (or null) for a client name. Falls back to
  * `null` if the API errors so the caller can decide what to do.
  */
-export async function findMatchForClient(clientName: string): Promise<GooglePlaceReview | null> {
+export async function findMatchForClient(
+  clientName: string,
+  clientEmail?: string | null,
+): Promise<GooglePlaceReview | null> {
   try {
     const summary = await fetchGooglePlaceSummary(false);
-    return findMatchingGoogleReview(clientName, summary.reviews);
+    return findMatchingGoogleReview(clientName, summary.reviews, clientEmail);
   } catch (err: any) {
     console.warn("[GooglePlaces] match lookup failed:", err?.message);
     return null;

@@ -255,7 +255,10 @@ export default function ReviewsPage() {
             )}
 
             {filteredCompleted.map((s) => {
-              const showTracking = s.rating === 5;
+              // Google review cadence now runs for every delivered client,
+              // not just 5★ surveys — always show the tracking badges and
+              // the admin "mark as already reviewed" control.
+              const showTracking = true;
               return (
                 <Card key={s.id}>
                   <CardContent className="pt-5 pb-4">

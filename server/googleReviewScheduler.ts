@@ -12,7 +12,7 @@ const SUPPRESS_AUTOMATION_ID = "bg_google_review_suppress_existing";
 async function suppressIfAlreadyReviewed(s: { id: string; clientName: string; clientEmail: string }): Promise<boolean> {
   if (!isEnabled(SUPPRESS_AUTOMATION_ID)) return false;
   try {
-    const match = await findMatchForClient(s.clientName);
+    const match = await findMatchForClient(s.clientName, s.clientEmail);
     if (!match) return false;
     await storage.markSurveyAlreadyReviewed(s.id, 'auto', match.authorName);
     recordFired(
@@ -50,8 +50,10 @@ async function processGooglePrompts() {
     const candidates = await storage.getSurveysAwaitingGooglePrompt(FIVE_MINUTES_MS, suppressionEnabled);
     for (const s of candidates) {
       try {
-        // Defence in depth: never send for surveys completed before launch
-        if (!s.completedAt || s.completedAt < FEATURE_LAUNCH_AT) continue;
+        // Defence in depth: never send for surveys whose underlying delivery
+        // (or completion, if filled in) predates the feature launch.
+        const eligibleAt = s.completedAt ?? s.createdAt;
+        if (!eligibleAt || eligibleAt < FEATURE_LAUNCH_AT) continue;
         // Skip if client already has a Google review (auto-match against live Places API)
         // Only runs when the suppress automation is enabled.
         if (suppressionEnabled && await suppressIfAlreadyReviewed(s)) continue;
@@ -187,7 +189,7 @@ async function processExistingReviewSweep() {
     let matched = 0;
     for (const s of surveys) {
       try {
-        const match = await findMatchForClient(s.clientName);
+        const match = await findMatchForClient(s.clientName, s.clientEmail);
         if (!match) continue;
         await storage.markSurveyAlreadyReviewed(s.id, 'auto', match.authorName);
         recordFired(
@@ -209,9 +211,36 @@ async function processExistingReviewSweep() {
   }
 }
 
+// Idempotent one-shot: ensure Lerato's prod survey row is marked
+// already-reviewed so no further reminders go out. Safe to run every boot —
+// the WHERE clause is keyed on a specific id and the already_reviewed flag.
+async function applyOneShotDataFixes() {
+  try {
+    const result = await db
+      .update(clientSurveys)
+      .set({
+        alreadyReviewedOnGoogle: true,
+        alreadyReviewedAt: new Date(),
+        alreadyReviewedSource: 'manual',
+        alreadyReviewedMatchedAuthor: 'Lerato',
+      })
+      .where(and(
+        eq(clientSurveys.id, '6b1f4a8f-5792-4d2b-b3b2-12589b2ace4f'),
+        eq(clientSurveys.alreadyReviewedOnGoogle, false),
+      ))
+      .returning({ id: clientSurveys.id });
+    if (result.length > 0) {
+      console.log("[GoogleReviewScheduler] One-shot: suppressed Lerato (BIRTHDAY SPECIAL) — already reviewed on Google");
+    }
+  } catch (err: any) {
+    console.warn("[GoogleReviewScheduler] One-shot data fix failed:", err?.message);
+  }
+}
+
 export function startGoogleReviewScheduler() {
   if (promptIntervalHandle || reminderIntervalHandle || sweepIntervalHandle) return;
   console.log("[GoogleReviewScheduler] Starting (prompts every 60s, reminders every hour, sweep daily, cadence 3/7/14d from prompt)");
+  applyOneShotDataFixes();
   promptIntervalHandle = setInterval(processGooglePrompts, 60 * 1000);
   reminderIntervalHandle = setInterval(processReminders, 60 * 60 * 1000);
   sweepIntervalHandle = setInterval(processExistingReviewSweep, DAY_MS);

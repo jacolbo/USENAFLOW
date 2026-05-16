@@ -156,7 +156,7 @@ register({
 register({
   id: 'bg_google_review_prompt',
   name: 'Google Review Prompt + Reminder Loop',
-  description: 'Sends the 5★ Google review prompt email 5 minutes after a satisfied client completes the survey, then up to 3 reminders on day 3, 7, and 14. Stops as soon as the client clicks the Google link.',
+  description: 'Sends the Google review prompt email to every client whose project is delivered (5 minutes after delivery, or 5 minutes after they fill in the satisfaction survey if sooner), then up to 3 reminders on day 3, 7, and 14. Stops as soon as the client clicks the Google link or is detected as having already reviewed.',
   type: 'background',
   category: 'Scheduled Processes',
   trigger: 'Prompts checked every 60s, reminders every hour',
