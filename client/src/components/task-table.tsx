@@ -754,13 +754,20 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
       const response = await apiRequest("PATCH", `/api/projects/${id}`, updateData);
       return response.json();
     },
-    onSuccess: () => {
+    onSuccess: (data: any) => {
       // Don't clear local state immediately - let the query update handle it
       queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
-      toast({
-        title: "Project updated",
-        description: "Project details updated successfully.",
-      });
+      if (data?._driveRenameWarning) {
+        toast({
+          title: "Saved with a warning",
+          description: data._driveRenameWarning,
+        });
+      } else {
+        toast({
+          title: "Project updated",
+          description: "Project details updated successfully.",
+        });
+      }
     },
     onError: () => {
       toast({
@@ -1772,15 +1779,11 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
                         {user.role === 'Sales' ? (
                           <>
                             {/* Sel, Extra, Due, Retoucher, Status, Rating, Notes for Sales */}
+                            {/* Photo amount is read-only for Sales — only Data Wrangler/Admin can edit it */}
                             <TableCell>
-                              <input
-                                type="number"
-                                value={localInputValues[project.id]?.selectedCount ?? project.selectedCount}
-                                onChange={(e) => handleChangeSelectedCount(project.id, parseInt(e.target.value) || 0)}
-                                className="border rounded px-2 py-1 w-16 text-center bg-white dark:bg-gray-800"
-                                min="0"
-                                placeholder="0"
-                              />
+                              <span className="text-sm font-medium text-center block w-16">
+                                {project.selectedCount}
+                              </span>
                             </TableCell>
                             {/* To Edit column for Sales */}
                             <TableCell>
@@ -2006,11 +2009,24 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
                           <>
                             {/* Standard cells for other roles */}
                             {/* Client cell already rendered above */}
-                            {/* To Edit column for non-Sales */}
+                            {/* To Edit column for non-Sales — editable photo amount for Admin only */}
                             <TableCell>
-                              <span className="text-sm font-medium text-purple-600">
-                                {project.toEditRemaining || project.selectedCount}
-                              </span>
+                              {user.role === 'Admin' ? (
+                                <input
+                                  type="number"
+                                  value={localInputValues[project.id]?.selectedCount ?? project.selectedCount}
+                                  onChange={(e) => handleChangeSelectedCount(project.id, parseInt(e.target.value) || 0)}
+                                  className="border rounded px-2 py-1 w-16 text-center bg-white dark:bg-gray-800"
+                                  min="0"
+                                  placeholder="0"
+                                  title="Edit photo amount — updates the retoucher's target and renames the Drive folder"
+                                  data-testid={`input-photo-amount-${project.id}`}
+                                />
+                              ) : (
+                                <span className="text-sm font-medium text-purple-600">
+                                  {project.toEditRemaining || project.selectedCount}
+                                </span>
+                              )}
                             </TableCell>
                             {/* Done photos column for non-Sales (read-only) */}
                             <TableCell>

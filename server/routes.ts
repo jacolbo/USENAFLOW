@@ -1088,10 +1088,64 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { id } = req.params;
       const validatedData = updateProjectSchema.parse(req.body);
       const oldProject = await storage.getProject(id);
+
+      // When the photo amount (selectedCount) changes, keep the retoucher's
+      // "to edit" target in sync so their remaining workload matches the new number.
+      const selectedCountChanged =
+        validatedData.selectedCount !== undefined &&
+        !!oldProject &&
+        validatedData.selectedCount !== oldProject.selectedCount;
+
+      if (selectedCountChanged && validatedData.toEditRemaining === undefined) {
+        validatedData.toEditRemaining = validatedData.selectedCount;
+      }
+
       const project = await storage.updateProject(id, validatedData);
       
       if (!project) {
         return res.status(404).json({ error: "Project not found" });
+      }
+
+      // Side effects for a photo-amount change: rename the linked Google Drive
+      // folder, log a project event, and surface a non-blocking warning if the
+      // Drive rename fails (the count is still saved).
+      let driveRenameWarning: string | null = null;
+      if (selectedCountChanged && oldProject) {
+        const changedBy =
+          (req.headers["x-usena-user-id"] as string) ||
+          (req.headers["x-usena-role"] as string) ||
+          "unknown";
+
+        if (project.driveFolderId) {
+          try {
+            const drive = await import("./services/googleDriveService");
+            const newFolderName = drive.buildProjectFolderName(
+              project.clientName,
+              project.selectedCount,
+            );
+            await drive.renameFolder(project.driveFolderId, newFolderName);
+            await storage.updateProject(id, { driveFolderName: newFolderName });
+            project.driveFolderName = newFolderName;
+          } catch (err: any) {
+            driveRenameWarning =
+              "Photo count saved, but the Google Drive folder could not be renamed. Please rename it manually.";
+            console.error(
+              `[Photo Count] Failed to rename Drive folder for ${project.clientName}: ${err?.message}`,
+            );
+          }
+        }
+
+        try {
+          await storage.createProjectEvent({
+            projectId: id,
+            eventType: "photo_count_changed",
+            eventDate: new Date(),
+            details: `Photo amount changed from ${oldProject.selectedCount} to ${project.selectedCount} by ${changedBy}`,
+            createdBy: String(changedBy),
+          });
+        } catch (err: any) {
+          console.error(`[Photo Count] Failed to log project event:`, err?.message);
+        }
       }
 
       if (oldProject && oldProject.status !== project.status) {
@@ -1228,7 +1282,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       console.log('Broadcasting project update for:', project.clientName);
       broadcastProjectUpdate(project);
-      res.json(project);
+      res.json(driveRenameWarning ? { ...project, _driveRenameWarning: driveRenameWarning } : project);
     } catch (error) {
       res.status(400).json({ error: "Invalid update data" });
     }

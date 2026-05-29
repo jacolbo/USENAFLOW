@@ -294,6 +294,27 @@ export async function createProjectFolderStructure(
   return { mainFolder, bwFolder };
 }
 
+export function buildProjectFolderName(clientName: string, selectedCount: number): string {
+  return `${clientName.toUpperCase()} (${selectedCount})`;
+}
+
+export async function renameFolder(folderId: string, newName: string): Promise<DriveFolder> {
+  const drive = await getDriveClient();
+
+  const response = await drive.files.update({
+    fileId: folderId,
+    requestBody: { name: newName },
+    fields: 'id, name, webViewLink',
+  });
+
+  console.log(`📁 Renamed Drive folder ${folderId} → ${newName}`);
+  return {
+    id: response.data.id!,
+    name: response.data.name!,
+    webViewLink: response.data.webViewLink!,
+  };
+}
+
 export async function getImageThumbnails(folderId: string, maxResults: number = 5): Promise<DriveFileInfo[]> {
   const files = await listFilesInFolder(folderId);
   const images = files.filter(f => f.mimeType.startsWith('image/'));
