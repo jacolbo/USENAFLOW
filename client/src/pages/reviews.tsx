@@ -241,6 +241,9 @@ export default function ReviewsPage() {
                 </SelectContent>
               </Select>
             </div>
+            <p className="text-xs text-gray-500">
+              Showing every submitted review at all star levels (1–5), not just 5-star. Use the filter above to narrow by rating.
+            </p>
 
             {isLoading && (
               <div className="flex justify-center py-12"><Loader2 className="h-6 w-6 animate-spin text-gray-400" /></div>

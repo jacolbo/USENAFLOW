@@ -196,7 +196,7 @@ export default function SurveyPage() {
 
           <div className="space-y-2">
             <label className="text-sm font-medium text-gray-700">
-              Tell us more about your experience (optional)
+              Tell us more about your experience <span className="text-red-500">*</span>
             </label>
             <Textarea
               value={feedback}
@@ -204,6 +204,9 @@ export default function SurveyPage() {
               placeholder="What did you love? What could we improve?"
               rows={4}
             />
+            <p className="text-xs text-gray-500">
+              Please share a few words about your experience — it's required.
+            </p>
           </div>
 
           <div className="space-y-2">
@@ -232,7 +235,7 @@ export default function SurveyPage() {
 
           <Button
             onClick={() => submitMutation.mutate()}
-            disabled={rating === 0 || submitMutation.isPending}
+            disabled={rating === 0 || feedback.trim().length < 3 || submitMutation.isPending}
             className="w-full bg-[#2563EB] hover:bg-[#1d4ed8] text-white"
           >
             {submitMutation.isPending ? (
@@ -247,7 +250,15 @@ export default function SurveyPage() {
 
           {submitMutation.isError && (
             <p className="text-red-500 text-sm text-center">
-              Failed to submit. Please try again.
+              {(() => {
+                const raw = (submitMutation.error as Error)?.message || "";
+                const body = raw.replace(/^\d+:\s*/, "");
+                try {
+                  const parsed = JSON.parse(body);
+                  if (parsed?.error) return parsed.error;
+                } catch {}
+                return "Failed to submit. Please try again.";
+              })()}
             </p>
           )}
         </CardContent>

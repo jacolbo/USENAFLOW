@@ -2112,13 +2112,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!rating || rating < 1 || rating > 5) {
         return res.status(400).json({ error: "Rating must be between 1 and 5" });
       }
+      const trimmedFeedback = typeof feedback === "string" ? feedback.trim() : "";
+      if (trimmedFeedback.length < 3) {
+        return res.status(400).json({ error: "Please share a few words about your experience" });
+      }
       if (communicationRating && (communicationRating < 1 || communicationRating > 5)) {
         return res.status(400).json({ error: "Communication rating must be between 1 and 5" });
       }
       const updated = await storage.updateSurvey(survey.id, {
         rating,
         communicationRating: communicationRating || null,
-        feedback: feedback || null,
+        feedback: trimmedFeedback,
         wouldRecommend: wouldRecommend ?? null,
         completedAt: new Date(),
       });
