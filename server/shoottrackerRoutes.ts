@@ -355,8 +355,35 @@ export function registerShoottrackerRoutes(app: Express): void {
       const dueWeekStart = getWeekStartSunday(deliveryDueDate);
       const thisWeekStart = getWeekStartSunday(now);
       
-      const weekStart = deliveryDueDate < now ? thisWeekStart : dueWeekStart;
-      console.log(`📅 Project week: ${deliveryDueDate < now ? 'OVERDUE → This Week' : 'Due Week'} (${weekStart.toISOString().split('T')[0]})`);
+      const calculatedWeekStart = deliveryDueDate < now ? thisWeekStart : dueWeekStart;
+
+      // If the Wrangler explicitly chose a week, honour it; otherwise fall back
+      // to the auto-calculated delivery week. The client sends a timezone-stable
+      // YYYY-MM-DD Sunday date so we reconstruct it at LOCAL midnight (the same
+      // basis as the calculated week) to avoid UTC offset shifting the week.
+      let weekStart = calculatedWeekStart;
+      let weekWasChosen = false;
+      if (targetWeekStart) {
+        const isoDateMatch = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(targetWeekStart).trim());
+        if (isoDateMatch) {
+          const localMidnight = new Date(Number(isoDateMatch[1]), Number(isoDateMatch[2]) - 1, Number(isoDateMatch[3]));
+          weekStart = getWeekStartSunday(localMidnight);
+          weekWasChosen = true;
+        } else {
+          const parsed = new Date(targetWeekStart);
+          if (!isNaN(parsed.getTime())) {
+            weekStart = getWeekStartSunday(parsed);
+            weekWasChosen = true;
+          } else {
+            console.warn(`📅 Ignoring invalid targetWeekStart "${targetWeekStart}", using calculated week`);
+          }
+        }
+      }
+      if (weekWasChosen) {
+        console.log(`📅 Project week: WRANGLER-CHOSEN (${weekStart.toDateString()})`);
+      } else {
+        console.log(`📅 Project week: ${deliveryDueDate < now ? 'OVERDUE → This Week' : 'Due Week'} (${weekStart.toDateString()})`);
+      }
       
       const riskLevel = calculateShootTrackerRiskLevel(
         deliveryDueDate,

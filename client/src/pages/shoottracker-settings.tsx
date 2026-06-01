@@ -197,6 +197,7 @@ export default function ShootTrackerSettings() {
   const [newKeyword, setNewKeyword] = useState("");
   const [syncStats, setSyncStats] = useState<SyncStats | null>(null);
   const [selectedEvents, setSelectedEvents] = useState<Set<string>>(new Set());
+  const [eventWeekChoices, setEventWeekChoices] = useState<Record<string, string>>({});
   const [showIgnored, setShowIgnored] = useState(false);
   const [eventSearchQuery, setEventSearchQuery] = useState("");
   const [dateFrom, setDateFrom] = useState("");
@@ -352,7 +353,7 @@ export default function ShootTrackerSettings() {
   });
 
   const promoteMutation = useMutation({
-    mutationFn: async (eventId: string) => {
+    mutationFn: async ({ eventId, targetWeekStart }: { eventId: string; targetWeekStart?: string }) => {
       const headers = {
         ...getAdminHeaders(userRole, userId),
         "Content-Type": "application/json",
@@ -360,15 +361,20 @@ export default function ShootTrackerSettings() {
       const response = await fetch(`/api/admin/shoottracker/staged/${eventId}/promote`, {
         method: "POST",
         headers,
-        body: JSON.stringify({}),
+        body: JSON.stringify(targetWeekStart ? { targetWeekStart } : {}),
       });
       if (!response.ok) throw new Error("Failed to promote event");
       return response.json();
     },
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/shoottracker/staged"] });
       queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
-      toast({ title: "Added to Week", description: "Project placed in appropriate week based on due date" });
+      setEventWeekChoices(prev => {
+        const next = { ...prev };
+        delete next[variables.eventId];
+        return next;
+      });
+      toast({ title: "Added to Week", description: "Project placed in the selected week" });
     },
     onError: (error: any) => {
       toast({ title: "Error", description: error.message, variant: "destructive" });
@@ -520,6 +526,59 @@ export default function ShootTrackerSettings() {
     return addWeeks(weekStart, targetWeekOffset);
   };
 
+  const getWeekStartSunday = (date: Date): Date => {
+    const sunday = new Date(date);
+    sunday.setDate(sunday.getDate() - sunday.getDay());
+    sunday.setHours(0, 0, 0, 0);
+    return sunday;
+  };
+
+  const getSuggestedWeekStart = (event: CalendarEventStaging): Date => {
+    const shootDate = new Date(event.eventStart);
+    const deliveryDue = calculateDeliveryDueDate(shootDate, event.title);
+    const now = new Date();
+    now.setHours(0, 0, 0, 0);
+    const dueWeek = getWeekStartSunday(deliveryDue);
+    const thisWeek = getWeekStartSunday(now);
+    return deliveryDue < now ? thisWeek : dueWeek;
+  };
+
+  const formatWeekRange = (sunday: Date): string => {
+    const end = new Date(sunday);
+    end.setDate(end.getDate() + 6);
+    return `${format(sunday, "MMM d")} – ${format(end, "MMM d")}`;
+  };
+
+  const weekKey = (date: Date): string => format(date, "yyyy-MM-dd");
+
+  const getSuggestedWeekKey = (event: CalendarEventStaging): string => weekKey(getSuggestedWeekStart(event));
+
+  // The value shown/selected in the dropdown: the Wrangler's override if set,
+  // otherwise the auto-calculated suggested week.
+  const getSelectedWeekKey = (event: CalendarEventStaging): string =>
+    eventWeekChoices[event.id] || getSuggestedWeekKey(event);
+
+  const getWeekOptions = (suggestedKey: string): { value: string; label: string }[] => {
+    const base = getWeekStartSunday(new Date());
+    const weeks = new Map<string, Date>();
+    for (let i = -4; i <= 12; i++) {
+      const d = addWeeks(base, i);
+      weeks.set(weekKey(d), d);
+    }
+    if (suggestedKey && !weeks.has(suggestedKey)) {
+      const [y, m, d] = suggestedKey.split("-").map(Number);
+      weeks.set(suggestedKey, new Date(y, m - 1, d));
+    }
+    return Array.from(weeks.entries())
+      .sort((a, b) => a[1].getTime() - b[1].getTime())
+      .map(([key, d]) => ({
+        value: key,
+        label: key === suggestedKey
+          ? `${formatWeekRange(d)} (suggested)`
+          : formatWeekRange(d),
+      }));
+  };
+
   const resolveTurnaroundDays = (eventTitle: string): { turnaroundDays: number; matchedRule: string | null } => {
     const settings = settingsQuery.data;
     if (!settings) {
@@ -602,7 +661,7 @@ export default function ShootTrackerSettings() {
 
     for (const eventId of Array.from(selectedEvents)) {
       try {
-        await promoteMutation.mutateAsync(eventId);
+        await promoteMutation.mutateAsync({ eventId, targetWeekStart: eventWeekChoices[eventId] });
         successCount++;
       } catch {
         errorCount++;
@@ -1149,15 +1208,30 @@ export default function ShootTrackerSettings() {
                                   {canPromote && (
                                     <div className="col-span-2 sm:col-span-1">
                                       <Label className="text-xs text-muted-foreground">Add to Week</Label>
-                                      <div className="flex gap-1 mt-1">
+                                      <div className="flex flex-col gap-1 mt-1">
+                                        <Select
+                                          value={getSelectedWeekKey(event)}
+                                          onValueChange={(val) => setEventWeekChoices(prev => ({ ...prev, [event.id]: val }))}
+                                        >
+                                          <SelectTrigger className="h-8 w-full" data-testid={`select-week-${event.id}`}>
+                                            <SelectValue />
+                                          </SelectTrigger>
+                                          <SelectContent>
+                                            {getWeekOptions(getSuggestedWeekKey(event)).map(opt => (
+                                              <SelectItem key={opt.value} value={opt.value}>
+                                                {opt.label}
+                                              </SelectItem>
+                                            ))}
+                                          </SelectContent>
+                                        </Select>
                                         <Button
                                           size="sm"
                                           className="h-8 w-full"
-                                          onClick={() => promoteMutation.mutate(event.id)}
+                                          onClick={() => promoteMutation.mutate({ eventId: event.id, targetWeekStart: eventWeekChoices[event.id] })}
                                           disabled={promoteMutation.isPending}
                                         >
                                           <Plus className="h-3 w-3 mr-1" />
-                                          Add to Due Week
+                                          Add to Week
                                         </Button>
                                       </div>
                                     </div>
