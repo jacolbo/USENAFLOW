@@ -175,9 +175,6 @@ export default function EditorChat() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
-  const prevTotalUnreadRef = useRef<number>(0);
-  const audioContextRef = useRef<AudioContext | null>(null);
-  
   const storedRole = localStorage.getItem("usena_role") as string;
   const storedUserId = localStorage.getItem("usena_user_id") as string;
   const userRole = storedRole || UserRoles.RETOUCHER_1;
@@ -237,36 +234,6 @@ export default function EditorChat() {
     enabled: isAllowed && !!selectedProjectId,
     refetchInterval: 2000,
   });
-
-  const playNotificationSound = () => {
-    try {
-      if (!audioContextRef.current) {
-        audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
-      }
-      const ctx = audioContextRef.current;
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      osc.frequency.setValueAtTime(880, ctx.currentTime);
-      osc.frequency.setValueAtTime(1100, ctx.currentTime + 0.1);
-      gain.gain.setValueAtTime(0.3, ctx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3);
-      osc.start(ctx.currentTime);
-      osc.stop(ctx.currentTime + 0.3);
-    } catch {}
-  };
-
-  useEffect(() => {
-    if (!projectsQuery.data) return;
-    const currentTotal = projectsQuery.data.reduce((sum, p) => sum + p.unreadCount, 0);
-    if (prevTotalUnreadRef.current > 0 || currentTotal > 0) {
-      if (currentTotal > prevTotalUnreadRef.current) {
-        playNotificationSound();
-      }
-    }
-    prevTotalUnreadRef.current = currentTotal;
-  }, [projectsQuery.data]);
 
   const sendMessageMutation = useMutation({
     mutationFn: async ({ 
