@@ -45,9 +45,9 @@ export function verifyAdminRequest(req: Request, res: Response, next: NextFuncti
   next();
 }
 
-// Stricter middleware that excludes Data Wrangler. Use for promote/ignore/
-// restore/sync/settings PUT/send-email endpoints so DW can only touch counts
-// and wrangler notes.
+// Stricter middleware that excludes Data Wrangler. Use for sync/settings PUT/
+// send-email endpoints so DW is limited there. Note: promote/ignore/restore use
+// verifyAdminRequest (DW included) since Wranglers manage the staging list.
 export function verifyAdminOrLeadRequest(req: Request, res: Response, next: NextFunction) {
   const role = req.headers["x-usena-role"] as string;
   const userId = req.headers["x-usena-user-id"] as string;

@@ -524,8 +524,8 @@ export function registerShoottrackerRoutes(app: Express): void {
     }
   });
 
-  // Ignore staged event
-  app.post("/api/admin/shoottracker/staged/:id/ignore", verifyAdminOrLeadRequest, async (req: Request, res: Response) => {
+  // Ignore staged event (Admin / Lead / Data Wrangler — same surface as promote)
+  app.post("/api/admin/shoottracker/staged/:id/ignore", verifyAdminRequest, async (req: Request, res: Response) => {
     try {
       const { id } = req.params;
       
@@ -544,8 +544,8 @@ export function registerShoottrackerRoutes(app: Express): void {
     }
   });
 
-  // Restore ignored event to pending
-  app.post("/api/admin/shoottracker/staged/:id/restore", verifyAdminOrLeadRequest, async (req: Request, res: Response) => {
+  // Restore ignored event to pending (Admin / Lead / Data Wrangler)
+  app.post("/api/admin/shoottracker/staged/:id/restore", verifyAdminRequest, async (req: Request, res: Response) => {
     try {
       const { id } = req.params;
       

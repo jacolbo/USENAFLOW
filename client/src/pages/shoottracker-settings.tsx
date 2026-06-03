@@ -216,14 +216,18 @@ export default function ShootTrackerSettings() {
 
   const hasAccess = ALLOWED_ROLES.includes(userRole as any);
   // DataWrangler and Photographer share the limited view (no Settings tab,
-  // no Sync controls, no Ignore action). Photographer additionally lacks the
-  // bulk "Add to Due Week" capability — but the Inspos / Notes button is
+  // no Sync controls). Photographer additionally lacks the bulk "Add to Due
+  // Week" and Ignore/Restore actions — but the Inspos / Notes button is
   // available for both so they can attach inspos in real time on shoot day.
+  // (DataWrangler does get Ignore/Restore via canIgnore below.)
   const isDataWranglerOnly = userRole === UserRoles.DATA_WRANGLER || userRole === UserRoles.PHOTOGRAPHER;
   const isPhotographer = userRole === UserRoles.PHOTOGRAPHER;
   // Admin / Lead / DataWrangler may promote (Add to Due Week). Photographer
   // can only attach inspos in real time on shoot day — they cannot promote.
   const canPromote = userRole === UserRoles.ADMIN || userRole === UserRoles.LEAD_RETOUCHER || userRole === UserRoles.DATA_WRANGLER;
+  // Admin / Lead / DataWrangler may ignore & restore staged shoots (they manage
+  // the staging list). Photographer is excluded — inspos only.
+  const canIgnore = userRole === UserRoles.ADMIN || userRole === UserRoles.LEAD_RETOUCHER || userRole === UserRoles.DATA_WRANGLER;
 
   const settingsQuery = useQuery<ShoottrackerSettings>({
     queryKey: ["/api/admin/shoottracker/settings"],
@@ -912,27 +916,31 @@ export default function ShootTrackerSettings() {
                       Review synced calendar events and add them to your project schedule
                     </CardDescription>
                   </div>
-                  {!isDataWranglerOnly && (
+                  {(canIgnore || !isDataWranglerOnly) && (
                     <div className="flex gap-2">
-                      <Button 
-                        variant="outline" 
-                        size="sm"
-                        onClick={() => setShowIgnored(!showIgnored)}
-                      >
-                        {showIgnored ? <Eye className="h-4 w-4 mr-1" /> : <EyeOff className="h-4 w-4 mr-1" />}
-                        {showIgnored ? "Hide Ignored" : "Show Ignored"}
-                      </Button>
-                      <Button 
-                        size="sm"
-                        onClick={() => syncMutation.mutate()} 
-                        disabled={syncMutation.isPending}
-                      >
-                        {syncMutation.isPending ? (
-                          <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Syncing...</>
-                        ) : (
-                          <><RefreshCw className="h-4 w-4 mr-2" /> Sync Now</>
-                        )}
-                      </Button>
+                      {canIgnore && (
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          onClick={() => setShowIgnored(!showIgnored)}
+                        >
+                          {showIgnored ? <Eye className="h-4 w-4 mr-1" /> : <EyeOff className="h-4 w-4 mr-1" />}
+                          {showIgnored ? "Hide Ignored" : "Show Ignored"}
+                        </Button>
+                      )}
+                      {!isDataWranglerOnly && (
+                        <Button 
+                          size="sm"
+                          onClick={() => syncMutation.mutate()} 
+                          disabled={syncMutation.isPending}
+                        >
+                          {syncMutation.isPending ? (
+                            <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Syncing...</>
+                          ) : (
+                            <><RefreshCw className="h-4 w-4 mr-2" /> Sync Now</>
+                          )}
+                        </Button>
+                      )}
                     </div>
                   )}
                 </div>
@@ -1009,7 +1017,7 @@ export default function ShootTrackerSettings() {
                     </div>
                     {selectedEvents.size > 0 && (
                       <div className="flex items-center gap-2 flex-wrap">
-                        {!isDataWranglerOnly && (
+                        {canIgnore && (
                           <Button
                             size="sm"
                             variant="destructive"
@@ -1130,7 +1138,7 @@ export default function ShootTrackerSettings() {
                                   {event.status === StagingStatus.IGNORED && (
                                     <>
                                       <Badge variant="secondary">Ignored</Badge>
-                                      {!isDataWranglerOnly && (
+                                      {canIgnore && (
                                         <Button
                                           size="sm"
                                           variant="ghost"
@@ -1151,7 +1159,7 @@ export default function ShootTrackerSettings() {
                                       userId={userId}
                                     />
                                   )}
-                                  {!isDataWranglerOnly && event.status === StagingStatus.PENDING && (
+                                  {canIgnore && event.status === StagingStatus.PENDING && (
                                     <Button
                                       size="sm"
                                       variant="ghost"
