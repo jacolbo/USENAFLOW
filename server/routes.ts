@@ -1028,6 +1028,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get all projects
   app.get("/api/projects", async (req, res) => {
     try {
+      // getAllProjects() already hides inspo-only placeholders (shoots awaiting
+      // ShootTracker promotion) so they never reach a week board / task table.
       const projects = await storage.getAllProjects();
       res.json(projects);
     } catch (error) {
@@ -3395,7 +3397,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
           end = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
         }
       }
-      const all = await storage.getAllProjects();
+      // Today's Shoots intentionally includes inspo-only placeholders so users
+      // can keep attaching inspos to a shoot before it is promoted, and so the
+      // matching calendar event still shows as already linked.
+      const all = await storage.getAllProjectsIncludingPlaceholders();
       const todays = all.filter(p => {
         if (!p.shootDate) return false;
         const d = new Date(p.shootDate);
@@ -3489,6 +3494,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         calendarEventId: eventId,
         lastSyncedAt: new Date(),
         createdFrom: "CALENDAR",
+        // Keep this off all week boards until ShootTracker promotes the shoot.
+        isInspoPlaceholder: true,
       } satisfies Partial<typeof projects.$inferInsert> as InsertProject);
       res.json({ project: newProject, created: true });
     } catch (err: any) {

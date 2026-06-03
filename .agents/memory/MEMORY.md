@@ -1,0 +1,1 @@
+- [Inspo placeholder projects](inspo-placeholders.md) — storage.getAllProjects() hides isInspoPlaceholder rows; use getAllProjectsIncludingPlaceholders() only for Today's Shoots + calendar dedup.

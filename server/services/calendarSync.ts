@@ -28,8 +28,10 @@ export async function syncCalendarToProjects(
     const events = await fetchCalendarEvents(calendarId);
     console.log(`📅 Found ${events.length} calendar events`);
     
-    // Get existing projects to match against
-    const existingProjects = await storage.getAllProjects();
+    // Get existing projects to match against. Include placeholders so a shoot
+    // that already has an inspo placeholder isn't created a second time (the
+    // calendarEventId unique constraint would otherwise throw).
+    const existingProjects = await storage.getAllProjectsIncludingPlaceholders();
     const projectsByEventId = new Map(
       existingProjects
         .filter(p => p.calendarEventId)

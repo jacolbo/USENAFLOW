@@ -42,6 +42,11 @@ export const projects = pgTable("projects", {
   calendarEventId: text("calendar_event_id").unique(), // Link to synced calendar event (unique)
   lastSyncedAt: timestamp("last_synced_at"), // When last synced from calendar
   createdFrom: text("created_from").notNull().default("MANUAL"), // MANUAL or CALENDAR
+  // True when this row only exists so inspos/notes can be attached to a calendar
+  // event BEFORE it is formally promoted in ShootTracker. Placeholders are hidden
+  // from all project week boards / dashboards / task tables until promoted, at
+  // which point this flips to false (see ShootTracker promote route).
+  isInspoPlaceholder: boolean("is_inspo_placeholder").notNull().default(false),
   // Client share link fields (existing)
   isLinkSent: boolean("is_link_sent").notNull().default(false),
   linkSentAt: timestamp("link_sent_at"),

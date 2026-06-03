@@ -423,6 +423,8 @@ export function registerShoottrackerRoutes(app: Express): void {
           lastSyncedAt: new Date(),
           createdFrom: "CALENDAR",
           clientEmail: existingForEvent.clientEmail || resolvedClientEmail,
+          // Promotion makes the shoot a real, visible project on its week board.
+          isInspoPlaceholder: false,
         });
         newProject = updated || existingForEvent;
       } else {

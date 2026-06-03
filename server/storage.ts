@@ -12,6 +12,10 @@ export interface IStorage {
   deleteUser(id: string): Promise<boolean>;
   
   getAllProjects(): Promise<Project[]>;
+  // Includes inspo-only placeholders (shoots awaiting ShootTracker promotion).
+  // Use only where placeholders must be visible: the Today's Shoots page and
+  // calendar-event de-duplication. Everywhere else use getAllProjects().
+  getAllProjectsIncludingPlaceholders(): Promise<Project[]>;
   getProject(id: string): Promise<Project | undefined>;
   createProject(project: InsertProject): Promise<Project>;
   updateProject(id: string, updates: UpdateProject): Promise<Project | undefined>;
@@ -449,6 +453,10 @@ export class MemStorage implements IStorage {
   }
 
   async getAllProjects(): Promise<Project[]> {
+    return Array.from(this.projects.values()).filter(p => !p.isInspoPlaceholder);
+  }
+
+  async getAllProjectsIncludingPlaceholders(): Promise<Project[]> {
     return Array.from(this.projects.values());
   }
 
@@ -488,6 +496,7 @@ export class MemStorage implements IStorage {
       calendarEventId: insertProject.calendarEventId ?? null,
       lastSyncedAt: insertProject.lastSyncedAt ?? null,
       createdFrom: insertProject.createdFrom ?? "MANUAL",
+      isInspoPlaceholder: insertProject.isInspoPlaceholder ?? false,
       isLinkSent: insertProject.isLinkSent ?? false,
       linkSentAt: insertProject.linkSentAt ?? null,
       clientEmail: insertProject.clientEmail ?? null,
@@ -1134,6 +1143,10 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getAllProjects(): Promise<Project[]> {
+    return await db.select().from(projects).where(eq(projects.isInspoPlaceholder, false));
+  }
+
+  async getAllProjectsIncludingPlaceholders(): Promise<Project[]> {
     return await db.select().from(projects);
   }
 
