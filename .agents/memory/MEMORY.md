@@ -1,1 +1,2 @@
 - [Inspo placeholder projects](inspo-placeholders.md) — storage.getAllProjects() hides isInspoPlaceholder rows; use getAllProjectsIncludingPlaceholders() only for Today's Shoots + calendar dedup.
+- [Chat sender types](chat-sender-types.md) — client_messages.sender_type: client/retoucher/system; for "team replied" logic anchor on 'retoucher' only, not `<> 'client'` (system msgs are automated).

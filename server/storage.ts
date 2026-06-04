@@ -98,7 +98,7 @@ export interface IStorage {
   getMessagesByProject(projectId: string): Promise<ClientMessage[]>;
   createClientMessage(message: InsertClientMessage): Promise<ClientMessage>;
   markMessagesAsRead(projectId: string, senderType: string): Promise<number>;
-  getProjectsWithUnreadCounts(assignedTo?: string, archived?: boolean, postReviewOnly?: boolean): Promise<Array<{ project: Project; unreadCount: number; lastMessageAt: Date | null; lastSenderType: string | null; hasPostReviewReply: boolean }>>;
+  getProjectsWithUnreadCounts(assignedTo?: string, archived?: boolean, postReviewOnly?: boolean): Promise<Array<{ project: Project; unreadCount: number; awaitingReplyCount: number; lastMessageAt: Date | null; lastSenderType: string | null; hasPostReviewReply: boolean }>>;
   
   // Dashboard preferences methods
   getDashboardPreferences(userId: string): Promise<DashboardPreferences | undefined>;
@@ -826,7 +826,7 @@ export class MemStorage implements IStorage {
     return 0;
   }
   
-  async getProjectsWithUnreadCounts(assignedTo?: string, _archived?: boolean, _postReviewOnly?: boolean): Promise<Array<{ project: Project; unreadCount: number; lastMessageAt: Date | null; lastSenderType: string | null; hasPostReviewReply: boolean }>> {
+  async getProjectsWithUnreadCounts(assignedTo?: string, _archived?: boolean, _postReviewOnly?: boolean): Promise<Array<{ project: Project; unreadCount: number; awaitingReplyCount: number; lastMessageAt: Date | null; lastSenderType: string | null; hasPostReviewReply: boolean }>> {
     return [];
   }
   
@@ -1598,7 +1598,7 @@ export class DatabaseStorage implements IStorage {
     return result.rowCount || 0;
   }
   
-  async getProjectsWithUnreadCounts(assignedTo?: string, archived: boolean = false, postReviewOnly: boolean = false): Promise<Array<{ project: Project; unreadCount: number; lastMessageAt: Date | null; lastSenderType: string | null; hasPostReviewReply: boolean }>> {
+  async getProjectsWithUnreadCounts(assignedTo?: string, archived: boolean = false, postReviewOnly: boolean = false): Promise<Array<{ project: Project; unreadCount: number; awaitingReplyCount: number; lastMessageAt: Date | null; lastSenderType: string | null; hasPostReviewReply: boolean }>> {
     let assignedCondition;
     if (archived) {
       assignedCondition = assignedTo
@@ -1614,6 +1614,16 @@ export class DatabaseStorage implements IStorage {
       SELECT 
         p.*,
         COALESCE(SUM(CASE WHEN cm.sender_type = 'client' AND cm.is_read = false THEN 1 ELSE 0 END), 0)::int as unread_count,
+        (
+          SELECT COUNT(*) FROM client_messages cm2
+          WHERE cm2.project_id = p.id
+            AND cm2.sender_type = 'client'
+            AND cm2.created_at > COALESCE(
+              (SELECT MAX(cm3.created_at) FROM client_messages cm3
+                WHERE cm3.project_id = p.id AND cm3.sender_type = 'retoucher'),
+              '1970-01-01'::timestamp
+            )
+        )::int as awaiting_reply_count,
         MAX(cm.created_at) as last_message_at,
         (SELECT sender_type FROM client_messages WHERE project_id = p.id ORDER BY created_at DESC LIMIT 1) as last_sender_type,
         EXISTS (
@@ -1627,7 +1637,7 @@ export class DatabaseStorage implements IStorage {
       ORDER BY last_message_at DESC NULLS LAST, unread_count DESC
     `);
     
-    const result: Array<{ project: Project; unreadCount: number; lastMessageAt: Date | null; lastSenderType: string | null; hasPostReviewReply: boolean }> = [];
+    const result: Array<{ project: Project; unreadCount: number; awaitingReplyCount: number; lastMessageAt: Date | null; lastSenderType: string | null; hasPostReviewReply: boolean }> = [];
     
     for (const row of aggregateQuery.rows as any[]) {
       const project: Project = {
@@ -1707,6 +1717,7 @@ export class DatabaseStorage implements IStorage {
       result.push({
         project,
         unreadCount: Number(row.unread_count || 0),
+        awaitingReplyCount: Number(row.awaiting_reply_count || 0),
         lastMessageAt: row.last_message_at ? new Date(row.last_message_at) : null,
         lastSenderType: row.last_sender_type || null,
         hasPostReviewReply,

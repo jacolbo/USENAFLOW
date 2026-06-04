@@ -80,6 +80,7 @@ interface Message {
 interface ProjectWithUnread {
   project: Project;
   unreadCount: number;
+  awaitingReplyCount: number;
   lastMessageAt: string | null;
   lastSenderType: string | null;
   hasPostReviewReply?: boolean;
@@ -628,11 +629,11 @@ export default function EditorChat() {
               </div>
             ) : (
               <div className="divide-y">
-                {filteredProjects.map(({ project, unreadCount, lastMessageAt, lastSenderType, hasPostReviewReply }) => {
+                {filteredProjects.map(({ project, unreadCount, awaitingReplyCount, lastMessageAt, lastSenderType, hasPostReviewReply }) => {
                   const nameColor = unreadCount > 0
                     ? "text-green-500 font-semibold"
-                    : lastSenderType === "client"
-                      ? "text-blue-500 font-medium"
+                    : awaitingReplyCount > 0
+                      ? "text-red-500 font-medium"
                       : "font-medium";
                   return (
                   <div
@@ -667,11 +668,15 @@ export default function EditorChat() {
                       )}
                     </div>
                     <div className="flex items-center gap-1 flex-shrink-0">
-                      {unreadCount > 0 && (
-                        <Badge variant="destructive" className="rounded-full h-5 min-w-[20px] flex items-center justify-center">
+                      {unreadCount > 0 ? (
+                        <Badge className="rounded-full h-5 min-w-[20px] flex items-center justify-center bg-green-500 text-white hover:bg-green-500 border-transparent" title="New messages">
                           {unreadCount}
                         </Badge>
-                      )}
+                      ) : awaitingReplyCount > 0 ? (
+                        <Badge variant="destructive" className="rounded-full h-5 min-w-[20px] flex items-center justify-center" title="Messages awaiting a reply">
+                          {awaitingReplyCount}
+                        </Badge>
+                      ) : null}
                       <Button
                         variant="ghost"
                         size="icon"
