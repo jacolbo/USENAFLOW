@@ -33,6 +33,7 @@ import {
 import { startReplyMonitor } from "./services/gmailReplyMonitor";
 import { fetchCalendarEvents, CalendarEvent, listCalendars } from "./services/googleCalendar";
 import { calculateRiskLevel } from "./services/riskCalculator";
+import { matchProjectForShoot } from "./services/shootMatching";
 import { getAutoSyncStatus } from "./autoSyncScheduler";
 import { 
   sendDeliveryEstimateEmail, 
@@ -305,7 +306,30 @@ export function registerShoottrackerRoutes(app: Express): void {
     try {
       const { status } = req.query;
       const events = await storage.getStagedEvents(status as string | undefined);
-      res.json(events);
+
+      // Surface the project that holds this shoot's inspos so the team sees what
+      // the photographer uploaded (on Today's Shoots / from-calendar-event the
+      // inspos live in project_inspos, not staging_event_inspos). Match by:
+      //   1. promotedProjectId (already promoted),
+      //   2. exact calendar-event-id,
+      //   3. same client name + shoot date (manual / unlinked projects).
+      const allProjects = await storage.getAllProjectsIncludingPlaceholders();
+      const projectByCalId = new Map<string, string>();
+      for (const p of allProjects) {
+        if (p.calendarEventId) projectByCalId.set(p.calendarEventId, p.id);
+      }
+      const augmented = events.map((ev) => {
+        let linkedProjectId: string | null = ev.promotedProjectId || null;
+        if (!linkedProjectId) {
+          linkedProjectId = projectByCalId.get(ev.calendarEventId) || null;
+          if (!linkedProjectId) {
+            const m = matchProjectForShoot(allProjects, parseClientNameFromTitle(ev.title), ev.eventStart, ev.calendarEventId);
+            linkedProjectId = m?.id || null;
+          }
+        }
+        return { ...ev, linkedProjectId };
+      });
+      res.json(augmented);
     } catch (error: any) {
       console.error("Error fetching staged events:", error);
       res.status(500).json({ error: "Failed to fetch staged events" });
@@ -406,9 +430,17 @@ export function registerShoottrackerRoutes(app: Express): void {
       // attach inspos before sync), reuse it instead of inserting a new row
       // (calendar_event_id is unique). Preserve any inspos/notes already
       // attached and just back-fill the proper ShootTracker fields.
-      const existingForEvent = stagedEvent.calendarEventId
+      // First try the exact calendar-event link. If none (e.g. a manual project
+      // was created for the same shoot, or inspos were attached to a project with
+      // no calendar id), fall back to a client-name + shoot-date match so we
+      // reuse that inspo-bearing project instead of spawning a duplicate.
+      let existingForEvent = stagedEvent.calendarEventId
         ? await storage.getProjectByCalendarEventId(stagedEvent.calendarEventId)
         : undefined;
+      if (!existingForEvent) {
+        const allProjects = await storage.getAllProjectsIncludingPlaceholders();
+        existingForEvent = matchProjectForShoot(allProjects, clientName, shootDate, stagedEvent.calendarEventId);
+      }
 
       let newProject;
       if (existingForEvent) {
@@ -420,6 +452,10 @@ export function registerShoottrackerRoutes(app: Express): void {
           shootDate,
           deliveryDueDate,
           riskLevel,
+          // Link the reused project to this calendar event if it wasn't already
+          // (manual projects have no calendar id). getProjectByCalendarEventId
+          // above guarantees nothing else holds this id, so this is safe.
+          calendarEventId: existingForEvent.calendarEventId || stagedEvent.calendarEventId,
           lastSyncedAt: new Date(),
           createdFrom: "CALENDAR",
           clientEmail: existingForEvent.clientEmail || resolvedClientEmail,
@@ -523,6 +559,118 @@ export function registerShoottrackerRoutes(app: Express): void {
     } catch (error: any) {
       console.error("Error promoting staged event:", error);
       res.status(500).json({ error: error.message || "Failed to promote event" });
+    }
+  });
+
+  // Attach an EXISTING inspo-bearing project (e.g. one sitting in a week tab) to
+  // a ShootTracker shoot, so a stray duplicate can be fixed from the UI without
+  // losing inspos.
+  //  - If the staged event is not yet promoted: promote it ONTO the chosen
+  //    project (flip it visible, back-fill ShootTracker fields, link calendar id,
+  //    migrate any staged inspos in).
+  //  - If the staged event is already promoted to a DIFFERENT project: merge the
+  //    chosen project's inspos into the promoted one and delete the now-empty
+  //    duplicate.
+  app.post("/api/admin/shoottracker/staged/:id/link-project", verifyAdminRequest, async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+      const { projectId } = req.body || {};
+      const userId = req.headers["x-usena-user-id"] as string;
+      if (!projectId) return res.status(400).json({ error: "projectId is required" });
+
+      const stagedEvent = await storage.getStagedEvents().then(events => events.find(e => e.id === id));
+      if (!stagedEvent) return res.status(404).json({ error: "Staged event not found" });
+
+      const project = await storage.getProject(projectId);
+      if (!project) return res.status(404).json({ error: "Project not found" });
+
+      // Case A: this shoot is already a different project → merge the stray in.
+      if (stagedEvent.promotedProjectId && stagedEvent.promotedProjectId !== projectId) {
+        const target = stagedEvent.promotedProjectId;
+        const targetProject = await storage.getProject(target);
+
+        // Safety gates — merging deletes the source after moving its inspos, so
+        // never collapse a project that holds real work or that clearly belongs
+        // to a DIFFERENT shoot.
+        const hasRealWork =
+          (project.packageCount || 0) > 0 ||
+          (project.photosCompleted || 0) > 0 ||
+          !!project.assignedTo ||
+          project.status === ProjectStatus.DELIVERED;
+        if (hasRealWork) {
+          return res.status(409).json({ error: "That project already has real work on it, so it can't be merged. Re-assign or clear it first." });
+        }
+        // Refuse if the source is linked to a different calendar event than the
+        // shoot's project (it's a separate real-world shoot).
+        if (
+          project.calendarEventId &&
+          targetProject?.calendarEventId &&
+          project.calendarEventId !== targetProject.calendarEventId
+        ) {
+          return res.status(409).json({ error: "That project is linked to a different calendar event, so it can't be merged into this shoot." });
+        }
+
+        const { moved } = await storage.mergeProjects(projectId, target, userId);
+        console.log(`🔗 Merged stray project ${projectId} into shoot project ${target} (${moved} inspos moved, duplicate removed)`);
+        const survivor = await storage.getProject(target);
+        return res.json({ success: true, project: survivor, merged: true, movedInspos: moved });
+      }
+
+      // Case B: link this project as the shoot's project (promote onto it).
+      const settings = await getSettings();
+      const shootDate = stagedEvent.eventStart;
+      const { turnaroundDays } = resolveTurnaroundDays(stagedEvent.title, settings);
+      const deliveryDueDate = addBusinessDays(shootDate, turnaroundDays, settings.working_days, settings.holidays, settings.timezone);
+
+      // Guard the unique calendar_event_id: only set it if free.
+      let calendarEventId = project.calendarEventId;
+      if (!calendarEventId && stagedEvent.calendarEventId) {
+        const clash = await storage.getProjectByCalendarEventId(stagedEvent.calendarEventId);
+        if (!clash || clash.id === project.id) calendarEventId = stagedEvent.calendarEventId;
+      }
+
+      const updated = await storage.updateProject(project.id, {
+        shootDate,
+        deliveryDueDate,
+        calendarEventId,
+        lastSyncedAt: new Date(),
+        createdFrom: "CALENDAR",
+        isInspoPlaceholder: false,
+      });
+      const linked = updated || project;
+
+      const existingMeta = await storage.getShoottrackerMeta(linked.id).catch(() => undefined);
+      if (!existingMeta) {
+        await storage.createShoottrackerMeta({
+          projectId: linked.id,
+          linkSent: false,
+          delivered: false,
+          turnaroundDays,
+          workingDays: settings.working_days,
+          holidays: settings.holidays,
+          lastCalendarSync: new Date(),
+          rawEventPayload: stagedEvent.rawPayload as any,
+        });
+      }
+
+      const migrated = await storage.migrateStagingInsposToProject(stagedEvent.id, linked.id, userId);
+      if (migrated.moved > 0 || migrated.instructions) {
+        console.log(`📎 Migrated ${migrated.moved} staged inspos into linked project ${linked.id}`);
+      }
+
+      await storage.updateStagedEvent(id, {
+        status: StagingStatus.PROMOTED,
+        promotedProjectId: linked.id,
+        targetWeekStart: linked.dueDate,
+        promotedAt: new Date(),
+        promotedBy: userId,
+      });
+
+      console.log(`🔗 Linked existing project ${linked.id} to shoot "${stagedEvent.title}"`);
+      res.json({ success: true, project: linked, merged: false, movedInspos: migrated.moved });
+    } catch (error: any) {
+      console.error("Error linking project to staged event:", error);
+      res.status(500).json({ error: error.message || "Failed to link project" });
     }
   });
 

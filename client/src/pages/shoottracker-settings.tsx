@@ -35,8 +35,21 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
+import type { Project } from "@shared/schema";
+import { Link2 } from "lucide-react";
 
 const ALLOWED_ROLES = [UserRoles.ADMIN, UserRoles.DATA_WRANGLER, UserRoles.LEAD_RETOUCHER, UserRoles.PHOTOGRAPHER];
+
+// The staged-events listing carries the project that holds this shoot's inspos
+// (placeholder / manual / promoted) so the team always sees the right inspos.
+type StagedEventWithLink = CalendarEventStaging & { linkedProjectId?: string | null };
 
 /**
  * Inspos / Notes button for a calendar staging event (pending event that has
@@ -46,13 +59,13 @@ const ALLOWED_ROLES = [UserRoles.ADMIN, UserRoles.DATA_WRANGLER, UserRoles.LEAD_
  */
 function StagedInsposButton({
   stagingEventId,
-  promotedProjectId,
+  linkedProjectId,
   eventTitle,
   userRole,
   userId,
 }: {
   stagingEventId: string;
-  promotedProjectId: string | null;
+  linkedProjectId: string | null;
   eventTitle: string;
   userRole: string;
   userId: string;
@@ -60,14 +73,16 @@ function StagedInsposButton({
   const [open, setOpen] = useState(false);
   const canEdit = ["Admin", "Photographer", "DataWrangler"].includes(userRole);
 
-  // Once the event has been promoted, the inspos live on the project. Before
-  // promotion, they live on the staging event.
-  const usingProject = !!promotedProjectId;
+  // When this shoot already maps to a project (placeholder created from Today's
+  // Shoots, a manual project, or a promoted one), its inspos live in
+  // project_inspos. Only fall back to the staging-event store when nothing is
+  // linked yet.
+  const usingProject = !!linkedProjectId;
   const countUrl = usingProject
-    ? `/api/projects/${promotedProjectId}/inspos-count`
+    ? `/api/projects/${linkedProjectId}/inspos-count`
     : `/api/staging-events/${stagingEventId}/inspos-count`;
   const countQueryKey = usingProject
-    ? ["/api/projects", promotedProjectId, "inspos-count"]
+    ? ["/api/projects", linkedProjectId, "inspos-count"]
     : ["/api/staging-events", stagingEventId, "inspos-count"];
 
   const countQuery = useQuery<{ count: number; hasInstructions: boolean }>({
@@ -100,7 +115,7 @@ function StagedInsposButton({
         <InsposViewerDialog
           open={open}
           onOpenChange={setOpen}
-          projectId={usingProject ? promotedProjectId! : undefined}
+          projectId={usingProject ? linkedProjectId! : undefined}
           stagingEventId={usingProject ? undefined : stagingEventId}
           projectName={eventTitle}
           userRole={userRole}
@@ -108,6 +123,121 @@ function StagedInsposButton({
           canEdit={canEdit}
         />
       )}
+    </>
+  );
+}
+
+/**
+ * Lets an admin/lead attach an EXISTING project (one already sitting in a week
+ * tab) to this shoot. If the project already holds the photographer's inspos but
+ * isn't linked to the calendar event, this is how you reconcile them — no more
+ * duplicate shoot records. Posts to the link-project endpoint which either
+ * promotes onto the chosen project or merges a stray into the real one.
+ */
+function LinkProjectButton({
+  stagingEventId,
+  eventTitle,
+  userRole,
+  userId,
+}: {
+  stagingEventId: string;
+  eventTitle: string;
+  userRole: string;
+  userId: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const { toast } = useToast();
+
+  const projectsQuery = useQuery<Project[]>({
+    queryKey: ["/api/projects"],
+    queryFn: async () => {
+      const res = await fetch("/api/projects", { headers: getAdminHeaders(userRole, userId) });
+      if (!res.ok) throw new Error("Failed to load projects");
+      return res.json();
+    },
+    enabled: open,
+  });
+
+  const linkMutation = useMutation({
+    mutationFn: async (projectId: string) => {
+      const res = await fetch(`/api/admin/shoottracker/staged/${stagingEventId}/link-project`, {
+        method: "POST",
+        headers: { ...getAdminHeaders(userRole, userId), "Content-Type": "application/json" },
+        body: JSON.stringify({ projectId }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || "Failed to link project");
+      }
+      return res.json();
+    },
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/shoottracker/staged"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
+      toast({
+        title: data.merged ? "Shoots merged" : "Project linked",
+        description: data.merged
+          ? `Moved ${data.movedInspos || 0} inspos and removed the duplicate.`
+          : "This shoot now uses the selected project.",
+      });
+      setOpen(false);
+    },
+    onError: (error: any) => {
+      toast({ title: "Couldn't link", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const term = search.trim().toLowerCase();
+  const filtered = (projectsQuery.data || [])
+    .filter((p) => !term || p.clientName.toLowerCase().includes(term))
+    .slice(0, 50);
+
+  return (
+    <>
+      <Button size="sm" variant="ghost" title="Link an existing project" onClick={() => setOpen(true)}>
+        <Link2 className="h-4 w-4" />
+      </Button>
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Link a project to this shoot</DialogTitle>
+            <DialogDescription>
+              Pick the project that already has the inspos for "{eventTitle}". We'll connect it to this shoot and remove any duplicate.
+            </DialogDescription>
+          </DialogHeader>
+          <Input
+            placeholder="Search by client name…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="mb-2"
+          />
+          <div className="max-h-72 overflow-y-auto space-y-1">
+            {projectsQuery.isLoading && (
+              <div className="flex items-center justify-center py-6 text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin mr-2" /> Loading projects…
+              </div>
+            )}
+            {!projectsQuery.isLoading && filtered.length === 0 && (
+              <div className="text-sm text-muted-foreground py-4 text-center">No matching projects.</div>
+            )}
+            {filtered.map((p) => (
+              <button
+                key={p.id}
+                type="button"
+                disabled={linkMutation.isPending}
+                onClick={() => linkMutation.mutate(p.id)}
+                className="w-full text-left px-3 py-2 rounded-md hover:bg-muted transition-colors disabled:opacity-50 flex items-center justify-between gap-2"
+              >
+                <span className="font-medium truncate">{p.clientName}</span>
+                <span className="text-xs text-muted-foreground whitespace-nowrap">
+                  {p.shootDate ? format(new Date(p.shootDate), "MMM d") : p.dueDate ? format(new Date(p.dueDate), "MMM d") : ""}
+                </span>
+              </button>
+            ))}
+          </div>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }
@@ -343,7 +473,7 @@ export default function ShootTrackerSettings() {
     },
   });
 
-  const stagedEventsQuery = useQuery<CalendarEventStaging[]>({
+  const stagedEventsQuery = useQuery<StagedEventWithLink[]>({
     queryKey: ["/api/admin/shoottracker/staged", showIgnored ? "all" : "pending"],
     queryFn: async () => {
       const headers = getAdminHeaders(userRole, userId);
@@ -1153,7 +1283,15 @@ export default function ShootTrackerSettings() {
                                   {event.status === StagingStatus.PENDING && (
                                     <StagedInsposButton
                                       stagingEventId={event.id}
-                                      promotedProjectId={null}
+                                      linkedProjectId={event.linkedProjectId || null}
+                                      eventTitle={event.title}
+                                      userRole={userRole}
+                                      userId={userId}
+                                    />
+                                  )}
+                                  {canPromote && event.status === StagingStatus.PENDING && (
+                                    <LinkProjectButton
+                                      stagingEventId={event.id}
                                       eventTitle={event.title}
                                       userRole={userRole}
                                       userId={userId}

@@ -82,6 +82,7 @@ export interface IStorage {
   getStagingEventInspoById(id: string): Promise<StagingEventInspo | undefined>;
   setStagingEventInsposOverallInstructions(stagingEventId: string, instructions: string): Promise<void>;
   migrateStagingInsposToProject(stagingEventId: string, projectId: string, migratedBy: string): Promise<{ moved: number; instructions: string }>;
+  mergeProjects(sourceProjectId: string, targetProjectId: string, mergedBy: string): Promise<{ moved: number }>;
   
   // Client auth token methods
   createClientAuthToken(token: InsertClientAuthToken): Promise<ClientAuthToken>;
@@ -791,6 +792,7 @@ export class MemStorage implements IStorage {
   async getStagingEventInspoById(): Promise<StagingEventInspo | undefined> { return undefined; }
   async setStagingEventInsposOverallInstructions(): Promise<void> { /* no-op */ }
   async migrateStagingInsposToProject(): Promise<{ moved: number; instructions: string }> { return { moved: 0, instructions: "" }; }
+  async mergeProjects(): Promise<{ moved: number }> { return { moved: 0 }; }
 
   // Client auth token methods (Not implemented for MemStorage)
   async createClientAuthToken(token: InsertClientAuthToken): Promise<ClientAuthToken> {
@@ -2592,6 +2594,65 @@ export class DatabaseStorage implements IStorage {
       }
 
       return { moved, instructions: overallInstructions };
+    });
+  }
+
+  // Move all inspos + overall instructions from a duplicate (source) project
+  // onto the surviving (target) project, then delete the source. Transactional.
+  // Used by the "link/merge to right shoot" action and the duplicate cleanup
+  // backfill. project_inspos cascade-delete with the project, so we MUST move
+  // them before deleting the source row.
+  async mergeProjects(sourceProjectId: string, targetProjectId: string, mergedBy: string): Promise<{ moved: number }> {
+    if (sourceProjectId === targetProjectId) return { moved: 0 };
+    return await db.transaction(async (tx) => {
+      const sourceInspos = await tx.select().from(projectInspos)
+        .where(eq(projectInspos.projectId, sourceProjectId))
+        .orderBy(asc(projectInspos.sortOrder), asc(projectInspos.createdAt));
+
+      let moved = 0;
+      if (sourceInspos.length > 0) {
+        const [{ maxSort }] = await tx.select({
+          maxSort: sql<number>`COALESCE(MAX(${projectInspos.sortOrder}), -1)::int`,
+        }).from(projectInspos).where(eq(projectInspos.projectId, targetProjectId));
+        let nextSort = Number(maxSort) + 1;
+        for (const r of sourceInspos) {
+          await tx.update(projectInspos)
+            .set({ projectId: targetProjectId, sortOrder: nextSort++ })
+            .where(eq(projectInspos.id, r.id));
+        }
+        moved = sourceInspos.length;
+      }
+
+      // Carry the source's overall instructions only if the target has none.
+      const [sourceMeta] = await tx.select().from(projectInspoMeta).where(eq(projectInspoMeta.projectId, sourceProjectId));
+      const sourceInstructions = sourceMeta?.overallInstructions?.trim() || "";
+      if (sourceInstructions) {
+        const [targetMeta] = await tx.select().from(projectInspoMeta).where(eq(projectInspoMeta.projectId, targetProjectId));
+        if (targetMeta) {
+          if (!targetMeta.overallInstructions || !targetMeta.overallInstructions.trim()) {
+            await tx.update(projectInspoMeta)
+              .set({ overallInstructions: sourceInstructions, updatedBy: mergedBy, updatedAt: new Date() })
+              .where(eq(projectInspoMeta.projectId, targetProjectId));
+          }
+        } else {
+          await tx.insert(projectInspoMeta).values({ projectId: targetProjectId, overallInstructions: sourceInstructions, updatedBy: mergedBy });
+        }
+      }
+
+      // Re-point the two project references that do NOT cascade/set-null on
+      // delete (referrals.referredProjectId, referralRewardClaims.projectId) so
+      // the duplicate can be removed without a foreign-key violation and without
+      // losing the referral/reward linkage — they now point at the survivor.
+      await tx.update(referrals)
+        .set({ referredProjectId: targetProjectId })
+        .where(eq(referrals.referredProjectId, sourceProjectId));
+      await tx.update(referralRewardClaims)
+        .set({ projectId: targetProjectId })
+        .where(eq(referralRewardClaims.projectId, sourceProjectId));
+
+      // Delete the now-empty duplicate. All remaining child rows cascade / set-null.
+      await tx.delete(projects).where(eq(projects.id, sourceProjectId));
+      return { moved };
     });
   }
 
