@@ -10,7 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowLeft, CalendarDays, Check, X, Clock, Loader2 } from "lucide-react";
+import { ArrowLeft, CalendarDays, Clock, Loader2 } from "lucide-react";
 import type { LeaveRequest } from "@shared/schema";
 
 function getWeekdaysCount(start: Date, end: Date): number {
@@ -22,19 +22,6 @@ function getWeekdaysCount(start: Date, end: Date): number {
     current.setDate(current.getDate() + 1);
   }
   return count;
-}
-
-function statusBadge(status: string) {
-  switch (status) {
-    case "approved":
-      return <Badge className="bg-green-100 text-green-800 border-green-200">Approved</Badge>;
-    case "denied":
-      return <Badge className="bg-red-100 text-red-800 border-red-200">Denied</Badge>;
-    case "pending":
-      return <Badge className="bg-yellow-100 text-yellow-800 border-yellow-200">Pending Review</Badge>;
-    default:
-      return <Badge variant="outline">{status}</Badge>;
-  }
 }
 
 export default function LeaveManagement() {
@@ -82,33 +69,13 @@ export default function LeaveManagement() {
       }
       return res.json();
     },
-    onSuccess: (data) => {
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/leave/requests"] });
       setStartDate("");
       setEndDate("");
       setReason("");
       setLeaveType("annual");
-      const statusMsg = data.status === "approved" ? "approved" : data.status === "denied" ? "denied" : "submitted for review";
-      toast({ title: "Leave Request", description: `Your leave request has been ${statusMsg}.` });
-    },
-    onError: (error: Error) => {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
-    },
-  });
-
-  const reviewMutation = useMutation({
-    mutationFn: async ({ id, status }: { id: string; status: string }) => {
-      const res = await fetch(`/api/leave/${id}/review`, {
-        method: "POST",
-        headers: { ...headers, "Content-Type": "application/json" },
-        body: JSON.stringify({ status }),
-      });
-      if (!res.ok) throw new Error("Failed to review request");
-      return res.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/leave/requests"] });
-      toast({ title: "Review Submitted", description: "Leave request has been updated." });
+      toast({ title: "Leave Logged", description: "Your leave has been recorded." });
     },
     onError: (error: Error) => {
       toast({ title: "Error", description: error.message, variant: "destructive" });
@@ -217,7 +184,7 @@ export default function LeaveManagement() {
               <div className="md:col-span-2">
                 <Button type="submit" disabled={createMutation.isPending || !startDate || !endDate || !reason}>
                   {createMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-                  Submit Request
+                  Log Leave
                 </Button>
               </div>
             </form>
@@ -254,51 +221,9 @@ export default function LeaveManagement() {
                         <Badge variant="outline" className="mr-2 capitalize">{req.leaveType}</Badge>
                         {req.reason}
                       </p>
-                      {req.aiReason && (
-                        <p className="text-xs text-gray-500 italic">{req.aiReason}</p>
-                      )}
-                      {req.reviewedBy && (
-                        <p className="text-xs text-gray-500">Reviewed by {req.reviewedBy}</p>
-                      )}
                     </div>
                     <div className="flex items-center gap-2">
-                      {statusBadge(req.status)}
-                      {isAdmin && req.status === "pending" && (
-                        <>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="text-green-600 border-green-200 hover:bg-green-50"
-                            onClick={() => reviewMutation.mutate({ id: req.id, status: "approved" })}
-                            disabled={reviewMutation.isPending}
-                          >
-                            <Check className="h-3 w-3 mr-1" /> Approve
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="text-red-600 border-red-200 hover:bg-red-50"
-                            onClick={() => reviewMutation.mutate({ id: req.id, status: "denied" })}
-                            disabled={reviewMutation.isPending}
-                          >
-                            <X className="h-3 w-3 mr-1" /> Deny
-                          </Button>
-                        </>
-                      )}
-                      {isAdmin && req.status !== "pending" && (
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          className="text-gray-500"
-                          onClick={() => reviewMutation.mutate({
-                            id: req.id,
-                            status: req.status === "approved" ? "denied" : "approved"
-                          })}
-                          disabled={reviewMutation.isPending}
-                        >
-                          Override
-                        </Button>
-                      )}
+                      <Badge className="bg-blue-100 text-blue-800 border-blue-200">Logged</Badge>
                     </div>
                   </div>
                 ))}

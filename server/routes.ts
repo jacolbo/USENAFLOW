@@ -12,7 +12,7 @@ import type { Notification, WebSocketMessage } from "@shared/schema";
 import { triggerManualRollover, performManualRolloverToNextWeek, performManualRollbackFromNextWeek } from "./rolloverScheduler";
 import { registerShoottrackerRoutes } from "./shoottrackerRoutes";
 import { sendChatLinkEmail, sendGalleryDeliveryEmail, sendSneakPeekEmail, sendSatisfactionSurveyEmail, sendSchedulingNotificationEmail, sendManualDelayNoticeEmail, generateToken } from "./services/emailService";
-import { evaluateLeaveRequest, aiTeamChat, generateDailySummaryForAdmin } from "./services/aiService";
+import { aiTeamChat, generateDailySummaryForAdmin } from "./services/aiService";
 import { appSettings } from "@shared/schema";
 import { insertLeaveRequestSchema } from "@shared/schema";
 import { seedDefaultTemplates } from "./services/defaultEmailTemplates";
@@ -4604,41 +4604,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const year = new Date(startDate).getFullYear();
-      const usedDays = await storage.getUsedLeaveDays(username, year);
 
-      const allProjects = await storage.getAllProjects();
-      const userProjects = allProjects.filter(p => p.assignedTo === username);
-      const overdueProjects = userProjects.filter(p => p.dueDate && new Date(p.dueDate) < new Date() && p.status !== 'Delivered').length;
-      const pendingProjects = userProjects.filter(p => p.status !== 'Delivered').length;
-
-      const sevenDaysFromNow = new Date();
-      sevenDaysFromNow.setDate(sevenDaysFromNow.getDate() + 7);
-      const upcomingDueCount = userProjects.filter(p => p.dueDate && new Date(p.dueDate) <= sevenDaysFromNow && p.status !== 'Delivered').length;
-
-      const existingLeaves = await storage.getLeaveRequests(undefined, year);
-      const reqStart = new Date(startDate);
-      const reqEnd = new Date(endDate);
-      const teamMembersOnLeave = existingLeaves
-        .filter(l => l.username !== username && l.status === 'approved' &&
-          new Date(l.startDate) <= reqEnd && new Date(l.endDate) >= reqStart)
-        .map(l => l.username)
-        .filter((v, i, a) => a.indexOf(v) === i);
-
-      const aiResult = await evaluateLeaveRequest({
-        username,
-        startDate,
-        endDate,
-        weekdaysCount,
-        reason,
-        leaveType,
-        usedDays,
-        maxDays: 15,
-        pendingProjects,
-        overdueProjects,
-        upcomingDueCount,
-        teamMembersOnLeave,
-      });
-
+      // Leave is clocked, not approved. Submitting a request simply logs that the
+      // person will be away — there is no AI evaluation or admin sign-off. We
+      // store it as "approved" so capacity/forecast logic still counts the person
+      // as on leave for the period.
       const leaveRequest = await storage.createLeaveRequest({
         username,
         startDate: new Date(startDate),
@@ -4646,16 +4616,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         weekdaysCount,
         reason,
         leaveType,
-        status: aiResult.decision === 'approved' ? 'approved' : aiResult.decision === 'denied' ? 'denied' : 'pending',
+        status: "approved",
         year,
       });
 
-      const updated = await storage.updateLeaveRequest(leaveRequest.id, {
-        aiDecision: aiResult.decision,
-        aiReason: aiResult.reason,
-      });
-
-      res.json(updated || leaveRequest);
+      res.json(leaveRequest);
     } catch (error: any) {
       console.error("[Leave] Error creating request:", error.message);
       res.status(500).json({ error: "Failed to create leave request" });
@@ -4682,38 +4647,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error: any) {
       console.error("[Leave] Error fetching requests:", error.message);
       res.status(500).json({ error: "Failed to fetch leave requests" });
-    }
-  });
-
-  app.post("/api/leave/:id/review", async (req, res) => {
-    try {
-      const role = req.headers["x-usena-role"] as string;
-      if (role !== "Admin") {
-        return res.status(403).json({ error: "Admin access required" });
-      }
-
-      const { id } = req.params;
-      const { status } = req.body;
-      const reviewedBy = req.headers["x-usena-user-id"] as string || "Admin";
-
-      if (!status || !['approved', 'denied'].includes(status)) {
-        return res.status(400).json({ error: "Invalid status. Must be 'approved' or 'denied'" });
-      }
-
-      const updated = await storage.updateLeaveRequest(id, {
-        status,
-        reviewedBy,
-        reviewedAt: new Date(),
-      });
-
-      if (!updated) {
-        return res.status(404).json({ error: "Leave request not found" });
-      }
-
-      res.json(updated);
-    } catch (error: any) {
-      console.error("[Leave] Error reviewing request:", error.message);
-      res.status(500).json({ error: "Failed to review leave request" });
     }
   });
 
