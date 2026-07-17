@@ -1,0 +1,328 @@
+# The Noël Set 2026 — Consolidated Pipeline Specification
+
+This document describes the complete Christmas campaign module for USENA Flow, start to finish. It is written explicitly so it can be implemented step by step with no guessing. Every automatic behaviour, every manual action, and every message to a client is spelled out.
+
+**The hard deadline for all Christmas deliveries is 19 December 2026.**
+
+---
+
+## The One-Paragraph Summary
+
+A Noël booking lands in Google Calendar. The system creates a project, calculates its due date (shoot date + 5 working days, never later than 19 December), and waits. After the shoot, a team member enters one number: how many photos the client selected. That evening the client gets ONE email with their delivery date and a link into the USENA Flow chat module, where they are connected to their retoucher. From then on, everything the client needs to know is posted automatically into that chat thread — no more emails until delivery. Behind the scenes, the system builds a day-by-day work calendar backward from 19 December, assigns projects to retouchers, and recalculates the plan every time anything changes. Each retoucher has their own workspace where they manage their own calendar; when they move a project, the client's chat thread is updated automatically. When the finished photos land in Google Drive, the project flips to delivered, the client gets the delivery email, and the whole plan recalculates.
+
+---
+
+## Part 1: A Booking Arrives (Fully Automatic)
+
+**What happens:**
+ShootTracker polls Google Calendar on its existing schedule. When it finds a booking tagged as Noël, it reads exactly two things: the client's name and the shoot date. It creates a project record and stamps it with the Christmas `campaignId`.
+
+**ShootTracker does NOTHING else.** It does not calculate dates, send messages, or know anything about deadlines. It creates the record and emits an event. Done.
+
+**What reacts to that event:**
+The date logic calculates the due date:
+
+- Due date = shoot date + 5 working days (Monday–Friday, weekends skipped)
+- If that lands after 19 December, cap it at 19 December
+- Write `dueDate` and `promisedDeliveryDate` onto the project
+
+**Example:** Shoot Friday 6 Dec → count Mon 9, Tue 10, Wed 11, Thu 12, Fri 13 → due date is Friday 13 December.
+
+**The client receives nothing at this stage.** No email, no message. If the shoot gets rescheduled before it happens, the due date silently recalculates — still no client contact, because nothing was ever promised yet.
+
+**Capacity check at booking time:** when the new project's estimated photos push a delivery week past roughly 200 photos, show a warning in the cockpit so the team knows that week is filling up.
+
+---
+
+## Part 2: Shoot Day (One Manual Action)
+
+**What happens:**
+The client comes in, shoots, and selects their photos in the studio the same day. There is no online selection link in the Christmas flow — selection is always in-studio.
+
+**The only manual data entry in the entire pipeline:**
+The DataWrangler opens the project and types in the number of photos the client selected. Example: 18.
+
+**What reacts automatically:**
+- The pacing engine adds 18 photos to the campaign's remaining total and recalculates everything (see Part 4).
+- The project becomes eligible for the evening email.
+
+---
+
+## Part 3: The One Email + The Chat Connection (Automatic)
+
+**The evening of the shoot day**, once the shoot is marked done, the client automatically receives **Email 1** via Resend:
+
+> "Your photos will be ready by **Friday, 13 December**."
+
+**This email also contains a link to the USENA Flow chat module.** The client clicks the link, signs in via a token link (no password creation required), and lands in a chat thread connected directly to their assigned retoucher.
+
+**The chat thread is now the client's home for this project.** From this moment on:
+
+- All automatic project updates post into this thread (not into their email inbox)
+- The client can message the retoucher directly with questions
+- The retoucher can message the client if they need something (e.g. a question about edit preferences)
+
+The system records `lastCommunicatedDate` = the due date stated in Email 1. This value is what all future date-change detection compares against.
+
+**Hard rule: Email 1 never fires before the shoot has happened.**
+
+---
+
+## Part 4: The Pacing Engine (The Brain, Fully Automatic)
+
+The pacing engine is photo-weighted, not project-weighted. A 30-photo family session is treated as three times the work of a 10-photo session.
+
+**The core numbers, recalculated constantly:**
+
+```
+remainingPhotos    = sum of selected photo counts of all undelivered projects
+workingDaysLeft    = working days from today until 19 December
+requiredDailyRate  = remainingPhotos ÷ workingDaysLeft
+actualDailyRate    = photos delivered per working day (rolling 7-day average)
+forecastFinishDate = today + (remainingPhotos ÷ actualDailyRate)
+```
+
+For shoots that are booked but haven't happened yet, estimate their photo count as the average of all real counts entered so far in the campaign. Replace the estimate with the real number the moment the DataWrangler enters it.
+
+**The engine does not just forecast — it actively schedules.** Every night at 02:00, and immediately whenever any of these events happen — a count is entered, a project is delivered, a project is moved, a new booking lands — the engine rebuilds the work calendar:
+
+1. Take every unfinished project
+2. Sort by oldest shoot date first
+3. Walk forward day by day from today to 19 December
+4. Fill each working day up to the required daily photo rate
+5. Write a `plannedWorkDate` onto every project
+
+**This produces the big calendar: every working day from today to 19 December, showing exactly which projects must be finished that day, with client name and photo count on each chip.** Nobody arranges this calendar by hand. The math arranges it.
+
+**Falling behind triggers instant recovery math.** If a project that was planned for today is not finished today, the engine recalculates immediately:
+
+> "We are now 12 photos behind. To still hit 19 December, tomorrow's quota rises from 156 to 168 photos."
+
+The calendar redraws, moving the unfinished projects forward and re-spreading the load across the remaining days. The cockpit shows the gap in plain numbers: photos behind, new daily rate required, forecast finish date at current pace.
+
+---
+
+## Part 5: Retoucher Assignment and the Retoucher Workspace
+
+**Projects are assigned to a specific retoucher** (`assignedRetoucherId` on the project). Assignment can happen at project creation (default retoucher for the campaign) or manually from the campaign cockpit.
+
+**Each assigned retoucher gets their own Christmas workspace tab in USENA Flow.** Access is controlled by `campaignAssignments` — if you're not assigned to the campaign, you don't see the tab.
+
+**Inside their workspace, the retoucher sees only their own work:**
+
+- Their own calendar: which of their projects are planned for which days
+- Their own queue for today: oldest shoot first, client name + photo count on each row
+- Their own progress: "You have 340 photos assigned. 8 working days left. You need 43 photos per day. Today: 12 done of 45 planned."
+
+**The retoucher can manage their own space:**
+
+- **Move projects between days.** Drag Khumalo from Thursday to Friday. The system recalculates their whole calendar and shows the ripple effect (what else has to shift to keep 19 December) before the move is confirmed.
+- **Pull projects forward.** Finished early? Pull tomorrow's first project into today.
+- **Plan their week.** The calendar is theirs to arrange, as long as the campaign math still closes by 19 December. If a move would make 19 December impossible, the workspace shows the warning in red before the move is saved.
+
+**Multi-retoucher setup:** each retoucher sees only their own workspace. The campaign cockpit (admin view) shows the merged picture — all retouchers, one shared calendar, one shared deadline. If one retoucher falls behind, the cockpit flags exactly who the bottleneck is, and the admin can reassign projects between retouchers from there.
+
+---
+
+## Part 6: Automatic Client Updates via the Chat Module
+
+**This replaces date-change emails entirely.** After Email 1 has gone out, the client is never emailed about date movements again. Instead:
+
+**Whenever a project's promised delivery date changes** — because a retoucher moved it, because the recovery math re-spread the load, because an admin reshuffled the calendar — the system:
+
+1. Compares the new date against `lastCommunicatedDate`
+2. If they differ, waits a debounce window (a few minutes) to absorb rapid back-and-forth corrections
+3. Posts an automatic message into the client's chat thread:
+
+   > "Update on your photos: your new delivery date is **Monday, 16 December**."
+
+4. Updates `lastCommunicatedDate` to the new date
+
+**The retoucher never writes these messages.** They move a chip on a calendar; the system does the talking. The workspace shows a small note at the moment of the move — "This will notify [client] in their chat" — for visibility, not approval.
+
+**Optional campaign setting:** `dateSlipThresholdDays` — only notify the client if the date moves by N or more days. Default is 0 (any change notifies).
+
+Automatic chat messages are marked with an `automated` flag so they render slightly differently in the thread (e.g. a system-style bubble) and so analytics can separate them from human conversation.
+
+---
+
+## Part 7: Quality Check (Per Campaign Setting)
+
+When a retoucher finishes editing and uploads to Google Drive, two things happen:
+
+1. **AI quality gate** — the system compares the photos against reference images from approved Christmas work and posts non-blocking feedback for the retoucher.
+2. **Human review, per the campaign's `reviewMode` setting:**
+   - `full` — every project reviewed by the lead retoucher
+   - `spot-check` — every Nth project reviewed
+   - `ai-gate-only` — only AI-flagged projects go to the lead
+
+Once a project passes review, it is ready for delivery detection.
+
+---
+
+## Part 8: Delivery (Automatic)
+
+**The Google Drive watcher is the delivery trigger.** The system already watches client folders. When it detects the client's folder is complete:
+
+1. The project automatically flips to **Delivered**
+2. The client receives **Email 2** via Resend: "Your photos are ready" with the access link
+3. A matching message posts into the chat thread as well, so the thread tells the full story end to end
+4. The calendar clears that project; the pacing engine recalculates (delivered photos move from "remaining" to "done", daily rate updates, forecast updates)
+5. Analytics records the shoot-to-delivery turnaround for that project
+
+**Manual fallback:** a "Mark Delivered" button exists in the cockpit for the rare case where Drive detection fails. It triggers the identical chain.
+
+---
+
+## Part 9: After Delivery (Automatic)
+
+**N days after delivery** (configurable), the client receives **Email 3**: a satisfaction survey plus a Google review ask. VIP tier and referral balances update for repeat clients. The velocity snapshot for the day records the delivery.
+
+---
+
+## Part 10: The Campaign Cockpit (Admin View)
+
+The cockpit is the admin's single screen for the whole campaign:
+
+**Top strip — the countdown:**
+- Working days left until 19 December
+- Total photos remaining
+- Current actual daily rate vs required daily rate
+
+**The two percentages:**
+1. **Completion:** photos delivered ÷ total photos committed (e.g. 58%)
+2. **Pace position:** where you should be today vs where you are (e.g. "target for today: 66% — you are 8 points / 167 photos behind")
+
+**The forecast line:** "At your current pace you finish 23 December. To hit 19 December you need 64 photos/day for the next 6 days."
+
+**The big calendar:** Monday–Friday columns, one row per week, from today to 19 December. Each day cell shows the project chips planned for that day (client name + photo count), colour-coded:
+- Teal = delivered
+- Purple = on track
+- Amber = at risk
+- Red = overdue
+
+Week headers show that week's total photo load, with a warning when it exceeds ~200 photos.
+
+**Retoucher lanes:** the cockpit can split the calendar by retoucher to see who is ahead and who is behind, and reassign projects between them by drag.
+
+---
+
+## The Complete Client Experience (For Reference)
+
+1. Books a Noël session. Hears nothing from the system.
+2. Comes in, shoots, selects photos in studio.
+3. That evening: **one email** — delivery date + chat link.
+4. Clicks the link, lands in a chat thread with their retoucher.
+5. Any date changes appear as messages in that thread automatically.
+6. Can chat with the retoucher directly at any time.
+7. Photos done: **delivery email** + chat message with the link.
+8. A few days later: **survey/review email**.
+
+Three emails total. Everything else lives in the chat.
+
+---
+
+## The Complete Team Experience (For Reference)
+
+- **DataWrangler:** enters one number per project (photo count, after the shoot). Nothing else.
+- **Retoucher:** works their own workspace — daily queue, own calendar, can move their own projects. Never writes a client update by hand.
+- **Admin:** watches the cockpit, reassigns between retouchers when someone falls behind, decides on recovery actions when the gap grows.
+
+---
+
+## Architecture Rules (Do Not Break These)
+
+The system is event-driven. ShootTracker and the other components communicate only through an in-process event bus (Node's built-in `EventEmitter` — no message queue, no extra infrastructure).
+
+**Events on the bus:** `project.created`, `project.shootDone`, `project.countEntered`, `project.dateChanged`, `project.moved`, `project.driveComplete`, `project.delivered`
+
+**The single-responsibility rules:**
+
+- **ShootTracker never sends messages and never computes dates.** It reads the calendar, writes project records, emits events. That is all.
+- **Only the date logic writes `dueDate`.**
+- **Only the email/chat logic talks to clients** — and every client-facing word passes through editable templates.
+- **The pacing logic never writes to projects except `plannedWorkDate`.** It reads, computes, schedules, and reports.
+- **Only the Drive watcher (or the manual fallback button) flips a project to delivered.**
+- Handlers never call each other. They only react to events. Removing or changing one handler touches nothing else.
+- Every automation is registered in the Automation Hub with an on/off toggle. Toggling off literally unsubscribes that listener.
+
+---
+
+## Files to Create or Touch
+
+**New files:**
+- `server/events.ts` — the event bus (EventEmitter wrapper)
+- `server/campaignRoutes.ts` — campaign CRUD, cockpit data endpoints, DataWrangler count entry, project move/reassign endpoints. Do NOT add these routes to the existing `routes.ts`.
+- `server/services/campaignScheduler.ts` — pure functions for date calculation, backward scheduling, recovery math, velocity snapshots; plus the 02:00 cron wiring. Keep the math functions pure so they can be unit tested without a database.
+- `client/src/pages/christmas/` — campaign cockpit, retoucher workspace, and any shared Christmas components
+
+**Existing files that gain small changes:**
+- `server/shoottrackerRoutes.ts` — add Noël tag detection and two or three `emit` calls. Nothing else.
+- `server/services/emailService.ts` — three new Resend templates (delivery date + chat link, photos ready, survey/review)
+- Chat module — accept system-generated messages with an `automated` flag; accept token-link sign-in from Email 1
+- Existing Drive integration — one `emit` on folder-complete
+- All existing regular-workflow views — add `WHERE campaign_id IS NULL` so Christmas projects never appear in the normal dashboard, calendar, or queues
+
+---
+
+## Schema Additions
+
+**New tables:**
+
+```ts
+campaigns {
+  id, name,                    // "Noël Set 2026"
+  hardDeadline,                // 2026-12-19
+  bufferDays,                  // internal deadline = hardDeadline - bufferDays
+  reviewMode,                  // "full" | "spot-check" | "ai-gate-only"
+  dateSlipThresholdDays,       // 0 = notify client on any date change
+  surveyDelayDays,             // days after delivery before Email 3
+  status                       // "active" | "closed"
+}
+
+campaignAssignments {
+  campaignId, userId, roleWithinCampaign
+  // controls who sees the Christmas tab; retouchers only see their workspace if assigned
+}
+
+campaignVelocitySnapshots {
+  id, campaignId, date,
+  completedPhotosToDate, remainingPhotoCount,
+  actualDailyPhotoRate, requiredDailyPhotoRate,
+  forecastFinishDate
+}
+```
+
+**New columns on the existing `projects` table:**
+
+```ts
+campaignId              // nullable FK → campaigns; null = regular USENA project
+assignedRetoucherId     // FK → users; whose workspace this project appears in
+dueDate                 // shoot + 5 working days, capped at 19 Dec
+promisedDeliveryDate    // the date currently promised to the client
+lastCommunicatedDate    // the date stated in the most recent client communication
+lastCommunicatedAt      // timestamp of that communication
+dueDateHistory          // JSON audit trail of every date change and who/what caused it
+selectedPhotoCount      // the DataWrangler's single manual entry
+plannedWorkDate         // which day the pacing engine has scheduled this project for
+editProfile             // batch grouping key (2–3 edit style variants per campaign)
+```
+
+**Chat module:** add an `automated` boolean to chat messages so system posts render distinctly and can be filtered in analytics.
+
+---
+
+## Build Order
+
+1. Schema push (`drizzle-kit push`) — all tables and columns above
+2. `server/events.ts` — the bus
+3. `campaignScheduler.ts` pure functions — date calc, backward scheduling, recovery math — with unit tests
+4. ShootTracker Noël detection + emits
+5. `campaignRoutes.ts` endpoints
+6. Email templates + chat token link + automated chat messages
+7. Retoucher workspace UI
+8. Campaign cockpit UI
+9. Drive watcher emit + delivery chain
+10. Automation Hub registration for all five automations
+
+**Open item:** the typical selected-photo count per Christmas session (rough range from last year) is still needed to set sensible capacity defaults and the initial future-booking estimate. The system works without it — it self-corrects as real counts come in — but a starting number makes the first weeks of forecasting more honest.
