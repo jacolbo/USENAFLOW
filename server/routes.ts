@@ -11,6 +11,7 @@ import { registerObjectStorageRoutes } from "./replit_integrations/object_storag
 import type { Notification, WebSocketMessage } from "@shared/schema";
 import { triggerManualRollover, performManualRolloverToNextWeek, performManualRollbackFromNextWeek } from "./rolloverScheduler";
 import { registerShoottrackerRoutes } from "./shoottrackerRoutes";
+import { registerCampaignRoutes } from "./campaignRoutes";
 import { sendChatLinkEmail, sendGalleryDeliveryEmail, sendSneakPeekEmail, sendSatisfactionSurveyEmail, sendSchedulingNotificationEmail, sendManualDelayNoticeEmail, generateToken } from "./services/emailService";
 import { aiTeamChat, generateDailySummaryForAdmin } from "./services/aiService";
 import { appSettings } from "@shared/schema";
@@ -3877,6 +3878,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Register ShootTracker routes (settings, sync, forecast, toggles)
   registerShoottrackerRoutes(app);
   registerGalleryRoutes(app);
+
+  // Register Noël Set 2026 Campaign routes
+  registerCampaignRoutes(app);
 
   // Register object storage routes for file uploads
   registerObjectStorageRoutes(app);

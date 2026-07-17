@@ -5,6 +5,7 @@ import { seed } from "./seed";
 import { startRolloverScheduler } from "./rolloverScheduler";
 import { startAutoSync } from "./autoSyncScheduler";
 import { startGoogleReviewScheduler } from "./googleReviewScheduler";
+import { startCampaignCron, wireUpCampaignListeners } from "./services/campaignScheduler";
 import { backfillWranglerNotesToInspos } from "./migrations/backfillWranglerNotesToInspos";
 
 const app = express();
@@ -83,5 +84,8 @@ app.use((req, res, next) => {
 
     // Start Google review prompt + reminder scheduler
     startGoogleReviewScheduler();
+
+    // Start Noël Set 2026 campaign pacing cron (runs nightly at 02:00)
+    startCampaignCron();
   });
 })();

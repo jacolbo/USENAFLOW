@@ -1760,3 +1760,207 @@ export async function sendGoogleReviewThanksEmail(
     return { success: false, error: error.message };
   }
 }
+
+// ============================================================
+// NOËL SET 2026 CAMPAIGN EMAILS
+// ============================================================
+
+export async function sendNoelDeliveryEstimateEmail(
+  projectId: string,
+  clientName: string,
+  clientEmail: string,
+  deliveryDate: Date | null | undefined,
+  chatLink?: string
+): Promise<{ success: boolean; error?: string; messageId?: string }> {
+  const firstName = clientName.split(' ')[0];
+  const dateStr = deliveryDate
+    ? new Date(deliveryDate).toLocaleDateString('en-ZA', { day: 'numeric', month: 'long', year: 'numeric' })
+    : '19 December 2026';
+
+  const chatLinkHtml = chatLink
+    ? `<p style="color:#2c2c2c;font-size:14px;line-height:1.6;margin:16px 0 0">You can also reply to us directly via your <a href="${chatLink}" style="color:#b8860b;font-weight:bold">client chat thread</a>.</p>`
+    : '';
+
+  const variables: Record<string, string> = {
+    clientName,
+    firstName,
+    deliveryDate: dateStr,
+    chatLink: chatLink || '',
+    chatLinkHtml,
+    emailHeader: '<div style="text-align:center;padding:16px 0 24px"><strong style="font-size:20px;letter-spacing:2px;color:#2c2c2c">JEPSON MYLES STUDIO</strong></div>',
+  };
+
+  let subject = `Your Noël Set — estimated delivery ${dateStr}`;
+  let htmlContent = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; background: #fff;">
+      ${variables.emailHeader}
+      <p style="color:#2c2c2c;font-size:16px;line-height:1.6;margin:0 0 16px">Hi ${firstName},</p>
+      <p style="color:#2c2c2c;font-size:16px;line-height:1.6;margin:0 0 16px">
+        Thank you for booking your Noël Set with Jepson Myles Studio — we're so excited to create something beautiful for your family this Christmas season.
+      </p>
+      <p style="color:#2c2c2c;font-size:16px;line-height:1.6;margin:0 0 16px">
+        We're currently working through our Noël schedule and we expect your edited photos to be ready by <strong>${dateStr}</strong>. 
+        We'll send you a message as soon as your gallery is live.
+      </p>
+      ${chatLinkHtml}
+      <p style="color:#2c2c2c;font-size:15px;line-height:1.6;margin:28px 0 4px">Warm regards,</p>
+      <p style="color:#2c2c2c;font-size:15px;line-height:1.6;margin:0"><strong>Jepson Myles Studio</strong></p>
+    </div>
+  `;
+
+  const dbTemplate = await getTemplate('noel_delivery_estimate');
+  if (dbTemplate) {
+    subject = renderTemplate(dbTemplate.subject, variables);
+    htmlContent = renderTemplate(dbTemplate.htmlBody, variables);
+  }
+
+  try {
+    const { client, fromEmail } = await getResendClient();
+    const replyTo = getProjectReplyToEmail(projectId);
+    const response = await client.emails.send({ from: fromEmail, replyTo, to: clientEmail, subject, html: htmlContent });
+    if (response.data?.id) {
+      await logEmail(projectId, EmailType.NOEL_DELIVERY_ESTIMATE, clientEmail, subject, 'sent', response.data.id);
+      return { success: true, messageId: response.data.id };
+    }
+    const errorMsg = response.error?.message || 'Unknown error';
+    await logEmail(projectId, EmailType.NOEL_DELIVERY_ESTIMATE, clientEmail, subject, 'failed', undefined, errorMsg);
+    return { success: false, error: errorMsg };
+  } catch (error: any) {
+    await logEmail(projectId, EmailType.NOEL_DELIVERY_ESTIMATE, clientEmail, subject, 'failed', undefined, error.message);
+    return { success: false, error: error.message };
+  }
+}
+
+export async function sendNoelPhotosReadyEmail(
+  projectId: string,
+  clientName: string,
+  clientEmail: string,
+  galleryLink: string
+): Promise<{ success: boolean; error?: string; messageId?: string }> {
+  const firstName = clientName.split(' ')[0];
+
+  const variables: Record<string, string> = {
+    clientName,
+    firstName,
+    galleryLink: galleryLink || '#',
+    emailHeader: '<div style="text-align:center;padding:16px 0 24px"><strong style="font-size:20px;letter-spacing:2px;color:#2c2c2c">JEPSON MYLES STUDIO</strong></div>',
+  };
+
+  let subject = `Your Noël Set photos are ready 🎄`;
+  let htmlContent = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; background: #fff;">
+      ${variables.emailHeader}
+      <p style="color:#2c2c2c;font-size:16px;line-height:1.6;margin:0 0 16px">Hi ${firstName},</p>
+      <p style="color:#2c2c2c;font-size:16px;line-height:1.6;margin:0 0 16px">
+        Wonderful news — your Noël Set photos are beautifully edited and ready for you to enjoy!
+      </p>
+      ${galleryLink ? `
+      <div style="text-align:center;margin:28px 0">
+        <a href="${galleryLink}" style="background:#2c2c2c;color:#fff;text-decoration:none;padding:14px 32px;border-radius:4px;font-size:15px;letter-spacing:1px">
+          VIEW YOUR GALLERY
+        </a>
+      </div>` : ''}
+      <p style="color:#2c2c2c;font-size:16px;line-height:1.6;margin:0 0 16px">
+        We hope these photos bring as much joy to your home as it was to photograph your family. Wishing you a magical Christmas season.
+      </p>
+      <p style="color:#2c2c2c;font-size:15px;line-height:1.6;margin:28px 0 4px">With warmth,</p>
+      <p style="color:#2c2c2c;font-size:15px;line-height:1.6;margin:0"><strong>Jepson Myles Studio</strong></p>
+    </div>
+  `;
+
+  const dbTemplate = await getTemplate('noel_photos_ready');
+  if (dbTemplate) {
+    subject = renderTemplate(dbTemplate.subject, variables);
+    htmlContent = renderTemplate(dbTemplate.htmlBody, variables);
+  }
+
+  try {
+    const { client, fromEmail } = await getResendClient();
+    const replyTo = getProjectReplyToEmail(projectId);
+    const response = await client.emails.send({ from: fromEmail, replyTo, to: clientEmail, subject, html: htmlContent });
+    if (response.data?.id) {
+      await logEmail(projectId, EmailType.NOEL_PHOTOS_READY, clientEmail, subject, 'sent', response.data.id);
+      return { success: true, messageId: response.data.id };
+    }
+    const errorMsg = response.error?.message || 'Unknown error';
+    await logEmail(projectId, EmailType.NOEL_PHOTOS_READY, clientEmail, subject, 'failed', undefined, errorMsg);
+    return { success: false, error: errorMsg };
+  } catch (error: any) {
+    await logEmail(projectId, EmailType.NOEL_PHOTOS_READY, clientEmail, subject, 'failed', undefined, error.message);
+    return { success: false, error: error.message };
+  }
+}
+
+export async function sendNoelSurveyEmail(
+  projectId: string,
+  clientName: string,
+  clientEmail: string,
+  surveyToken: string
+): Promise<{ success: boolean; error?: string; messageId?: string }> {
+  const firstName = clientName.split(' ')[0];
+  const baseUrl = process.env.APP_URL?.replace(/\/$/, '') || 'https://usena-flow.replit.app';
+  // Use canonical persisted-token survey route (same as regular satisfaction survey flow)
+  const surveyUrl = `${baseUrl}/survey/${surveyToken}`;
+  // Google review redirect route (same pattern as /r/google/:token used by the review scheduler)
+  const googleReviewUrl = `${baseUrl}/r/google/${surveyToken}`;
+
+  const variables: Record<string, string> = {
+    clientName,
+    firstName,
+    surveyUrl,
+    googleReviewUrl,
+    emailHeader: '<div style="text-align:center;padding:16px 0 24px"><strong style="font-size:20px;letter-spacing:2px;color:#2c2c2c">JEPSON MYLES STUDIO</strong></div>',
+  };
+
+  let subject = `How was your Noël Set experience, ${firstName}?`;
+  let htmlContent = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; background: #fff;">
+      ${variables.emailHeader}
+      <p style="color:#2c2c2c;font-size:16px;line-height:1.6;margin:0 0 16px">Hi ${firstName},</p>
+      <p style="color:#2c2c2c;font-size:16px;line-height:1.6;margin:0 0 16px">
+        We hope you and your family are absolutely loving your Noël Set photos! 
+        We'd love to hear about your experience — it helps us make every session even more special.
+      </p>
+      <div style="text-align:center;margin:28px 0">
+        <a href="${surveyUrl}" style="background:#2c2c2c;color:#fff;text-decoration:none;padding:14px 32px;border-radius:4px;font-size:15px;letter-spacing:1px">
+          SHARE YOUR EXPERIENCE
+        </a>
+      </div>
+      <p style="color:#2c2c2c;font-size:15px;line-height:1.6;margin:0 0 8px">
+        If you're happy with your photos, we'd be incredibly grateful for a quick Google review — it makes a huge difference to us as a small studio. 🙏
+      </p>
+      <div style="text-align:center;margin:16px 0 28px">
+        <a href="${googleReviewUrl}" style="background:#c9a84c;color:#fff;text-decoration:none;padding:12px 28px;border-radius:4px;font-size:14px;letter-spacing:1px">
+          ★ LEAVE A GOOGLE REVIEW
+        </a>
+      </div>
+      <p style="color:#2c2c2c;font-size:16px;line-height:1.6;margin:0 0 16px">
+        It only takes a minute and means the world to us. Thank you for choosing Jepson Myles Studio for your Christmas memories.
+      </p>
+      <p style="color:#2c2c2c;font-size:15px;line-height:1.6;margin:28px 0 4px">Happy holidays,</p>
+      <p style="color:#2c2c2c;font-size:15px;line-height:1.6;margin:0"><strong>Jepson Myles Studio</strong></p>
+    </div>
+  `;
+
+  const dbTemplate = await getTemplate('noel_survey');
+  if (dbTemplate) {
+    subject = renderTemplate(dbTemplate.subject, variables);
+    htmlContent = renderTemplate(dbTemplate.htmlBody, variables);
+  }
+
+  try {
+    const { client, fromEmail } = await getResendClient();
+    const replyTo = getProjectReplyToEmail(projectId);
+    const response = await client.emails.send({ from: fromEmail, replyTo, to: clientEmail, subject, html: htmlContent });
+    if (response.data?.id) {
+      await logEmail(projectId, EmailType.NOEL_SURVEY, clientEmail, subject, 'sent', response.data.id);
+      return { success: true, messageId: response.data.id };
+    }
+    const errorMsg = response.error?.message || 'Unknown error';
+    await logEmail(projectId, EmailType.NOEL_SURVEY, clientEmail, subject, 'failed', undefined, errorMsg);
+    return { success: false, error: errorMsg };
+  } catch (error: any) {
+    await logEmail(projectId, EmailType.NOEL_SURVEY, clientEmail, subject, 'failed', undefined, error.message);
+    return { success: false, error: error.message };
+  }
+}

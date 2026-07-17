@@ -51,11 +51,22 @@ export function isEnabled(id: string): boolean {
   return a ? a.enabled : true;
 }
 
+// Toggle hook registry — campaign scheduler registers here for true subscribe/unsubscribe
+const toggleHooks: Array<(id: string, enabled: boolean) => void> = [];
+
+export function onAutomationToggle(hook: (id: string, enabled: boolean) => void): void {
+  toggleHooks.push(hook);
+}
+
 export function setEnabled(id: string, enabled: boolean): boolean {
   const a = automations.get(id);
   if (!a) return false;
   a.enabled = enabled;
   logActivity(id, enabled ? 'Enabled' : 'Disabled');
+  // Notify all registered toggle hooks (e.g. campaign event bus subscribe/unsubscribe)
+  for (const hook of toggleHooks) {
+    try { hook(id, enabled); } catch {}
+  }
   return true;
 }
 
@@ -1292,6 +1303,143 @@ register({
   actions: ['Broadcast update event to all connected clients', 'Update UI in real-time'],
   connectsTo: [],
   apiRoute: '/api/events',
+});
+
+// ========================================
+// NOËL SET 2026 CAMPAIGN AUTOMATIONS
+// ========================================
+
+register({
+  id: 'noel_detection',
+  name: 'Noël Set Auto-Detection',
+  description: 'When a ShootTracker event is promoted, checks title/description for Noël/noel/Christmas Set keywords. If matched, links the project to the active Noël campaign and caps the due date at 19 December 2026.',
+  type: 'data_triggered',
+  category: 'Project Management',
+  trigger: 'ShootTracker event promoted to project',
+  actions: ['Check event title and description for Noël keywords', 'Tag project with campaign ID', 'Set hard-capped due date (19 Dec 2026)'],
+  connectsTo: ['noel_pacing_engine'],
+});
+
+register({
+  id: 'noel_pacing_engine',
+  name: 'Noël Set Pacing Engine',
+  description: 'Runs nightly at 02:00 to snapshot campaign velocity — compares photos completed vs required daily rate, forecasts finish date, and raises a pacing.warning event if the team is behind schedule.',
+  type: 'background',
+  category: 'Scheduled Processes',
+  trigger: 'Nightly at 02:00',
+  actions: ['Count completed photos', 'Calculate required daily rate vs actual', 'Forecast finish date', 'Snapshot to velocity log', 'Warn if behind schedule'],
+  connectsTo: [],
+});
+
+register({
+  id: 'noel_count_entry',
+  name: 'Noël Photo Count Entry',
+  description: 'DataWrangler enters the photo count for each Noël project in the campaign cockpit. Count is stored as selectedPhotoCount and feeds the pacing engine.',
+  type: 'user_action',
+  category: 'Project Management',
+  trigger: 'DataWrangler enters count in Campaign Cockpit',
+  actions: ['Store selectedPhotoCount on project', 'Emit project.counted event'],
+  connectsTo: ['noel_pacing_engine'],
+  apiRoute: '/api/campaign/projects/:id/count',
+  roles: ['Admin', 'LeadRetoucher', 'DataWrangler'],
+});
+
+register({
+  id: 'noel_assignment',
+  name: 'Noël Retoucher Assignment',
+  description: 'Admin or Lead assigns a retoucher to each Noël project via the Campaign Cockpit. Updates both the project and the campaign assignment ledger.',
+  type: 'user_action',
+  category: 'Project Management',
+  trigger: 'Admin/Lead clicks Assign in Campaign Cockpit',
+  actions: ['Set assignedRetoucherId on project', 'Upsert campaign assignment record', 'Emit campaign.reassigned event'],
+  connectsTo: [],
+  apiRoute: '/api/campaign/projects/:id/assign',
+  roles: ['Admin', 'LeadRetoucher'],
+});
+
+register({
+  id: 'noel_date_move',
+  name: 'Noël Delivery Date Mover',
+  description: 'Admin moves a Noël project delivery date (capped at 19 Dec). Records history, sends an automated chat message to the client, and updates lastCommunicatedAt.',
+  type: 'user_action',
+  category: 'Project Management',
+  trigger: 'Admin/Lead moves delivery date in Campaign Cockpit',
+  actions: ['Update dueDate and promisedDeliveryDate', 'Record change in dueDateHistory', 'Send automated client chat message', 'Update lastCommunicatedAt'],
+  connectsTo: ['comm_status_auto_msg'],
+  apiRoute: '/api/campaign/projects/:id/move',
+  roles: ['Admin', 'LeadRetoucher'],
+});
+
+register({
+  id: 'noel_email_estimate',
+  name: 'Noël Email 1 — Delivery Estimate',
+  description: 'Sends a branded email to the Noël client with their expected delivery date. Triggered manually from the Campaign Cockpit. Passes through AI text variation.',
+  type: 'communication',
+  category: 'Communication',
+  trigger: 'Admin sends Email 1 from Campaign Cockpit',
+  actions: ['Send Noël delivery estimate email', 'Log email as NOEL_DELIVERY_ESTIMATE'],
+  connectsTo: ['ai_email_variation'],
+  apiRoute: '/api/campaign/projects/:id/email/estimate',
+  roles: ['Admin', 'LeadRetoucher', 'DataWrangler'],
+});
+
+register({
+  id: 'noel_email_ready',
+  name: 'Noël Email 2 — Photos Ready',
+  description: 'Sends a branded "your photos are ready" email with gallery link. Triggered manually from the Campaign Cockpit after Drive upload completes.',
+  type: 'communication',
+  category: 'Communication',
+  trigger: 'Admin sends Email 2 from Campaign Cockpit',
+  actions: ['Send Noël photos-ready email with gallery link', 'Log email as NOEL_PHOTOS_READY'],
+  connectsTo: ['ai_email_variation'],
+  apiRoute: '/api/campaign/projects/:id/email/ready',
+  roles: ['Admin', 'LeadRetoucher', 'DataWrangler'],
+});
+
+register({
+  id: 'noel_email_survey',
+  name: 'Noël Email 3 — Post-Delivery Survey',
+  description: 'Sends a post-delivery satisfaction survey email to the Noël client. Survey delay is configurable per campaign.',
+  type: 'communication',
+  category: 'Communication',
+  trigger: 'Admin sends Email 3 from Campaign Cockpit (after campaign.surveyDelayDays)',
+  actions: ['Send Noël survey email', 'Log email as NOEL_SURVEY'],
+  connectsTo: ['ai_email_variation'],
+  apiRoute: '/api/campaign/projects/:id/email/survey',
+  roles: ['Admin', 'LeadRetoucher', 'DataWrangler'],
+});
+
+register({
+  id: 'noel_delivery_chain',
+  name: 'Noël Delivery Chain',
+  description: 'Full campaign delivery chain triggered when Drive confirms photo upload. Flips project status to Delivered, emits project.delivered, sends Email 2 (Photos Ready), and schedules Email 3 (Survey) after surveyDelayDays. Skips Email 2 if the standard delivery email was already sent.',
+  type: 'drive_monitor',
+  category: 'Delivery & Gallery',
+  trigger: 'project.driveComplete event (Drive auto-detection) or manual mark-delivered',
+  actions: ['Flip status to Delivered', 'Emit project.delivered', 'Send Email 2 (Photos Ready)', 'Schedule Email 3 after delay'],
+  connectsTo: ['noel_email_ready', 'noel_email_survey', 'noel_pacing_engine'],
+});
+
+register({
+  id: 'noel_work_scheduler',
+  name: 'Noël Photo-Weighted Work Scheduler',
+  description: 'Forward-schedules plannedWorkDate for every undelivered campaign project using a photo-weighted daily-capacity algorithm. Sorts by urgency (earliest delivery deadline first), fills working days up to capacity (30 photos per retoucher per day × retoucher count). Runs after count entry, assignment changes, date moves, and nightly.',
+  type: 'background',
+  category: 'Scheduled Processes',
+  trigger: 'project.countEntered, project.created, project.moved, project.delivered events, and nightly pacing run',
+  actions: ['Sort projects by delivery urgency', 'Forward-fill working days up to daily capacity', 'Persist plannedWorkDate for changed projects'],
+  connectsTo: ['noel_pacing_engine'],
+});
+
+register({
+  id: 'noel_date_slip_alert',
+  name: 'Noël Date Slip Alert',
+  description: 'Sends an automated client chat message when a delivery date slips beyond the campaign dateSlipThresholdDays (default 3). Debounced — only sends once per calendar day per project by checking lastCommunicatedDate. Updates lastCommunicatedDate after sending.',
+  type: 'communication',
+  category: 'Client-Facing',
+  trigger: 'project.dateChanged or project.moved event with slipDays >= dateSlipThresholdDays',
+  actions: ['Check debounce (lastCommunicatedDate)', 'Post automated chat message to client', 'Update lastCommunicatedDate'],
+  connectsTo: ['noel_date_move'],
 });
 
 console.log(`✅ Automation Registry: ${automations.size} automations registered`);

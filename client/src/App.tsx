@@ -21,6 +21,8 @@ import GalleryDetailPage from "@/pages/gallery-detail";
 import ClientGalleryPage from "@/pages/client-gallery";
 import ReviewsPage from "@/pages/reviews";
 import TodayShoots from "@/pages/today-shoots";
+import CampaignCockpit from "@/pages/christmas/CampaignCockpit";
+import RetoucherWorkspace from "@/pages/christmas/RetoucherWorkspace";
 import NotFound from "@/pages/not-found";
 
 function Router() {
@@ -43,6 +45,8 @@ function Router() {
       <Route path="/g/:slug" component={ClientGalleryPage} />
       <Route path="/reviews" component={ReviewsPage} />
       <Route path="/today" component={TodayShoots} />
+      <Route path="/christmas" component={CampaignCockpit} />
+      <Route path="/christmas/workspace" component={RetoucherWorkspace} />
       <Route component={NotFound} />
     </Switch>
   );

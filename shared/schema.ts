@@ -97,6 +97,16 @@ export const projects = pgTable("projects", {
   qualityGateOverrideBy: text("quality_gate_override_by"),
   qualityGateOverrideAt: timestamp("quality_gate_override_at"),
   qualityGateFeedback: jsonb("quality_gate_feedback"),
+  // Campaign fields (Noël Set 2026 pipeline)
+  campaignId: varchar("campaign_id"),
+  assignedRetoucherId: text("assigned_retoucher_id"),
+  promisedDeliveryDate: timestamp("promised_delivery_date"),
+  lastCommunicatedDate: text("last_communicated_date"),
+  lastCommunicatedAt: timestamp("last_communicated_at"),
+  dueDateHistory: jsonb("due_date_history"),
+  selectedPhotoCount: integer("selected_photo_count"),
+  plannedWorkDate: timestamp("planned_work_date"),
+  editProfile: text("edit_profile"),
 });
 
 // ShootTracker metadata table (1:1 with projects)
@@ -183,6 +193,7 @@ export const clientMessages = pgTable("client_messages", {
   attachmentName: text("attachment_name"),
   readAt: timestamp("read_at"),
   tag: text("tag"), // optional tag like 'post_review_reply' to surface special replies
+  automated: boolean("automated").notNull().default(false), // true = system-generated (campaign date-change notifier etc.)
 });
 
 // Client authentication tokens for chat access
@@ -734,6 +745,9 @@ export const EmailType = {
   GOOGLE_REVIEW_PROMPT: "google_review_prompt",
   GOOGLE_REVIEW_REMINDER: "google_review_reminder",
   GOOGLE_REVIEW_THANKS: "google_review_thanks",
+  NOEL_DELIVERY_ESTIMATE: "noel_delivery_estimate",
+  NOEL_PHOTOS_READY: "noel_photos_ready",
+  NOEL_SURVEY: "noel_survey",
 } as const;
 
 export type EmailTypeValue = typeof EmailType[keyof typeof EmailType];
@@ -1109,6 +1123,62 @@ export type ProjectWranglerNote = typeof projectWranglerNotes.$inferSelect;
 export type InsertProjectWranglerNote = z.infer<typeof insertProjectWranglerNoteSchema>;
 
 export type ProjectInspoMeta = typeof projectInspoMeta.$inferSelect;
+
+// =====================================================
+// CAMPAIGN TABLES (Noël Set 2026 Pipeline)
+// =====================================================
+
+export const campaigns = pgTable("campaigns", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  year: integer("year").notNull(),
+  hardDeadline: timestamp("hard_deadline").notNull(),
+  surveyDelayDays: integer("survey_delay_days").notNull().default(3),
+  reviewMode: text("review_mode").notNull().default("spot-check"), // 'full' | 'spot-check' | 'ai-gate-only'
+  isActive: boolean("is_active").notNull().default(true),
+  status: text("status").notNull().default("active"), // 'active' | 'completed' | 'cancelled'
+  bufferDays: integer("buffer_days").notNull().default(2), // extra days to finish before hard deadline
+  dateSlipThresholdDays: integer("date_slip_threshold_days").notNull().default(3), // days of slip before client chat alert
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+  updatedAt: timestamp("updated_at").notNull().default(sql`now()`),
+});
+
+export const campaignAssignments = pgTable("campaign_assignments", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  campaignId: varchar("campaign_id").notNull().references(() => campaigns.id, { onDelete: "cascade" }),
+  retoucherId: text("retoucher_id").notNull(),
+  retoucherName: text("retoucher_name").notNull(),
+  userId: varchar("user_id"), // FK to users table (nullable for non-registered retouchers)
+  roleWithinCampaign: text("role_within_campaign").notNull().default("retoucher"), // 'retoucher' | 'lead' | 'qa'
+  totalAssigned: integer("total_assigned").notNull().default(0),
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+});
+
+export const campaignVelocitySnapshots = pgTable("campaign_velocity_snapshots", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  campaignId: varchar("campaign_id").notNull().references(() => campaigns.id, { onDelete: "cascade" }),
+  snapshotAt: timestamp("snapshot_at").notNull().default(sql`now()`),
+  photosCompleted: integer("photos_completed").notNull().default(0),
+  photosRemaining: integer("photos_remaining").notNull().default(0),
+  requiredDailyRate: integer("required_daily_rate").notNull().default(0),
+  forecastFinishDate: timestamp("forecast_finish_date"),
+  actualDailyRate: integer("actual_daily_rate").notNull().default(0),
+  isOnTrack: boolean("is_on_track").notNull().default(true),
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+});
+
+export const insertCampaignSchema = createInsertSchema(campaigns).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertCampaignAssignmentSchema = createInsertSchema(campaignAssignments).omit({ id: true, createdAt: true });
+export const insertCampaignVelocitySnapshotSchema = createInsertSchema(campaignVelocitySnapshots).omit({ id: true, createdAt: true });
+
+export type Campaign = typeof campaigns.$inferSelect;
+export type InsertCampaign = z.infer<typeof insertCampaignSchema>;
+export type CampaignAssignment = typeof campaignAssignments.$inferSelect;
+export type InsertCampaignAssignment = z.infer<typeof insertCampaignAssignmentSchema>;
+export type CampaignVelocitySnapshot = typeof campaignVelocitySnapshots.$inferSelect;
+export type InsertCampaignVelocitySnapshot = z.infer<typeof insertCampaignVelocitySnapshotSchema>;
+
+export const CAMPAIGN_NOEL_KEYWORDS = ["noël", "noel", "noel set", "noël set", "christmas set"];
 
 export const GalleryPermissions = {
   FULL: ["Admin", "Evans", "Retoucher1", "Retoucher2", "Retoucher3", "DataWrangler"],

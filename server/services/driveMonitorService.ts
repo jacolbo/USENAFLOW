@@ -5,6 +5,7 @@ import { eq, isNotNull, isNull, and, not, inArray, sql } from 'drizzle-orm';
 import * as driveService from './googleDriveService';
 import { sendGalleryPreviewEmail, sendGalleryDeliveryEmail, sendSatisfactionSurveyEmail, generateToken } from './emailService';
 import { recordFired, isEnabled } from './automationRegistry';
+import { campaignBus } from '../events';
 
 let monitorInterval: NodeJS.Timeout | null = null;
 let scanInProgress = false;
@@ -229,7 +230,12 @@ async function executeDeliveryOnPublic(project: any, updateData: any, result: Dr
   updateData.deliveryApprovedBy = 'Drive Auto-Detection';
   result.deliveryTriggered = true;
 
-  if (project.clientEmail) {
+  // Campaign projects: skip standard delivery/survey emails — the campaign delivery
+  // chain (project.driveComplete listener in campaignScheduler.ts) handles them
+  // to prevent duplicate communications in the Noël 3-email journey.
+  if (project.campaignId) {
+    console.log(`📂 Drive Monitor: Skipping standard delivery/survey emails for campaign project ${project.clientName} — campaign chain will handle`);
+  } else if (project.clientEmail) {
     let referralCode: string | undefined;
     try {
       referralCode = generateToken();
@@ -291,6 +297,12 @@ async function executeDeliveryOnPublic(project: any, updateData: any, result: Dr
   try {
     await storage.recordStatusTransition(project.id, project.status || 'Review', 'Delivered', 'Drive Auto-Detection');
   } catch (e) {}
+
+  // Emit campaign drive-complete event so the pacing engine can update velocity
+  if (project.campaignId) {
+    campaignBus.emit("project.driveComplete", { projectId: project.id, campaignId: project.campaignId });
+    console.log(`🎄 Drive Monitor: Emitted project.driveComplete for campaign project ${project.clientName}`);
+  }
 
   console.log(`✅ Drive Monitor: Full delivery completed for ${project.clientName}`);
 }

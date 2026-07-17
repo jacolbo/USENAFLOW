@@ -480,6 +480,33 @@ export function registerShoottrackerRoutes(app: Express): void {
         });
       }
 
+      // ── Noël Set detection ──────────────────────────────────────────────────
+      const titleLower = (stagedEvent.title || "").toLowerCase();
+      const descLower  = (stagedEvent.description || "").toLowerCase();
+      const isNoel =
+        titleLower.includes("noël") || titleLower.includes("noel") || titleLower.includes("christmas set") ||
+        descLower.includes("noël") || descLower.includes("noel") || descLower.includes("christmas set");
+
+      if (isNoel) {
+        try {
+          const { ensureNoelCampaign } = await import("./services/campaignScheduler");
+          const { campaignBus } = await import("./events");
+          const campaign = await ensureNoelCampaign();
+
+          // ShootTracker only tags + emits project.created — the listener in
+          // campaignScheduler.ts handles computing the due date, writing
+          // promisedDeliveryDate, and scheduling work dates.
+          console.log(`🎄 [Noël] Emitting project.created for ${newProject.clientName} → campaign ${campaign.id}`);
+          campaignBus.emit("project.created", {
+            project: newProject,
+            campaignId: campaign.id,
+          });
+        } catch (noelErr: any) {
+          console.error(`🎄 [Noël] Detection error (non-fatal): ${noelErr.message}`);
+        }
+      }
+      // ────────────────────────────────────────────────────────────────────────
+
       const existingMeta = await storage.getShoottrackerMeta(newProject.id).catch(() => undefined);
       if (!existingMeta) {
         await storage.createShoottrackerMeta({

@@ -1,4 +1,4 @@
-import { type User, type InsertUser, type Project, type InsertProject, type UpdateProject, type ProjectNote, type InsertProjectNote, type UpdateProjectNote, type TradeOffer, type InsertTradeOffer, type UpdateTradeOffer, type WranglerCommission, type InsertWranglerCommission, type ProjectEvent, type InsertProjectEvent, type Complaint, type InsertComplaint, type ShoottrackerMeta, type InsertShoottrackerMeta, type UpdateShoottrackerMeta, type AppSetting, type CalendarEventStaging, type InsertCalendarEventStaging, type UpdateCalendarEventStaging, type ClientAuthToken, type InsertClientAuthToken, type ClientMessage, type InsertClientMessage, type DashboardPreferences, type InsertDashboardPreferences, type SneakPeek, type InsertSneakPeek, type Survey, type InsertSurvey, type Referral, type InsertReferral, type ClientProfile, type InsertClientProfile, type RewardClaim, type InsertRewardClaim, type EmailTemplate, type InsertEmailTemplate, type PushSubscription, type InsertPushSubscription, type StatusTransition, type InsertStatusTransition, type LeaveRequest, type InsertLeaveRequest, type AiTeamMessage, type InsertAiTeamMessage, type AiMemory, type InsertAiMemory, type AiAdminInstruction, type InsertAiAdminInstruction, type ProjectInspo, type InsertProjectInspo, type ProjectInspoMeta, type StagingEventInspo, type InsertStagingEventInspo, ProjectStatus, TradeOfferStatus, StagingStatus, users, projects, projectNotes, tradeOffers, wranglerCommissions, projectEvents, complaints, shoottrackerMeta, appSettings, calendarEventsStaging, clientAuthTokens, clientMessages, dashboardPreferences, sneakPeeks, clientSurveys, referrals, clientProfiles, referralRewardClaims, emailTemplates, pushSubscriptions, chatEncryptionKeys, projectStatusTransitions, leaveRequests, aiTeamMessages, aiMemory, aiAdminInstructions, projectInspos, projectInspoMeta, stagingEventInspos } from "@shared/schema";
+import { type User, type InsertUser, type Project, type InsertProject, type UpdateProject, type ProjectNote, type InsertProjectNote, type UpdateProjectNote, type TradeOffer, type InsertTradeOffer, type UpdateTradeOffer, type WranglerCommission, type InsertWranglerCommission, type ProjectEvent, type InsertProjectEvent, type Complaint, type InsertComplaint, type ShoottrackerMeta, type InsertShoottrackerMeta, type UpdateShoottrackerMeta, type AppSetting, type CalendarEventStaging, type InsertCalendarEventStaging, type UpdateCalendarEventStaging, type ClientAuthToken, type InsertClientAuthToken, type ClientMessage, type InsertClientMessage, type DashboardPreferences, type InsertDashboardPreferences, type SneakPeek, type InsertSneakPeek, type Survey, type InsertSurvey, type Referral, type InsertReferral, type ClientProfile, type InsertClientProfile, type RewardClaim, type InsertRewardClaim, type EmailTemplate, type InsertEmailTemplate, type PushSubscription, type InsertPushSubscription, type StatusTransition, type InsertStatusTransition, type LeaveRequest, type InsertLeaveRequest, type AiTeamMessage, type InsertAiTeamMessage, type AiMemory, type InsertAiMemory, type AiAdminInstruction, type InsertAiAdminInstruction, type ProjectInspo, type InsertProjectInspo, type ProjectInspoMeta, type StagingEventInspo, type InsertStagingEventInspo, type Campaign, type InsertCampaign, type CampaignAssignment, type InsertCampaignAssignment, type CampaignVelocitySnapshot, type InsertCampaignVelocitySnapshot, ProjectStatus, TradeOfferStatus, StagingStatus, users, projects, projectNotes, tradeOffers, wranglerCommissions, projectEvents, complaints, shoottrackerMeta, appSettings, calendarEventsStaging, clientAuthTokens, clientMessages, dashboardPreferences, sneakPeeks, clientSurveys, referrals, clientProfiles, referralRewardClaims, emailTemplates, pushSubscriptions, chatEncryptionKeys, projectStatusTransitions, leaveRequests, aiTeamMessages, aiMemory, aiAdminInstructions, projectInspos, projectInspoMeta, stagingEventInspos, campaigns, campaignAssignments, campaignVelocitySnapshots } from "@shared/schema";
 import { db } from "./db";
 import { eq, sql, asc, and, ilike, isNotNull, isNull, lte, desc, inArray } from "drizzle-orm";
 import { randomUUID } from "crypto";
@@ -214,6 +214,17 @@ export interface IStorage {
   getProjectInspoMeta(projectId: string): Promise<ProjectInspoMeta | undefined>;
   upsertProjectInspoMeta(projectId: string, overallInstructions: string, updatedBy: string): Promise<ProjectInspoMeta>;
 
+  // Campaign methods (Noël Set 2026)
+  getCampaign(id: string): Promise<Campaign | undefined>;
+  getActiveCampaign(): Promise<Campaign | undefined>;
+  createCampaign(campaign: InsertCampaign): Promise<Campaign>;
+  updateCampaign(id: string, updates: Partial<Campaign>): Promise<Campaign | undefined>;
+  getCampaignProjects(campaignId: string): Promise<Project[]>;
+  getCampaignAssignments(campaignId: string): Promise<CampaignAssignment[]>;
+  getCampaignAssignment(campaignId: string, retoucherId: string): Promise<CampaignAssignment | undefined>;
+  upsertCampaignAssignment(assignment: InsertCampaignAssignment): Promise<CampaignAssignment>;
+  getVelocitySnapshots(campaignId: string, limit?: number): Promise<CampaignVelocitySnapshot[]>;
+  createVelocitySnapshot(snapshot: InsertCampaignVelocitySnapshot): Promise<CampaignVelocitySnapshot>;
 }
 
 export class MemStorage implements IStorage {
@@ -454,11 +465,11 @@ export class MemStorage implements IStorage {
   }
 
   async getAllProjects(): Promise<Project[]> {
-    return Array.from(this.projects.values()).filter(p => !p.isInspoPlaceholder);
+    return Array.from(this.projects.values()).filter(p => !p.isInspoPlaceholder && !p.campaignId);
   }
 
   async getAllProjectsIncludingPlaceholders(): Promise<Project[]> {
-    return Array.from(this.projects.values());
+    return Array.from(this.projects.values()).filter(p => !p.campaignId);
   }
 
   async getProject(id: string): Promise<Project | undefined> {
@@ -1104,6 +1115,18 @@ export class MemStorage implements IStorage {
   async deleteAdminInstruction(id: string): Promise<boolean> {
     return this.adminInstructions.delete(id);
   }
+
+  // Campaign stubs for MemStorage (not used in production)
+  async getCampaign(id: string): Promise<Campaign | undefined> { return undefined; }
+  async getActiveCampaign(): Promise<Campaign | undefined> { return undefined; }
+  async createCampaign(campaign: InsertCampaign): Promise<Campaign> { throw new Error("Not implemented in MemStorage"); }
+  async updateCampaign(id: string, updates: Partial<Campaign>): Promise<Campaign | undefined> { return undefined; }
+  async getCampaignProjects(campaignId: string): Promise<Project[]> { return []; }
+  async getCampaignAssignments(campaignId: string): Promise<CampaignAssignment[]> { return []; }
+  async getCampaignAssignment(campaignId: string, retoucherId: string): Promise<CampaignAssignment | undefined> { return undefined; }
+  async upsertCampaignAssignment(assignment: InsertCampaignAssignment): Promise<CampaignAssignment> { throw new Error("Not implemented in MemStorage"); }
+  async getVelocitySnapshots(campaignId: string, limit?: number): Promise<CampaignVelocitySnapshot[]> { return []; }
+  async createVelocitySnapshot(snapshot: InsertCampaignVelocitySnapshot): Promise<CampaignVelocitySnapshot> { throw new Error("Not implemented in MemStorage"); }
 }
 
 // Database Storage Implementation
@@ -1145,11 +1168,13 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getAllProjects(): Promise<Project[]> {
-    return await db.select().from(projects).where(eq(projects.isInspoPlaceholder, false));
+    return await db.select().from(projects).where(
+      and(eq(projects.isInspoPlaceholder, false), isNull(projects.campaignId))
+    );
   }
 
   async getAllProjectsIncludingPlaceholders(): Promise<Project[]> {
-    return await db.select().from(projects);
+    return await db.select().from(projects).where(isNull(projects.campaignId));
   }
 
   async getProject(id: string): Promise<Project | undefined> {
@@ -2654,6 +2679,69 @@ export class DatabaseStorage implements IStorage {
       await tx.delete(projects).where(eq(projects.id, sourceProjectId));
       return { moved };
     });
+  }
+
+  // ============================
+  // CAMPAIGN METHODS (Noël 2026)
+  // ============================
+
+  async getCampaign(id: string): Promise<Campaign | undefined> {
+    const [campaign] = await db.select().from(campaigns).where(eq(campaigns.id, id));
+    return campaign || undefined;
+  }
+
+  async getActiveCampaign(): Promise<Campaign | undefined> {
+    const [campaign] = await db.select().from(campaigns).where(eq(campaigns.isActive, true)).orderBy(desc(campaigns.createdAt)).limit(1);
+    return campaign || undefined;
+  }
+
+  async createCampaign(campaign: InsertCampaign): Promise<Campaign> {
+    const [created] = await db.insert(campaigns).values(campaign).returning();
+    return created;
+  }
+
+  async updateCampaign(id: string, updates: Partial<Campaign>): Promise<Campaign | undefined> {
+    const [updated] = await db.update(campaigns).set({ ...updates, updatedAt: new Date() }).where(eq(campaigns.id, id)).returning();
+    return updated || undefined;
+  }
+
+  async getCampaignProjects(campaignId: string): Promise<Project[]> {
+    return await db.select().from(projects).where(eq(projects.campaignId, campaignId));
+  }
+
+  async getCampaignAssignments(campaignId: string): Promise<CampaignAssignment[]> {
+    return await db.select().from(campaignAssignments).where(eq(campaignAssignments.campaignId, campaignId));
+  }
+
+  async getCampaignAssignment(campaignId: string, retoucherId: string): Promise<CampaignAssignment | undefined> {
+    const [assignment] = await db.select().from(campaignAssignments)
+      .where(and(eq(campaignAssignments.campaignId, campaignId), eq(campaignAssignments.retoucherId, retoucherId)));
+    return assignment || undefined;
+  }
+
+  async upsertCampaignAssignment(assignment: InsertCampaignAssignment): Promise<CampaignAssignment> {
+    const existing = await this.getCampaignAssignment(assignment.campaignId, assignment.retoucherId);
+    if (existing) {
+      const [updated] = await db.update(campaignAssignments)
+        .set({ totalAssigned: existing.totalAssigned + (assignment.totalAssigned || 1) })
+        .where(eq(campaignAssignments.id, existing.id))
+        .returning();
+      return updated;
+    }
+    const [created] = await db.insert(campaignAssignments).values(assignment).returning();
+    return created;
+  }
+
+  async getVelocitySnapshots(campaignId: string, limit = 30): Promise<CampaignVelocitySnapshot[]> {
+    return await db.select().from(campaignVelocitySnapshots)
+      .where(eq(campaignVelocitySnapshots.campaignId, campaignId))
+      .orderBy(desc(campaignVelocitySnapshots.snapshotAt))
+      .limit(limit);
+  }
+
+  async createVelocitySnapshot(snapshot: InsertCampaignVelocitySnapshot): Promise<CampaignVelocitySnapshot> {
+    const [created] = await db.insert(campaignVelocitySnapshots).values(snapshot).returning();
+    return created;
   }
 
 }
