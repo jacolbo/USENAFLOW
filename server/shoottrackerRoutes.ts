@@ -124,6 +124,23 @@ export function registerShoottrackerRoutes(app: Express): void {
     }
   });
 
+  app.put("/api/admin/shoottracker/calendars/selected", verifyAdminOrLeadRequest, async (req: Request, res: Response) => {
+    try {
+      const { selected_calendar_ids } = req.body;
+      if (!Array.isArray(selected_calendar_ids)) {
+        return res.status(400).json({ error: "selected_calendar_ids must be an array" });
+      }
+      const current = await storage.getAppSetting<any>(SETTINGS_KEY) || {};
+      const updated = { ...current, selected_calendar_ids };
+      await storage.setAppSetting(SETTINGS_KEY, updated);
+      console.log(`[ShootTracker] Calendar selection updated: ${selected_calendar_ids.length} calendar(s) selected`);
+      res.json({ success: true, selected_calendar_ids });
+    } catch (error: any) {
+      console.error("Error saving calendar selection:", error);
+      res.status(500).json({ error: error.message || "Failed to save calendar selection" });
+    }
+  });
+
   app.put("/api/admin/shoottracker/settings", verifyAdminOrLeadRequest, async (req: Request, res: Response) => {
     try {
       const validatedSettings = shoottrackerSettingsSchema.parse(req.body);

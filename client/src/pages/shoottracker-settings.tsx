@@ -420,6 +420,29 @@ export default function ShootTrackerSettings() {
     }
   }, [settingsQuery.data, form]);
 
+  const saveCalendarSelectionMutation = useMutation({
+    mutationFn: async (selected_calendar_ids: string[]) => {
+      const headers = {
+        ...getAdminHeaders(userRole, userId),
+        "Content-Type": "application/json",
+      };
+      const response = await fetch("/api/admin/shoottracker/calendars/selected", {
+        method: "PUT",
+        headers,
+        body: JSON.stringify({ selected_calendar_ids }),
+      });
+      if (!response.ok) throw new Error("Failed to save calendar selection");
+      return response.json();
+    },
+    onSuccess: () => {
+      toast({ title: "Calendars saved", description: "Calendar selection has been updated." });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/shoottracker/settings"] });
+    },
+    onError: () => {
+      toast({ title: "Error", description: "Failed to save calendar selection.", variant: "destructive" });
+    },
+  });
+
   const saveSettingsMutation = useMutation({
     mutationFn: async (data: ShoottrackerSettings) => {
       const headers = {
@@ -1487,9 +1510,22 @@ export default function ShootTrackerSettings() {
                     )}
                   />
                   
-                  <div className="flex gap-2">
+                  <div className="flex gap-2 flex-wrap">
+                    <Button
+                      type="button"
+                      variant="default"
+                      onClick={() => saveCalendarSelectionMutation.mutate(form.getValues("selected_calendar_ids"))}
+                      disabled={saveCalendarSelectionMutation.isPending}
+                    >
+                      {saveCalendarSelectionMutation.isPending ? (
+                        <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Saving...</>
+                      ) : (
+                        "Save Calendar Selection"
+                      )}
+                    </Button>
                     <Button 
                       type="button"
+                      variant="outline"
                       onClick={() => syncMutation.mutate()} 
                       disabled={syncMutation.isPending}
                     >
