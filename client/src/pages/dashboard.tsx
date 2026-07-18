@@ -3534,6 +3534,20 @@ export default function Dashboard() {
                           </DropdownMenuItem>
                         )}
 
+                        {/* Noël Campaign - Cockpit for Admin/Lead/DataWrangler, Workspace for Retouchers */}
+                        {['Admin', 'LeadRetoucher', 'DataWrangler'].includes(user.role) && (
+                          <DropdownMenuItem onClick={() => setLocation('/christmas')}>
+                            <Gift className="h-4 w-4 mr-2" />
+                            Noël Campaign
+                          </DropdownMenuItem>
+                        )}
+                        {['Retoucher1', 'Retoucher2', 'Retoucher3'].includes(user.role) && (
+                          <DropdownMenuItem onClick={() => setLocation('/christmas/workspace')}>
+                            <Gift className="h-4 w-4 mr-2" />
+                            Noël Campaign
+                          </DropdownMenuItem>
+                        )}
+
                         {/* Today's Shoots - Photographer + Admin/LeadRetoucher/DataWrangler */}
                         {['Admin', 'LeadRetoucher', 'DataWrangler', 'Photographer'].includes(user.role) && (
                           <DropdownMenuItem onClick={() => setLocation('/today')} data-testid="menu-today-shoots">
