@@ -3867,10 +3867,10 @@ export default function Dashboard() {
                 user.role !== "Sales" && user.role !== "Evans" && 
                 !showCommissions && !showExtraPhotosSales && !showComplaints && !showRewards && !showReferrals && !showVipClients && !showDriveManager) {
               const DELIVERED_STATUSES = ["Delivered", "Done"];
-              const activeProjects = visibleProjects
+              const activeProjects = projects
                 .filter(p => p.dueDate && !DELIVERED_STATUSES.includes(p.status))
                 .sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
-              const deliveredProjects = visibleProjects
+              const deliveredProjects = projects
                 .filter(p => p.dueDate && DELIVERED_STATUSES.includes(p.status))
                 .sort((a, b) => new Date(b.dueDate).getTime() - new Date(a.dueDate).getTime());
               const tableProjects = projectListTab === "active" ? activeProjects : deliveredProjects;
