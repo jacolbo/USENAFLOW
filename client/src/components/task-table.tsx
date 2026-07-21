@@ -1037,12 +1037,26 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false, re
     },
   });
 
+  // SAST-local date key — returns "YYYY-MM-DD" in Africa/Johannesburg timezone for safe same-day comparisons
+  const toSASTDateKey = (date: Date): string => {
+    const parts = new Intl.DateTimeFormat('en-ZA', {
+      timeZone: 'Africa/Johannesburg',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).formatToParts(date);
+    const y = parts.find(p => p.type === 'year')?.value;
+    const m = parts.find(p => p.type === 'month')?.value;
+    const d = parts.find(p => p.type === 'day')?.value;
+    return `${y}-${m}-${d}`;
+  };
+
   // Reschedule mutation — calls the dedicated endpoint that also logs + emails client
+  // actorId is derived server-side from x-usena-user-id header, not sent by client
   const rescheduleConfirmMutation = useMutation({
-    mutationFn: async ({ projectId, newDate, actorId }: { projectId: string; newDate: Date; actorId: string }) => {
+    mutationFn: async ({ projectId, newDate }: { projectId: string; newDate: Date }) => {
       return await apiRequest("POST", `/api/projects/${projectId}/reschedule`, {
         newDate: newDate.toISOString(),
-        actorId,
       });
     },
     onSuccess: (data: any) => {
@@ -1455,10 +1469,10 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false, re
                         const dayName = dayDate.toLocaleDateString('en-US', { weekday: 'short' });
                         const dayNumber = dayDate.getDate();
                         
-                        // Get projects due on this specific day and apply search filter
+                        // Get projects due on this specific day using SAST-local date keys to avoid timezone day-shift
+                        const dayKey_SAST = toSASTDateKey(dayDate);
                         const allDayProjects = group.projects.filter(project => {
-                          const projectDate = new Date(project.dueDate);
-                          return projectDate.toDateString() === dayDate.toDateString();
+                          return toSASTDateKey(new Date(project.dueDate)) === dayKey_SAST;
                         });
                         const dayProjects = filterProjectsBySearch(allDayProjects, weekKey);
 
@@ -1472,20 +1486,18 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false, re
                           return formatRetoucherAbbr(assignedTo);
                         };
 
-                        // Status-first color coding for calendar pills
+                        // Status-first color coding — uses SAST date keys to avoid timezone day-shift bugs
                         const getProjectColor = (project: Project) => {
                           const status = project.status;
                           if (status === "Delivered" || status === "Done") {
                             return 'bg-green-600 text-white';
                           }
-                          const todayMidnight = new Date();
-                          todayMidnight.setHours(0, 0, 0, 0);
-                          const dueMidnight = new Date(project.dueDate);
-                          dueMidnight.setHours(0, 0, 0, 0);
-                          if (dueMidnight < todayMidnight) {
+                          const todayKey = toSASTDateKey(new Date());
+                          const dueKey = toSASTDateKey(new Date(project.dueDate));
+                          if (dueKey < todayKey) {
                             return 'bg-red-500 text-white';
                           }
-                          if (dueMidnight.getTime() === todayMidnight.getTime()) {
+                          if (dueKey === todayKey) {
                             return 'bg-amber-500 text-white';
                           }
                           return 'bg-blue-500 text-white';
@@ -2570,49 +2582,71 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false, re
       })}
       
       {/* Reschedule Confirmation Dialog */}
-      {rescheduleModal && (
-        <Dialog open={!!rescheduleModal} onOpenChange={(open) => { if (!open) setRescheduleModal(null); }}>
-          <DialogContent className="max-w-md">
-            <DialogHeader>
-              <DialogTitle>Confirm Reschedule</DialogTitle>
-              <DialogDescription>
-                Moving <strong>{rescheduleModal.project.clientName}</strong> to a new delivery date.
-                {rescheduleModal.project.clientEmail && " The client will be notified by email."}
-              </DialogDescription>
-            </DialogHeader>
-            <div className="space-y-3 py-2">
-              <div className="grid grid-cols-2 gap-2 text-sm">
-                <div className="text-gray-500 dark:text-gray-400">Current date</div>
-                <div className="line-through text-gray-400 dark:text-gray-500">
-                  {new Date(rescheduleModal.project.dueDate).toLocaleDateString('en-ZA', { weekday: 'short', day: 'numeric', month: 'short' })}
+      {rescheduleModal && (() => {
+        const oldFmt = new Date(rescheduleModal.project.dueDate).toLocaleDateString('en-ZA', {
+          weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
+          timeZone: 'Africa/Johannesburg',
+        });
+        const newFmt = rescheduleModal.targetDate.toLocaleDateString('en-ZA', {
+          weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
+          timeZone: 'Africa/Johannesburg',
+        });
+        const firstName = rescheduleModal.project.clientName.split(' ')[0];
+        const hasEmail = !!rescheduleModal.project.clientEmail;
+        return (
+          <Dialog open={!!rescheduleModal} onOpenChange={(open) => { if (!open) setRescheduleModal(null); }}>
+            <DialogContent className="max-w-lg">
+              <DialogHeader>
+                <DialogTitle>Confirm Reschedule</DialogTitle>
+                <DialogDescription>
+                  Moving <strong>{rescheduleModal.project.clientName}</strong>'s delivery date.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4 py-1">
+                <div className="grid grid-cols-2 gap-2 text-sm">
+                  <div className="text-gray-500 dark:text-gray-400">Current date</div>
+                  <div className="line-through text-gray-400 dark:text-gray-500">{oldFmt}</div>
+                  <div className="text-gray-500 dark:text-gray-400">New date</div>
+                  <div className="font-semibold text-gray-900 dark:text-gray-100">{newFmt}</div>
                 </div>
-                <div className="text-gray-500 dark:text-gray-400">New date</div>
-                <div className="font-semibold text-gray-900 dark:text-gray-100">
-                  {rescheduleModal.targetDate.toLocaleDateString('en-ZA', { weekday: 'short', day: 'numeric', month: 'short' })}
-                </div>
+                {hasEmail && (
+                  <div className="rounded-md border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/30 p-3 space-y-1.5">
+                    <p className="text-xs font-medium text-blue-700 dark:text-blue-300 uppercase tracking-wide">Email preview — will be sent to client</p>
+                    <p className="text-xs font-semibold text-gray-800 dark:text-gray-200">Subject: Update on your photo delivery, {firstName}</p>
+                    <div className="text-xs text-gray-700 dark:text-gray-300 space-y-1 border-t border-blue-200 dark:border-blue-700 pt-1.5">
+                      <p>Hi {firstName},</p>
+                      <p>We wanted to let you know that your photo delivery date has been updated.</p>
+                      <p><span className="line-through text-gray-400">{oldFmt}</span> → <strong>{newFmt}</strong></p>
+                      <p>We apologise for any inconvenience and appreciate your patience.</p>
+                      <p className="text-gray-500 dark:text-gray-400">— Jepson Myles Studio</p>
+                    </div>
+                  </div>
+                )}
+                {!hasEmail && (
+                  <p className="text-xs text-amber-600 dark:text-amber-400">No client email on record — no notification will be sent.</p>
+                )}
               </div>
-            </div>
-            <div className="flex justify-end gap-2 pt-2">
-              <Button variant="outline" onClick={() => setRescheduleModal(null)}>
-                Cancel
-              </Button>
-              <Button
-                disabled={rescheduleConfirmMutation.isPending}
-                onClick={() => {
-                  rescheduleConfirmMutation.mutate({
-                    projectId: rescheduleModal.project.id,
-                    newDate: rescheduleModal.targetDate,
-                    actorId: user.name,
-                  });
-                  setRescheduleModal(null);
-                }}
-              >
-                {rescheduleConfirmMutation.isPending ? "Saving…" : "Confirm"}
-              </Button>
-            </div>
-          </DialogContent>
-        </Dialog>
-      )}
+              <div className="flex justify-end gap-2 pt-2">
+                <Button variant="outline" onClick={() => setRescheduleModal(null)}>
+                  Cancel
+                </Button>
+                <Button
+                  disabled={rescheduleConfirmMutation.isPending}
+                  onClick={() => {
+                    rescheduleConfirmMutation.mutate({
+                      projectId: rescheduleModal.project.id,
+                      newDate: rescheduleModal.targetDate,
+                    });
+                    setRescheduleModal(null);
+                  }}
+                >
+                  {rescheduleConfirmMutation.isPending ? "Saving…" : "Confirm reschedule"}
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
+        );
+      })()}
 
       {/* Assignment Modal */}
       <AnimatePresence>

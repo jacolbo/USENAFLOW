@@ -1721,10 +1721,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/projects/:id/reschedule", async (req, res) => {
     try {
       const { id } = req.params;
-      const { newDate, actorId } = req.body;
-      if (!newDate || !actorId) {
-        return res.status(400).json({ error: "newDate and actorId are required" });
+      const { newDate } = req.body;
+      if (!newDate) {
+        return res.status(400).json({ error: "newDate is required" });
       }
+      // Derive actor from auth headers — never trust client-supplied identity for audit logs
+      const actorId =
+        (req.headers["x-usena-user-id"] as string) ||
+        (req.headers["x-usena-role"] as string) ||
+        "unknown";
+
       const project = await storage.getProject(id);
       if (!project) return res.status(404).json({ error: "Project not found" });
 
