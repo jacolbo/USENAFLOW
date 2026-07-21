@@ -89,6 +89,12 @@ export async function syncNoelCalendar(): Promise<NoelSyncResult> {
 
     // ── 4. Scan every calendar ────────────────────────────────────────────────
     for (const cal of calendars) {
+      // Skip public holiday calendars — these are not working shoots
+      if (/holiday/i.test(cal.summary)) {
+        console.log(`🎄 Noël sync: skipping holiday calendar "${cal.summary}"`);
+        continue;
+      }
+
       let events: Awaited<ReturnType<typeof fetchCalendarEvents>> = [];
       try {
         events = await fetchCalendarEvents(cal.id, timeMin, timeMax);
@@ -101,6 +107,12 @@ export async function syncNoelCalendar(): Promise<NoelSyncResult> {
 
       for (const event of events) {
         try {
+          // Skip unconfirmed leads — "(lead)" anywhere in the title means not a confirmed shoot
+          if (/\(lead\)/i.test(event.summary)) {
+            result.skipped++;
+            continue;
+          }
+
           // Filter to Noël / Christmas events only
           if (!isNoelEvent(event.summary)) {
             result.skipped++;
