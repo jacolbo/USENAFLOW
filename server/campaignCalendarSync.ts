@@ -14,12 +14,19 @@ function noelKeywordMatch(text: string): boolean {
 export interface NoelSyncResult {
   created: number;
   updated: number;
+  promoted: number;
   skipped: number;
   errors: string[];
 }
 
 export async function syncNoelCalendar(): Promise<NoelSyncResult> {
-  const result: NoelSyncResult = { created: 0, updated: 0, skipped: 0, errors: [] };
+  const result: NoelSyncResult = {
+    created: 0,
+    updated: 0,
+    promoted: 0,
+    skipped: 0,
+    errors: [],
+  };
 
   try {
     const campaign = await storage.getActiveCampaign();
@@ -41,10 +48,10 @@ export async function syncNoelCalendar(): Promise<NoelSyncResult> {
       return result;
     }
 
-    // Use an extreme window that covers all practical dates (the Google Calendar
-    // API requires a time range; this is the closest approximation to "all dates").
-    const timeMin = new Date(0);                          // 1970-01-01 (Unix epoch)
-    const timeMax = new Date('2100-12-31T23:59:59Z');    // far future
+    // Use an extreme window that covers all practical dates.
+    // The Google Calendar API requires a time range; this is the closest to "all dates".
+    const timeMin = new Date(0);                         // 1970-01-01 (Unix epoch)
+    const timeMax = new Date('2100-12-31T23:59:59Z');   // far future
 
     for (const cal of calendars) {
       let events: Awaited<ReturnType<typeof fetchCalendarEvents>> = [];
@@ -72,9 +79,9 @@ export async function syncNoelCalendar(): Promise<NoelSyncResult> {
           const shootDate = event.start;
 
           // Google Calendar all-day events have an exclusive end date (end = last day + 1).
-          // A single-day all-day event → end - start = exactly 24 h.
-          // A multi-day all-day event → end - start ≥ 48 h.
-          // Timed events rarely span > 12 h, so ≥ 48 h is the safe multi-day threshold.
+          // A single-day all-day event → end − start = exactly 24 h.
+          // A multi-day all-day event → end − start ≥ 48 h.
+          // Use ≥ 48 h as the multi-day threshold to avoid misclassifying single-day events.
           const durationMs =
             event.end && !isNaN(event.end.getTime())
               ? event.end.getTime() - event.start.getTime()
@@ -82,19 +89,48 @@ export async function syncNoelCalendar(): Promise<NoelSyncResult> {
           const isMultiDay = durationMs >= 2 * 24 * 60 * 60 * 1000; // ≥ 48 h
           const promisedDeliveryDate = isMultiDay ? event.end : event.start;
 
+          // ── Dedup check ──────────────────────────────────────────────────────────
+          // calendarEventId is UNIQUE across the projects table.  We must check what
+          // pipeline the existing project belongs to and act accordingly:
+          //
+          //  a) Already a Noël campaign project   → update dates only
+          //  b) ShootTracker project (no campaignId) → promote into this campaign
+          //  c) Belongs to a different campaign   → skip (don't hijack)
+          //  d) No existing project               → create new campaign project
+          // ────────────────────────────────────────────────────────────────────────
           const existing = await storage.getProjectByCalendarEventId(event.id);
 
           if (existing) {
-            await storage.updateProject(existing.id, {
-              shootDate,
-              promisedDeliveryDate,
-              lastSyncedAt: new Date(),
-            });
-            result.updated++;
+            if (existing.campaignId === campaign.id) {
+              // (a) Already in this Noël campaign — refresh dates
+              await storage.updateProject(existing.id, {
+                shootDate,
+                promisedDeliveryDate,
+                lastSyncedAt: new Date(),
+              });
+              result.updated++;
+            } else if (!existing.campaignId) {
+              // (b) ShootTracker project — promote it into the Noël campaign
+              await storage.updateProject(existing.id, {
+                shootDate,
+                promisedDeliveryDate,
+                campaignId: campaign.id,
+                status: 'ShootDone',
+                lastSyncedAt: new Date(),
+              });
+              result.promoted++;
+              console.log(
+                `🎄 Noël sync: promoted ShootTracker project "${existing.clientName}" → campaign`
+              );
+            } else {
+              // (c) Different campaign — leave it alone
+              result.skipped++;
+            }
             continue;
           }
 
-          // Sunday of shoot week — dueDate is a required field on projects
+          // (d) No existing project — create a new Noël campaign project
+          // Sunday of the shoot week (dueDate is a required field on projects)
           const sunday = new Date(shootDate);
           sunday.setDate(sunday.getDate() - sunday.getDay());
           sunday.setHours(0, 0, 0, 0);
@@ -118,7 +154,9 @@ export async function syncNoelCalendar(): Promise<NoelSyncResult> {
 
           result.created++;
           console.log(
-            `🎄 Noël sync: created "${event.summary}" (shoot ${shootDate.toISOString().slice(0, 10)}, delivery ${promisedDeliveryDate.toISOString().slice(0, 10)})`
+            `🎄 Noël sync: created "${event.summary}" ` +
+              `(shoot ${shootDate.toISOString().slice(0, 10)}, ` +
+              `delivery ${promisedDeliveryDate.toISOString().slice(0, 10)})`
           );
         } catch (err: any) {
           result.errors.push(`Event "${event.summary}": ${err.message}`);
@@ -128,7 +166,8 @@ export async function syncNoelCalendar(): Promise<NoelSyncResult> {
     }
 
     console.log(
-      `✅ Noël sync complete: ${result.created} created, ${result.updated} updated, ${result.skipped} skipped, ${result.errors.length} errors`
+      `✅ Noël sync complete: ${result.created} created, ${result.promoted} promoted, ` +
+        `${result.updated} updated, ${result.skipped} skipped, ${result.errors.length} errors`
     );
   } catch (err: any) {
     console.error('❌ Noël sync failed:', err.message);
