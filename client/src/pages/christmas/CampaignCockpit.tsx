@@ -779,14 +779,28 @@ function CalendarGrid({ projects }: { projects: Project[] }) {
   const [countProject, setCountProject] = useState<Project | null>(null);
   const [photoCount, setPhotoCount] = useState("");
 
+  const [lastSyncErrors, setLastSyncErrors] = useState<string[]>([]);
+
   const syncMutation = useMutation({
     mutationFn: () => campaignFetch("POST", "/api/campaign/sync-calendar", {}),
     onSuccess: (data: any) => {
       qc.invalidateQueries({ queryKey: ["/api/campaign"] });
-      toast({
-        title: `Calendar synced`,
-        description: `${data.created} new, ${data.updated} updated${data.errors?.length ? `, ${data.errors.length} errors` : ""}`,
-      });
+      setLastSyncErrors(data.errors || []);
+      const hasConnectorError = (data.errors || []).some((e: string) =>
+        /not connected|authoris|connector/i.test(e)
+      );
+      if (hasConnectorError) {
+        toast({
+          title: "Google Calendar not connected",
+          description: "Authorise the connector in Deployment › Advanced › Connectors, then sync again.",
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "Calendar synced",
+          description: `${data.created} new, ${data.updated} updated${data.errors?.length ? `, ${data.errors.length} errors` : ""}`,
+        });
+      }
     },
     onError: (e: any) => toast({ title: "Sync failed", description: e.message, variant: "destructive" }),
   });
@@ -892,6 +906,16 @@ function CalendarGrid({ projects }: { projects: Project[] }) {
             </div>
           </div>
           <p className="text-xs text-muted-foreground mt-1">Double-click a project pill to enter photo count</p>
+          {lastSyncErrors.some(e => /not connected|authoris|connector/i.test(e)) && (
+            <div className="flex items-start gap-2 mt-2 p-2 bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-700 rounded text-xs text-amber-800 dark:text-amber-200">
+              <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0 text-amber-600" />
+              <span>
+                <strong>Google Calendar not connected.</strong> Authorise the connector in{" "}
+                <em>Deployment › Advanced settings › Connectors</em>, then click{" "}
+                <strong>Refresh from Calendar</strong> to pull in Noël shoots.
+              </span>
+            </div>
+          )}
         </CardHeader>
         <CardContent className="p-0">
           {/* Day-of-week headers */}

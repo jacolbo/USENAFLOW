@@ -46,7 +46,13 @@ export async function syncNoelCalendar(): Promise<NoelSyncResult> {
     try {
       calendars = await listCalendars();
     } catch (err: any) {
-      console.warn('🎄 Noël sync: could not list calendars —', err.message);
+      const isAuthErr =
+        /not connected|no connection|access token|unauthorized|401/i.test(err.message);
+      const msg = isAuthErr
+        ? 'Google Calendar not connected — authorise the connector in Deployment › Advanced › Connectors'
+        : `Could not list calendars: ${err.message}`;
+      console.warn('🎄 Noël sync:', msg);
+      result.errors.push(msg);
       return result;
     }
     if (calendars.length === 0) {
