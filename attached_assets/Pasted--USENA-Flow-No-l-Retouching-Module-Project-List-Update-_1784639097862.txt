@@ -1,0 +1,72 @@
+# USENA Flow — Noël Retouching Module & Project List Update
+
+Implement the following changes. Where existing schema or components conflict with anything below, adapt to the existing structure — do not duplicate tables or fields that already exist.
+
+## 1. Project list view — ordering and filtering
+
+- All projects from 2025 are delivered. None of them should appear in the default list view. If any 2025 project still shows as undelivered, that is a data issue — flag it, do not hide it with UI logic.
+- Default list view shows **undelivered projects only**, sorted by due date ascending: the oldest undelivered projects at the top, the newest projects at the bottom.
+- Delivered projects move out of the default view into a "Delivered" filter/tab.
+
+## 2. Two separate assignment types (do not conflate these)
+
+### Type A — Noël membership (invitation)
+- Managed inside **Noël Settings**.
+- An admin invites/assigns an existing USENA retoucher to be part of Noël retouching.
+- When a retoucher is a Noël member, a **"Noël" tab** appears on their account.
+- Inside the Noël tab, the retoucher sees the clients/projects assigned to them, displayed on the **Noël calendar**.
+- Implementation: use a `noel_members` join table (retoucher_id, invited_at, status) so seasonal membership can be tracked and revoked cleanly.
+
+### Type B — Project assignment
+- This is assigning a specific Noël project to a retoucher. It is a different action from the Type A invitation.
+- Noël project assignments appear **only on the Noël calendar** — never in the normal USENA projects list or the standard calendar.
+- Implementation: add a `workspace` field on projects (`standard` | `noel`). All existing standard views must filter `workspace = 'standard'`; all Noël views filter `workspace = 'noel'`.
+- Guard rule: a Noël project can only be assigned to a retoucher who is already a Noël member. If not, block the action and prompt the admin to invite them first.
+
+## 3. Bug fix — calendar not showing all projects due on a day
+
+- Current bug: the calendar does not display every project due on a given day.
+- Investigate in this order: (1) query result limits/pagination caps, (2) timezone handling — due dates must render in SAST (Africa/Johannesburg), watch for UTC storage shifting dates by a day, (3) day-cell overflow silently truncating items.
+- Requirement: every project due on a day must appear on that day. If a day cell overflows, show a "+N more" expander instead of hiding items.
+
+## 4. Drag-and-drop rescheduling with client email
+
+- Projects on the calendar can be dragged from one day to another to change their due date.
+- On drop, show a **confirmation modal** before anything is saved or sent. The modal displays: project/client name, original due date, new due date, and a preview of the client email. Confirm applies the change and sends the email; Cancel reverts the drag with no side effects.
+- Log every reschedule: project_id, old_date, new_date, actor, timestamp.
+- The email is sent to the client automatically on confirmation, using this copy:
+
+> **Subject:** An update on your gallery delivery date
+>
+> Hi [Client Name],
+>
+> Your gallery was originally scheduled for delivery on [original date]. Due to our current retouching volume, your new delivery date is [new date].
+>
+> We appreciate your patience and understanding — your images are receiving the full care and attention every Jepson Myles gallery deserves, and we look forward to delivering them to you.
+>
+> Warm regards,
+> Jepson Myles Studio
+
+- Dates in the email must be formatted in full (e.g. "Thursday, 23 July 2026") and rendered in SAST.
+
+## 5. Calendar color coding by project status
+
+- Every project on the calendar (both standard and Noël calendars) is color-coded by its status.
+- When a project's status changes to **Delivered**, its calendar item turns **green** immediately.
+- Map the colors to the existing USENA project status values — do not invent new statuses. Suggested defaults, adjust to the existing status set:
+  - Delivered → green (required)
+  - Overdue (past due date, not delivered) → red
+  - Due today → amber
+  - In progress / upcoming → neutral or brand color
+- Colors must update reactively when a status changes, without requiring a page refresh.
+- Include a small legend on the calendar so the color meanings are visible at a glance.
+
+## 6. Reuse the existing USENA Flow post-production process
+
+The Noël module must **adopt the current USENA Flow post-production pipeline exactly as it already exists in the codebase** — do not build a parallel version. Wire Noël projects into the same flow used by standard projects:
+
+1. **Drive check** — the existing process for verifying files/folders on the drive before delivery applies to Noël projects unchanged.
+2. **Delivery emails** — Noël projects use the same delivery email system and templates already implemented in USENA Flow.
+3. **Feedback / review system** — after delivery, Noël clients go through the same existing feedback and review request flow.
+
+Implementation note: locate the existing post-production services/handlers in the codebase and route Noël projects through them (e.g. by having the pipeline operate on all projects regardless of `workspace`, or by explicitly including `workspace = 'noel'`). The only difference between standard and Noël projects should be where they are displayed and assigned (Sections 2–4) — the post-production process itself is shared.
