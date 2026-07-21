@@ -3052,6 +3052,7 @@ export default function Dashboard() {
   const [showTradeModal, setShowTradeModal] = useState(false);
   const [showSettingsDialog, setShowSettingsDialog] = useState(false);
   const [showDriveManager, setShowDriveManager] = useState(false);
+  const [projectListTab, setProjectListTab] = useState<"active" | "delivered">("active");
   const { toast } = useToast();
   const queryClient = useQueryClient();
   
@@ -3865,7 +3866,64 @@ export default function Dashboard() {
             if (widgetId === "project_table" && isWidgetVisible("project_table") && 
                 user.role !== "Sales" && user.role !== "Evans" && 
                 !showCommissions && !showExtraPhotosSales && !showComplaints && !showRewards && !showReferrals && !showVipClients && !showDriveManager) {
-              return <TaskTable key={widgetId} projects={projects} user={user} allUsers={users} />;
+              const DELIVERED_STATUSES = ["Delivered", "Done"];
+              const activeProjects = visibleProjects
+                .filter(p => p.dueDate && !DELIVERED_STATUSES.includes(p.status))
+                .sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
+              const deliveredProjects = visibleProjects
+                .filter(p => p.dueDate && DELIVERED_STATUSES.includes(p.status))
+                .sort((a, b) => new Date(b.dueDate).getTime() - new Date(a.dueDate).getTime());
+              const tableProjects = projectListTab === "active" ? activeProjects : deliveredProjects;
+
+              return (
+                <div key={widgetId}>
+                  {/* Active / Delivered tabs */}
+                  {!showArchive && (
+                    <div className="flex items-center gap-2 mb-3">
+                      <button
+                        onClick={() => setProjectListTab("active")}
+                        className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${
+                          projectListTab === "active"
+                            ? "bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900"
+                            : "bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-750"
+                        }`}
+                      >
+                        Active
+                        <span className={`ml-1.5 text-xs px-1.5 py-0.5 rounded-full ${
+                          projectListTab === "active"
+                            ? "bg-white/20 dark:bg-black/20"
+                            : "bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400"
+                        }`}>
+                          {activeProjects.length}
+                        </span>
+                      </button>
+                      <button
+                        onClick={() => setProjectListTab("delivered")}
+                        className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${
+                          projectListTab === "delivered"
+                            ? "bg-green-600 text-white"
+                            : "bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-750"
+                        }`}
+                      >
+                        Delivered
+                        <span className={`ml-1.5 text-xs px-1.5 py-0.5 rounded-full ${
+                          projectListTab === "delivered"
+                            ? "bg-white/20"
+                            : "bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400"
+                        }`}>
+                          {deliveredProjects.length}
+                        </span>
+                      </button>
+                    </div>
+                  )}
+                  <TaskTable
+                    projects={showArchive ? projects : tableProjects}
+                    user={user}
+                    allUsers={users}
+                    reverseSort={!showArchive && projectListTab === "delivered"}
+                  />
+                </div>
+              );
             }
             
             // Pending Payments Widget (Sales only)

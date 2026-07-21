@@ -31,9 +31,10 @@ interface TaskTableProps {
   user: User;
   allUsers: User[];
   isPersonalView?: boolean;
+  reverseSort?: boolean;
 }
 
-export function TaskTable({ projects, user, allUsers, isPersonalView = false }: TaskTableProps) {
+export function TaskTable({ projects, user, allUsers, isPersonalView = false, reverseSort = false }: TaskTableProps) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   
@@ -367,7 +368,10 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
   });
 
   // Sort groups by weekStart date
-  groups.sort((a, b) => a.weekStart.getTime() - b.weekStart.getTime());
+  groups.sort((a, b) => {
+    const diff = a.weekStart.getTime() - b.weekStart.getTime();
+    return reverseSort ? -diff : diff;
+  });
 
   const getStatusBadge = (status: string) => {
     const statusConfig = {
@@ -414,9 +418,13 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
   const formatClientDisplay = (project: any) => {
     const name = project.isRolloverShadow ? `${project.clientName} (RO)` : project.clientName;
     const bonus = getBonusIndicator(project);
+    const is2025DataIssue = project.dueDate &&
+      new Date(project.dueDate).getFullYear() === 2025 &&
+      project.status !== "Delivered" &&
+      project.status !== "Done";
     
     return (
-      <span className="inline-flex items-center gap-1">
+      <span className="inline-flex items-center gap-1 flex-wrap">
         {name}
         {bonus && (
           <span
@@ -425,6 +433,14 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false }: 
           >
             <Gift className="h-3 w-3" />
             {bonus.available}
+          </span>
+        )}
+        {is2025DataIssue && (
+          <span
+            className="inline-flex items-center gap-0.5 bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-400 border border-amber-300 dark:border-amber-700 px-1.5 py-0 rounded text-[10px] font-semibold"
+            title="This 2025 project is still showing as undelivered — please check the data"
+          >
+            ⚠ 2025 — data issue
           </span>
         )}
       </span>
