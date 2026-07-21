@@ -229,6 +229,7 @@ export interface IStorage {
 
   // Reschedule log
   createRescheduleLog(log: InsertRescheduleLog): Promise<RescheduleLog>;
+  getRescheduleLogByProject(projectId: string): Promise<RescheduleLog[]>;
 }
 
 export class MemStorage implements IStorage {
@@ -1133,6 +1134,7 @@ export class MemStorage implements IStorage {
   async createVelocitySnapshot(snapshot: InsertCampaignVelocitySnapshot): Promise<CampaignVelocitySnapshot> { throw new Error("Not implemented in MemStorage"); }
 
   async createRescheduleLog(log: InsertRescheduleLog): Promise<RescheduleLog> { throw new Error("Not implemented in MemStorage"); }
+  async getRescheduleLogByProject(_projectId: string): Promise<RescheduleLog[]> { return []; }
 }
 
 // Database Storage Implementation
@@ -2753,6 +2755,14 @@ export class DatabaseStorage implements IStorage {
   async createRescheduleLog(log: InsertRescheduleLog): Promise<RescheduleLog> {
     const [created] = await db.insert(rescheduleLog).values(log).returning();
     return created;
+  }
+
+  async getRescheduleLogByProject(projectId: string): Promise<RescheduleLog[]> {
+    return db
+      .select()
+      .from(rescheduleLog)
+      .where(eq(rescheduleLog.projectId, projectId))
+      .orderBy(desc(rescheduleLog.createdAt));
   }
 
 }

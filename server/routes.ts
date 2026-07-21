@@ -1767,6 +1767,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // GET /api/projects/:id/reschedule-log — full reschedule history for a project
+  app.get("/api/projects/:id/reschedule-log", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const project = await storage.getProject(id);
+      if (!project) return res.status(404).json({ error: "Project not found" });
+
+      const logs = await storage.getRescheduleLogByProject(id);
+      const allUsers = await storage.getAllUsers();
+
+      const enriched = logs.map(log => {
+        const actor = allUsers.find(u => u.id === log.actorId);
+        return { ...log, actorName: actor?.name ?? log.actorId };
+      });
+
+      res.json(enriched);
+    } catch (error: any) {
+      console.error("[RescheduleLog] Error:", error.message);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   app.patch("/api/projects/:id/rating", async (req, res) => {
     try {
       const { id } = req.params;
