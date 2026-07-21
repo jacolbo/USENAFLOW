@@ -761,142 +761,254 @@ function WorkingDayChips({ deadline, projects }: { deadline: Date; projects: Pro
 // ─────────────────────── Calendar Grid ─────────────────────────
 
 function CalendarGrid({ projects }: { projects: Project[] }) {
-  // Build week-by-week grid from today to Dec 19
-  const weeks = useMemo(() => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const start = new Date(today);
-    // Go to Monday of this week
-    while (start.getDay() !== 1) start.setDate(start.getDate() - 1);
-    const end = new Date("2026-12-21"); // Go a bit past deadline
-    const weekList: { weekStart: Date; days: Date[] }[] = [];
-    const cur = new Date(start);
-    while (cur <= end) {
-      const days: Date[] = [];
-      for (let i = 0; i < 7; i++) {
-        days.push(new Date(cur));
-        cur.setDate(cur.getDate() + 1);
-      }
-      weekList.push({ weekStart: new Date(days[0]), days });
-    }
-    return weekList;
-  }, []);
+  const { toast } = useToast();
+  const qc = useQueryClient();
+  const todayDate = new Date();
 
-  // Map projects to dates
+  const [calYear, setCalYear] = useState(todayDate.getFullYear());
+  const [calMonth, setCalMonth] = useState(todayDate.getMonth()); // 0-indexed
+  const [countProject, setCountProject] = useState<Project | null>(null);
+  const [photoCount, setPhotoCount] = useState("");
+
+  const syncMutation = useMutation({
+    mutationFn: () => campaignFetch("POST", "/api/campaign/sync-calendar", {}),
+    onSuccess: (data: any) => {
+      qc.invalidateQueries({ queryKey: ["/api/campaign"] });
+      toast({
+        title: `Calendar synced`,
+        description: `${data.created} new, ${data.updated} updated${data.errors?.length ? `, ${data.errors.length} errors` : ""}`,
+      });
+    },
+    onError: (e: any) => toast({ title: "Sync failed", description: e.message, variant: "destructive" }),
+  });
+
+  const saveMutation = useMutation({
+    mutationFn: ({ id, count }: { id: string; count: number }) =>
+      campaignFetch("PATCH", `/api/campaign/projects/${id}/count`, { selectedPhotoCount: count }),
+    onSuccess: (updated: any) => {
+      qc.invalidateQueries({ queryKey: ["/api/campaign"] });
+      setCountProject(null);
+      if (updated?.driveGalleryLink) {
+        toast({ title: "Photo count saved", description: "Drive folder created automatically!" });
+      } else {
+        toast({ title: "Photo count saved" });
+      }
+    },
+    onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
+  // Build month grid cells (Sun–Sat)
+  const { cells, monthLabel } = useMemo(() => {
+    const firstDay = new Date(calYear, calMonth, 1);
+    const lastDay = new Date(calYear, calMonth + 1, 0);
+    const startDow = firstDay.getDay(); // 0=Sun
+    const prevMonthLastDay = new Date(calYear, calMonth, 0).getDate();
+
+    const built: { date: Date; isCurrentMonth: boolean }[] = [];
+
+    // Pad start with previous-month days
+    for (let i = startDow - 1; i >= 0; i--) {
+      built.push({ date: new Date(calYear, calMonth - 1, prevMonthLastDay - i), isCurrentMonth: false });
+    }
+    // Current month
+    for (let d = 1; d <= lastDay.getDate(); d++) {
+      built.push({ date: new Date(calYear, calMonth, d), isCurrentMonth: true });
+    }
+    // Pad end with next-month days
+    let nextD = 1;
+    while (built.length % 7 !== 0) {
+      built.push({ date: new Date(calYear, calMonth + 1, nextD++), isCurrentMonth: false });
+    }
+
+    const label = firstDay.toLocaleString("default", { month: "long" }) + " " + calYear;
+    return { cells: built, monthLabel: label };
+  }, [calYear, calMonth]);
+
+  // Map projects by promisedDeliveryDate (fallback: deliveryDueDate, then shootDate)
   const projectsByDate = useMemo(() => {
-    const map: Record<string, { type: "work" | "delivery"; project: Project }[]> = {};
+    const map: Record<string, Project[]> = {};
     for (const p of projects) {
-      if (p.plannedWorkDate) {
-        const key = isoDate(new Date(p.plannedWorkDate));
-        map[key] = map[key] || [];
-        map[key].push({ type: "work", project: p });
-      }
-      const dueDate = p.promisedDeliveryDate || p.deliveryDueDate;
-      if (dueDate) {
-        const key = isoDate(new Date(dueDate));
-        map[key] = map[key] || [];
-        map[key].push({ type: "delivery", project: p });
-      }
+      const dateField = p.promisedDeliveryDate || p.deliveryDueDate || p.shootDate;
+      if (!dateField) continue;
+      const key = new Date(dateField).toISOString().slice(0, 10);
+      map[key] = map[key] || [];
+      map[key].push(p);
     }
     return map;
   }, [projects]);
 
-  const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-  const today = isoDate(new Date());
-  const deadlineStr = "2026-12-19";
+  const todayStr = todayDate.toISOString().slice(0, 10);
+
+  const prevMonth = () => {
+    if (calMonth === 0) { setCalMonth(11); setCalYear(y => y - 1); }
+    else setCalMonth(m => m - 1);
+  };
+  const nextMonth = () => {
+    if (calMonth === 11) { setCalMonth(0); setCalYear(y => y + 1); }
+    else setCalMonth(m => m + 1);
+  };
+  const goToday = () => { setCalMonth(todayDate.getMonth()); setCalYear(todayDate.getFullYear()); };
+
+  const weeks: typeof cells[] = [];
+  for (let i = 0; i < cells.length; i += 7) weeks.push(cells.slice(i, i + 7));
+
+  const DAY_HEADERS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <CalendarDays className="h-5 w-5" />
-          Campaign Calendar — Nov to 19 Dec 2026
-        </CardTitle>
-        <div className="flex gap-3 text-xs text-muted-foreground mt-1">
-          <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-purple-200 border border-purple-400 inline-block" /> Retouching day</span>
-          <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-green-200 border border-green-400 inline-block" /> Delivery due</span>
-          <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-red-200 border border-red-500 inline-block" /> Hard deadline</span>
-        </div>
-      </CardHeader>
-      <CardContent className="overflow-x-auto">
-        <table className="w-full text-xs border-collapse min-w-[600px]">
-          <thead>
-            <tr>
-              {DAYS.map((d) => (
-                <th key={d} className="text-center py-1 px-1 text-muted-foreground font-medium border-b w-[14.2%]">{d}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {weeks.map((week) => {
-              // Reorder days: Mon first (days[0]=Mon since we aligned)
-              return (
-                <tr key={isoDate(week.weekStart)}>
-                  {week.days.map((day) => {
-                    const dayStr = isoDate(day);
-                    const isToday = dayStr === today;
-                    const isDeadline = dayStr === deadlineStr;
-                    const isWeekend = day.getDay() === 0 || day.getDay() === 6;
-                    const isPast = day < new Date(today);
-                    const entries = projectsByDate[dayStr] || [];
-                    const workEntries = entries.filter((e) => e.type === "work");
-                    const deliveryEntries = entries.filter((e) => e.type === "delivery");
+    <>
+      <Card>
+        <CardHeader className="pb-2">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <CardTitle className="text-xl font-bold tracking-tight">{monthLabel}</CardTitle>
+            <div className="flex items-center gap-1.5">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => syncMutation.mutate()}
+                disabled={syncMutation.isPending}
+                className="h-7 text-xs"
+              >
+                <RefreshCw className={`h-3 w-3 mr-1 ${syncMutation.isPending ? "animate-spin" : ""}`} />
+                {syncMutation.isPending ? "Syncing…" : "Refresh from Calendar"}
+              </Button>
+              <Button size="icon" variant="ghost" className="h-7 w-7" onClick={prevMonth}>
+                <span className="text-base leading-none">‹</span>
+              </Button>
+              <Button size="sm" variant="outline" className="h-7 text-xs" onClick={goToday}>
+                Today
+              </Button>
+              <Button size="icon" variant="ghost" className="h-7 w-7" onClick={nextMonth}>
+                <span className="text-base leading-none">›</span>
+              </Button>
+            </div>
+          </div>
+          <p className="text-xs text-muted-foreground mt-1">Double-click a project pill to enter photo count</p>
+        </CardHeader>
+        <CardContent className="p-0">
+          {/* Day-of-week headers */}
+          <div className="grid grid-cols-7 border-b border-t">
+            {DAY_HEADERS.map(d => (
+              <div key={d} className="text-center text-xs font-medium text-muted-foreground py-1.5 border-r last:border-r-0">
+                {d}
+              </div>
+            ))}
+          </div>
 
-                    return (
-                      <td
-                        key={dayStr}
-                        className={`
-                          border p-1 min-h-[56px] align-top w-[14.2%]
-                          ${isWeekend ? "bg-muted/50" : ""}
-                          ${isPast ? "opacity-50" : ""}
-                          ${isToday ? "ring-2 ring-inset ring-blue-400 bg-blue-50 dark:bg-blue-950/30" : ""}
-                          ${isDeadline ? "ring-2 ring-inset ring-red-500 bg-red-50 dark:bg-red-950/30" : ""}
-                        `}
+          {/* Month grid */}
+          {weeks.map((week, wi) => (
+            <div key={wi} className="grid grid-cols-7 border-b last:border-b-0">
+              {week.map(({ date, isCurrentMonth }, di) => {
+                const dayStr = date.toISOString().slice(0, 10);
+                const isToday = dayStr === todayStr;
+                const pills = isCurrentMonth ? (projectsByDate[dayStr] || []) : [];
+
+                return (
+                  <div
+                    key={di}
+                    className={`
+                      min-h-[88px] border-r last:border-r-0 p-1 align-top
+                      ${!isCurrentMonth ? "bg-muted/30" : ""}
+                    `}
+                  >
+                    {/* Day number */}
+                    <div className="flex justify-end mb-0.5">
+                      {isToday ? (
+                        <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-red-500 text-white text-[11px] font-bold">
+                          {date.getDate()}
+                        </span>
+                      ) : (
+                        <span className={`text-[11px] ${isCurrentMonth ? "text-foreground" : "text-muted-foreground/40"}`}>
+                          {date.getDate()}
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Project pills */}
+                    {pills.slice(0, 4).map(p => (
+                      <div
+                        key={p.id}
+                        onDoubleClick={() => { setCountProject(p); setPhotoCount(String(p.selectedPhotoCount ?? "")); }}
+                        className="text-[10px] border-l-2 border-amber-500 bg-amber-50 dark:bg-amber-950/40 text-amber-900 dark:text-amber-100 rounded-r px-1 py-0.5 mb-0.5 truncate cursor-pointer select-none hover:bg-amber-100 dark:hover:bg-amber-900/50 transition-colors"
+                        title={`${p.clientName}${p.selectedPhotoCount ? ` — ${p.selectedPhotoCount} photos` : " — double-click to enter count"}`}
                       >
-                        <div className={`text-right text-[10px] mb-0.5 ${isToday ? "text-blue-600 font-bold" : "text-muted-foreground"} ${isDeadline ? "text-red-600 font-bold" : ""}`}>
-                          {day.getDate()}
-                          {isDeadline && <span className="ml-0.5">🎄</span>}
-                        </div>
-                        {workEntries.slice(0, 3).map((e, i) => (
-                          <Tooltip key={`w-${e.project.id}-${i}`}>
-                            <TooltipTrigger asChild>
-                              <div className="text-[9px] bg-purple-100 border border-purple-300 text-purple-800 rounded px-1 mb-0.5 truncate cursor-default">
-                                ✂ {e.project.clientName.split(" ")[0]}
-                              </div>
-                            </TooltipTrigger>
-                            <TooltipContent>
-                              <p className="font-medium">Retouching: {e.project.clientName}</p>
-                              <p className="text-xs">{e.project.selectedPhotoCount || e.project.selectedCount || "?"} photos</p>
-                              <p className="text-xs">Profile: {e.project.editProfile || "standard"}</p>
-                            </TooltipContent>
-                          </Tooltip>
-                        ))}
-                        {deliveryEntries.slice(0, 3).map((e, i) => (
-                          <Tooltip key={`d-${e.project.id}-${i}`}>
-                            <TooltipTrigger asChild>
-                              <div className="text-[9px] bg-green-100 border border-green-300 text-green-800 rounded px-1 mb-0.5 truncate cursor-default">
-                                📸 {e.project.clientName.split(" ")[0]}
-                              </div>
-                            </TooltipTrigger>
-                            <TooltipContent>
-                              <p className="font-medium">Delivery due: {e.project.clientName}</p>
-                              <p className="text-xs">Status: {e.project.status}</p>
-                            </TooltipContent>
-                          </Tooltip>
-                        ))}
-                        {entries.length > 3 && (
-                          <div className="text-[9px] text-muted-foreground">+{entries.length - 3} more</div>
-                        )}
-                      </td>
-                    );
-                  })}
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </CardContent>
-    </Card>
+                        {p.clientName}
+                        {p.selectedPhotoCount ? (
+                          <span className="ml-1 opacity-70">({p.selectedPhotoCount})</span>
+                        ) : null}
+                        {p.driveFolderId ? (
+                          <span className="ml-1">📁</span>
+                        ) : null}
+                      </div>
+                    ))}
+                    {pills.length > 4 && (
+                      <div className="text-[9px] text-muted-foreground pl-1">+{pills.length - 4} more</div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          ))}
+        </CardContent>
+      </Card>
+
+      {/* Photo Count Dialog */}
+      <Dialog open={!!countProject} onOpenChange={o => !o && setCountProject(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Camera className="h-4 w-4 text-amber-600" />
+              {countProject?.clientName}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <label className="text-sm font-medium block mb-1.5">Number of photos</label>
+              <Input
+                type="number"
+                min={0}
+                value={photoCount}
+                onChange={e => setPhotoCount(e.target.value)}
+                placeholder="e.g. 120"
+                autoFocus
+                onKeyDown={e => {
+                  if (e.key === "Enter") {
+                    const n = parseInt(photoCount, 10);
+                    if (!isNaN(n) && n >= 0) saveMutation.mutate({ id: countProject!.id, count: n });
+                  }
+                }}
+              />
+            </div>
+            {countProject?.driveGalleryLink ? (
+              <a
+                href={countProject.driveGalleryLink}
+                target="_blank"
+                rel="noreferrer"
+                className="text-xs text-blue-600 hover:underline flex items-center gap-1"
+              >
+                📁 Open Drive Folder
+              </a>
+            ) : (
+              <p className="text-xs text-muted-foreground">
+                A Google Drive folder will be created automatically when you save a count {">"} 0.
+              </p>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCountProject(null)}>Cancel</Button>
+            <Button
+              onClick={() => {
+                const n = parseInt(photoCount, 10);
+                if (isNaN(n) || n < 0) return;
+                saveMutation.mutate({ id: countProject!.id, count: n });
+              }}
+              disabled={saveMutation.isPending}
+            >
+              {saveMutation.isPending ? "Saving…" : "Save"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 

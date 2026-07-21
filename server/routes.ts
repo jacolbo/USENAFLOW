@@ -12,6 +12,7 @@ import type { Notification, WebSocketMessage } from "@shared/schema";
 import { triggerManualRollover, performManualRolloverToNextWeek, performManualRollbackFromNextWeek } from "./rolloverScheduler";
 import { registerShoottrackerRoutes } from "./shoottrackerRoutes";
 import { registerCampaignRoutes } from "./campaignRoutes";
+import { syncNoelCalendar } from "./campaignCalendarSync";
 import { sendChatLinkEmail, sendGalleryDeliveryEmail, sendSneakPeekEmail, sendSatisfactionSurveyEmail, sendSchedulingNotificationEmail, sendManualDelayNoticeEmail, generateToken } from "./services/emailService";
 import { aiTeamChat, generateDailySummaryForAdmin } from "./services/aiService";
 import { appSettings } from "@shared/schema";
@@ -3881,6 +3882,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Register Noël Set 2026 Campaign routes
   registerCampaignRoutes(app);
+
+  // Boot sync + 10-minute interval for Noël calendar engine
+  syncNoelCalendar().catch(err => console.warn('🎄 Boot Noël sync failed:', err.message));
+  setInterval(() => {
+    syncNoelCalendar().catch(err => console.warn('🎄 Interval Noël sync failed:', err.message));
+  }, 10 * 60 * 1000);
 
   // Register object storage routes for file uploads
   registerObjectStorageRoutes(app);

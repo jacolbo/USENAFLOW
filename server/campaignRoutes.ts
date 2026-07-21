@@ -10,6 +10,8 @@ import {
   sendNoelSurveyEmail,
 } from "./services/emailService";
 import { UserRoles } from "@shared/schema";
+import { syncNoelCalendar } from "./campaignCalendarSync";
+import { createFolder, makeFolderPublic } from "./services/googleDriveService";
 
 const CAMPAIGN_ROLES = [
   UserRoles.ADMIN,
@@ -101,10 +103,38 @@ export function registerCampaignRoutes(app: Express): void {
       const project = await storage.getProject(id);
       if (!project || !project.campaignId) return res.status(404).json({ error: "Campaign project not found" });
 
-      const updated = await storage.updateProject(id, { selectedPhotoCount });
+      const updates: Record<string, any> = { selectedPhotoCount };
+
+      // Auto-create Drive folder when photo count is entered for the first time
+      if (selectedPhotoCount > 0 && !project.driveFolderId) {
+        try {
+          const folderName = `${project.clientName} – Noël 2026`;
+          const folder = await createFolder(folderName);
+          const shareLink = await makeFolderPublic(folder.id);
+          updates.driveFolderId = folder.id;
+          updates.driveFolderName = folderName;
+          updates.driveGalleryLink = shareLink;
+          console.log(`📁 Noël: Drive folder created for "${project.clientName}" → ${folder.id}`);
+        } catch (driveErr: any) {
+          console.error(`📁 Noël: Drive folder creation failed for "${project.clientName}":`, driveErr.message);
+        }
+      }
+
+      const updated = await storage.updateProject(id, updates);
       campaignBus.emit("project.countEntered", { projectId: id, campaignId: project.campaignId!, photoCount: selectedPhotoCount });
       recordFired("noel_count_entry", `Photo count set to ${selectedPhotoCount} for project ${id}`);
       res.json(updated);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // POST /api/campaign/sync-calendar — manual Noël calendar sync trigger
+  app.post("/api/campaign/sync-calendar", verifyCampaignCockpit, async (req: Request, res: Response) => {
+    try {
+      const result = await syncNoelCalendar();
+      recordFired("noel_calendar_sync", `Noël sync: ${result.created} created, ${result.updated} updated`);
+      res.json(result);
     } catch (err: any) {
       res.status(500).json({ error: err.message });
     }
