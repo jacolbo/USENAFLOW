@@ -1721,23 +1721,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/projects/:id/reschedule", async (req, res) => {
     try {
       const { id } = req.params;
-      const { newDate } = req.body;
+      const { newDate, actorId: rawActorId } = req.body;
       if (!newDate) {
         return res.status(400).json({ error: "newDate is required" });
       }
-      // Derive actor from auth headers — never trust client-supplied identity for audit logs
-      const actorId =
-        (req.headers["x-usena-user-id"] as string) ||
-        (req.headers["x-usena-role"] as string) ||
-        "unknown";
+      const parsedNewDate = new Date(newDate);
+      if (isNaN(parsedNewDate.getTime())) {
+        return res.status(400).json({ error: "newDate is not a valid date" });
+      }
+      // Validate actor by looking up the user in the DB — prevents spoofed actorIds
+      if (!rawActorId) {
+        return res.status(400).json({ error: "actorId is required" });
+      }
+      const actorUser = await storage.getUser(rawActorId);
+      if (!actorUser) {
+        return res.status(400).json({ error: "Actor not found — invalid actorId" });
+      }
+      const actorId = actorUser.id;
 
       const project = await storage.getProject(id);
       if (!project) return res.status(404).json({ error: "Project not found" });
 
       const oldDate = new Date(project.dueDate);
-      const parsedNewDate = new Date(newDate);
 
-      const updated = await storage.updateProject(id, { dueDate: parsedNewDate.toISOString() as any });
+      const updated = await storage.updateProject(id, { dueDate: parsedNewDate });
       await storage.createRescheduleLog({ projectId: id, oldDate, newDate: parsedNewDate, actorId });
 
       let emailResult: any = null;

@@ -1052,12 +1052,14 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false, re
   };
 
   // Reschedule mutation — calls the dedicated endpoint that also logs + emails client
-  // actorId is derived server-side from x-usena-user-id header, not sent by client
+  // actorId is sent as user.id so the server can validate it against the users table
   const rescheduleConfirmMutation = useMutation({
     mutationFn: async ({ projectId, newDate }: { projectId: string; newDate: Date }) => {
-      return await apiRequest("POST", `/api/projects/${projectId}/reschedule`, {
+      const res = await apiRequest("POST", `/api/projects/${projectId}/reschedule`, {
         newDate: newDate.toISOString(),
+        actorId: user.id,
       });
+      return res.json();
     },
     onSuccess: (data: any) => {
       toast({
