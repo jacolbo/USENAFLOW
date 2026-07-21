@@ -1721,7 +1721,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/projects/:id/reschedule", async (req, res) => {
     try {
       const { id } = req.params;
-      const { newDate, actorId: rawActorId } = req.body;
+      const { newDate } = req.body;
       if (!newDate) {
         return res.status(400).json({ error: "newDate is required" });
       }
@@ -1729,15 +1729,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (isNaN(parsedNewDate.getTime())) {
         return res.status(400).json({ error: "newDate is not a valid date" });
       }
-      // Validate actor by looking up the user in the DB — prevents spoofed actorIds
+      // Derive actor exclusively from the X-Usena-User-Id auth header (never trust client body for actor)
+      const rawActorId = req.headers["x-usena-user-id"] as string | undefined;
       if (!rawActorId) {
-        return res.status(400).json({ error: "actorId is required" });
+        return res.status(403).json({ error: "Forbidden — missing authentication identity" });
       }
       const actorUser = await storage.getUser(rawActorId);
       if (!actorUser) {
-        return res.status(400).json({ error: "Actor not found — invalid actorId" });
+        return res.status(403).json({ error: "Forbidden — actor identity not recognised" });
       }
       const actorId = actorUser.id;
+      // Role check — only privileged roles may reschedule projects
+      const callerRole = req.headers["x-usena-role"] as string | undefined;
+      const allowedRoles = ["Admin", "DataWrangler", "Sales", "LeadRetoucher"];
+      if (!callerRole || !allowedRoles.includes(callerRole)) {
+        return res.status(403).json({ error: "Forbidden — insufficient role to reschedule" });
+      }
 
       const project = await storage.getProject(id);
       if (!project) return res.status(404).json({ error: "Project not found" });

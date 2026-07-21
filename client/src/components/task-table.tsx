@@ -1051,14 +1051,22 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false, re
     return `${y}-${m}-${d}`;
   };
 
-  // Reschedule mutation — calls the dedicated endpoint that also logs + emails client
-  // actorId is sent as user.id so the server can validate it against the users table
+  // Reschedule mutation — uses fetch with X-Usena-User-Id header so the server can
+  // derive actor from authenticated context rather than trusting client-supplied body data
   const rescheduleConfirmMutation = useMutation({
     mutationFn: async ({ projectId, newDate }: { projectId: string; newDate: Date }) => {
-      const res = await apiRequest("POST", `/api/projects/${projectId}/reschedule`, {
-        newDate: newDate.toISOString(),
-        actorId: user.id,
+      const { getAdminHeaders } = await import("@/lib/adminAuth");
+      const authHeaders = getAdminHeaders(user.role, user.id || "");
+      const res = await fetch(`/api/projects/${projectId}/reschedule`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...authHeaders },
+        body: JSON.stringify({ newDate: newDate.toISOString() }),
+        credentials: "include",
       });
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(`${res.status}: ${text}`);
+      }
       return res.json();
     },
     onSuccess: (data: any) => {
