@@ -1716,6 +1716,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Set project rating (admin action)
+  // POST /api/projects/:id/reschedule — confirmed calendar drag-to-reschedule
+  // Updates dueDate, writes a reschedule_log row, and sends client email if email on record.
+  app.post("/api/projects/:id/reschedule", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { newDate, actorId } = req.body;
+      if (!newDate || !actorId) {
+        return res.status(400).json({ error: "newDate and actorId are required" });
+      }
+      const project = await storage.getProject(id);
+      if (!project) return res.status(404).json({ error: "Project not found" });
+
+      const oldDate = new Date(project.dueDate);
+      const parsedNewDate = new Date(newDate);
+
+      const updated = await storage.updateProject(id, { dueDate: parsedNewDate.toISOString() as any });
+      await storage.createRescheduleLog({ projectId: id, oldDate, newDate: parsedNewDate, actorId });
+
+      let emailResult: any = null;
+      if (project.clientEmail) {
+        const { sendRescheduleEmail } = await import('./services/emailService');
+        emailResult = await sendRescheduleEmail(id, project.clientName, project.clientEmail, oldDate, parsedNewDate);
+      }
+
+      broadcastProjectUpdate(updated);
+      res.json({ project: updated, emailSent: !!emailResult?.success });
+    } catch (error: any) {
+      console.error("[Reschedule] Error:", error.message);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   app.patch("/api/projects/:id/rating", async (req, res) => {
     try {
       const { id } = req.params;

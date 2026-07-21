@@ -99,6 +99,12 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false, re
   // State for drag and drop
   const [draggedProject, setDraggedProject] = useState<Project | null>(null);
   const [assignProject, setAssignProject] = useState<Project | null>(null);
+
+  // Reschedule confirmation modal
+  const [rescheduleModal, setRescheduleModal] = useState<{ project: Project; targetDate: Date } | null>(null);
+
+  // Expanded calendar day pills (key = `${weekKey}-${dayIndex}`)
+  const [expandedCalendarDays, setExpandedCalendarDays] = useState<Set<string>>(new Set());
   
   // Loading states for different operations
   const [loadingStates, setLoadingStates] = useState<Record<string, boolean>>({});
@@ -1031,6 +1037,28 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false, re
     },
   });
 
+  // Reschedule mutation — calls the dedicated endpoint that also logs + emails client
+  const rescheduleConfirmMutation = useMutation({
+    mutationFn: async ({ projectId, newDate, actorId }: { projectId: string; newDate: Date; actorId: string }) => {
+      return await apiRequest("POST", `/api/projects/${projectId}/reschedule`, {
+        newDate: newDate.toISOString(),
+        actorId,
+      });
+    },
+    onSuccess: (data: any) => {
+      toast({
+        title: "Project rescheduled",
+        description: data?.emailSent
+          ? "Due date updated and client notified by email."
+          : "Due date updated.",
+      });
+      queryClient.invalidateQueries({ queryKey: ['/api/projects'] });
+    },
+    onError: () => {
+      toast({ title: "Error", description: "Failed to reschedule project.", variant: "destructive" });
+    },
+  });
+
   // Drag and drop handlers
   const handleDragStart = (e: React.DragEvent, project: Project) => {
     setDraggedProject(project);
@@ -1045,17 +1073,14 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false, re
   const handleDrop = (e: React.DragEvent, targetDate: Date) => {
     e.preventDefault();
     if (draggedProject) {
-      console.log('Dropping project:', draggedProject.clientName, 'to date:', targetDate.toDateString());
-      
-      // Only allow moving within the same week
       const draggedWeekStart = getWeekStart(new Date(draggedProject.dueDate));
       const targetWeekStart = getWeekStart(targetDate);
-      
+
       if (draggedWeekStart.getTime() === targetWeekStart.getTime()) {
-        updateProjectDateMutation.mutate({
-          projectId: draggedProject.id,
-          dueDate: targetDate,
-        });
+        const currentDate = new Date(draggedProject.dueDate);
+        if (currentDate.toDateString() !== targetDate.toDateString()) {
+          setRescheduleModal({ project: draggedProject, targetDate });
+        }
       } else {
         toast({
           title: "Cannot move project",
@@ -1447,42 +1472,23 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false, re
                           return formatRetoucherAbbr(assignedTo);
                         };
 
-                        const getProjectColor = (project: Project, prefix: string) => {
-                          // Project type colors (highest priority - override rollover colors)
-                          switch (prefix) {
-                            case 'EC': return 'bg-black text-white dark:bg-black dark:text-white';
-                            case 'ASA': return 'bg-purple-600 text-white dark:bg-purple-600 dark:text-white';
-                            case 'LM': return 'bg-blue-600 text-white dark:bg-blue-600 dark:text-white';
-                            case 'AP': return 'bg-pink-600 text-white dark:bg-pink-600 dark:text-white';
-                            default: break; // Continue to rollover logic for other types
+                        // Status-first color coding for calendar pills
+                        const getProjectColor = (project: Project) => {
+                          const status = project.status;
+                          if (status === "Delivered" || status === "Done") {
+                            return 'bg-green-600 text-white';
                           }
-                          
-                          // Rollover colors (if not overridden by project type)
-                          const now = new Date();
-                          const currentWeek = getWeekStart(now);
-                          const previousWeek = new Date(currentWeek);
-                          previousWeek.setDate(previousWeek.getDate() - 7);
-                          const twoWeeksAgo = new Date(currentWeek);
-                          twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14);
-                          
-                          const projectCreatedDate = new Date(project.createdAt);
-                          const projectWeek = getWeekStart(projectCreatedDate);
-                          
-                          // Projects rolled over from two weeks ago or older (rolled over twice) → Red
-                          if (projectWeek <= twoWeeksAgo) {
-                            return 'bg-red-600 text-white dark:bg-red-600 dark:text-white';
+                          const todayMidnight = new Date();
+                          todayMidnight.setHours(0, 0, 0, 0);
+                          const dueMidnight = new Date(project.dueDate);
+                          dueMidnight.setHours(0, 0, 0, 0);
+                          if (dueMidnight < todayMidnight) {
+                            return 'bg-red-500 text-white';
                           }
-                          // Projects rolled over from previous week (rolled over once) → Green
-                          else if (projectWeek.getTime() === previousWeek.getTime()) {
-                            return 'bg-green-600 text-white dark:bg-green-600 dark:text-white';
+                          if (dueMidnight.getTime() === todayMidnight.getTime()) {
+                            return 'bg-amber-500 text-white';
                           }
-                          // Projects added by wrangler for current week (new projects) → Green
-                          else if (projectWeek.getTime() === currentWeek.getTime()) {
-                            return 'bg-green-600 text-white dark:bg-green-600 dark:text-white';
-                          }
-                          
-                          // Default color for other cases
-                          return 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200';
+                          return 'bg-blue-500 text-white';
                         };
 
                         return (
@@ -1499,9 +1505,16 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false, re
                               {dayNumber}
                             </div>
                             <div className="space-y-1 min-h-[60px] p-1 rounded transition-colors hover:bg-gray-50 dark:hover:bg-gray-800">
-                              {dayProjects.map(project => {
+                              {(() => {
+                                const MAX_PILLS = 4;
+                                const dayKey = `${weekKey}-${dayIndex}`;
+                                const isExpanded = expandedCalendarDays.has(dayKey);
+                                const visibleProjects = isExpanded ? dayProjects : dayProjects.slice(0, MAX_PILLS);
+                                const hiddenCount = dayProjects.length - MAX_PILLS;
+                                return (<>
+                              {visibleProjects.map(project => {
                                 const retoucherPrefix = getRetoucherPrefix(project.assignedTo);
-                                const colorClass = getProjectColor(project, retoucherPrefix);
+                                const colorClass = getProjectColor(project);
                                 const isDragging = draggedProject?.id === project.id;
                         const isLoading = loadingStates[project.id + 'assign'] || loadingStates[project.id + 'move'];
                                 
@@ -1584,6 +1597,36 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false, re
                                   </motion.div>
                                 );
                               })}
+                              {!isExpanded && hiddenCount > 0 && (
+                                <button
+                                  className="text-xs text-blue-600 dark:text-blue-400 hover:underline mt-0.5 w-full text-left pl-1"
+                                  onClick={() => {
+                                    setExpandedCalendarDays(prev => {
+                                      const next = new Set(prev);
+                                      next.add(dayKey);
+                                      return next;
+                                    });
+                                  }}
+                                >
+                                  +{hiddenCount} more
+                                </button>
+                              )}
+                              {isExpanded && dayProjects.length > MAX_PILLS && (
+                                <button
+                                  className="text-xs text-gray-500 dark:text-gray-400 hover:underline mt-0.5 w-full text-left pl-1"
+                                  onClick={() => {
+                                    setExpandedCalendarDays(prev => {
+                                      const next = new Set(prev);
+                                      next.delete(dayKey);
+                                      return next;
+                                    });
+                                  }}
+                                >
+                                  Show less
+                                </button>
+                              )}
+                              </>);
+                              })()}
                             </div>
                             <AnimatePresence>
                               {dayProjects.length === 0 && (
@@ -1655,6 +1698,26 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false, re
                           </div>
                         );
                       })}
+                    </div>
+                    {/* Color legend */}
+                    <div className="mt-3 pt-3 border-t border-gray-100 dark:border-gray-700 flex flex-wrap items-center gap-3 text-xs text-gray-600 dark:text-gray-400">
+                      <span className="font-medium">Key:</span>
+                      <span className="flex items-center gap-1.5">
+                        <span className="inline-block w-3 h-3 rounded-sm bg-green-600" />
+                        Delivered
+                      </span>
+                      <span className="flex items-center gap-1.5">
+                        <span className="inline-block w-3 h-3 rounded-sm bg-red-500" />
+                        Overdue
+                      </span>
+                      <span className="flex items-center gap-1.5">
+                        <span className="inline-block w-3 h-3 rounded-sm bg-amber-500" />
+                        Due today
+                      </span>
+                      <span className="flex items-center gap-1.5">
+                        <span className="inline-block w-3 h-3 rounded-sm bg-blue-500" />
+                        Active
+                      </span>
                     </div>
                   </div>
                 )}
@@ -2506,6 +2569,51 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false, re
         );
       })}
       
+      {/* Reschedule Confirmation Dialog */}
+      {rescheduleModal && (
+        <Dialog open={!!rescheduleModal} onOpenChange={(open) => { if (!open) setRescheduleModal(null); }}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>Confirm Reschedule</DialogTitle>
+              <DialogDescription>
+                Moving <strong>{rescheduleModal.project.clientName}</strong> to a new delivery date.
+                {rescheduleModal.project.clientEmail && " The client will be notified by email."}
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-3 py-2">
+              <div className="grid grid-cols-2 gap-2 text-sm">
+                <div className="text-gray-500 dark:text-gray-400">Current date</div>
+                <div className="line-through text-gray-400 dark:text-gray-500">
+                  {new Date(rescheduleModal.project.dueDate).toLocaleDateString('en-ZA', { weekday: 'short', day: 'numeric', month: 'short' })}
+                </div>
+                <div className="text-gray-500 dark:text-gray-400">New date</div>
+                <div className="font-semibold text-gray-900 dark:text-gray-100">
+                  {rescheduleModal.targetDate.toLocaleDateString('en-ZA', { weekday: 'short', day: 'numeric', month: 'short' })}
+                </div>
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="outline" onClick={() => setRescheduleModal(null)}>
+                Cancel
+              </Button>
+              <Button
+                disabled={rescheduleConfirmMutation.isPending}
+                onClick={() => {
+                  rescheduleConfirmMutation.mutate({
+                    projectId: rescheduleModal.project.id,
+                    newDate: rescheduleModal.targetDate,
+                    actorId: user.name,
+                  });
+                  setRescheduleModal(null);
+                }}
+              >
+                {rescheduleConfirmMutation.isPending ? "Saving…" : "Confirm"}
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
+
       {/* Assignment Modal */}
       <AnimatePresence>
         {assignProject && (

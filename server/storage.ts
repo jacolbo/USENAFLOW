@@ -1,4 +1,5 @@
 import { type User, type InsertUser, type Project, type InsertProject, type UpdateProject, type ProjectNote, type InsertProjectNote, type UpdateProjectNote, type TradeOffer, type InsertTradeOffer, type UpdateTradeOffer, type WranglerCommission, type InsertWranglerCommission, type ProjectEvent, type InsertProjectEvent, type Complaint, type InsertComplaint, type ShoottrackerMeta, type InsertShoottrackerMeta, type UpdateShoottrackerMeta, type AppSetting, type CalendarEventStaging, type InsertCalendarEventStaging, type UpdateCalendarEventStaging, type ClientAuthToken, type InsertClientAuthToken, type ClientMessage, type InsertClientMessage, type DashboardPreferences, type InsertDashboardPreferences, type SneakPeek, type InsertSneakPeek, type Survey, type InsertSurvey, type Referral, type InsertReferral, type ClientProfile, type InsertClientProfile, type RewardClaim, type InsertRewardClaim, type EmailTemplate, type InsertEmailTemplate, type PushSubscription, type InsertPushSubscription, type StatusTransition, type InsertStatusTransition, type LeaveRequest, type InsertLeaveRequest, type AiTeamMessage, type InsertAiTeamMessage, type AiMemory, type InsertAiMemory, type AiAdminInstruction, type InsertAiAdminInstruction, type ProjectInspo, type InsertProjectInspo, type ProjectInspoMeta, type StagingEventInspo, type InsertStagingEventInspo, type Campaign, type InsertCampaign, type CampaignAssignment, type InsertCampaignAssignment, type CampaignVelocitySnapshot, type InsertCampaignVelocitySnapshot, ProjectStatus, TradeOfferStatus, StagingStatus, users, projects, projectNotes, tradeOffers, wranglerCommissions, projectEvents, complaints, shoottrackerMeta, appSettings, calendarEventsStaging, clientAuthTokens, clientMessages, dashboardPreferences, sneakPeeks, clientSurveys, referrals, clientProfiles, referralRewardClaims, emailTemplates, pushSubscriptions, chatEncryptionKeys, projectStatusTransitions, leaveRequests, aiTeamMessages, aiMemory, aiAdminInstructions, projectInspos, projectInspoMeta, stagingEventInspos, campaigns, campaignAssignments, campaignVelocitySnapshots } from "@shared/schema";
+import { type RescheduleLog, type InsertRescheduleLog, rescheduleLog } from "@shared/schema";
 import { db } from "./db";
 import { eq, sql, asc, and, ilike, isNotNull, isNull, lte, desc, inArray } from "drizzle-orm";
 import { randomUUID } from "crypto";
@@ -225,6 +226,9 @@ export interface IStorage {
   upsertCampaignAssignment(assignment: InsertCampaignAssignment): Promise<CampaignAssignment>;
   getVelocitySnapshots(campaignId: string, limit?: number): Promise<CampaignVelocitySnapshot[]>;
   createVelocitySnapshot(snapshot: InsertCampaignVelocitySnapshot): Promise<CampaignVelocitySnapshot>;
+
+  // Reschedule log
+  createRescheduleLog(log: InsertRescheduleLog): Promise<RescheduleLog>;
 }
 
 export class MemStorage implements IStorage {
@@ -1127,6 +1131,8 @@ export class MemStorage implements IStorage {
   async upsertCampaignAssignment(assignment: InsertCampaignAssignment): Promise<CampaignAssignment> { throw new Error("Not implemented in MemStorage"); }
   async getVelocitySnapshots(campaignId: string, limit?: number): Promise<CampaignVelocitySnapshot[]> { return []; }
   async createVelocitySnapshot(snapshot: InsertCampaignVelocitySnapshot): Promise<CampaignVelocitySnapshot> { throw new Error("Not implemented in MemStorage"); }
+
+  async createRescheduleLog(log: InsertRescheduleLog): Promise<RescheduleLog> { throw new Error("Not implemented in MemStorage"); }
 }
 
 // Database Storage Implementation
@@ -2741,6 +2747,11 @@ export class DatabaseStorage implements IStorage {
 
   async createVelocitySnapshot(snapshot: InsertCampaignVelocitySnapshot): Promise<CampaignVelocitySnapshot> {
     const [created] = await db.insert(campaignVelocitySnapshots).values(snapshot).returning();
+    return created;
+  }
+
+  async createRescheduleLog(log: InsertRescheduleLog): Promise<RescheduleLog> {
+    const [created] = await db.insert(rescheduleLog).values(log).returning();
     return created;
   }
 
