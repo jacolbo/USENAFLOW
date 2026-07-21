@@ -107,6 +107,14 @@ function isoDate(date: Date): string {
   return date.toISOString().slice(0, 10);
 }
 
+// Local-timezone date key — avoids UTC midnight shift in non-UTC zones (e.g. Africa/Johannesburg)
+function localDateKey(date: Date): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
 // ─────────────────────── Types ────────────────────────
 
 interface PacingData {
@@ -831,14 +839,14 @@ function CalendarGrid({ projects }: { projects: Project[] }) {
     for (const p of projects) {
       const dateField = p.promisedDeliveryDate || p.deliveryDueDate || p.shootDate;
       if (!dateField) continue;
-      const key = new Date(dateField).toISOString().slice(0, 10);
+      const key = localDateKey(new Date(dateField));
       map[key] = map[key] || [];
       map[key].push(p);
     }
     return map;
   }, [projects]);
 
-  const todayStr = todayDate.toISOString().slice(0, 10);
+  const todayStr = localDateKey(todayDate);
 
   const prevMonth = () => {
     if (calMonth === 0) { setCalMonth(11); setCalYear(y => y - 1); }
@@ -899,7 +907,7 @@ function CalendarGrid({ projects }: { projects: Project[] }) {
           {weeks.map((week, wi) => (
             <div key={wi} className="grid grid-cols-7 border-b last:border-b-0">
               {week.map(({ date, isCurrentMonth }, di) => {
-                const dayStr = date.toISOString().slice(0, 10);
+                const dayStr = localDateKey(date);
                 const isToday = dayStr === todayStr;
                 const pills = isCurrentMonth ? (projectsByDate[dayStr] || []) : [];
 
