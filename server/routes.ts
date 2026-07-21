@@ -1739,10 +1739,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ error: "Forbidden — actor identity not recognised" });
       }
       const actorId = actorUser.id;
-      // Role check — only privileged roles may reschedule projects
-      const callerRole = req.headers["x-usena-role"] as string | undefined;
+      // Role check — derive role from persisted user record (not caller-supplied header) to prevent privilege escalation
       const allowedRoles = ["Admin", "DataWrangler", "Sales", "LeadRetoucher"];
-      if (!callerRole || !allowedRoles.includes(callerRole)) {
+      if (!allowedRoles.includes(actorUser.role)) {
         return res.status(403).json({ error: "Forbidden — insufficient role to reschedule" });
       }
 

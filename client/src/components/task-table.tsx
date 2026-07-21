@@ -2626,9 +2626,19 @@ export function TaskTable({ projects, user, allUsers, isPersonalView = false, re
                     <div className="text-xs text-gray-700 dark:text-gray-300 space-y-1 border-t border-blue-200 dark:border-blue-700 pt-1.5">
                       <p>Hi {firstName},</p>
                       <p>We wanted to let you know that your photo delivery date has been updated.</p>
-                      <p><span className="line-through text-gray-400">{oldFmt}</span> → <strong>{newFmt}</strong></p>
-                      <p>We apologise for any inconvenience and appreciate your patience.</p>
-                      <p className="text-gray-500 dark:text-gray-400">— Jepson Myles Studio</p>
+                      <div className="rounded border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 overflow-hidden my-1">
+                        <div className="flex border-b border-gray-200 dark:border-gray-600">
+                          <span className="px-2 py-1 text-gray-400 w-36 shrink-0">Original delivery date</span>
+                          <span className="px-2 py-1 line-through text-gray-400">{oldFmt}</span>
+                        </div>
+                        <div className="flex">
+                          <span className="px-2 py-1 text-gray-400 w-36 shrink-0">New delivery date</span>
+                          <span className="px-2 py-1 font-semibold">{newFmt}</span>
+                        </div>
+                      </div>
+                      <p>We apologise for any inconvenience and appreciate your patience. Our team is working hard to deliver your photos beautifully.</p>
+                      <p className="text-gray-500 dark:text-gray-400">Warm regards,</p>
+                      <p className="font-medium">Jepson Myles Studio</p>
                     </div>
                   </div>
                 )}
