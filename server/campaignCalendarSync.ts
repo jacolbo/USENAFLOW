@@ -14,7 +14,6 @@ function noelKeywordMatch(text: string): boolean {
 export interface NoelSyncResult {
   created: number;
   updated: number;
-  promoted: number;
   skipped: number;
   errors: string[];
 }
@@ -23,7 +22,6 @@ export async function syncNoelCalendar(): Promise<NoelSyncResult> {
   const result: NoelSyncResult = {
     created: 0,
     updated: 0,
-    promoted: 0,
     skipped: 0,
     errors: [],
   };
@@ -102,29 +100,21 @@ export async function syncNoelCalendar(): Promise<NoelSyncResult> {
 
           if (existing) {
             if (existing.campaignId === campaign.id) {
-              // (a) Already in this Noël campaign — refresh dates
+              // Already in this Noël campaign — refresh dates only, no other side effects
               await storage.updateProject(existing.id, {
                 shootDate,
                 promisedDeliveryDate,
                 lastSyncedAt: new Date(),
               });
               result.updated++;
-            } else if (!existing.campaignId) {
-              // (b) ShootTracker project — promote it into the Noël campaign
-              await storage.updateProject(existing.id, {
-                shootDate,
-                promisedDeliveryDate,
-                campaignId: campaign.id,
-                status: 'ShootDone',
-                lastSyncedAt: new Date(),
-              });
-              result.promoted++;
-              console.log(
-                `🎄 Noël sync: promoted ShootTracker project "${existing.clientName}" → campaign`
-              );
             } else {
-              // (c) Different campaign — leave it alone
+              // Belongs to ShootTracker or a different campaign — skip completely.
+              // We must NOT mutate projects owned by other pipelines.
               result.skipped++;
+              console.log(
+                `🎄 Noël sync: skipped "${event.summary}" — ` +
+                  `calendarEventId already owned by another pipeline (projectId ${existing.id})`
+              );
             }
             continue;
           }
@@ -166,8 +156,8 @@ export async function syncNoelCalendar(): Promise<NoelSyncResult> {
     }
 
     console.log(
-      `✅ Noël sync complete: ${result.created} created, ${result.promoted} promoted, ` +
-        `${result.updated} updated, ${result.skipped} skipped, ${result.errors.length} errors`
+      `✅ Noël sync complete: ${result.created} created, ${result.updated} updated, ` +
+        `${result.skipped} skipped, ${result.errors.length} errors`
     );
   } catch (err: any) {
     console.error('❌ Noël sync failed:', err.message);
