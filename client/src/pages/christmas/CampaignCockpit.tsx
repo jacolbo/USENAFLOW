@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -814,9 +815,9 @@ function CalendarGrid({ projects }: { projects: Project[] }) {
     for (let d = 1; d <= lastDay.getDate(); d++) {
       built.push({ date: new Date(calYear, calMonth, d), isCurrentMonth: true });
     }
-    // Pad end with next-month days
+    // Pad end with next-month days to always produce exactly 42 cells (6 rows × 7 cols)
     let nextD = 1;
-    while (built.length % 7 !== 0) {
+    while (built.length < 42) {
       built.push({ date: new Date(calYear, calMonth + 1, nextD++), isCurrentMonth: false });
     }
 
@@ -923,22 +924,95 @@ function CalendarGrid({ projects }: { projects: Project[] }) {
                       )}
                     </div>
 
-                    {/* Project pills */}
+                    {/* Project pills — double-click opens count popover */}
                     {pills.slice(0, 4).map(p => (
-                      <div
+                      <Popover
                         key={p.id}
-                        onDoubleClick={() => { setCountProject(p); setPhotoCount(String(p.selectedPhotoCount ?? "")); }}
-                        className="text-[10px] border-l-2 border-amber-500 bg-amber-50 dark:bg-amber-950/40 text-amber-900 dark:text-amber-100 rounded-r px-1 py-0.5 mb-0.5 truncate cursor-pointer select-none hover:bg-amber-100 dark:hover:bg-amber-900/50 transition-colors"
-                        title={`${p.clientName}${p.selectedPhotoCount ? ` — ${p.selectedPhotoCount} photos` : " — double-click to enter count"}`}
+                        open={countProject?.id === p.id}
+                        onOpenChange={open => {
+                          if (!open) setCountProject(null);
+                        }}
                       >
-                        {p.clientName}
-                        {p.selectedPhotoCount ? (
-                          <span className="ml-1 opacity-70">({p.selectedPhotoCount})</span>
-                        ) : null}
-                        {p.driveFolderId ? (
-                          <span className="ml-1">📁</span>
-                        ) : null}
-                      </div>
+                        <PopoverTrigger asChild>
+                          <div
+                            onDoubleClick={() => {
+                              setCountProject(p);
+                              setPhotoCount(String(p.selectedPhotoCount ?? ""));
+                            }}
+                            className="text-[10px] border-l-2 border-amber-500 bg-amber-50 dark:bg-amber-950/40 text-amber-900 dark:text-amber-100 rounded-r px-1 py-0.5 mb-0.5 truncate cursor-pointer select-none hover:bg-amber-100 dark:hover:bg-amber-900/50 transition-colors"
+                            title={`${p.clientName}${p.selectedPhotoCount ? ` — ${p.selectedPhotoCount} photos` : " — double-click to enter count"}`}
+                          >
+                            {p.clientName}
+                            {p.selectedPhotoCount ? (
+                              <span className="ml-1 opacity-70">({p.selectedPhotoCount})</span>
+                            ) : null}
+                            {p.driveFolderId ? " 📁" : null}
+                          </div>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-64 p-3" side="right" align="start">
+                          <div className="space-y-3">
+                            <p className="text-sm font-semibold flex items-center gap-1.5">
+                              <Camera className="h-3.5 w-3.5 text-amber-600" />
+                              {p.clientName}
+                            </p>
+                            <div>
+                              <label className="text-xs font-medium block mb-1">Number of photos</label>
+                              <Input
+                                type="number"
+                                min={0}
+                                value={countProject?.id === p.id ? photoCount : ""}
+                                onChange={e => setPhotoCount(e.target.value)}
+                                placeholder="e.g. 120"
+                                className="h-7 text-sm"
+                                autoFocus
+                                onKeyDown={e => {
+                                  if (e.key === "Enter") {
+                                    const n = parseInt(photoCount, 10);
+                                    if (!isNaN(n) && n >= 0) saveMutation.mutate({ id: p.id, count: n });
+                                  }
+                                  if (e.key === "Escape") setCountProject(null);
+                                }}
+                              />
+                            </div>
+                            {p.driveGalleryLink ? (
+                              <a
+                                href={p.driveGalleryLink}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="text-xs text-blue-600 hover:underline block"
+                              >
+                                📁 Open Drive Folder
+                              </a>
+                            ) : (
+                              <p className="text-[10px] text-muted-foreground">
+                                Drive folder auto-created when count {">"} 0 is saved.
+                              </p>
+                            )}
+                            <div className="flex gap-2">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-6 text-xs flex-1"
+                                onClick={() => setCountProject(null)}
+                              >
+                                Cancel
+                              </Button>
+                              <Button
+                                size="sm"
+                                className="h-6 text-xs flex-1"
+                                onClick={() => {
+                                  const n = parseInt(photoCount, 10);
+                                  if (isNaN(n) || n < 0) return;
+                                  saveMutation.mutate({ id: p.id, count: n });
+                                }}
+                                disabled={saveMutation.isPending}
+                              >
+                                {saveMutation.isPending ? "…" : "Save"}
+                              </Button>
+                            </div>
+                          </div>
+                        </PopoverContent>
+                      </Popover>
                     ))}
                     {pills.length > 4 && (
                       <div className="text-[9px] text-muted-foreground pl-1">+{pills.length - 4} more</div>
@@ -951,63 +1025,6 @@ function CalendarGrid({ projects }: { projects: Project[] }) {
         </CardContent>
       </Card>
 
-      {/* Photo Count Dialog */}
-      <Dialog open={!!countProject} onOpenChange={o => !o && setCountProject(null)}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Camera className="h-4 w-4 text-amber-600" />
-              {countProject?.clientName}
-            </DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <label className="text-sm font-medium block mb-1.5">Number of photos</label>
-              <Input
-                type="number"
-                min={0}
-                value={photoCount}
-                onChange={e => setPhotoCount(e.target.value)}
-                placeholder="e.g. 120"
-                autoFocus
-                onKeyDown={e => {
-                  if (e.key === "Enter") {
-                    const n = parseInt(photoCount, 10);
-                    if (!isNaN(n) && n >= 0) saveMutation.mutate({ id: countProject!.id, count: n });
-                  }
-                }}
-              />
-            </div>
-            {countProject?.driveGalleryLink ? (
-              <a
-                href={countProject.driveGalleryLink}
-                target="_blank"
-                rel="noreferrer"
-                className="text-xs text-blue-600 hover:underline flex items-center gap-1"
-              >
-                📁 Open Drive Folder
-              </a>
-            ) : (
-              <p className="text-xs text-muted-foreground">
-                A Google Drive folder will be created automatically when you save a count {">"} 0.
-              </p>
-            )}
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setCountProject(null)}>Cancel</Button>
-            <Button
-              onClick={() => {
-                const n = parseInt(photoCount, 10);
-                if (isNaN(n) || n < 0) return;
-                saveMutation.mutate({ id: countProject!.id, count: n });
-              }}
-              disabled={saveMutation.isPending}
-            >
-              {saveMutation.isPending ? "Saving…" : "Save"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </>
   );
 }

@@ -1,7 +1,15 @@
 import { storage } from './storage';
 import { listCalendars, fetchCalendarEvents } from './services/googleCalendar';
 
-const NOEL_RE = /noe[lë]|christmas/i;
+// Accent-insensitive keyword match: normalise NFD and strip combining marks,
+// then test against plain ASCII patterns (handles NOEL / NOËL / Noël / NÖEL etc.)
+function noelKeywordMatch(text: string): boolean {
+  const normalised = text
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '') // strip combining diacritics
+    .toLowerCase();
+  return /noel|christmas/.test(normalised);
+}
 
 export interface NoelSyncResult {
   created: number;
@@ -20,7 +28,7 @@ export async function syncNoelCalendar(): Promise<NoelSyncResult> {
       return result;
     }
 
-    let calendars: { id: string; summary: string }[] = [];
+    let calendars: Awaited<ReturnType<typeof listCalendars>> = [];
     try {
       calendars = await listCalendars();
     } catch (err: any) {
@@ -29,13 +37,14 @@ export async function syncNoelCalendar(): Promise<NoelSyncResult> {
     }
 
     if (calendars.length === 0) {
-      console.log('🎄 Noël sync: no calendars found');
+      console.log('🎄 Noël sync: no calendars available');
       return result;
     }
 
-    // Scan a wide window so we catch historical and future events
-    const timeMin = new Date('2020-01-01T00:00:00Z');
-    const timeMax = new Date('2028-12-31T23:59:59Z');
+    // Use an extreme window that covers all practical dates (the Google Calendar
+    // API requires a time range; this is the closest approximation to "all dates").
+    const timeMin = new Date(0);                          // 1970-01-01 (Unix epoch)
+    const timeMax = new Date('2100-12-31T23:59:59Z');    // far future
 
     for (const cal of calendars) {
       let events: Awaited<ReturnType<typeof fetchCalendarEvents>> = [];
@@ -49,7 +58,8 @@ export async function syncNoelCalendar(): Promise<NoelSyncResult> {
 
       for (const event of events) {
         try {
-          if (!NOEL_RE.test(event.summary)) {
+          // Accent-insensitive keyword filter
+          if (!noelKeywordMatch(event.summary)) {
             result.skipped++;
             continue;
           }
@@ -60,11 +70,16 @@ export async function syncNoelCalendar(): Promise<NoelSyncResult> {
           }
 
           const shootDate = event.start;
-          // Multi-day event → delivery = end; single-day → delivery = shoot date
-          const isMultiDay =
-            event.end &&
-            !isNaN(event.end.getTime()) &&
-            event.end.getTime() - event.start.getTime() > 12 * 60 * 60 * 1000;
+
+          // Google Calendar all-day events have an exclusive end date (end = last day + 1).
+          // A single-day all-day event → end - start = exactly 24 h.
+          // A multi-day all-day event → end - start ≥ 48 h.
+          // Timed events rarely span > 12 h, so ≥ 48 h is the safe multi-day threshold.
+          const durationMs =
+            event.end && !isNaN(event.end.getTime())
+              ? event.end.getTime() - event.start.getTime()
+              : 0;
+          const isMultiDay = durationMs >= 2 * 24 * 60 * 60 * 1000; // ≥ 48 h
           const promisedDeliveryDate = isMultiDay ? event.end : event.start;
 
           const existing = await storage.getProjectByCalendarEventId(event.id);
@@ -79,7 +94,7 @@ export async function syncNoelCalendar(): Promise<NoelSyncResult> {
             continue;
           }
 
-          // Sunday of shoot week — used as dueDate (required field)
+          // Sunday of shoot week — dueDate is a required field on projects
           const sunday = new Date(shootDate);
           sunday.setDate(sunday.getDate() - sunday.getDay());
           sunday.setHours(0, 0, 0, 0);
@@ -98,10 +113,13 @@ export async function syncNoelCalendar(): Promise<NoelSyncResult> {
             lastSyncedAt: new Date(),
             createdFrom: 'CALENDAR',
             campaignId: campaign.id,
+            status: 'ShootDone',
           });
 
           result.created++;
-          console.log(`🎄 Noël sync: created project "${event.summary}" (${shootDate.toISOString().slice(0, 10)})`);
+          console.log(
+            `🎄 Noël sync: created "${event.summary}" (shoot ${shootDate.toISOString().slice(0, 10)}, delivery ${promisedDeliveryDate.toISOString().slice(0, 10)})`
+          );
         } catch (err: any) {
           result.errors.push(`Event "${event.summary}": ${err.message}`);
           console.error(`🎄 Noël sync error for event "${event.summary}":`, err.message);
