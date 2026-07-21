@@ -30,6 +30,8 @@ import {
   PackageCheck,
   LayoutGrid,
   GripVertical,
+  FolderOpen,
+  FolderX,
 } from "lucide-react";
 import type { Project, Campaign } from "@shared/schema";
 
@@ -418,13 +420,14 @@ export default function CampaignCockpit() {
                         <th className="text-left py-2 px-3">Profile</th>
                         <th className="text-left py-2 px-3">Retoucher</th>
                         <th className="text-left py-2 px-3">Status</th>
+                        <th className="text-left py-2 px-3">Drive</th>
                         <th className="text-left py-2 px-3">Actions</th>
                       </tr>
                     </thead>
                     <tbody>
                       {projects.length === 0 ? (
                         <tr>
-                          <td colSpan={9} className="text-center py-8 text-muted-foreground">
+                          <td colSpan={10} className="text-center py-8 text-muted-foreground">
                             No projects yet. Promote Noël-tagged ShootTracker events to populate this list.
                           </td>
                         </tr>
@@ -1190,6 +1193,44 @@ function ProjectRow({ project, onCount, onAssign, onMove, onEmail, onProfile, on
         <Badge variant="outline" className={`text-xs border ${statusClass}`}>
           {project.status}
         </Badge>
+      </td>
+      <td className="py-2 px-3">
+        {project.driveGalleryLink ? (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <a
+                href={project.driveGalleryLink}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-1 text-xs text-emerald-600 hover:text-emerald-700 font-medium"
+              >
+                <FolderOpen className="h-3.5 w-3.5" />
+                Linked
+              </a>
+            </TooltipTrigger>
+            <TooltipContent>Open Drive folder</TooltipContent>
+          </Tooltip>
+        ) : project.driveFolderId ? (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span className="inline-flex items-center gap-1 text-xs text-amber-500 font-medium cursor-default">
+                <FolderOpen className="h-3.5 w-3.5" />
+                No link
+              </span>
+            </TooltipTrigger>
+            <TooltipContent>Folder created but share link not yet generated</TooltipContent>
+          </Tooltip>
+        ) : (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span className="inline-flex items-center gap-1 text-xs text-muted-foreground cursor-default">
+                <FolderX className="h-3.5 w-3.5" />
+                Pending
+              </span>
+            </TooltipTrigger>
+            <TooltipContent>Drive folder created automatically when photo count is saved</TooltipContent>
+          </Tooltip>
+        )}
       </td>
       <td className="py-2 px-3">
         <div className="flex gap-1">
