@@ -1,15 +1,23 @@
 import { storage } from './storage';
 import { listCalendars, fetchCalendarEvents } from './services/googleCalendar';
+import { CAMPAIGN_NOEL_KEYWORDS } from '@shared/schema';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 /**
- * Accent-insensitive keyword match via Unicode NFD normalisation + diacritic strip.
+ * Build an accent-insensitive matcher from a list of keywords stored on the campaign.
+ * Falls back to the hardcoded CAMPAIGN_NOEL_KEYWORDS if the list is empty.
  * Handles NOEL / NOËL / Noël / NÖEL / CHRISTMAS / christmas, etc.
  */
-function isNoelEvent(text: string): boolean {
-  const plain = text.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
-  return /noel|christmas/.test(plain);
+
+function buildNoelMatcher(keywords: string[]): (text: string) => boolean {
+  const list = keywords.length ? keywords : CAMPAIGN_NOEL_KEYWORDS;
+  const patterns = list.map(kw =>
+    kw.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+       .replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  );
+  const regex = new RegExp(patterns.join('|'));
+  return (text: string) => regex.test(text.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase());
 }
 
 /** Local-timezone ISO date string (avoids UTC midnight shift in non-UTC zones). */
@@ -40,6 +48,9 @@ export async function syncNoelCalendar(): Promise<NoelSyncResult> {
       console.log('🎄 Noël sync: no active campaign found, skipping');
       return result;
     }
+
+    // Build keyword matcher from campaign's editable keywords (falls back to hardcoded defaults)
+    const isNoelEvent = buildNoelMatcher(campaign.keywords ?? []);
 
     // ── 1. Fetch all connected calendars ─────────────────────────────────────
     let calendars: Awaited<ReturnType<typeof listCalendars>> = [];

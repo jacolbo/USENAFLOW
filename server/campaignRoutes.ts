@@ -462,13 +462,73 @@ export function registerCampaignRoutes(app: Express): void {
     try {
       const campaign = await storage.getActiveCampaign();
       if (!campaign) return res.status(404).json({ error: "No active campaign" });
-      const { surveyDelayDays, reviewMode } = req.body;
+      const { surveyDelayDays, reviewMode, keywords } = req.body;
       const updates: any = {};
       if (typeof surveyDelayDays === "number") updates.surveyDelayDays = surveyDelayDays;
       if (["full", "spot-check", "ai-gate-only"].includes(reviewMode)) updates.reviewMode = reviewMode;
+      if (Array.isArray(keywords) && keywords.length > 0) {
+        updates.keywords = keywords.map((k: string) => String(k).trim().toLowerCase()).filter(Boolean);
+      }
       const updated = await storage.updateCampaign(campaign.id, updates);
       res.json(updated);
     } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // POST /api/campaign/archive-year — bulk-archive all shoots matching campaign keywords for a given year
+  app.post("/api/campaign/archive-year", verifyAdminOrLeadRequest, async (req: Request, res: Response) => {
+    try {
+      const { year } = req.body;
+      if (!year || typeof year !== "number" || year < 2000 || year > 2100) {
+        return res.status(400).json({ error: "year must be a valid 4-digit number" });
+      }
+      const actorId = req.headers["x-usena-user-id"] as string || "system";
+      const campaign = await storage.getActiveCampaign();
+
+      // Build keyword matcher — use campaign keywords if available, else fall back to hardcoded defaults
+      const { CAMPAIGN_NOEL_KEYWORDS } = await import("@shared/schema");
+      const rawKeywords: string[] = campaign?.keywords?.length ? campaign.keywords : CAMPAIGN_NOEL_KEYWORDS;
+      const patterns = rawKeywords.map(kw =>
+        kw.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+      );
+      const matchRegex = new RegExp(patterns.join("|"));
+      const normalise = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+
+      // Fetch all projects (campaign and non-campaign) to scan
+      const allProjects = await storage.getAllProjectsIncludingPlaceholders();
+      // Also fetch campaign projects separately since getAllProjectsIncludingPlaceholders filters by campaignId
+      const campaignProjects = campaign ? await storage.getCampaignProjects(campaign.id) : [];
+      const combined = [...allProjects, ...campaignProjects].filter(
+        (p, i, arr) => arr.findIndex(x => x.id === p.id) === i
+      );
+
+      // Filter: matches keywords + shoot or due date falls in the requested year
+      const yearStart = new Date(year, 0, 1);
+      const yearEnd = new Date(year + 1, 0, 1);
+
+      const toArchive = combined.filter(p => {
+        if (p.chatArchived) return false; // already archived
+        const dateToCheck = p.shootDate ? new Date(p.shootDate) : new Date(p.dueDate);
+        if (dateToCheck < yearStart || dateToCheck >= yearEnd) return false;
+        return matchRegex.test(normalise(p.clientName));
+      });
+
+      const now = new Date();
+      let archived = 0;
+      for (const p of toArchive) {
+        await storage.updateProject(p.id, {
+          chatArchived: true,
+          chatArchivedAt: now,
+          chatArchivedBy: actorId,
+        });
+        archived++;
+      }
+
+      console.log(`🎄 [Archive] Archived ${archived} Christmas ${year} shoots by ${actorId}`);
+      res.json({ archived, year });
+    } catch (err: any) {
+      console.error("[Archive Year] Error:", err.message);
       res.status(500).json({ error: err.message });
     }
   });

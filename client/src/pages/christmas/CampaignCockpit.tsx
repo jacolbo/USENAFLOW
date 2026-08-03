@@ -34,6 +34,7 @@ import {
   FolderX,
 } from "lucide-react";
 import type { Project, Campaign } from "@shared/schema";
+import { CAMPAIGN_NOEL_KEYWORDS } from "@shared/schema";
 
 // ─────────────────────── Auth helpers ────────────────────────
 
@@ -150,6 +151,10 @@ export default function CampaignCockpit() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [reviewMode, setReviewMode] = useState("spot-check");
   const [surveyDelayDays, setSurveyDelayDays] = useState(3);
+  const [keywords, setKeywords] = useState<string[]>([...CAMPAIGN_NOEL_KEYWORDS]);
+  const [newKeyword, setNewKeyword] = useState("");
+  // Archive confirmation: { year, message }
+  const [archiveConfirm, setArchiveConfirm] = useState<{ year: number } | null>(null);
   // Lane drag state
   const [laneDragProjectId, setLaneDragProjectId] = useState<string | null>(null);
   const [laneDragOverId, setLaneDragOverId] = useState<string | null>(null);
@@ -214,12 +219,23 @@ export default function CampaignCockpit() {
   });
 
   const settingsMutation = useMutation({
-    mutationFn: () => campaignFetch("PUT", "/api/campaign/settings", { surveyDelayDays, reviewMode }),
+    mutationFn: () => campaignFetch("PUT", "/api/campaign/settings", { surveyDelayDays, reviewMode, keywords }),
     onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["/api/campaign"] });
       setSettingsOpen(false);
       toast({ title: "Campaign settings saved" });
     },
     onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
+  const archiveMutation = useMutation({
+    mutationFn: (year: number) => campaignFetch("POST", "/api/campaign/archive-year", { year }),
+    onSuccess: (data: any) => {
+      setArchiveConfirm(null);
+      qc.invalidateQueries({ queryKey: ["/api/campaign"] });
+      toast({ title: `${data.archived} shoot${data.archived !== 1 ? "s" : ""} archived`, description: `All Christmas ${data.year} shoots moved to archive.` });
+    },
+    onError: (e: any) => toast({ title: "Archive failed", description: e.message, variant: "destructive" }),
   });
 
   const deliverMutation = useMutation({
@@ -296,9 +312,17 @@ export default function CampaignCockpit() {
             <Button
               variant="outline"
               size="sm"
+              onClick={() => setArchiveConfirm({ year: (campaign.year ?? new Date().getFullYear()) - 1 })}
+            >
+              <FolderX className="h-4 w-4 mr-1" /> Archive {(campaign.year ?? new Date().getFullYear()) - 1}
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
               onClick={() => {
                 setReviewMode(campaign.reviewMode || "spot-check");
                 setSurveyDelayDays(campaign.surveyDelayDays || 3);
+                setKeywords(campaign.keywords?.length ? [...campaign.keywords] : [...CAMPAIGN_NOEL_KEYWORDS]);
                 setSettingsOpen(true);
               }}
             >
@@ -650,7 +674,7 @@ export default function CampaignCockpit() {
 
         {/* Settings Dialog */}
         <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
-          <DialogContent>
+          <DialogContent className="max-w-lg">
             <DialogHeader>
               <DialogTitle>Campaign Settings</DialogTitle>
             </DialogHeader>
@@ -676,11 +700,91 @@ export default function CampaignCockpit() {
                   onChange={(e) => setSurveyDelayDays(Number(e.target.value))}
                 />
               </div>
+              <div>
+                <label className="text-sm font-medium mb-1 block">Christmas Shoot Keywords</label>
+                <p className="text-xs text-muted-foreground mb-2">
+                  Calendar events whose title contains any of these words are pulled into this campaign.
+                </p>
+                <div className="flex flex-wrap gap-1.5 mb-2 min-h-[32px] p-2 border rounded-md bg-muted/30">
+                  {keywords.map((kw) => (
+                    <Badge key={kw} variant="secondary" className="gap-1 text-xs pr-1">
+                      {kw}
+                      <button
+                        type="button"
+                        className="ml-0.5 hover:text-destructive leading-none"
+                        onClick={() => setKeywords(keywords.filter(k => k !== kw))}
+                      >
+                        ×
+                      </button>
+                    </Badge>
+                  ))}
+                  {keywords.length === 0 && (
+                    <span className="text-xs text-muted-foreground">No keywords — add one below</span>
+                  )}
+                </div>
+                <div className="flex gap-2">
+                  <Input
+                    placeholder="e.g. xmas, festive, holiday shoot"
+                    value={newKeyword}
+                    onChange={(e) => setNewKeyword(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        const kw = newKeyword.trim().toLowerCase();
+                        if (kw && !keywords.includes(kw)) setKeywords([...keywords, kw]);
+                        setNewKeyword("");
+                      }
+                    }}
+                    className="text-sm"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      const kw = newKeyword.trim().toLowerCase();
+                      if (kw && !keywords.includes(kw)) setKeywords([...keywords, kw]);
+                      setNewKeyword("");
+                    }}
+                  >
+                    Add
+                  </Button>
+                </div>
+              </div>
             </div>
             <DialogFooter>
               <Button variant="outline" onClick={() => setSettingsOpen(false)}>Cancel</Button>
-              <Button onClick={() => settingsMutation.mutate()} disabled={settingsMutation.isPending}>
+              <Button onClick={() => settingsMutation.mutate()} disabled={settingsMutation.isPending || keywords.length === 0}>
                 {settingsMutation.isPending ? "Saving…" : "Save Settings"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Archive Year Confirmation Dialog */}
+        <Dialog open={!!archiveConfirm} onOpenChange={(open) => { if (!open) setArchiveConfirm(null); }}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Archive {archiveConfirm?.year} Shoots</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-3 text-sm">
+              <p>
+                This will archive all Christmas <strong>{archiveConfirm?.year}</strong> shoots — any project whose
+                name matches the campaign keywords and whose shoot date falls in {archiveConfirm?.year}.
+              </p>
+              <p className="text-muted-foreground">
+                Archived projects are hidden from all active views. You can still find them by toggling the archive
+                view on the main project list. No data is deleted.
+              </p>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setArchiveConfirm(null)}>Cancel</Button>
+              <Button
+                variant="destructive"
+                onClick={() => archiveConfirm && archiveMutation.mutate(archiveConfirm.year)}
+                disabled={archiveMutation.isPending}
+              >
+                {archiveMutation.isPending ? "Archiving…" : `Archive ${archiveConfirm?.year} Shoots`}
               </Button>
             </DialogFooter>
           </DialogContent>

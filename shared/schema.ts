@@ -1153,6 +1153,7 @@ export const campaigns = pgTable("campaigns", {
   status: text("status").notNull().default("active"), // 'active' | 'completed' | 'cancelled'
   bufferDays: integer("buffer_days").notNull().default(2), // extra days to finish before hard deadline
   dateSlipThresholdDays: integer("date_slip_threshold_days").notNull().default(3), // days of slip before client chat alert
+  keywords: text("keywords").array(), // editable list of calendar-event keywords that identify campaign shoots
   createdAt: timestamp("created_at").notNull().default(sql`now()`),
   updatedAt: timestamp("updated_at").notNull().default(sql`now()`),
 });
