@@ -7,24 +7,13 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-import { Eye, Plus, Trash2, Edit, Image as ImageIcon, FileText, CalendarClock, ArrowRight } from "lucide-react";
+import { Eye, Plus, Trash2, Edit, Image as ImageIcon, FileText } from "lucide-react";
 import { ObjectUploader } from "./ObjectUploader";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { queryClient } from "@/lib/queryClient";
 import type { ProjectNote } from "@shared/schema";
 import type { UploadResult } from "@uppy/core";
-
-interface RescheduleEntry {
-  id: string;
-  projectId: string;
-  oldDate: string;
-  newDate: string;
-  actorId: string;
-  actorName: string;
-  createdAt: string;
-}
 
 interface ProjectNotesProps {
   projectId: string;
@@ -46,15 +35,6 @@ export function ProjectNotes({ projectId, userRole, hasNotes }: ProjectNotesProp
     queryFn: async () => {
       const response = await fetch(`/api/projects/${projectId}/notes`);
       return response.json() as Promise<ProjectNote[]>;
-    },
-    enabled: isDialogOpen,
-  });
-
-  const rescheduleQuery = useQuery({
-    queryKey: ["/api/projects", projectId, "reschedule-log"],
-    queryFn: async () => {
-      const response = await fetch(`/api/projects/${projectId}/reschedule-log`);
-      return response.json() as Promise<RescheduleEntry[]>;
     },
     enabled: isDialogOpen,
   });
@@ -174,7 +154,6 @@ export function ProjectNotes({ projectId, userRole, hasNotes }: ProjectNotesProp
 
   // ONLY NOW check permissions after ALL hooks are declared
   const canManageNotes = ["Admin", "Sales", "DataWrangler"].includes(userRole);
-  const canViewRescheduleHistory = ["Admin", "Sales", "DataWrangler", "LeadRetoucher"].includes(userRole);
   const isRetoucher = ["Retoucher1", "Retoucher2", "Retoucher3", "Retoucher"].includes(userRole);
   
   // Early return for retouchers without notes - AFTER all hooks
@@ -251,58 +230,6 @@ export function ProjectNotes({ projectId, userRole, hasNotes }: ProjectNotesProp
             </Tabs>
           )}
           
-          {/* Reschedule History accordion — visible to Admin, Sales, DataWrangler, LeadRetoucher */}
-          {canViewRescheduleHistory && (
-            <Accordion type="single" collapsible className="border rounded-md px-3">
-              <AccordionItem value="reschedule-history" className="border-none">
-                <AccordionTrigger className="text-sm font-medium py-3">
-                  <span className="flex items-center gap-2">
-                    <CalendarClock className="h-4 w-4 text-muted-foreground" />
-                    Reschedule History
-                    {rescheduleQuery.data && rescheduleQuery.data.length > 0 && (
-                      <Badge variant="secondary" className="ml-1 text-xs">
-                        {rescheduleQuery.data.length}
-                      </Badge>
-                    )}
-                  </span>
-                </AccordionTrigger>
-                <AccordionContent>
-                  {rescheduleQuery.isLoading && (
-                    <p className="text-sm text-muted-foreground py-2">Loading history…</p>
-                  )}
-                  {rescheduleQuery.data && rescheduleQuery.data.length === 0 && (
-                    <p className="text-sm text-muted-foreground py-2">No reschedules recorded for this project.</p>
-                  )}
-                  {rescheduleQuery.data && rescheduleQuery.data.length > 0 && (
-                    <div className="space-y-2 pb-1">
-                      {rescheduleQuery.data.map((entry) => (
-                        <div key={entry.id} className="flex flex-col gap-0.5 rounded-md bg-muted/50 px-3 py-2 text-sm">
-                          <div className="flex items-center gap-2 font-medium">
-                            <ArrowRight className="h-3.5 w-3.5 text-amber-500 shrink-0" />
-                            <span className="text-muted-foreground">
-                              {new Date(entry.oldDate).toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" })}
-                            </span>
-                            <span className="text-muted-foreground">→</span>
-                            <span>
-                              {new Date(entry.newDate).toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" })}
-                            </span>
-                          </div>
-                          <div className="text-xs text-muted-foreground pl-5">
-                            Moved by <span className="font-medium text-foreground">{entry.actorName}</span>
-                            {" · "}
-                            {new Date(entry.createdAt).toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" })}
-                            {" at "}
-                            {new Date(entry.createdAt).toLocaleTimeString("en-ZA", { hour: "2-digit", minute: "2-digit" })}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </AccordionContent>
-              </AccordionItem>
-            </Accordion>
-          )}
-
           {/* Display existing notes */}
           <div className="space-y-3">
             <h3 className="text-lg font-semibold">Existing Notes</h3>

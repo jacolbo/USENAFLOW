@@ -284,19 +284,6 @@ export const complaints = pgTable("complaints", {
   createdAt: timestamp("created_at").notNull().default(sql`now()`),
 });
 
-// Reschedule log — every confirmed calendar drag-to-reschedule is recorded here
-export const rescheduleLog = pgTable("reschedule_log", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  projectId: varchar("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
-  oldDate: timestamp("old_date").notNull(),
-  newDate: timestamp("new_date").notNull(),
-  actorId: text("actor_id").notNull(),
-  createdAt: timestamp("created_at").notNull().default(sql`now()`),
-});
-
-export const insertRescheduleLogSchema = createInsertSchema(rescheduleLog).omit({ id: true, createdAt: true });
-export type RescheduleLog = typeof rescheduleLog.$inferSelect;
-export type InsertRescheduleLog = z.infer<typeof insertRescheduleLogSchema>;
 
 export const insertUserSchema = createInsertSchema(users).pick({
   username: true,
