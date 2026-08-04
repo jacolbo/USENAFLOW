@@ -97,11 +97,6 @@ const STATUS_COLORS: Record<string, string> = {
   AwaitingPayment: "bg-red-100 text-red-800 border-red-300",
 };
 
-const EDIT_PROFILE_COLORS: Record<string, string> = {
-  light: "bg-sky-100 text-sky-700 border-sky-300",
-  standard: "bg-indigo-100 text-indigo-700 border-indigo-300",
-  complex: "bg-rose-100 text-rose-700 border-rose-300",
-};
 
 const ALL_RETOUCHERS = [
   { id: "Retoucher1", name: "Retoucher 1" },
@@ -681,8 +676,6 @@ function ProjectCard({ project, draggable, onDragStart, onPullForward, isToday }
     : "—";
   const statusKey = (project.status || "").replace(/\s/g, "");
   const statusClass = STATUS_COLORS[statusKey] || "bg-gray-100 text-gray-700";
-  const profileClass =
-    EDIT_PROFILE_COLORS[project.editProfile || ""] || "bg-gray-100 text-gray-700 border-gray-300";
   const photoCount = project.selectedPhotoCount || project.selectedCount || 0;
 
   const today = new Date();
@@ -730,11 +723,6 @@ function ProjectCard({ project, draggable, onDragStart, onPullForward, isToday }
           <span className="inline-flex items-center gap-0.5 text-[10px] text-muted-foreground">
             <Camera className="h-3 w-3" />{photoCount}
           </span>
-        )}
-        {project.editProfile && (
-          <Badge variant="outline" className={`text-[10px] border px-1 py-0 ${profileClass}`}>
-            {project.editProfile}
-          </Badge>
         )}
       </div>
 

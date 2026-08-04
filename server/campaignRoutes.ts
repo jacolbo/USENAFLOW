@@ -341,21 +341,6 @@ export function registerCampaignRoutes(app: Express): void {
     }
   });
 
-  // PATCH /api/campaign/projects/:id/editprofile — set edit profile
-  app.patch("/api/campaign/projects/:id/editprofile", verifyCampaignCockpit, async (req: Request, res: Response) => {
-    try {
-      const { id } = req.params;
-      const { editProfile } = req.body;
-      const valid = ["light", "standard", "complex"];
-      if (!valid.includes(editProfile)) return res.status(400).json({ error: "Invalid editProfile" });
-      const project = await storage.getProject(id);
-      if (!project || !project.campaignId) return res.status(404).json({ error: "Campaign project not found" });
-      const updated = await storage.updateProject(id, { editProfile });
-      res.json(updated);
-    } catch (err: any) {
-      res.status(500).json({ error: err.message });
-    }
-  });
 
   // POST /api/campaign/projects/:id/email/estimate — Email 1: delivery estimate (manual trigger)
   app.post("/api/campaign/projects/:id/email/estimate", verifyCampaignCockpit, async (req: Request, res: Response) => {

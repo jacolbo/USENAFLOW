@@ -208,15 +208,6 @@ export default function CampaignCockpit() {
     onError: (e: any) => toast({ title: "Email failed", description: e.message, variant: "destructive" }),
   });
 
-  const profileMutation = useMutation({
-    mutationFn: ({ id, editProfile }: { id: string; editProfile: string }) =>
-      campaignFetch("PATCH", `/api/campaign/projects/${id}/editprofile`, { editProfile }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["/api/campaign"] });
-      toast({ title: "Edit profile updated" });
-    },
-    onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
-  });
 
   const settingsMutation = useMutation({
     mutationFn: () => campaignFetch("PUT", "/api/campaign/settings", { surveyDelayDays, reviewMode, keywords }),
@@ -441,7 +432,6 @@ export default function CampaignCockpit() {
                         <th className="text-left py-2 px-3">Work Date</th>
                         <th className="text-left py-2 px-3">Due</th>
                         <th className="text-left py-2 px-3">Photos</th>
-                        <th className="text-left py-2 px-3">Profile</th>
                         <th className="text-left py-2 px-3">Retoucher</th>
                         <th className="text-left py-2 px-3">Status</th>
                         <th className="text-left py-2 px-3">Drive</th>
@@ -451,7 +441,7 @@ export default function CampaignCockpit() {
                     <tbody>
                       {projects.length === 0 ? (
                         <tr>
-                          <td colSpan={10} className="text-center py-8 text-muted-foreground">
+                          <td colSpan={9} className="text-center py-8 text-muted-foreground">
                             No projects yet. Promote Noël-tagged ShootTracker events to populate this list.
                           </td>
                         </tr>
@@ -471,9 +461,8 @@ export default function CampaignCockpit() {
                               setMoveDate(d ? new Date(d).toISOString().slice(0, 10) : "2026-12-19");
                             }}
                             onEmail={(id, type) => emailMutation.mutate({ id, type })}
-                            onProfile={(id, profile) => profileMutation.mutate({ id, editProfile: profile })}
                             onMarkDelivered={(id) => deliverMutation.mutate(id)}
-                            isPending={countMutation.isPending || emailMutation.isPending || profileMutation.isPending || deliverMutation.isPending}
+                            isPending={countMutation.isPending || emailMutation.isPending || deliverMutation.isPending}
                           />
                         ))
                       )}
@@ -1213,12 +1202,11 @@ interface ProjectRowProps {
   onAssign: (id: string) => void;
   onMove: (id: string) => void;
   onEmail: (id: string, type: "estimate" | "ready" | "survey") => void;
-  onProfile: (id: string, profile: string) => void;
   onMarkDelivered: (id: string) => void;
   isPending: boolean;
 }
 
-function ProjectRow({ project, onCount, onAssign, onMove, onEmail, onProfile, onMarkDelivered, isPending }: ProjectRowProps) {
+function ProjectRow({ project, onCount, onAssign, onMove, onEmail, onMarkDelivered, isPending }: ProjectRowProps) {
   const [countInput, setCountInput] = useState(String(project.selectedPhotoCount || project.selectedCount || ""));
   const dueDate = project.promisedDeliveryDate || project.deliveryDueDate;
   const plannedWork = project.plannedWorkDate;
@@ -1269,18 +1257,6 @@ function ProjectRow({ project, onCount, onAssign, onMove, onEmail, onProfile, on
             ✓
           </Button>
         </div>
-      </td>
-      <td className="py-2 px-3">
-        <Select value={project.editProfile || ""} onValueChange={(v) => onProfile(project.id, v)}>
-          <SelectTrigger className="h-7 w-24 text-xs">
-            <SelectValue placeholder="Profile" />
-          </SelectTrigger>
-          <SelectContent>
-            {["light", "standard", "complex"].map((p) => (
-              <SelectItem key={p} value={p} className="text-xs capitalize">{p}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
       </td>
       <td className="py-2 px-3">
         {project.assignedRetoucherId ? (

@@ -106,7 +106,6 @@ export const projects = pgTable("projects", {
   dueDateHistory: jsonb("due_date_history"),
   selectedPhotoCount: integer("selected_photo_count"),
   plannedWorkDate: timestamp("planned_work_date"),
-  editProfile: text("edit_profile"),
 });
 
 // ShootTracker metadata table (1:1 with projects)
