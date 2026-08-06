@@ -2708,7 +2708,9 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getCampaignProjects(campaignId: string): Promise<Project[]> {
-    return await db.select().from(projects).where(eq(projects.campaignId, campaignId));
+    return await db.select().from(projects).where(
+      and(eq(projects.campaignId, campaignId), sql`${projects.chatArchived} IS NOT TRUE`)
+    );
   }
 
   async getCampaignAssignments(campaignId: string): Promise<CampaignAssignment[]> {
