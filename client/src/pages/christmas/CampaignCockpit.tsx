@@ -32,6 +32,11 @@ import {
   GripVertical,
   FolderOpen,
   FolderX,
+  ChevronDown,
+  ChevronRight,
+  Image,
+  HardDrive,
+  MessageCircle,
 } from "lucide-react";
 import type { Project, Campaign } from "@shared/schema";
 import { CAMPAIGN_NOEL_KEYWORDS } from "@shared/schema";
@@ -1206,8 +1211,31 @@ interface ProjectRowProps {
   isPending: boolean;
 }
 
+// ── Selection tier dot ──────────────────────────────────────────────────────
+function SelectionTierDot({ tier, sentAt }: { tier: number | null | undefined; sentAt: string | null | undefined }) {
+  if (!sentAt) return null;
+  const t = tier ?? 0;
+  const colors = ["bg-green-500", "bg-orange-500", "bg-red-500"];
+  const labels = ["Invite sent", "Orange reminder sent", "Red reminder sent"];
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span className={`inline-block w-2.5 h-2.5 rounded-full ml-1 ${colors[Math.min(t, 2)]}`} />
+      </TooltipTrigger>
+      <TooltipContent>{labels[Math.min(t, 2)]}</TooltipContent>
+    </Tooltip>
+  );
+}
+
 function ProjectRow({ project, onCount, onAssign, onMove, onEmail, onMarkDelivered, isPending }: ProjectRowProps) {
+  const { toast } = useToast();
+  const qc = useQueryClient();
   const [countInput, setCountInput] = useState(String(project.selectedPhotoCount || project.selectedCount || ""));
+  const [selExpanded, setSelExpanded] = useState(false);
+  const [pixiesetInput, setPixiesetInput] = useState(project.pixiesetLink || "");
+  const [allowanceInput, setAllowanceInput] = useState(String(project.selectionAllowance ?? project.packageCount ?? ""));
+  const [extraPriceInput, setExtraPriceInput] = useState(String(project.extraPhotoPrice ?? ""));
+
   const dueDate = project.promisedDeliveryDate || project.deliveryDueDate;
   const plannedWork = project.plannedWorkDate;
   const dueDateStr = dueDate ? new Date(dueDate).toLocaleDateString("en-ZA", { day: "numeric", month: "short" }) : "—";
@@ -1219,143 +1247,337 @@ function ProjectRow({ project, onCount, onAssign, onMove, onEmail, onMarkDeliver
   const isDeadlineNear = workDaysLeft <= 5 && workDaysLeft > 0;
   const isOverdue = dueDate && new Date(dueDate) < new Date() && project.status !== "Delivered";
 
+  // ── Selection mutations ───────────────────────────────────────────────────
+  const saveFieldsMutation = useMutation({
+    mutationFn: () =>
+      campaignFetch("PATCH", `/api/campaign/projects/${project.id}/selection-fields`, {
+        pixiesetLink: pixiesetInput,
+        selectionAllowance: parseInt(allowanceInput, 10) || project.packageCount,
+        extraPhotoPrice: parseInt(extraPriceInput, 10) || 0,
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["/api/campaign"] });
+      toast({ title: "Selection fields saved" });
+    },
+    onError: (e: any) => toast({ title: "Save failed", description: e.message, variant: "destructive" }),
+  });
+
+  const sendSelectionEmailMutation = useMutation({
+    mutationFn: () => campaignFetch("POST", `/api/campaign/projects/${project.id}/email/selection`, {}),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["/api/campaign"] });
+      toast({ title: "Selection email sent" });
+    },
+    onError: (e: any) => toast({ title: "Email failed", description: e.message, variant: "destructive" }),
+  });
+
+  const collectFilesMutation = useMutation({
+    mutationFn: () => campaignFetch("POST", `/api/campaign/projects/${project.id}/files-collected`, {}),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["/api/campaign"] });
+      toast({ title: "Files marked as collected", description: "Photos-ready email will fire when conditions are met." });
+    },
+    onError: (e: any) => toast({ title: "Failed", description: e.message, variant: "destructive" }),
+  });
+
+  // ── Selection panel derived values ──────────────────────────────────────
+  const clientDone = !!project.clientSelectionDoneAt;
+  const selAllowance = project.selectionAllowance ?? project.packageCount ?? 0;
+  const selExtras = clientDone && project.clientSelectionCount != null
+    ? Math.max(0, project.clientSelectionCount - selAllowance)
+    : 0;
+  const selExtrasTotal = selExtras * (project.extraPhotoPrice ?? 0);
+
   return (
-    <tr className="border-b hover:bg-muted/30 transition-colors">
-      <td className="py-2 px-3">
-        <div className="font-medium">{project.clientName}</div>
-        {project.clientEmail && <div className="text-xs text-muted-foreground">{project.clientEmail}</div>}
-      </td>
-      <td className="py-2 px-3 text-muted-foreground text-xs">{shootDateStr}</td>
-      <td className="py-2 px-3">
-        <div className="flex items-center gap-1 text-xs">
-          <Hammer className="h-3 w-3 text-purple-500" />
-          <span className={plannedWork ? "text-purple-700" : "text-muted-foreground"}>{workDateStr}</span>
-        </div>
-      </td>
-      <td className="py-2 px-3">
-        <div className={`flex items-center gap-1 text-xs ${isOverdue ? "text-red-600 font-bold" : isDeadlineNear ? "text-amber-600 font-semibold" : ""}`}>
-          {dueDateStr}
-          {(isDeadlineNear || isOverdue) && <AlertTriangle className="h-3 w-3" />}
-        </div>
-        {workDaysLeft > 0 && (
-          <div className="text-[10px] text-muted-foreground">{workDaysLeft}wd left</div>
-        )}
-        <button onClick={() => onMove(project.id)} className="text-xs text-primary hover:underline mt-0.5 block">
-          <Edit3 className="h-3 w-3 inline mr-0.5" />Move
-        </button>
-      </td>
-      <td className="py-2 px-3">
-        <div className="flex items-center gap-1">
-          <Input
-            type="number"
-            min={0}
-            className="h-7 w-20 text-xs"
-            value={countInput}
-            onChange={(e) => setCountInput(e.target.value)}
-          />
-          <Button size="sm" variant="ghost" className="h-7 px-2" onClick={() => onCount(project.id, Number(countInput))} disabled={isPending}>
-            ✓
-          </Button>
-        </div>
-      </td>
-      <td className="py-2 px-3">
-        {project.assignedRetoucherId ? (
-          <button onClick={() => onAssign(project.id)} className="text-sm hover:underline text-primary">
-            {project.assignedRetoucherId}
+    <>
+      <tr className="border-b hover:bg-muted/30 transition-colors">
+        <td className="py-2 px-3">
+          <div className="font-medium">{project.clientName}</div>
+          {project.clientEmail && <div className="text-xs text-muted-foreground">{project.clientEmail}</div>}
+        </td>
+        <td className="py-2 px-3 text-muted-foreground text-xs">{shootDateStr}</td>
+        <td className="py-2 px-3">
+          <div className="flex items-center gap-1 text-xs">
+            <Hammer className="h-3 w-3 text-purple-500" />
+            <span className={plannedWork ? "text-purple-700" : "text-muted-foreground"}>{workDateStr}</span>
+          </div>
+        </td>
+        <td className="py-2 px-3">
+          <div className={`flex items-center gap-1 text-xs ${isOverdue ? "text-red-600 font-bold" : isDeadlineNear ? "text-amber-600 font-semibold" : ""}`}>
+            {dueDateStr}
+            {(isDeadlineNear || isOverdue) && <AlertTriangle className="h-3 w-3" />}
+          </div>
+          {workDaysLeft > 0 && (
+            <div className="text-[10px] text-muted-foreground">{workDaysLeft}wd left</div>
+          )}
+          <button onClick={() => onMove(project.id)} className="text-xs text-primary hover:underline mt-0.5 block">
+            <Edit3 className="h-3 w-3 inline mr-0.5" />Move
           </button>
-        ) : (
-          <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => onAssign(project.id)}>
-            <Users className="h-3 w-3 mr-1" /> Assign
-          </Button>
-        )}
-      </td>
-      <td className="py-2 px-3">
-        <Badge variant="outline" className={`text-xs border ${statusClass}`}>
-          {project.status}
-        </Badge>
-      </td>
-      <td className="py-2 px-3">
-        {project.driveGalleryLink ? (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <a
-                href={project.driveGalleryLink}
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex items-center gap-1 text-xs text-emerald-600 hover:text-emerald-700 font-medium"
-              >
-                <FolderOpen className="h-3.5 w-3.5" />
-                Linked
-              </a>
-            </TooltipTrigger>
-            <TooltipContent>Open Drive folder</TooltipContent>
-          </Tooltip>
-        ) : project.driveFolderId ? (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <span className="inline-flex items-center gap-1 text-xs text-amber-500 font-medium cursor-default">
-                <FolderOpen className="h-3.5 w-3.5" />
-                No link
-              </span>
-            </TooltipTrigger>
-            <TooltipContent>Folder created but share link not yet generated</TooltipContent>
-          </Tooltip>
-        ) : (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <span className="inline-flex items-center gap-1 text-xs text-muted-foreground cursor-default">
-                <FolderX className="h-3.5 w-3.5" />
-                Pending
-              </span>
-            </TooltipTrigger>
-            <TooltipContent>Drive folder created automatically when photo count is saved</TooltipContent>
-          </Tooltip>
-        )}
-      </td>
-      <td className="py-2 px-3">
-        <div className="flex gap-1">
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => onEmail(project.id, "estimate")} disabled={!project.clientEmail}>
-                <Mail className="h-3 w-3" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>Email 1: Delivery Estimate</TooltipContent>
-          </Tooltip>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => onEmail(project.id, "ready")} disabled={!project.clientEmail}>
-                <Send className="h-3 w-3" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>Email 2: Photos Ready</TooltipContent>
-          </Tooltip>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => onEmail(project.id, "survey")} disabled={!project.clientEmail}>
-                <CheckCircle2 className="h-3 w-3" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>Email 3: Satisfaction Survey</TooltipContent>
-          </Tooltip>
-          {project.status !== "Delivered" && (
+        </td>
+        <td className="py-2 px-3">
+          <div className="flex items-center gap-1">
+            <Input
+              type="number"
+              min={0}
+              className="h-7 w-20 text-xs"
+              value={countInput}
+              onChange={(e) => setCountInput(e.target.value)}
+            />
+            <Button size="sm" variant="ghost" className="h-7 px-2" onClick={() => onCount(project.id, Number(countInput))} disabled={isPending}>
+              ✓
+            </Button>
+          </div>
+        </td>
+        <td className="py-2 px-3">
+          {project.assignedRetoucherId ? (
+            <button onClick={() => onAssign(project.id)} className="text-sm hover:underline text-primary">
+              {project.assignedRetoucherId}
+            </button>
+          ) : (
+            <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => onAssign(project.id)}>
+              <Users className="h-3 w-3 mr-1" /> Assign
+            </Button>
+          )}
+        </td>
+        <td className="py-2 px-3">
+          <Badge variant="outline" className={`text-xs border ${statusClass}`}>
+            {project.status}
+          </Badge>
+        </td>
+        <td className="py-2 px-3">
+          {project.driveGalleryLink ? (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <a
+                  href={project.driveGalleryLink}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-1 text-xs text-emerald-600 hover:text-emerald-700 font-medium"
+                >
+                  <FolderOpen className="h-3.5 w-3.5" />
+                  Linked
+                </a>
+              </TooltipTrigger>
+              <TooltipContent>Open Drive folder</TooltipContent>
+            </Tooltip>
+          ) : project.driveFolderId ? (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="inline-flex items-center gap-1 text-xs text-amber-500 font-medium cursor-default">
+                  <FolderOpen className="h-3.5 w-3.5" />
+                  No link
+                </span>
+              </TooltipTrigger>
+              <TooltipContent>Folder created but share link not yet generated</TooltipContent>
+            </Tooltip>
+          ) : (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="inline-flex items-center gap-1 text-xs text-muted-foreground cursor-default">
+                  <FolderX className="h-3.5 w-3.5" />
+                  Pending
+                </span>
+              </TooltipTrigger>
+              <TooltipContent>Drive folder created automatically when photo count is saved</TooltipContent>
+            </Tooltip>
+          )}
+        </td>
+        <td className="py-2 px-3">
+          <div className="flex gap-1 flex-wrap">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => onEmail(project.id, "estimate")} disabled={!project.clientEmail}>
+                  <Mail className="h-3 w-3" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Email 1: Delivery Estimate</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => onEmail(project.id, "ready")} disabled={!project.clientEmail}>
+                  <Send className="h-3 w-3" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Email 2: Photos Ready</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => onEmail(project.id, "survey")} disabled={!project.clientEmail}>
+                  <CheckCircle2 className="h-3 w-3" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Email 3: Satisfaction Survey</TooltipContent>
+            </Tooltip>
+            {project.status !== "Delivered" && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-7 w-7 p-0 text-green-600 hover:text-green-700 hover:bg-green-50"
+                    onClick={() => onMarkDelivered(project.id)}
+                    disabled={isPending}
+                  >
+                    <PackageCheck className="h-3 w-3" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Mark Delivered (manual fallback)</TooltipContent>
+              </Tooltip>
+            )}
+            {/* Selection panel toggle */}
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
                   size="sm"
-                  variant="ghost"
-                  className="h-7 w-7 p-0 text-green-600 hover:text-green-700 hover:bg-green-50"
-                  onClick={() => onMarkDelivered(project.id)}
-                  disabled={isPending}
+                  variant={selExpanded ? "secondary" : "ghost"}
+                  className="h-7 w-7 p-0"
+                  onClick={() => setSelExpanded((v) => !v)}
                 >
-                  <PackageCheck className="h-3 w-3" />
+                  <Image className="h-3 w-3" />
                 </Button>
               </TooltipTrigger>
-              <TooltipContent>Mark Delivered (manual fallback)</TooltipContent>
+              <TooltipContent>Selection flow</TooltipContent>
             </Tooltip>
-          )}
-        </div>
-      </td>
-    </tr>
+          </div>
+        </td>
+      </tr>
+
+      {/* ── Selection panel (collapsible sub-row) ──────────────────────────── */}
+      {selExpanded && (
+        <tr className="bg-muted/20 border-b">
+          <td colSpan={9} className="px-4 py-3">
+            <div className="flex items-center gap-2 mb-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+              <Image className="h-3.5 w-3.5" />
+              Photo Selection
+            </div>
+
+            {/* Fields row */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-3">
+              <div>
+                <label className="text-xs font-medium block mb-1">Pixieset gallery link</label>
+                <Input
+                  placeholder="https://gallery.pixieset.com/…"
+                  value={pixiesetInput}
+                  onChange={(e) => setPixiesetInput(e.target.value)}
+                  className="h-7 text-xs"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-medium block mb-1">Selection allowance (photos)</label>
+                <Input
+                  type="number"
+                  min={0}
+                  placeholder={String(project.packageCount ?? 0)}
+                  value={allowanceInput}
+                  onChange={(e) => setAllowanceInput(e.target.value)}
+                  className="h-7 text-xs"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-medium block mb-1">Extra photo price (R)</label>
+                <Input
+                  type="number"
+                  min={0}
+                  placeholder="0"
+                  value={extraPriceInput}
+                  onChange={(e) => setExtraPriceInput(e.target.value)}
+                  className="h-7 text-xs"
+                />
+              </div>
+            </div>
+
+            {/* Save + Send buttons */}
+            <div className="flex gap-2 mb-4 flex-wrap">
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-7 text-xs"
+                onClick={() => saveFieldsMutation.mutate()}
+                disabled={saveFieldsMutation.isPending}
+              >
+                {saveFieldsMutation.isPending ? "Saving…" : "Save fields"}
+              </Button>
+
+              <Button
+                size="sm"
+                className="h-7 text-xs"
+                onClick={() => sendSelectionEmailMutation.mutate()}
+                disabled={sendSelectionEmailMutation.isPending || !project.clientEmail || !!project.selectionEmailSentAt}
+              >
+                <Mail className="h-3 w-3 mr-1" />
+                {project.selectionEmailSentAt
+                  ? `Sent ${new Date(project.selectionEmailSentAt).toLocaleDateString("en-ZA", { day: "numeric", month: "short" })}`
+                  : sendSelectionEmailMutation.isPending
+                  ? "Sending…"
+                  : "Send Selection Email"}
+              </Button>
+              <SelectionTierDot tier={project.selectionReminderTier} sentAt={project.selectionEmailSentAt as any} />
+            </div>
+
+            {/* Selection Done list */}
+            {clientDone && project.clientSelectionCount != null ? (
+              <div className="bg-white dark:bg-card border rounded-lg p-3">
+                <p className="text-xs font-semibold mb-2 flex items-center gap-1 text-green-700">
+                  <CheckCircle2 className="h-3.5 w-3.5" />
+                  Client selection received
+                </p>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs mb-3">
+                  <div>
+                    <span className="text-muted-foreground block">Selected</span>
+                    <span className="font-bold text-sm">{project.clientSelectionCount}</span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground block">Allowance</span>
+                    <span className="font-bold text-sm">{selAllowance}</span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground block">Extras</span>
+                    <span className={`font-bold text-sm ${selExtras > 0 ? "text-orange-600" : "text-green-600"}`}>
+                      {selExtras > 0 ? `+${selExtras}` : "None"}
+                    </span>
+                  </div>
+                  {selExtras > 0 && (
+                    <div>
+                      <span className="text-muted-foreground block">Extras total</span>
+                      <span className="font-bold text-sm text-orange-600">R{selExtrasTotal}</span>
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-2">
+                  {project.filesCollected ? (
+                    <span className="flex items-center gap-1 text-xs text-green-700 font-medium">
+                      <HardDrive className="h-3.5 w-3.5" />
+                      Files collected{project.filesCollectedAt
+                        ? ` on ${new Date(project.filesCollectedAt).toLocaleDateString("en-ZA", { day: "numeric", month: "short" })}`
+                        : ""}
+                    </span>
+                  ) : (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-7 text-xs border-orange-300 text-orange-700 hover:bg-orange-50"
+                      onClick={() => collectFilesMutation.mutate()}
+                      disabled={collectFilesMutation.isPending}
+                    >
+                      <HardDrive className="h-3 w-3 mr-1" />
+                      {collectFilesMutation.isPending ? "Marking…" : "Mark Files Collected"}
+                    </Button>
+                  )}
+                  {project.photosReadyEmailSentAt && (
+                    <span className="text-xs text-green-600 flex items-center gap-1">
+                      <MessageCircle className="h-3 w-3" />
+                      Photos-ready email sent
+                    </span>
+                  )}
+                </div>
+              </div>
+            ) : project.selectionEmailSentAt ? (
+              <p className="text-xs text-muted-foreground italic">Waiting for client to complete their selection…</p>
+            ) : null}
+          </td>
+        </tr>
+      )}
+    </>
   );
 }

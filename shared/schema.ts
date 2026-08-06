@@ -106,6 +106,17 @@ export const projects = pgTable("projects", {
   dueDateHistory: jsonb("due_date_history"),
   selectedPhotoCount: integer("selected_photo_count"),
   plannedWorkDate: timestamp("planned_work_date"),
+  // Noël photo selection flow
+  pixiesetLink: text("pixieset_link"),
+  selectionAllowance: integer("selection_allowance"),
+  selectionEmailSentAt: timestamp("selection_email_sent_at"),
+  selectionReminderTier: integer("selection_reminder_tier").notNull().default(0),
+  clientSelectionCount: integer("client_selection_count"),
+  clientSelectionDoneAt: timestamp("client_selection_done_at"),
+  filesCollected: boolean("files_collected").notNull().default(false),
+  filesCollectedAt: timestamp("files_collected_at"),
+  filesCollectedBy: text("files_collected_by"),
+  photosReadyEmailSentAt: timestamp("photos_ready_email_sent_at"),
 });
 
 // ShootTracker metadata table (1:1 with projects)
@@ -748,6 +759,10 @@ export const EmailType = {
   NOEL_DELIVERY_ESTIMATE: "noel_delivery_estimate",
   NOEL_PHOTOS_READY: "noel_photos_ready",
   NOEL_SURVEY: "noel_survey",
+  NOEL_SELECTION_INVITE: "noel_selection_invite",
+  NOEL_SELECTION_REMINDER_ORANGE: "noel_selection_reminder_orange",
+  NOEL_SELECTION_REMINDER_RED: "noel_selection_reminder_red",
+  NOEL_SELECTION_PHOTOS_READY: "noel_selection_photos_ready",
 } as const;
 
 export type EmailTypeValue = typeof EmailType[keyof typeof EmailType];

@@ -23,6 +23,7 @@ import ReviewsPage from "@/pages/reviews";
 import TodayShoots from "@/pages/today-shoots";
 import CampaignCockpit from "@/pages/christmas/CampaignCockpit";
 import RetoucherWorkspace from "@/pages/christmas/RetoucherWorkspace";
+import NoelSelection from "@/pages/NoelSelection";
 import NotFound from "@/pages/not-found";
 
 function Router() {
@@ -47,6 +48,7 @@ function Router() {
       <Route path="/today" component={TodayShoots} />
       <Route path="/christmas" component={CampaignCockpit} />
       <Route path="/christmas/workspace" component={RetoucherWorkspace} />
+      <Route path="/noel-select/:token" component={NoelSelection} />
       <Route component={NotFound} />
     </Switch>
   );

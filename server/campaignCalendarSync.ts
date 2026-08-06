@@ -1,6 +1,7 @@
 import { storage } from './storage';
 import { listCalendars, fetchCalendarEvents } from './services/googleCalendar';
 import { CAMPAIGN_NOEL_KEYWORDS } from '@shared/schema';
+import { sendNoelSelectionPhotosReadyEmail } from './services/emailService';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -35,6 +36,53 @@ export interface NoelSyncResult {
   updated: number;
   skipped: number;
   errors: string[];
+}
+
+// ─── Photos-ready trigger ─────────────────────────────────────────────────────
+
+/**
+ * Called after drivePhotoCount or filesCollected is updated on a campaign project.
+ * Fires the "photos ready" WhatsApp-CTA email if:
+ *   - filesCollected is true
+ *   - drivePhotoCount is within ±2 of clientSelectionCount
+ *   - photosReadyEmailSentAt is null
+ *   - clientSelectionDoneAt is set (client has finished selecting)
+ */
+export async function checkAndSendPhotosReadyEmail(projectId: string): Promise<void> {
+  try {
+    const project = await storage.getProject(projectId);
+    if (!project) return;
+    if (!project.filesCollected) return;
+    if (project.photosReadyEmailSentAt) return; // already sent
+    if (!project.clientSelectionDoneAt) return; // client hasn't finished yet
+    if (!project.clientSelectionCount || !project.clientEmail) return;
+
+    const driveCount = project.drivePhotoCount ?? 0;
+    const selectionCount = project.clientSelectionCount;
+
+    // Tolerance: ±2
+    if (Math.abs(driveCount - selectionCount) > 2) return;
+
+    // Fetch whatsapp_admin_number from appSettings
+    const setting = await storage.getAppSetting('whatsapp_admin_number').catch(() => null);
+    const whatsappNumber = (setting?.value as string | undefined)?.replace(/^"|"$/g, '') || '27000000000';
+
+    const result = await sendNoelSelectionPhotosReadyEmail(
+      project.id,
+      project.clientName,
+      project.clientEmail,
+      whatsappNumber
+    );
+
+    if (result.success) {
+      await storage.updateProject(project.id, { photosReadyEmailSentAt: new Date() });
+      console.log(`🎄 Photos-ready email sent to ${project.clientEmail} for project ${projectId}`);
+    } else {
+      console.error(`🎄 Photos-ready email failed for ${projectId}: ${result.error}`);
+    }
+  } catch (err: any) {
+    console.error('🎄 checkAndSendPhotosReadyEmail error:', err.message);
+  }
 }
 
 // ─── Main sync ────────────────────────────────────────────────────────────────

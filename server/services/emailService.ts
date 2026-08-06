@@ -1891,6 +1891,263 @@ export async function sendNoelPhotosReadyEmail(
   }
 }
 
+// ============================================================
+// NOËL SELECTION FLOW EMAILS
+// ============================================================
+
+/**
+ * Selection invite email — green tier (T+0).
+ * Sent when wrangler taps "Send Selection Email".
+ */
+export async function sendNoelSelectionEmail(
+  projectId: string,
+  clientName: string,
+  clientEmail: string,
+  selectionLink: string,
+  allowance: number
+): Promise<{ success: boolean; error?: string; messageId?: string }> {
+  const firstName = clientName.split(' ')[0];
+  const variables: Record<string, string> = {
+    clientName,
+    firstName,
+    selectionLink,
+    allowance: String(allowance),
+    emailHeader: '<div style="text-align:center;padding:16px 0 24px"><strong style="font-size:20px;letter-spacing:2px;color:#2c2c2c">JEPSON MYLES STUDIO</strong></div>',
+  };
+
+  let subject = `Your Noël Set — please choose your ${allowance} photos`;
+  let htmlContent = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; background: #fff;">
+      ${variables.emailHeader}
+      <p style="color:#2c2c2c;font-size:16px;line-height:1.6;margin:0 0 16px">Hi ${firstName},</p>
+      <p style="color:#2c2c2c;font-size:16px;line-height:1.6;margin:0 0 16px">
+        Your Noël Set gallery is ready for you to browse! Your package includes <strong>${allowance} photos</strong>.
+        Please visit your gallery, make your selections, and let us know how many you've chosen.
+      </p>
+      <div style="text-align:center;margin:28px 0">
+        <a href="${selectionLink}" style="background:#2c2c2c;color:#fff;text-decoration:none;padding:14px 32px;border-radius:4px;font-size:15px;letter-spacing:1px">
+          VIEW YOUR GALLERY
+        </a>
+      </div>
+      <p style="color:#2c2c2c;font-size:16px;line-height:1.6;margin:0 0 16px">
+        Once you've finished selecting, click the button on your selection page to notify us. We'll handle the rest!
+      </p>
+      <p style="color:#2c2c2c;font-size:15px;line-height:1.6;margin:28px 0 4px">With excitement,</p>
+      <p style="color:#2c2c2c;font-size:15px;line-height:1.6;margin:0"><strong>Jepson Myles Studio</strong></p>
+    </div>
+  `;
+
+  const dbTemplate = await getTemplate('noel_selection_invite');
+  if (dbTemplate) {
+    subject = renderTemplate(dbTemplate.subject, variables);
+    htmlContent = renderTemplate(dbTemplate.htmlBody, variables);
+  }
+
+  try {
+    const { client, fromEmail } = await getResendClient();
+    const replyTo = getProjectReplyToEmail(projectId);
+    const response = await client.emails.send({ from: fromEmail, replyTo, to: clientEmail, subject, html: htmlContent });
+    if (response.data?.id) {
+      await logEmail(projectId, EmailType.NOEL_SELECTION_INVITE, clientEmail, subject, 'sent', response.data.id);
+      return { success: true, messageId: response.data.id };
+    }
+    const errorMsg = response.error?.message || 'Unknown error';
+    await logEmail(projectId, EmailType.NOEL_SELECTION_INVITE, clientEmail, subject, 'failed', undefined, errorMsg);
+    return { success: false, error: errorMsg };
+  } catch (error: any) {
+    await logEmail(projectId, EmailType.NOEL_SELECTION_INVITE, clientEmail, subject, 'failed', undefined, error.message);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Selection reminder — orange tier (T+12 h).
+ */
+export async function sendNoelSelectionReminderOrange(
+  projectId: string,
+  clientName: string,
+  clientEmail: string,
+  selectionLink: string
+): Promise<{ success: boolean; error?: string; messageId?: string }> {
+  const firstName = clientName.split(' ')[0];
+  const variables: Record<string, string> = {
+    clientName,
+    firstName,
+    selectionLink,
+    emailHeader: '<div style="text-align:center;padding:16px 0 24px"><strong style="font-size:20px;letter-spacing:2px;color:#2c2c2c">JEPSON MYLES STUDIO</strong></div>',
+  };
+
+  let subject = `Reminder — your Noël gallery is waiting, ${firstName}`;
+  let htmlContent = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; background: #fff;">
+      ${variables.emailHeader}
+      <p style="color:#2c2c2c;font-size:16px;line-height:1.6;margin:0 0 16px">Hi ${firstName},</p>
+      <p style="color:#2c2c2c;font-size:16px;line-height:1.6;margin:0 0 16px">
+        Just a friendly reminder — your Noël Set gallery is ready and waiting for your selections.
+        Please complete your selection soon so we can get your photos edited and delivered on time.
+      </p>
+      <div style="text-align:center;margin:28px 0">
+        <a href="${selectionLink}" style="background:#e07b00;color:#fff;text-decoration:none;padding:14px 32px;border-radius:4px;font-size:15px;letter-spacing:1px">
+          COMPLETE MY SELECTION
+        </a>
+      </div>
+      <p style="color:#2c2c2c;font-size:15px;line-height:1.6;margin:28px 0 4px">Kind regards,</p>
+      <p style="color:#2c2c2c;font-size:15px;line-height:1.6;margin:0"><strong>Jepson Myles Studio</strong></p>
+    </div>
+  `;
+
+  const dbTemplate = await getTemplate('noel_selection_reminder_orange');
+  if (dbTemplate) {
+    subject = renderTemplate(dbTemplate.subject, variables);
+    htmlContent = renderTemplate(dbTemplate.htmlBody, variables);
+  }
+
+  try {
+    const { client, fromEmail } = await getResendClient();
+    const replyTo = getProjectReplyToEmail(projectId);
+    const response = await client.emails.send({ from: fromEmail, replyTo, to: clientEmail, subject, html: htmlContent });
+    if (response.data?.id) {
+      await logEmail(projectId, EmailType.NOEL_SELECTION_REMINDER_ORANGE, clientEmail, subject, 'sent', response.data.id);
+      return { success: true, messageId: response.data.id };
+    }
+    const errorMsg = response.error?.message || 'Unknown error';
+    await logEmail(projectId, EmailType.NOEL_SELECTION_REMINDER_ORANGE, clientEmail, subject, 'failed', undefined, errorMsg);
+    return { success: false, error: errorMsg };
+  } catch (error: any) {
+    await logEmail(projectId, EmailType.NOEL_SELECTION_REMINDER_ORANGE, clientEmail, subject, 'failed', undefined, error.message);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Selection reminder — red tier (T+24 h). Final warning.
+ */
+export async function sendNoelSelectionReminderRed(
+  projectId: string,
+  clientName: string,
+  clientEmail: string,
+  selectionLink: string
+): Promise<{ success: boolean; error?: string; messageId?: string }> {
+  const firstName = clientName.split(' ')[0];
+  const variables: Record<string, string> = {
+    clientName,
+    firstName,
+    selectionLink,
+    emailHeader: '<div style="text-align:center;padding:16px 0 24px"><strong style="font-size:20px;letter-spacing:2px;color:#2c2c2c">JEPSON MYLES STUDIO</strong></div>',
+  };
+
+  let subject = `Final reminder — action required for your Noël photos, ${firstName}`;
+  let htmlContent = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; background: #fff;">
+      ${variables.emailHeader}
+      <p style="color:#2c2c2c;font-size:16px;line-height:1.6;margin:0 0 16px">Hi ${firstName},</p>
+      <p style="color:#2c2c2c;font-size:16px;line-height:1.6;margin:0 0 16px">
+        This is a final reminder to complete your Noël Set photo selection. We have not yet received your selection,
+        and further delay may mean your project moves to the last available editing slot before the studio closes for
+        the festive season. Clients who have responded promptly will not be affected.
+      </p>
+      <div style="text-align:center;margin:28px 0">
+        <a href="${selectionLink}" style="background:#c0392b;color:#fff;text-decoration:none;padding:14px 32px;border-radius:4px;font-size:15px;letter-spacing:1px">
+          COMPLETE MY SELECTION NOW
+        </a>
+      </div>
+      <p style="color:#2c2c2c;font-size:15px;line-height:1.6;margin:28px 0 4px">Regards,</p>
+      <p style="color:#2c2c2c;font-size:15px;line-height:1.6;margin:0"><strong>Jepson Myles Studio</strong></p>
+    </div>
+  `;
+
+  const dbTemplate = await getTemplate('noel_selection_reminder_red');
+  if (dbTemplate) {
+    subject = renderTemplate(dbTemplate.subject, variables);
+    htmlContent = renderTemplate(dbTemplate.htmlBody, variables);
+  }
+
+  try {
+    const { client, fromEmail } = await getResendClient();
+    const replyTo = getProjectReplyToEmail(projectId);
+    const response = await client.emails.send({ from: fromEmail, replyTo, to: clientEmail, subject, html: htmlContent });
+    if (response.data?.id) {
+      await logEmail(projectId, EmailType.NOEL_SELECTION_REMINDER_RED, clientEmail, subject, 'sent', response.data.id);
+      return { success: true, messageId: response.data.id };
+    }
+    const errorMsg = response.error?.message || 'Unknown error';
+    await logEmail(projectId, EmailType.NOEL_SELECTION_REMINDER_RED, clientEmail, subject, 'failed', undefined, errorMsg);
+    return { success: false, error: errorMsg };
+  } catch (error: any) {
+    await logEmail(projectId, EmailType.NOEL_SELECTION_REMINDER_RED, clientEmail, subject, 'failed', undefined, error.message);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * "Photos ready" email for the selection flow.
+ * CTA is a WhatsApp wa.me button — the studio handles access manually.
+ */
+export async function sendNoelSelectionPhotosReadyEmail(
+  projectId: string,
+  clientName: string,
+  clientEmail: string,
+  whatsappNumber: string
+): Promise<{ success: boolean; error?: string; messageId?: string }> {
+  const firstName = clientName.split(' ')[0];
+  // Pre-fill: "Hi, I'd like to access my Noël gallery — my name is {clientName}."
+  const waMessage = encodeURIComponent(`Hi, I'd like to access my Noël gallery — my name is ${clientName}.`);
+  // Strip any non-digits from the number for wa.me URL
+  const cleanNumber = whatsappNumber.replace(/\D/g, '');
+  const waUrl = `https://wa.me/${cleanNumber}?text=${waMessage}`;
+
+  const variables: Record<string, string> = {
+    clientName,
+    firstName,
+    waUrl,
+    emailHeader: '<div style="text-align:center;padding:16px 0 24px"><strong style="font-size:20px;letter-spacing:2px;color:#2c2c2c">JEPSON MYLES STUDIO</strong></div>',
+  };
+
+  let subject = `Your Noël photos are ready, ${firstName} 🎄`;
+  let htmlContent = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; background: #fff;">
+      ${variables.emailHeader}
+      <p style="color:#2c2c2c;font-size:16px;line-height:1.6;margin:0 0 16px">Hi ${firstName},</p>
+      <p style="color:#2c2c2c;font-size:16px;line-height:1.6;margin:0 0 16px">
+        Wonderful news — your Noël Set photos have been beautifully edited and are ready for you!
+        Tap the button below to reach us on WhatsApp and we'll get you access right away.
+      </p>
+      <div style="text-align:center;margin:28px 0">
+        <a href="${waUrl}" style="background:#25d366;color:#fff;text-decoration:none;padding:14px 32px;border-radius:4px;font-size:15px;letter-spacing:1px">
+          GET ACCESS VIA WHATSAPP
+        </a>
+      </div>
+      <p style="color:#2c2c2c;font-size:14px;line-height:1.6;margin:0 0 16px;color:#666">
+        We'll be in touch to confirm access and any final details.
+      </p>
+      <p style="color:#2c2c2c;font-size:15px;line-height:1.6;margin:28px 0 4px">With warmth,</p>
+      <p style="color:#2c2c2c;font-size:15px;line-height:1.6;margin:0"><strong>Jepson Myles Studio</strong></p>
+    </div>
+  `;
+
+  const dbTemplate = await getTemplate('noel_selection_photos_ready');
+  if (dbTemplate) {
+    subject = renderTemplate(dbTemplate.subject, variables);
+    htmlContent = renderTemplate(dbTemplate.htmlBody, variables);
+  }
+
+  try {
+    const { client, fromEmail } = await getResendClient();
+    const replyTo = getProjectReplyToEmail(projectId);
+    const response = await client.emails.send({ from: fromEmail, replyTo, to: clientEmail, subject, html: htmlContent });
+    if (response.data?.id) {
+      await logEmail(projectId, EmailType.NOEL_SELECTION_PHOTOS_READY, clientEmail, subject, 'sent', response.data.id);
+      return { success: true, messageId: response.data.id };
+    }
+    const errorMsg = response.error?.message || 'Unknown error';
+    await logEmail(projectId, EmailType.NOEL_SELECTION_PHOTOS_READY, clientEmail, subject, 'failed', undefined, errorMsg);
+    return { success: false, error: errorMsg };
+  } catch (error: any) {
+    await logEmail(projectId, EmailType.NOEL_SELECTION_PHOTOS_READY, clientEmail, subject, 'failed', undefined, error.message);
+    return { success: false, error: error.message };
+  }
+}
+
 export async function sendNoelSurveyEmail(
   projectId: string,
   clientName: string,
