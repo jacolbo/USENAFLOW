@@ -1778,7 +1778,7 @@ export async function sendNoelDeliveryEstimateEmail(
     : '19 December 2026';
 
   const chatLinkHtml = chatLink
-    ? `<p style="color:#2c2c2c;font-size:14px;line-height:1.6;margin:16px 0 0">You can also reply to us directly via your <a href="${chatLink}" style="color:#b8860b;font-weight:bold">client chat thread</a>.</p>`
+    ? `<div style="margin:28px 0 0;text-align:center"><a href="${chatLink}" style="display:inline-block;background:#b8860b;color:#ffffff;font-size:14px;font-weight:bold;padding:13px 28px;border-radius:6px;text-decoration:none;letter-spacing:0.5px">Open chat →</a><p style="color:#888888;font-size:12px;margin:8px 0 0">Message us directly — your personal link</p></div>`
     : '';
 
   const variables: Record<string, string> = {
@@ -1812,6 +1812,15 @@ export async function sendNoelDeliveryEstimateEmail(
   if (dbTemplate) {
     subject = renderTemplate(dbTemplate.subject, variables);
     htmlContent = renderTemplate(dbTemplate.htmlBody, variables);
+    // If the DB template doesn't include {{chatLinkHtml}} / the rendered CTA, append it
+    // so the chat button is always present when a chat link exists.
+    if (chatLink && chatLinkHtml && !htmlContent.includes(chatLink)) {
+      htmlContent = htmlContent.replace('</div>', `${chatLinkHtml}</div>`);
+      if (!htmlContent.includes(chatLink)) {
+        // Fallback: append after the last closing tag
+        htmlContent += chatLinkHtml;
+      }
+    }
   }
 
   try {

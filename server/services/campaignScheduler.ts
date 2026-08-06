@@ -668,8 +668,31 @@ export function wireUpCampaignListeners(): void {
           return;
         }
       }
-      const tokenRecord = await storage.getClientAuthTokenByProjectId(projectId).catch(() => null);
-      const chatLink = getAbsoluteChatLink(projectId, tokenRecord?.token ?? null);
+      // Token is mandatory — Email 1 MUST carry the chat link per the Noël spec.
+      // If we cannot ensure a token exists, do not schedule the email.
+      let tokenRecord = await storage.getClientAuthTokenByProjectId(projectId).catch(() => null);
+      if (!tokenRecord) {
+        if (!project.clientEmail) {
+          console.log(`🎄 [AutoEmail] Email 1 skipped — no client email on ${projectId}`);
+          recordFired("noel_count_entry", `Email 1 skipped (no client email) for ${projectId}`);
+          return;
+        }
+        const { randomUUID } = await import("crypto");
+        const expiresAt = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000); // 1 year
+        try {
+          tokenRecord = await storage.createClientAuthToken({
+            email: project.clientEmail,
+            projectId,
+            token: randomUUID(),
+            expiresAt,
+          });
+        } catch (tokenErr: any) {
+          console.error(`🎄 [AutoEmail] Token creation failed for ${projectId} — Email 1 NOT sent:`, tokenErr.message);
+          recordFired("noel_count_entry", `Email 1 blocked (token creation failed) for ${projectId}`);
+          return;
+        }
+      }
+      const chatLink = getAbsoluteChatLink(projectId, tokenRecord.token);
       await scheduleEstimateEmail(project, chatLink);
     } catch (err: any) {
       console.error(`🎄 [Listener:noel_count_entry] error:`, err.message);

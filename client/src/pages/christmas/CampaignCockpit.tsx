@@ -135,9 +135,11 @@ interface PacingData {
   warningMessage: string | null;
 }
 
+type CampaignProject = Project & { clientChatToken?: string | null };
+
 interface CampaignData {
   campaign: Campaign | null;
-  projects: Project[];
+  projects: CampaignProject[];
   assignments: any[];
   pacing: PacingData | null;
   snapshots: any[];
@@ -625,6 +627,16 @@ export default function CampaignCockpit() {
                   project={projects.find((p) => p.id === moveProjectId)}
                 />
               )}
+              {moveProjectId && (() => {
+                const mp = projects.find((p) => p.id === moveProjectId);
+                return mp?.clientChatToken ? (
+                  <p className="text-xs text-blue-700 bg-blue-50 border border-blue-200 rounded px-3 py-2 flex items-center gap-1.5">
+                    <MessageCircle className="h-3 w-3 shrink-0" />
+                    This will send an update message to{" "}
+                    <span className="font-medium">{mp.clientName}</span> in their chat.
+                  </p>
+                ) : null;
+              })()}
             </div>
             <DialogFooter>
               <Button variant="outline" onClick={() => setMoveProjectId(null)}>Cancel</Button>
@@ -1202,7 +1214,7 @@ function MoveRipplePreview({ newDate, project }: { newDate: string; project?: Pr
 // ─────────────────────── Project Row ───────────────────────────
 
 interface ProjectRowProps {
-  project: Project;
+  project: CampaignProject;
   onCount: (id: string, count: number) => void;
   onAssign: (id: string) => void;
   onMove: (id: string) => void;
@@ -1426,6 +1438,21 @@ function ProjectRow({ project, onCount, onAssign, onMove, onEmail, onMarkDeliver
                 <TooltipContent>Mark Delivered (manual fallback)</TooltipContent>
               </Tooltip>
             )}
+            {/* Client chat link — enabled only after Email 1 has been sent (token exists) */}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className={`h-7 w-7 p-0 ${project.clientChatToken ? "text-blue-600 hover:text-blue-700 hover:bg-blue-50" : "text-muted-foreground/40"}`}
+                  disabled={!project.clientChatToken}
+                  onClick={() => project.clientChatToken && window.open(`/client-chat/${project.clientChatToken}`, "_blank")}
+                >
+                  <MessageCircle className="h-3 w-3" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>{project.clientChatToken ? "Open client chat" : "Chat not started yet (send Email 1 first)"}</TooltipContent>
+            </Tooltip>
             {/* Selection panel toggle */}
             <Tooltip>
               <TooltipTrigger asChild>

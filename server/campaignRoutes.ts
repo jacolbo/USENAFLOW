@@ -55,7 +55,15 @@ export function registerCampaignRoutes(app: Express): void {
       const assignments = await storage.getCampaignAssignments(campaign.id);
       const pacing = await runPacingEngine(campaign.id).catch(() => null);
       const snapshots = await storage.getVelocitySnapshots(campaign.id, 14);
-      res.json({ campaign, projects, assignments, pacing, snapshots });
+      // Enrich projects with clientChatToken so cockpit can render the chat icon
+      const tokenRecords = await Promise.all(
+        projects.map((p) => storage.getClientAuthTokenByProjectId(p.id).catch(() => null))
+      );
+      const enrichedProjects = projects.map((p, i) => ({
+        ...p,
+        clientChatToken: tokenRecords[i]?.token || null,
+      }));
+      res.json({ campaign, projects: enrichedProjects, assignments, pacing, snapshots });
     } catch (err: any) {
       res.status(500).json({ error: err.message });
     }
@@ -309,6 +317,10 @@ export function registerCampaignRoutes(app: Express): void {
         campaignBus.emit("project.moved", payload);
       }
 
+      // Client chat notification is handled by the noel_date_slip_alert listener
+      // (subscribes to project.dateChanged, uses 5-minute debounce + threshold check).
+      // Do NOT insert a direct message here — that would cause duplicates.
+
       recordFired("noel_date_move", `Project ${id} rescheduled to ${parsedDate.toDateString()}`);
       res.json(updated);
     } catch (err: any) {
@@ -333,7 +345,9 @@ export function registerCampaignRoutes(app: Express): void {
         deliveryApprovedBy: (req.headers["x-usena-user-id"] as string) || "admin",
       });
 
-      // Trigger the same delivery chain as Drive would
+      // Trigger the same delivery chain as Drive would.
+      // The noel_delivery_chain listener (runDeliveryChain) is the sole producer of
+      // the "photos are ready" client chat message — do NOT insert a second message here.
       campaignBus.emit("project.driveComplete", { projectId: id, campaignId: project.campaignId! });
       recordFired("noel_delivery_chain", `Manual mark-delivered for ${project.clientName}`);
       res.json(updated);
@@ -350,10 +364,20 @@ export function registerCampaignRoutes(app: Express): void {
       const project = await storage.getProject(id);
       if (!project || !project.campaignId) return res.status(404).json({ error: "Campaign project not found" });
       if (!project.clientEmail) return res.status(400).json({ error: "No client email" });
-      // Absolute chat link for external email recipients
-      const tokenRecord = await storage.getClientAuthTokenByProjectId(project.id).catch(() => null);
+      // Look up or create a client auth token so Email 1 always carries the chat link
+      const { randomUUID } = await import("crypto");
       const base = process.env.APP_URL?.replace(/\/$/, "") ||
         (process.env.REPLIT_DEV_DOMAIN ? `https://${process.env.REPLIT_DEV_DOMAIN}` : "https://usena-flow.replit.app");
+      let tokenRecord = await storage.getClientAuthTokenByProjectId(project.id).catch(() => null);
+      if (!tokenRecord) {
+        const expiresAt = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000); // 1 year
+        tokenRecord = await storage.createClientAuthToken({
+          email: project.clientEmail,
+          projectId: project.id,
+          token: randomUUID(),
+          expiresAt,
+        });
+      }
       const chatLink = tokenRecord?.token ? `${base}/client-chat/${tokenRecord.token}` : undefined;
 
       await sendNoelDeliveryEstimateEmail(project.id, project.clientName, project.clientEmail, project.promisedDeliveryDate || project.deliveryDueDate, chatLink);
