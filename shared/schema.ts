@@ -106,6 +106,8 @@ export const projects = pgTable("projects", {
   dueDateHistory: jsonb("due_date_history"),
   selectedPhotoCount: integer("selected_photo_count"),
   plannedWorkDate: timestamp("planned_work_date"),
+  // True when the team manually pinned the work day (chip drag/click) — auto-scheduler must not move it
+  workDatePinned: boolean("work_date_pinned").default(false),
   // Noël photo selection flow
   pixiesetLink: text("pixieset_link"),
   selectionAllowance: integer("selection_allowance"),

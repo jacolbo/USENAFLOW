@@ -137,7 +137,19 @@ export async function scheduleCampaignWorkDates(campaignId: string): Promise<voi
     if (!campaign) return;
 
     const projectList = await storage.getCampaignProjects(campaignId);
-    const pending = projectList.filter((p) => p.status !== "Delivered");
+    const allPending = projectList.filter((p) => p.status !== "Delivered");
+    if (allPending.length === 0) return;
+
+    // Pinned projects were manually placed (chip drag / Move Work Day) — never move them.
+    // Their photo load still counts against the capacity of their pinned day.
+    const pinned = allPending.filter((p) => p.workDatePinned && p.plannedWorkDate);
+    const pending = allPending.filter((p) => !(p.workDatePinned && p.plannedWorkDate));
+    const pinnedLoadByDay = new Map<string, number>();
+    for (const p of pinned) {
+      const key = isoDate(new Date(p.plannedWorkDate!));
+      const photos = Math.max(1, p.selectedPhotoCount || p.selectedCount || 0);
+      pinnedLoadByDay.set(key, (pinnedLoadByDay.get(key) || 0) + photos);
+    }
     if (pending.length === 0) return;
 
     const retoucherIds = new Set(
@@ -167,6 +179,8 @@ export async function scheduleCampaignWorkDates(campaignId: string): Promise<voi
         break;
       }
       if (!isWorkingDay(cursor)) { cursor.setDate(cursor.getDate() + 1); continue; }
+      // Seed the day with load already claimed by pinned projects
+      dayUsed = pinnedLoadByDay.get(isoDate(cursor)) || 0;
 
       while (queue.length > 0 && dayUsed < dailyCapacity) {
         const next = queue[0];

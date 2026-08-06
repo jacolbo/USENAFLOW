@@ -201,15 +201,24 @@ export function registerCampaignRoutes(app: Express): void {
         }
       }
 
-      const parsedDate = new Date(newDate);
-      const hardDeadline = new Date("2026-12-19T23:59:59");
+      // Strict date-only input, parsed in LOCAL time so a dropped "2026-12-19" stays 19 Dec
+      const m = typeof newDate === "string" && newDate.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+      if (!m) {
+        return res.status(400).json({ error: "newDate must be a YYYY-MM-DD date" });
+      }
+      const parsedDate = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+      if (isNaN(parsedDate.getTime())) {
+        return res.status(400).json({ error: "Invalid date" });
+      }
+      const hardDeadline = new Date(2026, 11, 19, 23, 59, 59);
       if (parsedDate > hardDeadline) {
         return res.status(400).json({ error: "Cannot move work date past the hard deadline (19 Dec 2026)" });
       }
       const promisedDate = project.promisedDeliveryDate || project.deliveryDueDate;
       const breaksDeadline = promisedDate && parsedDate > new Date(promisedDate);
 
-      const updated = await storage.updateProject(id, { plannedWorkDate: parsedDate });
+      // Manual move = pin. The auto-scheduler will keep this project on this day.
+      const updated = await storage.updateProject(id, { plannedWorkDate: parsedDate, workDatePinned: true });
       // Emit project.moved so noel_work_scheduler triggers a full reschedule
       campaignBus.emit("project.moved", {
         projectId: id,

@@ -144,6 +144,9 @@ export default function CampaignCockpit() {
 
   const [moveProjectId, setMoveProjectId] = useState<string | null>(null);
   const [moveDate, setMoveDate] = useState("");
+  // Calendar grid: move planned WORK day (not the client-facing delivery date)
+  const [workMoveProjectId, setWorkMoveProjectId] = useState<string | null>(null);
+  const [workMoveDate, setWorkMoveDate] = useState("");
   const [assignProjectId, setAssignProjectId] = useState<string | null>(null);
   const [assignRetoucher, setAssignRetoucher] = useState("");
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -206,6 +209,25 @@ export default function CampaignCockpit() {
       toast({ title: "Delivery date rescheduled", description: "Client will be notified and work dates rescheduled automatically." });
     },
     onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
+  const workMoveMutation = useMutation({
+    mutationFn: ({ id, date }: { id: string; date: string }) =>
+      campaignFetch("PATCH", `/api/campaign/projects/${id}/move`, { newDate: date }),
+    onSuccess: (res: any) => {
+      qc.invalidateQueries({ queryKey: ["/api/campaign"] });
+      setWorkMoveProjectId(null);
+      if (res?.breaksDeadline) {
+        toast({
+          title: "Work day moved — past the client promise!",
+          description: "This work day is now AFTER the delivery date promised to the client. Consider rescheduling the delivery date too.",
+          variant: "destructive",
+        });
+      } else {
+        toast({ title: "Work day moved", description: "The schedule has been updated." });
+      }
+    },
+    onError: (e: any) => toast({ title: "Couldn't move work day", description: e.message, variant: "destructive" }),
   });
 
   const emailMutation = useMutation({
@@ -606,14 +628,62 @@ export default function CampaignCockpit() {
               projects={projects}
               retouchers={retouchers}
               onChipClick={(id) => {
-                setMoveProjectId(id);
+                setWorkMoveProjectId(id);
                 const p = projects.find((proj) => proj.id === id);
-                const d = p?.promisedDeliveryDate || p?.deliveryDueDate;
-                setMoveDate(d ? new Date(d).toISOString().slice(0, 10) : "2026-12-19");
+                setWorkMoveDate(
+                  p?.plannedWorkDate ? new Date(p.plannedWorkDate).toISOString().slice(0, 10) : ""
+                );
               }}
+              onDropProject={(id, dateKey) => workMoveMutation.mutate({ id, date: dateKey })}
             />
           </TabsContent>
         </Tabs>
+
+        {/* Move Work Day Dialog (calendar grid chip click) */}
+        <Dialog open={!!workMoveProjectId} onOpenChange={(o) => { if (!o) { setWorkMoveProjectId(null); setWorkMoveDate(""); } }}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Move Work Day</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-3">
+              <p className="text-sm text-muted-foreground">
+                Pick the new day this project should be worked on. This only moves the internal
+                work day — the delivery date promised to the client stays the same.
+                Tip: you can also drag a chip straight onto another day.
+              </p>
+              <Input
+                type="date"
+                value={workMoveDate}
+                min={new Date().toISOString().slice(0, 10)}
+                max="2026-12-19"
+                onChange={(e) => setWorkMoveDate(e.target.value)}
+              />
+              {workMoveProjectId && (() => {
+                const wp = projects.find((p) => p.id === workMoveProjectId);
+                const promise = wp?.promisedDeliveryDate || wp?.deliveryDueDate;
+                if (wp && promise && workMoveDate && new Date(workMoveDate) > new Date(promise)) {
+                  return (
+                    <p className="text-xs text-red-700 bg-red-50 border border-red-200 rounded px-3 py-2 flex items-center gap-1.5">
+                      <AlertTriangle className="h-3 w-3 shrink-0" />
+                      This day is AFTER the delivery date promised to {wp.clientName} (
+                      {new Date(promise).toLocaleDateString("en-ZA", { day: "numeric", month: "short" })}).
+                    </p>
+                  );
+                }
+                return null;
+              })()}
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setWorkMoveProjectId(null)}>Cancel</Button>
+              <Button
+                onClick={() => workMoveProjectId && workMoveMutation.mutate({ id: workMoveProjectId, date: workMoveDate })}
+                disabled={workMoveMutation.isPending || !workMoveDate}
+              >
+                {workMoveMutation.isPending ? "Saving…" : "Move Work Day"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         {/* Move Date Dialog */}
         <Dialog open={!!moveProjectId} onOpenChange={(o) => !o && setMoveProjectId(null)}>
@@ -921,10 +991,12 @@ function getChipColor(project: Project, todayKey: string): string {
 function CalendarGrid({
   projects,
   onChipClick,
+  onDropProject,
   retouchers,
 }: {
   projects: Project[];
   onChipClick: (projectId: string) => void;
+  onDropProject: (projectId: string, dateKey: string) => void;
   retouchers: { id: string; name: string }[];
 }) {
   const { toast } = useToast();
@@ -932,6 +1004,9 @@ function CalendarGrid({
 
   const [selectedRetoucher, setSelectedRetoucher] = useState<string>("all");
   const [lastSyncErrors, setLastSyncErrors] = useState<string[]>([]);
+  // Drag-and-drop: chip being dragged + day cell hovered over
+  const [dragProjectId, setDragProjectId] = useState<string | null>(null);
+  const [dragOverDay, setDragOverDay] = useState<string | null>(null);
 
   const syncMutation = useMutation({
     mutationFn: () => campaignFetch("POST", "/api/campaign/sync-calendar", {}),
@@ -1138,15 +1213,32 @@ function CalendarGrid({
                   const allDelivered = hasProjects && allDayProjects.every((p) => p.status === "Delivered");
                   const hasPending = hasProjects && !allDelivered;
 
+                  const isDragTarget = dragOverDay === dayKey && dragProjectId;
                   return (
                     <div
                       key={di}
-                      className={`border-l p-1 min-h-[80px] ${
-                        allDelivered
-                          ? "bg-green-50 dark:bg-green-950/20"
-                          : isToday
-                            ? "bg-blue-50 dark:bg-blue-950/20"
-                            : ""
+                      onDragOver={(e) => {
+                        if (!dragProjectId) return;
+                        e.preventDefault();
+                        e.dataTransfer.dropEffect = "move";
+                        setDragOverDay(dayKey);
+                      }}
+                      onDragLeave={() => setDragOverDay((cur) => (cur === dayKey ? null : cur))}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        const id = e.dataTransfer.getData("text/project-id") || dragProjectId;
+                        setDragOverDay(null);
+                        setDragProjectId(null);
+                        if (id) onDropProject(id, dayKey);
+                      }}
+                      className={`border-l p-1 min-h-[80px] transition-colors ${
+                        isDragTarget
+                          ? "bg-primary/10 ring-2 ring-inset ring-primary/50"
+                          : allDelivered
+                            ? "bg-green-50 dark:bg-green-950/20"
+                            : isToday
+                              ? "bg-blue-50 dark:bg-blue-950/20"
+                              : ""
                       }`}
                     >
                       {/* Day number */}
@@ -1182,9 +1274,19 @@ function CalendarGrid({
                           return (
                             <button
                               key={p.id}
+                              draggable
+                              onDragStart={(e) => {
+                                e.dataTransfer.setData("text/project-id", p.id);
+                                e.dataTransfer.effectAllowed = "move";
+                                setDragProjectId(p.id);
+                              }}
+                              onDragEnd={() => {
+                                setDragProjectId(null);
+                                setDragOverDay(null);
+                              }}
                               onClick={() => onChipClick(p.id)}
-                              className={`w-full text-left text-[10px] text-white rounded px-1 py-0.5 truncate ${color} hover:opacity-80 active:opacity-70 transition-opacity`}
-                              title={`${p.clientName} · ${count}ph — click to reschedule`}
+                              className={`w-full text-left text-[10px] text-white rounded px-1 py-0.5 truncate cursor-grab active:cursor-grabbing ${color} hover:opacity-80 active:opacity-70 transition-opacity ${dragProjectId === p.id ? "opacity-50" : ""}`}
+                              title={`${p.clientName} · ${count}ph — click to move work day, or drag to another day`}
                             >
                               {firstName} · {count}ph
                             </button>
