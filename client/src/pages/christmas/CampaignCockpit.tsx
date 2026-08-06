@@ -909,14 +909,13 @@ function formatWeekLabel(monday: Date, friday: Date): string {
 }
 
 function getChipColor(project: Project, todayKey: string): string {
-  if (project.status === "Delivered") return "bg-teal-500";
+  if (project.status === "Delivered") return "bg-green-600";
   if (project.plannedWorkDate) {
     const workKey = localDateKey(new Date(project.plannedWorkDate));
     if (workKey < todayKey) return "bg-red-600";
   }
-  const dueDate = project.promisedDeliveryDate || project.deliveryDueDate;
-  if (dueDate && getWorkingDaysUntil(new Date(dueDate)) <= 2) return "bg-amber-500";
-  return "bg-purple-600";
+  // Not yet delivered → orange
+  return "bg-amber-500";
 }
 
 // ─────────────────────── Calendar Grid ─────────────────────────
@@ -1070,11 +1069,16 @@ function CalendarGrid({
       )}
 
       {/* Legend */}
-      <div className="flex gap-3 mb-3 flex-wrap text-[10px] text-white">
-        <span className="bg-teal-500 rounded px-2 py-0.5">Delivered</span>
-        <span className="bg-purple-600 rounded px-2 py-0.5">On track</span>
-        <span className="bg-amber-500 rounded px-2 py-0.5">At risk (≤2 working days)</span>
-        <span className="bg-red-600 rounded px-2 py-0.5">Overdue</span>
+      <div className="flex gap-3 mb-3 flex-wrap text-[10px] items-center">
+        <span className="bg-green-600 text-white rounded px-2 py-0.5">Delivered (Drive email sent)</span>
+        <span className="bg-amber-500 text-white rounded px-2 py-0.5">Not delivered yet</span>
+        <span className="bg-red-600 text-white rounded px-2 py-0.5">Work date missed</span>
+        <span className="flex items-center gap-1 text-muted-foreground">
+          <span className="inline-block w-2 h-2 rounded-full bg-amber-500" /> day has pending work
+        </span>
+        <span className="flex items-center gap-1 text-muted-foreground">
+          <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-green-600 text-white font-bold text-[9px]">✓</span> day fully delivered
+        </span>
       </div>
 
       {/* Grid */}
@@ -1132,19 +1136,42 @@ function CalendarGrid({
                             p.assignedTo === selectedRetoucher
                         );
 
+                  const hasProjects = allDayProjects.length > 0;
+                  const allDelivered = hasProjects && allDayProjects.every((p) => p.status === "Delivered");
+                  const hasPending = hasProjects && !allDelivered;
+
                   return (
                     <div
                       key={di}
-                      className={`border-l p-1 min-h-[80px] ${isToday ? "bg-blue-50 dark:bg-blue-950/20" : ""}`}
+                      className={`border-l p-1 min-h-[80px] ${
+                        allDelivered
+                          ? "bg-green-50 dark:bg-green-950/20"
+                          : isToday
+                            ? "bg-blue-50 dark:bg-blue-950/20"
+                            : ""
+                      }`}
                     >
                       {/* Day number */}
-                      <div className="text-[10px] text-muted-foreground text-right mb-0.5 leading-none">
-                        {isToday ? (
+                      <div className="text-[10px] text-muted-foreground text-right mb-0.5 leading-none flex items-center justify-end gap-1">
+                        {hasPending && (
+                          <span
+                            className="inline-block w-2 h-2 rounded-full bg-amber-500"
+                            title="This day still has undelivered projects"
+                          />
+                        )}
+                        {allDelivered ? (
+                          <span
+                            className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-green-600 text-white font-bold"
+                            title="All projects on this day delivered"
+                          >
+                            {day.getDate()}
+                          </span>
+                        ) : isToday ? (
                           <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-blue-500 text-white font-bold">
                             {day.getDate()}
                           </span>
                         ) : (
-                          day.getDate()
+                          <span>{day.getDate()}</span>
                         )}
                       </div>
 
