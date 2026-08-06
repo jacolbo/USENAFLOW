@@ -7,7 +7,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -596,7 +595,15 @@ export default function CampaignCockpit() {
 
           {/* Calendar grid view */}
           <TabsContent value="calendar">
-            <CalendarGrid projects={projects} />
+            <CalendarGrid
+              projects={projects}
+              onChipClick={(id) => {
+                setMoveProjectId(id);
+                const p = projects.find((proj) => proj.id === id);
+                const d = p?.promisedDeliveryDate || p?.deliveryDueDate;
+                setMoveDate(d ? new Date(d).toISOString().slice(0, 10) : "2026-12-19");
+              }}
+            />
           </TabsContent>
         </Tabs>
 
@@ -877,18 +884,41 @@ function WorkingDayChips({ deadline, projects }: { deadline: Date; projects: Pro
   );
 }
 
+// ─────────────────────── Calendar helpers ──────────────────────
+
+function formatWeekLabel(monday: Date, friday: Date): string {
+  const monDay = monday.getDate();
+  const friDay = friday.getDate();
+  const monMonth = monday.toLocaleString("en-GB", { month: "short" });
+  const friMonth = friday.toLocaleString("en-GB", { month: "short" });
+  if (monMonth === friMonth) return `${monDay}–${friDay} ${monMonth}`;
+  return `${monDay} ${monMonth}–${friDay} ${friMonth}`;
+}
+
+function getChipColor(project: Project, todayKey: string): string {
+  if (project.status === "Delivered") return "bg-teal-500";
+  if (project.plannedWorkDate) {
+    const workKey = localDateKey(new Date(project.plannedWorkDate));
+    if (workKey < todayKey) return "bg-red-600";
+  }
+  const dueDate = project.promisedDeliveryDate || project.deliveryDueDate;
+  if (dueDate && getWorkingDaysUntil(new Date(dueDate)) <= 2) return "bg-amber-500";
+  return "bg-purple-600";
+}
+
 // ─────────────────────── Calendar Grid ─────────────────────────
 
-function CalendarGrid({ projects }: { projects: Project[] }) {
+function CalendarGrid({
+  projects,
+  onChipClick,
+}: {
+  projects: Project[];
+  onChipClick: (projectId: string) => void;
+}) {
   const { toast } = useToast();
   const qc = useQueryClient();
-  const todayDate = new Date();
 
-  const [calYear, setCalYear] = useState(todayDate.getFullYear());
-  const [calMonth, setCalMonth] = useState(todayDate.getMonth()); // 0-indexed
-  const [countProject, setCountProject] = useState<Project | null>(null);
-  const [photoCount, setPhotoCount] = useState("");
-
+  const [selectedRetoucher, setSelectedRetoucher] = useState<string>("all");
   const [lastSyncErrors, setLastSyncErrors] = useState<string[]>([]);
 
   const syncMutation = useMutation({
@@ -915,259 +945,221 @@ function CalendarGrid({ projects }: { projects: Project[] }) {
     onError: (e: any) => toast({ title: "Sync failed", description: e.message, variant: "destructive" }),
   });
 
-  const saveMutation = useMutation({
-    mutationFn: ({ id, count }: { id: string; count: number }) =>
-      campaignFetch("PATCH", `/api/campaign/projects/${id}/count`, { selectedPhotoCount: count }),
-    onSuccess: (updated: any) => {
-      qc.invalidateQueries({ queryKey: ["/api/campaign"] });
-      setCountProject(null);
-      if (updated?.driveGalleryLink) {
-        toast({ title: "Photo count saved", description: "Drive folder created automatically!" });
-      } else {
-        toast({ title: "Photo count saved" });
+  // today, normalised to midnight
+  const today = useMemo(() => {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    return d;
+  }, []);
+  const todayKey = localDateKey(today);
+
+  // Build weeks: Monday of current week → 19 Dec 2026
+  const weeks = useMemo(() => {
+    const start = new Date(today);
+    const dow = start.getDay(); // 0=Sun
+    const toMonday = dow === 0 ? -6 : 1 - dow;
+    start.setDate(start.getDate() + toMonday);
+
+    const end = new Date(2026, 11, 19); // 19 Dec 2026
+
+    const result: { weekLabel: string; monday: Date; days: Date[] }[] = [];
+    const cursor = new Date(start);
+
+    while (cursor <= end) {
+      const monday = new Date(cursor);
+      const friday = new Date(cursor);
+      friday.setDate(friday.getDate() + 4);
+      const capFriday = friday > end ? new Date(end) : friday;
+
+      const days: Date[] = [];
+      for (let i = 0; i < 5; i++) {
+        const d = new Date(cursor);
+        d.setDate(d.getDate() + i);
+        if (d <= end) days.push(d);
       }
-    },
-    onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
-  });
 
-  // Build month grid cells (Sun–Sat)
-  const { cells, monthLabel } = useMemo(() => {
-    const firstDay = new Date(calYear, calMonth, 1);
-    const lastDay = new Date(calYear, calMonth + 1, 0);
-    const startDow = firstDay.getDay(); // 0=Sun
-    const prevMonthLastDay = new Date(calYear, calMonth, 0).getDate();
+      if (days.length > 0) {
+        result.push({ weekLabel: formatWeekLabel(monday, capFriday), monday, days });
+      }
 
-    const built: { date: Date; isCurrentMonth: boolean }[] = [];
-
-    // Pad start with previous-month days
-    for (let i = startDow - 1; i >= 0; i--) {
-      built.push({ date: new Date(calYear, calMonth - 1, prevMonthLastDay - i), isCurrentMonth: false });
+      cursor.setDate(cursor.getDate() + 7);
     }
-    // Current month
-    for (let d = 1; d <= lastDay.getDate(); d++) {
-      built.push({ date: new Date(calYear, calMonth, d), isCurrentMonth: true });
-    }
-    // Pad end with next-month days to always produce exactly 42 cells (6 rows × 7 cols)
-    let nextD = 1;
-    while (built.length < 42) {
-      built.push({ date: new Date(calYear, calMonth + 1, nextD++), isCurrentMonth: false });
-    }
+    return result;
+  }, [today]);
 
-    const label = firstDay.toLocaleString("default", { month: "long" }) + " " + calYear;
-    return { cells: built, monthLabel: label };
-  }, [calYear, calMonth]);
-
-  // Map projects by promisedDeliveryDate (fallback: deliveryDueDate, then shootDate)
+  // Index projects by plannedWorkDate
   const projectsByDate = useMemo(() => {
     const map: Record<string, Project[]> = {};
     for (const p of projects) {
-      const dateField = p.promisedDeliveryDate || p.deliveryDueDate || p.shootDate;
-      if (!dateField) continue;
-      const key = localDateKey(new Date(dateField));
+      if (!p.plannedWorkDate) continue;
+      const key = localDateKey(new Date(p.plannedWorkDate));
       map[key] = map[key] || [];
       map[key].push(p);
     }
     return map;
   }, [projects]);
 
-  const todayStr = localDateKey(todayDate);
-
-  const prevMonth = () => {
-    if (calMonth === 0) { setCalMonth(11); setCalYear(y => y - 1); }
-    else setCalMonth(m => m - 1);
-  };
-  const nextMonth = () => {
-    if (calMonth === 11) { setCalMonth(0); setCalYear(y => y + 1); }
-    else setCalMonth(m => m + 1);
-  };
-  const goToday = () => { setCalMonth(todayDate.getMonth()); setCalYear(todayDate.getFullYear()); };
-
-  const weeks: typeof cells[] = [];
-  for (let i = 0; i < cells.length; i += 7) weeks.push(cells.slice(i, i + 7));
-
-  const DAY_HEADERS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  // Retouchers that actually have projects
+  const activeRetouchers = useMemo(
+    () => RETOUCHERS.filter((r) => projects.some((p) => p.assignedRetoucherId === r.id || p.assignedTo === r.id)),
+    [projects]
+  );
 
   return (
-    <>
-      <Card>
-        <CardHeader className="pb-2">
-          <div className="flex items-center justify-between flex-wrap gap-2">
-            <CardTitle className="text-xl font-bold tracking-tight">{monthLabel}</CardTitle>
-            <div className="flex items-center gap-1.5">
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => syncMutation.mutate()}
-                disabled={syncMutation.isPending}
-                className="h-7 text-xs"
+    <div>
+      {/* Controls row */}
+      <div className="flex items-center gap-3 mb-3 flex-wrap">
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => syncMutation.mutate()}
+          disabled={syncMutation.isPending}
+          className="h-7 text-xs"
+        >
+          <RefreshCw className={`h-3 w-3 mr-1 ${syncMutation.isPending ? "animate-spin" : ""}`} />
+          {syncMutation.isPending ? "Syncing…" : "Refresh from Calendar"}
+        </Button>
+
+        {/* Retoucher filter pills */}
+        <div className="flex gap-1 flex-wrap">
+          {(["all", ...activeRetouchers.map((r) => r.id)] as string[]).map((id) => {
+            const label = id === "all" ? "All" : (RETOUCHERS.find((r) => r.id === id)?.name ?? id);
+            const active = selectedRetoucher === id;
+            return (
+              <button
+                key={id}
+                onClick={() => setSelectedRetoucher(id)}
+                className={`px-2.5 py-0.5 rounded-full text-xs font-medium border transition-colors ${
+                  active
+                    ? "bg-primary text-primary-foreground border-primary"
+                    : "border-border hover:bg-muted text-muted-foreground"
+                }`}
               >
-                <RefreshCw className={`h-3 w-3 mr-1 ${syncMutation.isPending ? "animate-spin" : ""}`} />
-                {syncMutation.isPending ? "Syncing…" : "Refresh from Calendar"}
-              </Button>
-              <Button size="icon" variant="ghost" className="h-7 w-7" onClick={prevMonth}>
-                <span className="text-base leading-none">‹</span>
-              </Button>
-              <Button size="sm" variant="outline" className="h-7 text-xs" onClick={goToday}>
-                Today
-              </Button>
-              <Button size="icon" variant="ghost" className="h-7 w-7" onClick={nextMonth}>
-                <span className="text-base leading-none">›</span>
-              </Button>
-            </div>
-          </div>
-          <p className="text-xs text-muted-foreground mt-1">Double-click a project pill to enter photo count</p>
-          {lastSyncErrors.some(e => /not connected|authoris|connector/i.test(e)) && (
-            <div className="flex items-start gap-2 mt-2 p-2 bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-700 rounded text-xs text-amber-800 dark:text-amber-200">
-              <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0 text-amber-600" />
-              <span>
-                <strong>Google Calendar not connected.</strong> Authorise the connector in{" "}
-                <em>Deployment › Advanced settings › Connectors</em>, then click{" "}
-                <strong>Refresh from Calendar</strong> to pull in Noël shoots.
-              </span>
-            </div>
-          )}
-        </CardHeader>
-        <CardContent className="p-0">
-          {/* Day-of-week headers */}
-          <div className="grid grid-cols-7 border-b border-t">
-            {DAY_HEADERS.map(d => (
-              <div key={d} className="text-center text-xs font-medium text-muted-foreground py-1.5 border-r last:border-r-0">
-                {d}
-              </div>
-            ))}
-          </div>
+                {label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
 
-          {/* Month grid */}
-          {weeks.map((week, wi) => (
-            <div key={wi} className="grid grid-cols-7 border-b last:border-b-0">
-              {week.map(({ date, isCurrentMonth }, di) => {
-                const dayStr = localDateKey(date);
-                const isToday = dayStr === todayStr;
-                const pills = isCurrentMonth ? (projectsByDate[dayStr] || []) : [];
+      {/* Connector warning */}
+      {lastSyncErrors.some((e) => /not connected|authoris|connector/i.test(e)) && (
+        <div className="flex items-start gap-2 mb-3 p-2 bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-700 rounded text-xs text-amber-800 dark:text-amber-200">
+          <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0 text-amber-600" />
+          <span>
+            <strong>Google Calendar not connected.</strong> Authorise the connector in{" "}
+            <em>Deployment › Advanced settings › Connectors</em>, then click{" "}
+            <strong>Refresh from Calendar</strong> to pull in Noël shoots.
+          </span>
+        </div>
+      )}
 
-                return (
-                  <div
-                    key={di}
-                    className={`
-                      min-h-[88px] border-r last:border-r-0 p-1 align-top
-                      ${!isCurrentMonth ? "bg-muted/30" : ""}
-                    `}
-                  >
-                    {/* Day number */}
-                    <div className="flex justify-end mb-0.5">
-                      {isToday ? (
-                        <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-red-500 text-white text-[11px] font-bold">
-                          {date.getDate()}
-                        </span>
-                      ) : (
-                        <span className={`text-[11px] ${isCurrentMonth ? "text-foreground" : "text-muted-foreground/40"}`}>
-                          {date.getDate()}
-                        </span>
-                      )}
-                    </div>
+      {/* Legend */}
+      <div className="flex gap-3 mb-3 flex-wrap text-[10px] text-white">
+        <span className="bg-teal-500 rounded px-2 py-0.5">Delivered</span>
+        <span className="bg-purple-600 rounded px-2 py-0.5">On track</span>
+        <span className="bg-amber-500 rounded px-2 py-0.5">At risk (≤2 working days)</span>
+        <span className="bg-red-600 rounded px-2 py-0.5">Overdue</span>
+      </div>
 
-                    {/* Project pills — double-click opens count popover */}
-                    {pills.slice(0, 4).map(p => (
-                      <Popover
-                        key={p.id}
-                        open={countProject?.id === p.id}
-                        onOpenChange={open => {
-                          if (!open) setCountProject(null);
-                        }}
-                      >
-                        <PopoverTrigger asChild>
-                          <div
-                            onDoubleClick={() => {
-                              setCountProject(p);
-                              setPhotoCount(String(p.selectedPhotoCount ?? ""));
-                            }}
-                            className="text-[10px] border-l-2 border-amber-500 bg-amber-50 dark:bg-amber-950/40 text-amber-900 dark:text-amber-100 rounded-r px-1 py-0.5 mb-0.5 truncate cursor-pointer select-none hover:bg-amber-100 dark:hover:bg-amber-900/50 transition-colors"
-                            title={`${p.clientName}${p.selectedPhotoCount ? ` — ${p.selectedPhotoCount} photos` : " — double-click to enter count"}`}
-                          >
-                            {p.clientName}
-                            {p.selectedPhotoCount ? (
-                              <span className="ml-1 opacity-70">({p.selectedPhotoCount})</span>
-                            ) : null}
-                            {p.driveFolderId ? " 📁" : null}
-                          </div>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-64 p-3" side="right" align="start">
-                          <div className="space-y-3">
-                            <p className="text-sm font-semibold flex items-center gap-1.5">
-                              <Camera className="h-3.5 w-3.5 text-amber-600" />
-                              {p.clientName}
-                            </p>
-                            <div>
-                              <label className="text-xs font-medium block mb-1">Number of photos</label>
-                              <Input
-                                type="number"
-                                min={0}
-                                value={countProject?.id === p.id ? photoCount : ""}
-                                onChange={e => setPhotoCount(e.target.value)}
-                                placeholder="e.g. 120"
-                                className="h-7 text-sm"
-                                autoFocus
-                                onKeyDown={e => {
-                                  if (e.key === "Enter") {
-                                    const n = parseInt(photoCount, 10);
-                                    if (!isNaN(n) && n >= 0) saveMutation.mutate({ id: p.id, count: n });
-                                  }
-                                  if (e.key === "Escape") setCountProject(null);
-                                }}
-                              />
-                            </div>
-                            {p.driveGalleryLink ? (
-                              <a
-                                href={p.driveGalleryLink}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="text-xs text-blue-600 hover:underline block"
-                              >
-                                📁 Open Drive Folder
-                              </a>
-                            ) : (
-                              <p className="text-[10px] text-muted-foreground">
-                                Drive folder auto-created when count {">"} 0 is saved.
-                              </p>
-                            )}
-                            <div className="flex gap-2">
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                className="h-6 text-xs flex-1"
-                                onClick={() => setCountProject(null)}
-                              >
-                                Cancel
-                              </Button>
-                              <Button
-                                size="sm"
-                                className="h-6 text-xs flex-1"
-                                onClick={() => {
-                                  const n = parseInt(photoCount, 10);
-                                  if (isNaN(n) || n < 0) return;
-                                  saveMutation.mutate({ id: p.id, count: n });
-                                }}
-                                disabled={saveMutation.isPending}
-                              >
-                                {saveMutation.isPending ? "…" : "Save"}
-                              </Button>
-                            </div>
-                          </div>
-                        </PopoverContent>
-                      </Popover>
-                    ))}
-                    {pills.length > 4 && (
-                      <div className="text-[9px] text-muted-foreground pl-1">+{pills.length - 4} more</div>
-                    )}
-                  </div>
-                );
-              })}
+      {/* Grid */}
+      <div className="rounded-lg border overflow-hidden">
+        {/* Sticky column headers */}
+        <div className="grid border-b bg-muted/40" style={{ gridTemplateColumns: "110px repeat(5, 1fr)" }}>
+          <div className="p-2 text-xs font-semibold text-muted-foreground">Week</div>
+          {["Mon", "Tue", "Wed", "Thu", "Fri"].map((d) => (
+            <div key={d} className="p-2 text-xs font-semibold text-center text-muted-foreground border-l">
+              {d}
             </div>
           ))}
-        </CardContent>
-      </Card>
+        </div>
 
-    </>
+        {/* Scrollable rows */}
+        <div className="overflow-y-auto max-h-[640px]">
+          {weeks.map(({ weekLabel, days }, wi) => {
+            // Week total photo count (unfiltered — load warning is always global)
+            const weekPhotos = days.reduce((sum, day) => {
+              const key = localDateKey(day);
+              return sum + (projectsByDate[key] || []).reduce((s, p) => s + (p.selectedPhotoCount || 0), 0);
+            }, 0);
+            const overloaded = weekPhotos >= 200;
+
+            return (
+              <div
+                key={wi}
+                className="grid border-b last:border-b-0"
+                style={{ gridTemplateColumns: "110px repeat(5, 1fr)" }}
+              >
+                {/* Week label */}
+                <div className="p-2 border-r bg-muted/20 flex flex-col justify-between min-h-[80px]">
+                  <span className="text-[11px] font-semibold leading-tight">{weekLabel}</span>
+                  <span className={`text-[10px] font-medium mt-1 flex items-center gap-0.5 ${overloaded ? "text-amber-600" : "text-muted-foreground"}`}>
+                    {overloaded && "⚠ "}
+                    {weekPhotos}ph
+                  </span>
+                </div>
+
+                {/* Day cells — always render 5 slots (Mon–Fri) */}
+                {Array.from({ length: 5 }).map((_, di) => {
+                  const day = days[di];
+                  if (!day) {
+                    return <div key={di} className="border-l bg-muted/10 min-h-[80px]" />;
+                  }
+                  const dayKey = localDateKey(day);
+                  const isToday = dayKey === todayKey;
+                  const allDayProjects = projectsByDate[dayKey] || [];
+                  const visibleProjects =
+                    selectedRetoucher === "all"
+                      ? allDayProjects
+                      : allDayProjects.filter(
+                          (p) =>
+                            p.assignedRetoucherId === selectedRetoucher ||
+                            p.assignedTo === selectedRetoucher
+                        );
+
+                  return (
+                    <div
+                      key={di}
+                      className={`border-l p-1 min-h-[80px] ${isToday ? "bg-blue-50 dark:bg-blue-950/20" : ""}`}
+                    >
+                      {/* Day number */}
+                      <div className="text-[10px] text-muted-foreground text-right mb-0.5 leading-none">
+                        {isToday ? (
+                          <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-blue-500 text-white font-bold">
+                            {day.getDate()}
+                          </span>
+                        ) : (
+                          day.getDate()
+                        )}
+                      </div>
+
+                      {/* Project chips */}
+                      <div className="space-y-0.5">
+                        {visibleProjects.map((p) => {
+                          const color = getChipColor(p, todayKey);
+                          const firstName = (p.clientName || "").split(" ")[0];
+                          const count = p.selectedPhotoCount || 0;
+                          return (
+                            <button
+                              key={p.id}
+                              onClick={() => onChipClick(p.id)}
+                              className={`w-full text-left text-[10px] text-white rounded px-1 py-0.5 truncate ${color} hover:opacity-80 active:opacity-70 transition-opacity`}
+                              title={`${p.clientName} · ${count}ph — click to reschedule`}
+                            >
+                              {firstName} · {count}ph
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
   );
 }
 
