@@ -70,11 +70,7 @@ const STATUS_COLORS: Record<string, string> = {
   AwaitingPayment: "bg-red-100 text-red-800 border-red-300",
 };
 
-const RETOUCHERS = [
-  { id: "Retoucher1", name: "Retoucher 1" },
-  { id: "Retoucher2", name: "Retoucher 2" },
-  { id: "Retoucher3", name: "Retoucher 3" },
-];
+// Retouchers are loaded dynamically from /api/users — no hardcoded list
 
 // ─────────────────────── Date utils ────────────────────────
 
@@ -166,6 +162,18 @@ export default function CampaignCockpit() {
     queryFn: () => campaignFetch("GET", "/api/campaign"),
   });
 
+  // Real retouchers from the users table
+  const { data: usersData } = useQuery<any[]>({
+    queryKey: ["/api/users"],
+    queryFn: () => campaignFetch("GET", "/api/users"),
+  });
+  const retouchers: { id: string; name: string }[] = useMemo(() => {
+    if (!usersData) return [];
+    return usersData
+      .filter((u: any) => u.role && (u.role.toLowerCase().includes("retoucher") || u.role === "LeadRetoucher"))
+      .map((u: any) => ({ id: u.id, name: u.username || u.name || u.id }));
+  }, [usersData]);
+
   const countMutation = useMutation({
     mutationFn: ({ id, count }: { id: string; count: number }) =>
       campaignFetch("PATCH", `/api/campaign/projects/${id}/count`, { selectedPhotoCount: count }),
@@ -178,7 +186,7 @@ export default function CampaignCockpit() {
 
   const assignMutation = useMutation({
     mutationFn: ({ id, retoucherId }: { id: string; retoucherId: string }) => {
-      const r = RETOUCHERS.find((x) => x.id === retoucherId);
+      const r = retouchers.find((x) => x.id === retoucherId);
       return campaignFetch("PATCH", `/api/campaign/projects/${id}/assign`, { retoucherId, retoucherName: r?.name || retoucherId });
     },
     onSuccess: () => {
@@ -433,7 +441,8 @@ export default function CampaignCockpit() {
                         <th className="text-left py-2 px-3">Shoot</th>
                         <th className="text-left py-2 px-3">Work Date</th>
                         <th className="text-left py-2 px-3">Due</th>
-                        <th className="text-left py-2 px-3">Photos</th>
+                        <th className="text-left py-2 px-3">Allowance</th>
+                        <th className="text-left py-2 px-3">Selected</th>
                         <th className="text-left py-2 px-3">Pixieset</th>
                         <th className="text-left py-2 px-3">Retoucher</th>
                         <th className="text-left py-2 px-3">Status</th>
@@ -444,7 +453,7 @@ export default function CampaignCockpit() {
                     <tbody>
                       {projects.length === 0 ? (
                         <tr>
-                          <td colSpan={9} className="text-center py-8 text-muted-foreground">
+                          <td colSpan={10} className="text-center py-8 text-muted-foreground">
                             No projects yet. Promote Noël-tagged ShootTracker events to populate this list.
                           </td>
                         </tr>
@@ -515,8 +524,8 @@ export default function CampaignCockpit() {
                 );
               })()}
 
-              {/* One lane per retoucher */}
-              {RETOUCHERS.map((r) => {
+              {/* One lane per retoucher — populated from real users */}
+              {retouchers.map((r) => {
                 const laneProjects = projects.filter(
                   (p) => (p.assignedRetoucherId === r.id || p.assignedTo === r.id) && p.status !== "Delivered"
                 );
@@ -665,9 +674,12 @@ export default function CampaignCockpit() {
                 <SelectValue placeholder="Select retoucher…" />
               </SelectTrigger>
               <SelectContent>
-                {RETOUCHERS.map((r) => (
-                  <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>
-                ))}
+                {retouchers.length === 0 && (
+                <SelectItem value="__none" disabled>No retouchers found</SelectItem>
+              )}
+              {retouchers.map((r) => (
+                <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>
+              ))}
               </SelectContent>
             </Select>
             <DialogFooter>
@@ -1218,11 +1230,14 @@ function ProjectRow({ project, onCount, onAssign, onMove, onEmail, onMarkDeliver
   const [countInput, setCountInput] = useState(
     String(project.selectedPhotoCount || project.selectedCount || "")
   );
+  const [allowanceInput, setAllowanceInput] = useState(
+    String(project.selectionAllowance ?? project.packageCount ?? "")
+  );
   const [pixiesetInput, setPixiesetInput] = useState(project.pixiesetLink || "");
 
   const savePixiesetMutation = useMutation({
-    mutationFn: () =>
-      campaignFetch("PATCH", `/api/campaign/projects/${project.id}/pixieset-link`, { pixiesetLink: pixiesetInput }),
+    mutationFn: (patch: { pixiesetLink?: string; selectionAllowance?: number }) =>
+      campaignFetch("PATCH", `/api/campaign/projects/${project.id}/pixieset-link`, patch),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["/api/campaign"] }),
     onError: (e: any) => toast({ title: "Save failed", description: e.message, variant: "destructive" }),
   });
@@ -1264,12 +1279,30 @@ function ProjectRow({ project, onCount, onAssign, onMove, onEmail, onMarkDeliver
             <Edit3 className="h-3 w-3 inline mr-0.5" />Move
           </button>
         </td>
+        {/* Allowance — how many photos are in the client's package */}
+        <td className="py-2 px-3">
+          <Input
+            type="number"
+            min={0}
+            placeholder="pkg"
+            className="h-7 w-16 text-xs"
+            value={allowanceInput}
+            onChange={(e) => setAllowanceInput(e.target.value)}
+            onBlur={() => {
+              const n = Number(allowanceInput);
+              if (!isNaN(n) && String(n) !== String(project.selectionAllowance ?? project.packageCount ?? "")) {
+                savePixiesetMutation.mutate({ selectionAllowance: n });
+              }
+            }}
+          />
+        </td>
+        {/* Selected — how many photos the client chose in-studio */}
         <td className="py-2 px-3">
           <div className="flex items-center gap-1">
             <Input
               type="number"
               min={0}
-              className="h-7 w-20 text-xs"
+              className="h-7 w-16 text-xs"
               value={countInput}
               onChange={(e) => setCountInput(e.target.value)}
             />
@@ -1285,7 +1318,7 @@ function ProjectRow({ project, onCount, onAssign, onMove, onEmail, onMarkDeliver
             onChange={(e) => setPixiesetInput(e.target.value)}
             onBlur={() => {
               if (pixiesetInput !== (project.pixiesetLink || "")) {
-                savePixiesetMutation.mutate();
+                savePixiesetMutation.mutate({ pixiesetLink: pixiesetInput });
               }
             }}
             className="h-7 text-xs w-40"
@@ -1346,37 +1379,28 @@ function ProjectRow({ project, onCount, onAssign, onMove, onEmail, onMarkDeliver
           )}
         </td>
         <td className="py-2 px-3">
-          <div className="flex gap-1 flex-wrap">
+          <div className="flex gap-1 items-center">
+            {/* Email 1 — delivery date + chat link. Fires manually after count is entered. */}
             <Tooltip>
               <TooltipTrigger asChild>
-                <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => onEmail(project.id, "estimate")} disabled={!project.clientEmail}>
+                <Button
+                  size="sm" variant="ghost" className="h-7 w-7 p-0"
+                  onClick={() => onEmail(project.id, "estimate")}
+                  disabled={!project.clientEmail}
+                >
                   <Mail className="h-3 w-3" />
                 </Button>
               </TooltipTrigger>
-              <TooltipContent>Email 1: Delivery Estimate</TooltipContent>
+              <TooltipContent>
+                {project.clientEmail ? "Send delivery date + chat link (Email 1)" : "No client email — add it to the project first"}
+              </TooltipContent>
             </Tooltip>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => onEmail(project.id, "ready")} disabled={!project.clientEmail}>
-                  <Send className="h-3 w-3" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>Email 2: Photos Ready</TooltipContent>
-            </Tooltip>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => onEmail(project.id, "survey")} disabled={!project.clientEmail}>
-                  <CheckCircle2 className="h-3 w-3" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>Email 3: Satisfaction Survey</TooltipContent>
-            </Tooltip>
+            {/* Mark Delivered — manual fallback; Drive detection handles this automatically */}
             {project.status !== "Delivered" && (
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button
-                    size="sm"
-                    variant="ghost"
+                    size="sm" variant="ghost"
                     className="h-7 w-7 p-0 text-green-600 hover:text-green-700 hover:bg-green-50"
                     onClick={() => onMarkDelivered(project.id)}
                     disabled={isPending}
@@ -1384,23 +1408,22 @@ function ProjectRow({ project, onCount, onAssign, onMove, onEmail, onMarkDeliver
                     <PackageCheck className="h-3 w-3" />
                   </Button>
                 </TooltipTrigger>
-                <TooltipContent>Mark Delivered (manual fallback)</TooltipContent>
+                <TooltipContent>Mark Delivered (Drive usually does this automatically)</TooltipContent>
               </Tooltip>
             )}
-            {/* Client chat link — enabled only after Email 1 has been sent (token exists) */}
+            {/* Client chat — opens after Email 1 has been sent */}
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
-                  size="sm"
-                  variant="ghost"
-                  className={`h-7 w-7 p-0 ${project.clientChatToken ? "text-blue-600 hover:text-blue-700 hover:bg-blue-50" : "text-muted-foreground/40"}`}
+                  size="sm" variant="ghost"
+                  className={`h-7 w-7 p-0 ${project.clientChatToken ? "text-blue-600 hover:text-blue-700 hover:bg-blue-50" : "text-muted-foreground/30"}`}
                   disabled={!project.clientChatToken}
                   onClick={() => project.clientChatToken && window.open(`/client-chat/${project.clientChatToken}`, "_blank")}
                 >
                   <MessageCircle className="h-3 w-3" />
                 </Button>
               </TooltipTrigger>
-              <TooltipContent>{project.clientChatToken ? "Open client chat" : "Chat not started yet (send Email 1 first)"}</TooltipContent>
+              <TooltipContent>{project.clientChatToken ? "Open client chat" : "Chat starts after Email 1 is sent"}</TooltipContent>
             </Tooltip>
           </div>
         </td>

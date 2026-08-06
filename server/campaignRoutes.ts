@@ -552,15 +552,21 @@ export function registerCampaignRoutes(app: Express): void {
     }
   });
 
-  // PATCH /api/campaign/projects/:id/pixieset-link — wrangler: save Pixieset gallery URL (team reference only)
+  // PATCH /api/campaign/projects/:id/pixieset-link — wrangler: save Pixieset URL and/or package allowance
   app.patch("/api/campaign/projects/:id/pixieset-link", verifyCampaignCockpit, async (req: Request, res: Response) => {
     try {
       const { id } = req.params;
-      const { pixiesetLink } = req.body;
+      const { pixiesetLink, selectionAllowance } = req.body;
       const project = await storage.getProject(id);
       if (!project || !project.campaignId) return res.status(404).json({ error: "Campaign project not found" });
-      if (typeof pixiesetLink !== "string") return res.status(400).json({ error: "pixiesetLink must be a string" });
-      const updated = await storage.updateProject(id, { pixiesetLink });
+      const patch: Record<string, any> = {};
+      if (typeof pixiesetLink === "string") patch.pixiesetLink = pixiesetLink;
+      if (selectionAllowance !== undefined) {
+        const n = Number(selectionAllowance);
+        if (!isNaN(n) && n >= 0) patch.selectionAllowance = n;
+      }
+      if (Object.keys(patch).length === 0) return res.status(400).json({ error: "Nothing to update" });
+      const updated = await storage.updateProject(id, patch);
       res.json(updated);
     } catch (err: any) {
       res.status(500).json({ error: err.message });
