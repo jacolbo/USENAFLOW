@@ -2708,8 +2708,19 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getCampaignProjects(campaignId: string): Promise<Project[]> {
+    // Only surface shoots from the campaign's own year onward — prior-season
+    // projects (e.g. 2024/2025) stay out of the cockpit, scheduler, and
+    // retoucher views until they are archived.
+    const [campaign] = await db.select().from(campaigns).where(eq(campaigns.id, campaignId));
+    const yearStart = campaign ? new Date(campaign.year, 0, 1) : null;
     return await db.select().from(projects).where(
-      and(eq(projects.campaignId, campaignId), sql`${projects.chatArchived} IS NOT TRUE`)
+      and(
+        eq(projects.campaignId, campaignId),
+        sql`${projects.chatArchived} IS NOT TRUE`,
+        ...(yearStart
+          ? [sql`(${projects.shootDate} IS NULL OR ${projects.shootDate} >= ${yearStart})`]
+          : [])
+      )
     );
   }
 
