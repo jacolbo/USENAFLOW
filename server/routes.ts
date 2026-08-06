@@ -2130,10 +2130,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         wouldRecommend: wouldRecommend ?? null,
         completedAt: new Date(),
       });
-      // Show the Google review CTA on the survey thank-you page for every
-      // client (not just 5★). The email cadence covers all delivered clients
-      // too, so the in-page CTA should match.
-      const googleReviewPrompt = true;
+      // Only prompt for a Google review when the client rated 4 or 5 stars.
+      const googleReviewPrompt = rating >= 4;
 
       try {
         const { storeMemory } = await import("./services/aiMemoryService");
