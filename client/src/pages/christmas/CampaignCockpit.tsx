@@ -1230,7 +1230,9 @@ function SelectionTierDot({ tier, sentAt }: { tier: number | null | undefined; s
 function ProjectRow({ project, onCount, onAssign, onMove, onEmail, onMarkDelivered, isPending }: ProjectRowProps) {
   const { toast } = useToast();
   const qc = useQueryClient();
-  const [countInput, setCountInput] = useState(String(project.selectedPhotoCount || project.selectedCount || ""));
+  const [countInput, setCountInput] = useState(
+    String(project.selectedPhotoCount || project.selectedCount || project.clientSelectionCount || "")
+  );
   const [selExpanded, setSelExpanded] = useState(false);
   const [pixiesetInput, setPixiesetInput] = useState(project.pixiesetLink || "");
   const [allowanceInput, setAllowanceInput] = useState(String(project.selectionAllowance ?? project.packageCount ?? ""));
@@ -1541,6 +1543,37 @@ function ProjectRow({ project, onCount, onAssign, onMove, onEmail, onMarkDeliver
                       <span className="text-muted-foreground block">Extras total</span>
                       <span className="font-bold text-sm text-orange-600">R{selExtrasTotal}</span>
                     </div>
+                  )}
+                </div>
+
+                {/* Admit — confirm client count and trigger Drive folder creation */}
+                <div className="flex items-center gap-2 mb-3 flex-wrap">
+                  <label className="text-xs font-medium text-muted-foreground shrink-0">Confirmed count:</label>
+                  <Input
+                    type="number"
+                    min={0}
+                    className="h-7 w-20 text-xs"
+                    value={countInput}
+                    onChange={(e) => setCountInput(e.target.value)}
+                  />
+                  <Button
+                    size="sm"
+                    className="h-7 text-xs bg-green-600 hover:bg-green-700 text-white"
+                    onClick={() => {
+                      const n = parseInt(countInput, 10);
+                      if (!isNaN(n) && n >= 0) onCount(project.id, n);
+                    }}
+                    disabled={isPending || !countInput}
+                  >
+                    <CheckCircle2 className="h-3 w-3 mr-1" />
+                    Admit
+                  </Button>
+                  {project.selectedPhotoCount ? (
+                    <span className="text-xs text-green-700">
+                      ✓ Admitted ({project.selectedPhotoCount} photos{project.driveFolderId ? " · Drive folder created" : ""})
+                    </span>
+                  ) : (
+                    <span className="text-xs text-muted-foreground">Drive folder created automatically on admit</span>
                   )}
                 </div>
 
