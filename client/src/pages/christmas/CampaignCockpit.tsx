@@ -439,21 +439,19 @@ export default function CampaignCockpit() {
                       <tr className="border-b text-muted-foreground">
                         <th className="text-left py-2 px-3">Client</th>
                         <th className="text-left py-2 px-3">Shoot</th>
-                        <th className="text-left py-2 px-3">Work Date</th>
                         <th className="text-left py-2 px-3">Due</th>
                         <th className="text-left py-2 px-3">Allowance</th>
                         <th className="text-left py-2 px-3">Selected</th>
                         <th className="text-left py-2 px-3">Pixieset</th>
                         <th className="text-left py-2 px-3">Retoucher</th>
                         <th className="text-left py-2 px-3">Status</th>
-                        <th className="text-left py-2 px-3">Drive</th>
                         <th className="text-left py-2 px-3">Actions</th>
                       </tr>
                     </thead>
                     <tbody>
                       {projects.length === 0 ? (
                         <tr>
-                          <td colSpan={10} className="text-center py-8 text-muted-foreground">
+                          <td colSpan={9} className="text-center py-8 text-muted-foreground">
                             No projects yet. Promote Noël-tagged ShootTracker events to populate this list.
                           </td>
                         </tr>
@@ -1273,10 +1271,8 @@ function ProjectRow({ project, onCount, onAssign, onMove, onEmail, onMarkDeliver
   });
 
   const dueDate = project.promisedDeliveryDate || project.deliveryDueDate;
-  const plannedWork = project.plannedWorkDate;
   const dueDateStr = dueDate ? new Date(dueDate).toLocaleDateString("en-ZA", { day: "numeric", month: "short" }) : "—";
   const shootDateStr = project.shootDate ? new Date(project.shootDate).toLocaleDateString("en-ZA", { day: "numeric", month: "short" }) : "—";
-  const workDateStr = plannedWork ? new Date(plannedWork).toLocaleDateString("en-ZA", { day: "numeric", month: "short" }) : "—";
   const statusKey = (project.status || "").replace(/\s/g, "");
   const statusClass = STATUS_COLORS[statusKey] || "bg-gray-100 text-gray-700";
   const workDaysLeft = dueDate ? getWorkingDaysUntil(new Date(dueDate)) : 0;
@@ -1291,12 +1287,6 @@ function ProjectRow({ project, onCount, onAssign, onMove, onEmail, onMarkDeliver
           {project.clientEmail && <div className="text-xs text-muted-foreground">{project.clientEmail}</div>}
         </td>
         <td className="py-2 px-3 text-muted-foreground text-xs">{shootDateStr}</td>
-        <td className="py-2 px-3">
-          <div className="flex items-center gap-1 text-xs">
-            <Hammer className="h-3 w-3 text-purple-500" />
-            <span className={plannedWork ? "text-purple-700" : "text-muted-foreground"}>{workDateStr}</span>
-          </div>
-        </td>
         <td className="py-2 px-3">
           <div className={`flex items-center gap-1 text-xs ${isOverdue ? "text-red-600 font-bold" : isDeadlineNear ? "text-amber-600 font-semibold" : ""}`}>
             {dueDateStr}
@@ -1371,45 +1361,23 @@ function ProjectRow({ project, onCount, onAssign, onMove, onEmail, onMarkDeliver
           </Badge>
         </td>
         <td className="py-2 px-3">
-          {project.driveGalleryLink ? (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <a
-                  href={project.driveGalleryLink}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-flex items-center gap-1 text-xs text-emerald-600 hover:text-emerald-700 font-medium"
-                >
-                  <FolderOpen className="h-3.5 w-3.5" />
-                  Linked
-                </a>
-              </TooltipTrigger>
-              <TooltipContent>Open Drive folder</TooltipContent>
-            </Tooltip>
-          ) : project.driveFolderId ? (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <span className="inline-flex items-center gap-1 text-xs text-amber-500 font-medium cursor-default">
-                  <FolderOpen className="h-3.5 w-3.5" />
-                  No link
-                </span>
-              </TooltipTrigger>
-              <TooltipContent>Folder created but share link not yet generated</TooltipContent>
-            </Tooltip>
-          ) : (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <span className="inline-flex items-center gap-1 text-xs text-muted-foreground cursor-default">
-                  <FolderX className="h-3.5 w-3.5" />
-                  Pending
-                </span>
-              </TooltipTrigger>
-              <TooltipContent>Drive folder created automatically when photo count is saved</TooltipContent>
-            </Tooltip>
-          )}
-        </td>
-        <td className="py-2 px-3">
           <div className="flex gap-1 items-center">
+            {/* Drive folder link, when available */}
+            {project.driveGalleryLink && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <a
+                    href={project.driveGalleryLink}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex h-7 w-7 items-center justify-center text-emerald-600 hover:text-emerald-700"
+                  >
+                    <FolderOpen className="h-3 w-3" />
+                  </a>
+                </TooltipTrigger>
+                <TooltipContent>Open Drive folder</TooltipContent>
+              </Tooltip>
+            )}
             {/* Email 1 — delivery date + chat link. Fires manually after count is entered. */}
             <Tooltip>
               <TooltipTrigger asChild>
