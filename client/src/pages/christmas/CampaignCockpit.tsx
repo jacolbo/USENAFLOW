@@ -606,6 +606,7 @@ export default function CampaignCockpit() {
           <TabsContent value="calendar">
             <CalendarGrid
               projects={projects}
+              retouchers={retouchers}
               onChipClick={(id) => {
                 setMoveProjectId(id);
                 const p = projects.find((proj) => proj.id === id);
@@ -923,9 +924,11 @@ function getChipColor(project: Project, todayKey: string): string {
 function CalendarGrid({
   projects,
   onChipClick,
+  retouchers,
 }: {
   projects: Project[];
   onChipClick: (projectId: string) => void;
+  retouchers: { id: string; name: string }[];
 }) {
   const { toast } = useToast();
   const qc = useQueryClient();
@@ -1013,7 +1016,7 @@ function CalendarGrid({
 
   // Retouchers that actually have projects
   const activeRetouchers = useMemo(
-    () => RETOUCHERS.filter((r) => projects.some((p) => p.assignedRetoucherId === r.id || p.assignedTo === r.id)),
+    () => retouchers.filter((r) => projects.some((p) => p.assignedRetoucherId === r.id || p.assignedTo === r.id)),
     [projects]
   );
 
@@ -1035,7 +1038,7 @@ function CalendarGrid({
         {/* Retoucher filter pills */}
         <div className="flex gap-1 flex-wrap">
           {(["all", ...activeRetouchers.map((r) => r.id)] as string[]).map((id) => {
-            const label = id === "all" ? "All" : (RETOUCHERS.find((r) => r.id === id)?.name ?? id);
+            const label = id === "all" ? "All" : (retouchers.find((r) => r.id === id)?.name ?? id);
             const active = selectedRetoucher === id;
             return (
               <button
