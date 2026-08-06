@@ -32,10 +32,6 @@ import {
   GripVertical,
   FolderOpen,
   FolderX,
-  ChevronDown,
-  ChevronRight,
-  Image,
-  HardDrive,
   MessageCircle,
 } from "lucide-react";
 import type { Project, Campaign } from "@shared/schema";
@@ -439,6 +435,7 @@ export default function CampaignCockpit() {
                         <th className="text-left py-2 px-3">Work Date</th>
                         <th className="text-left py-2 px-3">Due</th>
                         <th className="text-left py-2 px-3">Photos</th>
+                        <th className="text-left py-2 px-3">Pixieset</th>
                         <th className="text-left py-2 px-3">Retoucher</th>
                         <th className="text-left py-2 px-3">Status</th>
                         <th className="text-left py-2 px-3">Drive</th>
@@ -1223,32 +1220,20 @@ interface ProjectRowProps {
   isPending: boolean;
 }
 
-// ── Selection tier dot ──────────────────────────────────────────────────────
-function SelectionTierDot({ tier, sentAt }: { tier: number | null | undefined; sentAt: string | null | undefined }) {
-  if (!sentAt) return null;
-  const t = tier ?? 0;
-  const colors = ["bg-green-500", "bg-orange-500", "bg-red-500"];
-  const labels = ["Invite sent", "Orange reminder sent", "Red reminder sent"];
-  return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <span className={`inline-block w-2.5 h-2.5 rounded-full ml-1 ${colors[Math.min(t, 2)]}`} />
-      </TooltipTrigger>
-      <TooltipContent>{labels[Math.min(t, 2)]}</TooltipContent>
-    </Tooltip>
-  );
-}
-
 function ProjectRow({ project, onCount, onAssign, onMove, onEmail, onMarkDelivered, isPending }: ProjectRowProps) {
   const { toast } = useToast();
   const qc = useQueryClient();
   const [countInput, setCountInput] = useState(
-    String(project.selectedPhotoCount || project.selectedCount || project.clientSelectionCount || "")
+    String(project.selectedPhotoCount || project.selectedCount || "")
   );
-  const [selExpanded, setSelExpanded] = useState(false);
   const [pixiesetInput, setPixiesetInput] = useState(project.pixiesetLink || "");
-  const [allowanceInput, setAllowanceInput] = useState(String(project.selectionAllowance ?? project.packageCount ?? ""));
-  const [extraPriceInput, setExtraPriceInput] = useState(String(project.extraPhotoPrice ?? ""));
+
+  const savePixiesetMutation = useMutation({
+    mutationFn: () =>
+      campaignFetch("PATCH", `/api/campaign/projects/${project.id}/pixieset-link`, { pixiesetLink: pixiesetInput }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["/api/campaign"] }),
+    onError: (e: any) => toast({ title: "Save failed", description: e.message, variant: "destructive" }),
+  });
 
   const dueDate = project.promisedDeliveryDate || project.deliveryDueDate;
   const plannedWork = project.plannedWorkDate;
@@ -1260,47 +1245,6 @@ function ProjectRow({ project, onCount, onAssign, onMove, onEmail, onMarkDeliver
   const workDaysLeft = dueDate ? getWorkingDaysUntil(new Date(dueDate)) : 0;
   const isDeadlineNear = workDaysLeft <= 5 && workDaysLeft > 0;
   const isOverdue = dueDate && new Date(dueDate) < new Date() && project.status !== "Delivered";
-
-  // ── Selection mutations ───────────────────────────────────────────────────
-  const saveFieldsMutation = useMutation({
-    mutationFn: () =>
-      campaignFetch("PATCH", `/api/campaign/projects/${project.id}/selection-fields`, {
-        pixiesetLink: pixiesetInput,
-        selectionAllowance: parseInt(allowanceInput, 10) || project.packageCount,
-        extraPhotoPrice: parseInt(extraPriceInput, 10) || 0,
-      }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["/api/campaign"] });
-      toast({ title: "Selection fields saved" });
-    },
-    onError: (e: any) => toast({ title: "Save failed", description: e.message, variant: "destructive" }),
-  });
-
-  const sendSelectionEmailMutation = useMutation({
-    mutationFn: () => campaignFetch("POST", `/api/campaign/projects/${project.id}/email/selection`, {}),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["/api/campaign"] });
-      toast({ title: "Selection email sent" });
-    },
-    onError: (e: any) => toast({ title: "Email failed", description: e.message, variant: "destructive" }),
-  });
-
-  const collectFilesMutation = useMutation({
-    mutationFn: () => campaignFetch("POST", `/api/campaign/projects/${project.id}/files-collected`, {}),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["/api/campaign"] });
-      toast({ title: "Files marked as collected", description: "Photos-ready email will fire when conditions are met." });
-    },
-    onError: (e: any) => toast({ title: "Failed", description: e.message, variant: "destructive" }),
-  });
-
-  // ── Selection panel derived values ──────────────────────────────────────
-  const clientDone = !!project.clientSelectionDoneAt;
-  const selAllowance = project.selectionAllowance ?? project.packageCount ?? 0;
-  const selExtras = clientDone && project.clientSelectionCount != null
-    ? Math.max(0, project.clientSelectionCount - selAllowance)
-    : 0;
-  const selExtrasTotal = selExtras * (project.extraPhotoPrice ?? 0);
 
   return (
     <>
@@ -1341,6 +1285,19 @@ function ProjectRow({ project, onCount, onAssign, onMove, onEmail, onMarkDeliver
               ✓
             </Button>
           </div>
+        </td>
+        <td className="py-2 px-3">
+          <Input
+            placeholder="https://pixieset.com/…"
+            value={pixiesetInput}
+            onChange={(e) => setPixiesetInput(e.target.value)}
+            onBlur={() => {
+              if (pixiesetInput !== (project.pixiesetLink || "")) {
+                savePixiesetMutation.mutate();
+              }
+            }}
+            className="h-7 text-xs w-40"
+          />
         </td>
         <td className="py-2 px-3">
           {project.assignedRetoucherId ? (
@@ -1453,191 +1410,9 @@ function ProjectRow({ project, onCount, onAssign, onMove, onEmail, onMarkDeliver
               </TooltipTrigger>
               <TooltipContent>{project.clientChatToken ? "Open client chat" : "Chat not started yet (send Email 1 first)"}</TooltipContent>
             </Tooltip>
-            {/* Selection panel toggle */}
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  size="sm"
-                  variant={selExpanded ? "secondary" : "ghost"}
-                  className="h-7 w-7 p-0"
-                  onClick={() => setSelExpanded((v) => !v)}
-                >
-                  <Image className="h-3 w-3" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>Selection flow</TooltipContent>
-            </Tooltip>
           </div>
         </td>
       </tr>
-
-      {/* ── Selection panel (collapsible sub-row) ──────────────────────────── */}
-      {selExpanded && (
-        <tr className="bg-muted/20 border-b">
-          <td colSpan={9} className="px-4 py-3">
-            <div className="flex items-center gap-2 mb-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-              <Image className="h-3.5 w-3.5" />
-              Photo Selection
-            </div>
-
-            {/* Fields row */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-3">
-              <div>
-                <label className="text-xs font-medium block mb-1">Pixieset gallery link</label>
-                <Input
-                  placeholder="https://gallery.pixieset.com/…"
-                  value={pixiesetInput}
-                  onChange={(e) => setPixiesetInput(e.target.value)}
-                  className="h-7 text-xs"
-                />
-              </div>
-              <div>
-                <label className="text-xs font-medium block mb-1">Selection allowance (photos)</label>
-                <Input
-                  type="number"
-                  min={0}
-                  placeholder={String(project.packageCount ?? 0)}
-                  value={allowanceInput}
-                  onChange={(e) => setAllowanceInput(e.target.value)}
-                  className="h-7 text-xs"
-                />
-              </div>
-              <div>
-                <label className="text-xs font-medium block mb-1">Extra photo price (R)</label>
-                <Input
-                  type="number"
-                  min={0}
-                  placeholder="0"
-                  value={extraPriceInput}
-                  onChange={(e) => setExtraPriceInput(e.target.value)}
-                  className="h-7 text-xs"
-                />
-              </div>
-            </div>
-
-            {/* Save + Send buttons */}
-            <div className="flex gap-2 mb-4 flex-wrap">
-              <Button
-                size="sm"
-                variant="outline"
-                className="h-7 text-xs"
-                onClick={() => saveFieldsMutation.mutate()}
-                disabled={saveFieldsMutation.isPending}
-              >
-                {saveFieldsMutation.isPending ? "Saving…" : "Save fields"}
-              </Button>
-
-              <Button
-                size="sm"
-                className="h-7 text-xs"
-                onClick={() => sendSelectionEmailMutation.mutate()}
-                disabled={sendSelectionEmailMutation.isPending || !project.clientEmail || !!project.selectionEmailSentAt}
-              >
-                <Mail className="h-3 w-3 mr-1" />
-                {project.selectionEmailSentAt
-                  ? `Sent ${new Date(project.selectionEmailSentAt).toLocaleDateString("en-ZA", { day: "numeric", month: "short" })}`
-                  : sendSelectionEmailMutation.isPending
-                  ? "Sending…"
-                  : "Send Selection Email"}
-              </Button>
-              <SelectionTierDot tier={project.selectionReminderTier} sentAt={project.selectionEmailSentAt as any} />
-            </div>
-
-            {/* Selection Done list */}
-            {clientDone && project.clientSelectionCount != null ? (
-              <div className="bg-white dark:bg-card border rounded-lg p-3">
-                <p className="text-xs font-semibold mb-2 flex items-center gap-1 text-green-700">
-                  <CheckCircle2 className="h-3.5 w-3.5" />
-                  Client selection received
-                </p>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs mb-3">
-                  <div>
-                    <span className="text-muted-foreground block">Selected</span>
-                    <span className="font-bold text-sm">{project.clientSelectionCount}</span>
-                  </div>
-                  <div>
-                    <span className="text-muted-foreground block">Allowance</span>
-                    <span className="font-bold text-sm">{selAllowance}</span>
-                  </div>
-                  <div>
-                    <span className="text-muted-foreground block">Extras</span>
-                    <span className={`font-bold text-sm ${selExtras > 0 ? "text-orange-600" : "text-green-600"}`}>
-                      {selExtras > 0 ? `+${selExtras}` : "None"}
-                    </span>
-                  </div>
-                  {selExtras > 0 && (
-                    <div>
-                      <span className="text-muted-foreground block">Extras total</span>
-                      <span className="font-bold text-sm text-orange-600">R{selExtrasTotal}</span>
-                    </div>
-                  )}
-                </div>
-
-                {/* Admit — confirm client count and trigger Drive folder creation */}
-                <div className="flex items-center gap-2 mb-3 flex-wrap">
-                  <label className="text-xs font-medium text-muted-foreground shrink-0">Confirmed count:</label>
-                  <Input
-                    type="number"
-                    min={0}
-                    className="h-7 w-20 text-xs"
-                    value={countInput}
-                    onChange={(e) => setCountInput(e.target.value)}
-                  />
-                  <Button
-                    size="sm"
-                    className="h-7 text-xs bg-green-600 hover:bg-green-700 text-white"
-                    onClick={() => {
-                      const n = parseInt(countInput, 10);
-                      if (!isNaN(n) && n >= 0) onCount(project.id, n);
-                    }}
-                    disabled={isPending || !countInput}
-                  >
-                    <CheckCircle2 className="h-3 w-3 mr-1" />
-                    Admit
-                  </Button>
-                  {project.selectedPhotoCount ? (
-                    <span className="text-xs text-green-700">
-                      ✓ Admitted ({project.selectedPhotoCount} photos{project.driveFolderId ? " · Drive folder created" : ""})
-                    </span>
-                  ) : (
-                    <span className="text-xs text-muted-foreground">Drive folder created automatically on admit</span>
-                  )}
-                </div>
-
-                <div className="flex items-center gap-2">
-                  {project.filesCollected ? (
-                    <span className="flex items-center gap-1 text-xs text-green-700 font-medium">
-                      <HardDrive className="h-3.5 w-3.5" />
-                      Files collected{project.filesCollectedAt
-                        ? ` on ${new Date(project.filesCollectedAt).toLocaleDateString("en-ZA", { day: "numeric", month: "short" })}`
-                        : ""}
-                    </span>
-                  ) : (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="h-7 text-xs border-orange-300 text-orange-700 hover:bg-orange-50"
-                      onClick={() => collectFilesMutation.mutate()}
-                      disabled={collectFilesMutation.isPending}
-                    >
-                      <HardDrive className="h-3 w-3 mr-1" />
-                      {collectFilesMutation.isPending ? "Marking…" : "Mark Files Collected"}
-                    </Button>
-                  )}
-                  {project.photosReadyEmailSentAt && (
-                    <span className="text-xs text-green-600 flex items-center gap-1">
-                      <MessageCircle className="h-3 w-3" />
-                      Photos-ready email sent
-                    </span>
-                  )}
-                </div>
-              </div>
-            ) : project.selectionEmailSentAt ? (
-              <p className="text-xs text-muted-foreground italic">Waiting for client to complete their selection…</p>
-            ) : null}
-          </td>
-        </tr>
-      )}
     </>
   );
 }

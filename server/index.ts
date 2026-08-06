@@ -7,7 +7,7 @@ import { startAutoSync } from "./autoSyncScheduler";
 import { startGoogleReviewScheduler } from "./googleReviewScheduler";
 import { startCampaignCron, wireUpCampaignListeners } from "./services/campaignScheduler";
 import { backfillWranglerNotesToInspos } from "./migrations/backfillWranglerNotesToInspos";
-import { startNoelSelectionScheduler } from "./services/noelSelectionScheduler";
+
 
 const app = express();
 app.use(express.json({ limit: "10mb" }));
@@ -89,7 +89,5 @@ app.use((req, res, next) => {
     // Start Noël Set 2026 campaign pacing cron (runs nightly at 02:00)
     startCampaignCron();
 
-    // Start Noël selection reminder scheduler (polls every 15 min)
-    startNoelSelectionScheduler();
   });
 })();

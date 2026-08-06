@@ -109,14 +109,6 @@ export const projects = pgTable("projects", {
   // Noël photo selection flow
   pixiesetLink: text("pixieset_link"),
   selectionAllowance: integer("selection_allowance"),
-  selectionEmailSentAt: timestamp("selection_email_sent_at"),
-  selectionReminderTier: integer("selection_reminder_tier").notNull().default(0),
-  clientSelectionCount: integer("client_selection_count"),
-  clientSelectionDoneAt: timestamp("client_selection_done_at"),
-  filesCollected: boolean("files_collected").notNull().default(false),
-  filesCollectedAt: timestamp("files_collected_at"),
-  filesCollectedBy: text("files_collected_by"),
-  photosReadyEmailSentAt: timestamp("photos_ready_email_sent_at"),
 });
 
 // ShootTracker metadata table (1:1 with projects)

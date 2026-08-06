@@ -8,10 +8,9 @@ import {
   sendNoelDeliveryEstimateEmail,
   sendNoelPhotosReadyEmail,
   sendNoelSurveyEmail,
-  sendNoelSelectionEmail,
 } from "./services/emailService";
 import { UserRoles } from "@shared/schema";
-import { syncNoelCalendar, checkAndSendPhotosReadyEmail } from "./campaignCalendarSync";
+import { syncNoelCalendar } from "./campaignCalendarSync";
 import { createFolder, makeFolderPublic } from "./services/googleDriveService";
 
 const CAMPAIGN_ROLES = [
@@ -553,138 +552,15 @@ export function registerCampaignRoutes(app: Express): void {
     }
   });
 
-  // ─── Noël Photo Selection Flow ───────────────────────────────────────────────
-
-  // GET /api/noel-selection/:token — public: client fetches their selection page data
-  app.get("/api/noel-selection/:token", async (req: Request, res: Response) => {
-    try {
-      const { token } = req.params;
-      const tokenRecord = await storage.getClientAuthTokenByToken(token);
-      if (!tokenRecord) return res.status(404).json({ error: "Invalid or expired link" });
-      const project = await storage.getProject(tokenRecord.projectId);
-      if (!project) return res.status(404).json({ error: "Project not found" });
-      const whatsappSetting = await storage.getAppSetting("whatsapp_admin_number").catch(() => null);
-      const whatsappAdminNumber = (whatsappSetting?.value as string | undefined)?.replace(/^"|"$/g, "") || "27000000000";
-      res.json({
-        clientName: project.clientName,
-        selectionAllowance: project.selectionAllowance ?? project.packageCount ?? 0,
-        pixiesetLink: project.pixiesetLink ?? null,
-        extraPhotoPrice: project.extraPhotoPrice ?? 0,
-        whatsappAdminNumber,
-        clientSelectionCount: project.clientSelectionCount ?? null,
-        clientSelectionDoneAt: project.clientSelectionDoneAt ?? null,
-      });
-    } catch (err: any) {
-      res.status(500).json({ error: err.message });
-    }
-  });
-
-  // POST /api/noel-selection/:token/submit — public: client submits their count
-  app.post("/api/noel-selection/:token/submit", async (req: Request, res: Response) => {
-    try {
-      const { token } = req.params;
-      const { clientSelectionCount } = req.body;
-      if (typeof clientSelectionCount !== "number" || clientSelectionCount < 0) {
-        return res.status(400).json({ error: "clientSelectionCount must be a non-negative number" });
-      }
-      const tokenRecord = await storage.getClientAuthTokenByToken(token);
-      if (!tokenRecord) return res.status(404).json({ error: "Invalid or expired link" });
-      const project = await storage.getProject(tokenRecord.projectId);
-      if (!project) return res.status(404).json({ error: "Project not found" });
-      if (project.clientSelectionDoneAt) {
-        return res.status(409).json({ error: "Selection already submitted" });
-      }
-      await storage.updateProject(project.id, {
-        clientSelectionCount,
-        clientSelectionDoneAt: new Date(),
-      });
-      recordFired("noel_selection_submit", `Client ${project.clientName} submitted count ${clientSelectionCount}`);
-      res.json({ success: true });
-    } catch (err: any) {
-      res.status(500).json({ error: err.message });
-    }
-  });
-
-  // PATCH /api/campaign/projects/:id/selection-fields — wrangler: save pixiesetLink, selectionAllowance, extraPhotoPrice
-  app.patch("/api/campaign/projects/:id/selection-fields", verifyCampaignCockpit, async (req: Request, res: Response) => {
+  // PATCH /api/campaign/projects/:id/pixieset-link — wrangler: save Pixieset gallery URL (team reference only)
+  app.patch("/api/campaign/projects/:id/pixieset-link", verifyCampaignCockpit, async (req: Request, res: Response) => {
     try {
       const { id } = req.params;
-      const { pixiesetLink, selectionAllowance, extraPhotoPrice } = req.body;
+      const { pixiesetLink } = req.body;
       const project = await storage.getProject(id);
       if (!project || !project.campaignId) return res.status(404).json({ error: "Campaign project not found" });
-      const updates: Record<string, any> = {};
-      if (typeof pixiesetLink === "string") updates.pixiesetLink = pixiesetLink;
-      if (typeof selectionAllowance === "number") updates.selectionAllowance = selectionAllowance;
-      if (typeof extraPhotoPrice === "number") updates.extraPhotoPrice = extraPhotoPrice;
-      const updated = await storage.updateProject(id, updates);
-      res.json(updated);
-    } catch (err: any) {
-      res.status(500).json({ error: err.message });
-    }
-  });
-
-  // POST /api/campaign/projects/:id/email/selection — wrangler: send selection invite email
-  app.post("/api/campaign/projects/:id/email/selection", verifyCampaignCockpit, async (req: Request, res: Response) => {
-    try {
-      const { id } = req.params;
-      const project = await storage.getProject(id);
-      if (!project || !project.campaignId) return res.status(404).json({ error: "Campaign project not found" });
-      if (!project.clientEmail) return res.status(400).json({ error: "No client email on this project" });
-      if (!project.pixiesetLink) return res.status(400).json({ error: "Set a Pixieset link before sending the selection email" });
-
-      // Create or reuse client auth token
-      const { randomUUID } = await import("crypto");
-      const base = process.env.APP_URL?.replace(/\/$/, "") ||
-        (process.env.REPLIT_DEV_DOMAIN ? `https://${process.env.REPLIT_DEV_DOMAIN}` : "http://localhost:5000");
-
-      let tokenRecord = await storage.getClientAuthTokenByProjectId(project.id).catch(() => null);
-      if (!tokenRecord) {
-        const expiresAt = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000); // 1 year
-        tokenRecord = await storage.createClientAuthToken({
-          email: project.clientEmail,
-          projectId: project.id,
-          token: randomUUID(),
-          expiresAt,
-        });
-      }
-
-      const selectionLink = `${base}/noel-select/${tokenRecord.token}`;
-      const allowance = project.selectionAllowance ?? project.packageCount ?? 0;
-
-      await sendNoelSelectionEmail(project.id, project.clientName, project.clientEmail, selectionLink, allowance);
-
-      await storage.updateProject(id, {
-        selectionEmailSentAt: new Date(),
-        selectionReminderTier: 0,
-      });
-
-      recordFired("noel_selection_email", `Selection invite sent to ${project.clientEmail}`);
-      res.json({ success: true, selectionLink });
-    } catch (err: any) {
-      res.status(500).json({ error: err.message });
-    }
-  });
-
-  // POST /api/campaign/projects/:id/files-collected — wrangler: mark files collected to hard drive
-  app.post("/api/campaign/projects/:id/files-collected", verifyCampaignCockpit, async (req: Request, res: Response) => {
-    try {
-      const { id } = req.params;
-      const collectedBy = (req.headers["x-usena-user-id"] as string) || "wrangler";
-      const project = await storage.getProject(id);
-      if (!project || !project.campaignId) return res.status(404).json({ error: "Campaign project not found" });
-
-      const updated = await storage.updateProject(id, {
-        filesCollected: true,
-        filesCollectedAt: new Date(),
-        filesCollectedBy: collectedBy,
-      });
-
-      // Trigger photos-ready email check (fires if conditions are met)
-      checkAndSendPhotosReadyEmail(id).catch(err =>
-        console.error("[FilesCollected] checkAndSendPhotosReadyEmail error:", err.message)
-      );
-
-      recordFired("noel_files_collected", `Files collected for ${project.clientName} by ${collectedBy}`);
+      if (typeof pixiesetLink !== "string") return res.status(400).json({ error: "pixiesetLink must be a string" });
+      const updated = await storage.updateProject(id, { pixiesetLink });
       res.json(updated);
     } catch (err: any) {
       res.status(500).json({ error: err.message });
