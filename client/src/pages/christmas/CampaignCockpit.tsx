@@ -173,8 +173,15 @@ export default function CampaignCockpit() {
   const retouchers: { id: string; name: string }[] = useMemo(() => {
     if (!usersData) return [];
     return usersData
-      .filter((u: any) => u.role && (u.role.toLowerCase().includes("retoucher") || u.role === "LeadRetoucher"))
-      .map((u: any) => ({ id: u.id, name: u.username || u.name || u.id }));
+      .filter(
+        (u: any) =>
+          u.role &&
+          u.role.toLowerCase().includes("retoucher") &&
+          // System/service accounts are not real retouchers
+          u.id !== "workflow" &&
+          u.username !== "workflow"
+      )
+      .map((u: any) => ({ id: u.id, name: u.name || u.username || u.id }));
   }, [usersData]);
 
   const countMutation = useMutation({
@@ -482,6 +489,13 @@ export default function CampaignCockpit() {
                           <ProjectRow
                             key={project.id}
                             project={project}
+                            retoucherName={
+                              project.assignedRetoucherId
+                                ? retouchers.find((r) => r.id === project.assignedRetoucherId)?.name ||
+                                  retouchers.find((r) => r.id === project.assignedTo)?.name ||
+                                  "Unknown"
+                                : undefined
+                            }
                             onCount={(id, count) => countMutation.mutate({ id, count })}
                             onAssign={(id) => {
                               setAssignProjectId(id);
@@ -1345,6 +1359,7 @@ function MoveRipplePreview({ newDate, project }: { newDate: string; project?: Pr
 // ─────────────────────── Project Row ───────────────────────────
 
 interface ProjectRowProps {
+  retoucherName?: string;
   project: CampaignProject;
   onCount: (id: string, count: number) => void;
   onAssign: (id: string) => void;
@@ -1354,7 +1369,7 @@ interface ProjectRowProps {
   isPending: boolean;
 }
 
-function ProjectRow({ project, onCount, onAssign, onMove, onEmail, onMarkDelivered, isPending }: ProjectRowProps) {
+function ProjectRow({ project, retoucherName, onCount, onAssign, onMove, onEmail, onMarkDelivered, isPending }: ProjectRowProps) {
   const { toast } = useToast();
   const qc = useQueryClient();
   const [countInput, setCountInput] = useState(
@@ -1449,7 +1464,7 @@ function ProjectRow({ project, onCount, onAssign, onMove, onEmail, onMarkDeliver
         <td className="py-2 px-3">
           {project.assignedRetoucherId ? (
             <button onClick={() => onAssign(project.id)} className="text-sm hover:underline text-primary">
-              {project.assignedRetoucherId}
+              {retoucherName || "Unknown"}
             </button>
           ) : (
             <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => onAssign(project.id)}>

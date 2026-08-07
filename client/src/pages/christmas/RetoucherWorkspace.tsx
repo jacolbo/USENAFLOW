@@ -10,6 +10,7 @@
  *  - Team Lanes: admin/lead reassignment board (drag between retouchers)
  */
 import { useState } from "react";
+import { useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { Badge } from "@/components/ui/badge";
@@ -98,11 +99,16 @@ const STATUS_COLORS: Record<string, string> = {
 };
 
 
-const ALL_RETOUCHERS = [
-  { id: "Retoucher1", name: "Retoucher 1" },
-  { id: "Retoucher2", name: "Retoucher 2" },
-  { id: "Retoucher3", name: "Retoucher 3" },
-];
+// Retoucher list is loaded dynamically from /api/users (same rules as the cockpit):
+// role contains "retoucher", excluding the "workflow" system account.
+function isRealRetoucher(u: any): boolean {
+  return (
+    !!u.role &&
+    u.role.toLowerCase().includes("retoucher") &&
+    u.id !== "workflow" &&
+    u.username !== "workflow"
+  );
+}
 
 const UNASSIGNED_LANE = "__unassigned__";
 
@@ -136,6 +142,24 @@ export default function RetoucherWorkspace() {
   // Day-move warning dialog state
   const [pendingMove, setPendingMove] = useState<{ projectId: string; targetDate: string; preview: MovePreview } | null>(null);
 
+  // Live retoucher list — same source as the cockpit, so the two screens never disagree
+  const { data: usersData } = useQuery<any[]>({
+    queryKey: ["/api/users"],
+    queryFn: async () => {
+      const res = await fetch("/api/users", {
+        headers: { "x-usena-role": getRole(), "x-usena-user-id": getUserId() },
+      });
+      if (!res.ok) throw new Error("Failed to load users");
+      return res.json();
+    },
+  });
+  const allRetouchers: { id: string; name: string }[] = useMemo(() => {
+    if (!usersData) return [];
+    return usersData
+      .filter(isRealRetoucher)
+      .map((u: any) => ({ id: u.id, name: u.name || u.username || u.id }));
+  }, [usersData]);
+
   const { data: projects = [], isLoading } = useQuery<Project[]>({
     queryKey: ["/api/campaign/projects"],
     queryFn: async () => {
@@ -149,7 +173,7 @@ export default function RetoucherWorkspace() {
 
   const assignMutation = useMutation({
     mutationFn: ({ id, retoucherId }: { id: string; retoucherId: string }) => {
-      const r = ALL_RETOUCHERS.find((x) => x.id === retoucherId);
+      const r = allRetouchers.find((x) => x.id === retoucherId);
       return workspaceFetch("PATCH", `/api/campaign/projects/${id}/assign`, {
         retoucherId,
         retoucherName: r?.name || retoucherId,
@@ -311,7 +335,7 @@ export default function RetoucherWorkspace() {
 
   const unassigned = myProjects.filter((p) => !p.assignedRetoucherId && !p.assignedTo);
   const retoucherLanes = isAdminLead
-    ? ALL_RETOUCHERS.map((r) => ({
+    ? allRetouchers.map((r) => ({
         ...r,
         projects: myProjects.filter((p) => p.assignedRetoucherId === r.id || p.assignedTo === r.id),
       }))
