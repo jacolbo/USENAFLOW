@@ -326,7 +326,7 @@ export async function runNightlyPacing(): Promise<void> {
  *  2. Flip status → Delivered
  *  3. Emit project.delivered
  *  4. Send Email 2 (Photos Ready) + automated "photos ready" client chat message
- *  5. Schedule Email 3 (Survey) after campaign.surveyDelayDays
+ *  5. Schedule Email 3 (Survey) 5 minutes after the photos-ready email
  */
 async function runDeliveryChain(projectId: string, campaignId: string): Promise<void> {
   if (!isEnabled("noel_delivery_chain")) return;
@@ -389,17 +389,23 @@ async function runDeliveryChain(projectId: string, campaignId: string): Promise<
   }
 }
 
+const pendingSurveyTimers = new Set<string>();
+
 function scheduleSurveyEmail(projectId: string, campaignId: string): void {
   if (!isEnabled("noel_email_survey")) return;
+  if (pendingSurveyTimers.has(projectId)) return; // already scheduled — avoid duplicate survey sends
+  pendingSurveyTimers.add(projectId);
   (async () => {
     try {
-      const campaign = await storage.getCampaign(campaignId);
-      const delayMs = (campaign?.surveyDelayDays ?? 3) * 24 * 60 * 60 * 1000;
-      console.log(`🎄 [DeliveryChain] Email 3 scheduled in ${campaign?.surveyDelayDays ?? 3} days for project ${projectId}`);
+      const delayMs = 5 * 60 * 1000; // 5 minutes after the photos-ready email
+      console.log(`🎄 [DeliveryChain] Email 3 scheduled in 5 minutes for project ${projectId}`);
 
       // Create/reuse a persisted survey record so the token-based survey + Google review URLs are valid
       const p = await storage.getProject(projectId);
-      if (!p || !p.clientEmail) return;
+      if (!p || !p.clientEmail) {
+        pendingSurveyTimers.delete(projectId);
+        return;
+      }
       let surveyRecord = await storage.getSurveyByProjectId(projectId).catch(() => null);
       if (!surveyRecord) {
         const { randomUUID } = await import("crypto");
@@ -424,6 +430,7 @@ function scheduleSurveyEmail(projectId: string, campaignId: string): void {
         }
       }, delayMs);
     } catch (err: any) {
+      pendingSurveyTimers.delete(projectId);
       console.error(`🎄 [DeliveryChain] Survey schedule error:`, err.message);
     }
   })();

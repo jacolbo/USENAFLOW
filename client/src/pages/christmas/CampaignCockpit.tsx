@@ -151,7 +151,6 @@ export default function CampaignCockpit() {
   const [assignRetoucher, setAssignRetoucher] = useState("");
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [reviewMode, setReviewMode] = useState("spot-check");
-  const [surveyDelayDays, setSurveyDelayDays] = useState(3);
   const [keywords, setKeywords] = useState<string[]>([...CAMPAIGN_NOEL_KEYWORDS]);
   const [newKeyword, setNewKeyword] = useState("");
   // Archive confirmation: { year, message }
@@ -249,7 +248,7 @@ export default function CampaignCockpit() {
 
 
   const settingsMutation = useMutation({
-    mutationFn: () => campaignFetch("PUT", "/api/campaign/settings", { surveyDelayDays, reviewMode, keywords }),
+    mutationFn: () => campaignFetch("PUT", "/api/campaign/settings", { reviewMode, keywords }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/campaign"] });
       setSettingsOpen(false);
@@ -351,7 +350,6 @@ export default function CampaignCockpit() {
               size="sm"
               onClick={() => {
                 setReviewMode(campaign.reviewMode || "spot-check");
-                setSurveyDelayDays(campaign.surveyDelayDays || 3);
                 setKeywords(campaign.keywords?.length ? [...campaign.keywords] : [...CAMPAIGN_NOEL_KEYWORDS]);
                 setSettingsOpen(true);
               }}
@@ -796,14 +794,9 @@ export default function CampaignCockpit() {
                 </Select>
               </div>
               <div>
-                <label className="text-sm font-medium mb-1 block">Survey Delay (days after delivery)</label>
-                <Input
-                  type="number"
-                  min={0}
-                  max={30}
-                  value={surveyDelayDays}
-                  onChange={(e) => setSurveyDelayDays(Number(e.target.value))}
-                />
+                <p className="text-xs text-muted-foreground">
+                  Survey email is sent automatically 5 minutes after the photos-ready email.
+                </p>
               </div>
               <div>
                 <label className="text-sm font-medium mb-1 block">Christmas Shoot Keywords</label>

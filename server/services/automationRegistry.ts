@@ -1399,10 +1399,10 @@ register({
 register({
   id: 'noel_email_survey',
   name: 'Noël Email 3 — Post-Delivery Survey',
-  description: 'Sends a post-delivery satisfaction survey email to the Noël client. Survey delay is configurable per campaign.',
+  description: 'Sends a post-delivery satisfaction survey email to the Noël client, automatically 5 minutes after the Photos Ready email.',
   type: 'communication',
   category: 'Communication',
-  trigger: 'Admin sends Email 3 from Campaign Cockpit (after campaign.surveyDelayDays)',
+  trigger: 'Admin sends Email 3 from Campaign Cockpit (auto-sent 5 minutes after Email 2)',
   actions: ['Send Noël survey email', 'Log email as NOEL_SURVEY'],
   connectsTo: ['ai_email_variation'],
   apiRoute: '/api/campaign/projects/:id/email/survey',
@@ -1412,11 +1412,11 @@ register({
 register({
   id: 'noel_delivery_chain',
   name: 'Noël Delivery Chain',
-  description: 'Full campaign delivery chain triggered when Drive confirms photo upload. Flips project status to Delivered, emits project.delivered, sends Email 2 (Photos Ready), and schedules Email 3 (Survey) after surveyDelayDays. Skips Email 2 if the standard delivery email was already sent.',
+  description: 'Full campaign delivery chain triggered when Drive confirms photo upload. Flips project status to Delivered, emits project.delivered, sends Email 2 (Photos Ready), and schedules Email 3 (Survey) 5 minutes later. Skips Email 2 if the standard delivery email was already sent.',
   type: 'drive_monitor',
   category: 'Delivery & Gallery',
   trigger: 'project.driveComplete event (Drive auto-detection) or manual mark-delivered',
-  actions: ['Flip status to Delivered', 'Emit project.delivered', 'Send Email 2 (Photos Ready)', 'Schedule Email 3 after delay'],
+  actions: ['Flip status to Delivered', 'Emit project.delivered', 'Send Email 2 (Photos Ready)', 'Schedule Email 3 five minutes later'],
   connectsTo: ['noel_email_ready', 'noel_email_survey', 'noel_pacing_engine'],
 });
 

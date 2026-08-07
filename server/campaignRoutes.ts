@@ -480,9 +480,8 @@ export function registerCampaignRoutes(app: Express): void {
     try {
       const campaign = await storage.getActiveCampaign();
       if (!campaign) return res.status(404).json({ error: "No active campaign" });
-      const { surveyDelayDays, reviewMode, keywords } = req.body;
+      const { reviewMode, keywords } = req.body;
       const updates: any = {};
-      if (typeof surveyDelayDays === "number") updates.surveyDelayDays = surveyDelayDays;
       if (["full", "spot-check", "ai-gate-only"].includes(reviewMode)) updates.reviewMode = reviewMode;
       if (Array.isArray(keywords) && keywords.length > 0) {
         updates.keywords = keywords.map((k: string) => String(k).trim().toLowerCase()).filter(Boolean);
