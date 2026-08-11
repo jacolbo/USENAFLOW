@@ -1,6 +1,7 @@
 import { storage } from './storage';
 import { listCalendars, fetchCalendarEvents } from './services/googleCalendar';
 import { CAMPAIGN_NOEL_KEYWORDS } from '@shared/schema';
+import { calculateNoelDueDate } from './services/campaignScheduler';
 
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -144,7 +145,10 @@ export async function syncNoelCalendar(): Promise<NoelSyncResult> {
               ? event.end.getTime() - event.start.getTime()
               : 0;
           const isMultiDay = durationMs >= 2 * 24 * 60 * 60 * 1000;
-          const promisedDeliveryDate = isMultiDay ? event.end : event.start;
+          // Delivery promise = last shoot day + 5 working days (capped at 19 Dec),
+          // NOT the shoot date itself.
+          const lastShootDay = isMultiDay && event.end ? event.end : event.start;
+          const promisedDeliveryDate = calculateNoelDueDate(lastShootDay);
 
           // ── Dedup: campaign-scoped primary key (calendarEventId) ─────────────
           const existingByCampaignEventId = campaignByEventId.get(event.id);
