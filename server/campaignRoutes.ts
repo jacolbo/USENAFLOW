@@ -239,6 +239,67 @@ export function registerCampaignRoutes(app: Express): void {
     }
   });
 
+  // DELETE /api/campaign/projects/:id — soft delete into the Bin (Admin/Lead only)
+  app.delete("/api/campaign/projects/:id", verifyCampaignCockpit, async (req: Request, res: Response) => {
+    try {
+      const role = req.headers["x-usena-role"] as string;
+      const userId = req.headers["x-usena-user-id"] as string;
+      if (![UserRoles.ADMIN, UserRoles.LEAD_RETOUCHER].includes(role as any)) {
+        return res.status(403).json({ error: "Only Admin or Lead can delete projects" });
+      }
+      const project = await storage.getProject(req.params.id);
+      if (!project || !project.campaignId) return res.status(404).json({ error: "Campaign project not found" });
+      if ((project as any).deletedAt) return res.status(400).json({ error: "Project is already in the bin" });
+      const updated = await storage.updateProject(req.params.id, {
+        deletedAt: new Date(),
+        deletedBy: userId,
+      } as any);
+      recordFired("noel_work_scheduler", `Project deleted to bin: ${project.clientName}`);
+      res.json({ project: updated });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // GET /api/campaign/bin — deleted projects (Admin/Lead only)
+  app.get("/api/campaign/bin", verifyCampaignCockpit, async (req: Request, res: Response) => {
+    try {
+      const role = req.headers["x-usena-role"] as string;
+      if (![UserRoles.ADMIN, UserRoles.LEAD_RETOUCHER].includes(role as any)) {
+        return res.status(403).json({ error: "Only Admin or Lead can view the bin" });
+      }
+      const deleted = await storage.getDeletedProjects();
+      // Newest deletions first
+      deleted.sort((a: any, b: any) => new Date(b.deletedAt).getTime() - new Date(a.deletedAt).getTime());
+      res.json(deleted);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // POST /api/campaign/projects/:id/restore — restore from the Bin.
+  // Dates are never touched on delete, so the project comes back with its
+  // original planned work date and delivery promise intact.
+  app.post("/api/campaign/projects/:id/restore", verifyCampaignCockpit, async (req: Request, res: Response) => {
+    try {
+      const role = req.headers["x-usena-role"] as string;
+      if (![UserRoles.ADMIN, UserRoles.LEAD_RETOUCHER].includes(role as any)) {
+        return res.status(403).json({ error: "Only Admin or Lead can restore projects" });
+      }
+      const project = await storage.getProjectIncludingDeleted(req.params.id);
+      if (!project || !project.campaignId) return res.status(404).json({ error: "Campaign project not found" });
+      if (!project.deletedAt) return res.status(400).json({ error: "Project is not in the bin" });
+      const updated = await storage.updateProject(req.params.id, {
+        deletedAt: null,
+        deletedBy: null,
+      } as any);
+      recordFired("noel_work_scheduler", `Project restored from bin: ${project.clientName}`);
+      res.json({ project: updated });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   // GET /api/campaign/projects/:id/move/preview — ripple preview (no DB write)
   app.get("/api/campaign/projects/:id/move/preview", verifyCampaignWorkspace, async (req: Request, res: Response) => {
     try {

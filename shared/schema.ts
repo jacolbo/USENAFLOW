@@ -85,6 +85,8 @@ export const projects = pgTable("projects", {
   driveAccessGrantedAt: timestamp("drive_access_granted_at"),
   driveLastCheckedAt: timestamp("drive_last_checked_at"),
   driveClientAccessedAt: timestamp("drive_client_accessed_at"),
+  deletedAt: timestamp("deleted_at"),
+  deletedBy: text("deleted_by"),
   chatArchived: boolean("chat_archived").notNull().default(false),
   chatArchivedAt: timestamp("chat_archived_at"),
   chatArchivedBy: text("chat_archived_by"),

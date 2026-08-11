@@ -32,6 +32,8 @@ import {
   FolderOpen,
   FolderX,
   MessageCircle,
+  Trash2,
+  RotateCcw,
 } from "lucide-react";
 import type { Project, Campaign } from "@shared/schema";
 import { CAMPAIGN_NOEL_KEYWORDS } from "@shared/schema";
@@ -155,6 +157,10 @@ export default function CampaignCockpit() {
   const [newKeyword, setNewKeyword] = useState("");
   // Archive confirmation: { year, message }
   const [archiveConfirm, setArchiveConfirm] = useState<{ year: number } | null>(null);
+  // Bin (soft-deleted projects)
+  const [binOpen, setBinOpen] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState<{ id: string; name: string } | null>(null);
+  const isAdminLead = ["Admin", "LeadRetoucher"].includes(localStorage.getItem("userRole") || "Admin");
   // Lane drag state
   const [laneDragProjectId, setLaneDragProjectId] = useState<string | null>(null);
   const [laneDragOverId, setLaneDragOverId] = useState<string | null>(null);
@@ -267,6 +273,34 @@ export default function CampaignCockpit() {
     onError: (e: any) => toast({ title: "Archive failed", description: e.message, variant: "destructive" }),
   });
 
+  // Bin — deleted projects (loaded when the bin is opened)
+  const { data: binProjects = [] } = useQuery<CampaignProject[]>({
+    queryKey: ["/api/campaign/bin"],
+    queryFn: () => campaignFetch("GET", "/api/campaign/bin"),
+    enabled: binOpen && isAdminLead,
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => campaignFetch("DELETE", `/api/campaign/projects/${id}`),
+    onSuccess: () => {
+      setDeleteConfirm(null);
+      qc.invalidateQueries({ queryKey: ["/api/campaign"] });
+      qc.invalidateQueries({ queryKey: ["/api/campaign/bin"] });
+      toast({ title: "Project moved to bin", description: "It can be restored from the Bin with its dates intact." });
+    },
+    onError: (e: any) => toast({ title: "Delete failed", description: e.message, variant: "destructive" }),
+  });
+
+  const restoreMutation = useMutation({
+    mutationFn: (id: string) => campaignFetch("POST", `/api/campaign/projects/${id}/restore`, {}),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["/api/campaign"] });
+      qc.invalidateQueries({ queryKey: ["/api/campaign/bin"] });
+      toast({ title: "Project restored", description: "Back on its original work date and delivery promise." });
+    },
+    onError: (e: any) => toast({ title: "Restore failed", description: e.message, variant: "destructive" }),
+  });
+
   const deliverMutation = useMutation({
     mutationFn: (id: string) => campaignFetch("POST", `/api/campaign/projects/${id}/mark-delivered`, {}),
     onSuccess: () => {
@@ -338,6 +372,11 @@ export default function CampaignCockpit() {
             <Button variant="outline" size="sm" onClick={() => refetch()}>
               <RefreshCw className="h-4 w-4 mr-1" /> Refresh
             </Button>
+            {isAdminLead && (
+              <Button variant="outline" size="sm" onClick={() => setBinOpen(true)}>
+                <Trash2 className="h-4 w-4 mr-1" /> Bin
+              </Button>
+            )}
             <Button
               variant="outline"
               size="sm"
@@ -506,6 +545,7 @@ export default function CampaignCockpit() {
                             }}
                             onEmail={(id, type) => emailMutation.mutate({ id, type })}
                             onMarkDelivered={(id) => deliverMutation.mutate(id)}
+                            onDelete={isAdminLead ? (id, name) => setDeleteConfirm({ id, name }) : undefined}
                             isPending={countMutation.isPending || emailMutation.isPending || deliverMutation.isPending}
                           />
                         ))
@@ -885,6 +925,75 @@ export default function CampaignCockpit() {
                 {archiveMutation.isPending ? "Archiving…" : `Archive ${archiveConfirm?.year} Shoots`}
               </Button>
             </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Delete Confirmation Dialog */}
+        <Dialog open={!!deleteConfirm} onOpenChange={(open) => { if (!open) setDeleteConfirm(null); }}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Trash2 className="h-5 w-5 text-red-600" /> Delete project?
+              </DialogTitle>
+            </DialogHeader>
+            <div className="space-y-3 text-sm">
+              <p>
+                <strong>{deleteConfirm?.name}</strong> will be moved to the Bin and disappear from all
+                views, schedules, and automations.
+              </p>
+              <p className="text-muted-foreground">
+                You can restore it later from the Bin — it comes back with its original work date and
+                delivery promise.
+              </p>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setDeleteConfirm(null)}>Cancel</Button>
+              <Button
+                variant="destructive"
+                onClick={() => deleteConfirm && deleteMutation.mutate(deleteConfirm.id)}
+                disabled={deleteMutation.isPending}
+              >
+                {deleteMutation.isPending ? "Deleting…" : "Move to Bin"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Bin Dialog — deleted projects with restore */}
+        <Dialog open={binOpen} onOpenChange={setBinOpen}>
+          <DialogContent className="max-w-2xl">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Trash2 className="h-5 w-5" /> Bin
+              </DialogTitle>
+            </DialogHeader>
+            {binProjects.length === 0 ? (
+              <p className="text-sm text-muted-foreground py-6 text-center">The bin is empty.</p>
+            ) : (
+              <div className="max-h-[60vh] overflow-y-auto space-y-2">
+                {binProjects.map((p: any) => (
+                  <div key={p.id} className="flex items-center justify-between gap-3 border rounded-lg p-3">
+                    <div className="min-w-0">
+                      <p className="font-medium truncate">{p.clientName}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {p.shootDate && <>Shoot {new Date(p.shootDate).toLocaleDateString("en-ZA", { day: "numeric", month: "short" })} · </>}
+                        {(p.promisedDeliveryDate || p.deliveryDueDate) && <>Due {new Date(p.promisedDeliveryDate || p.deliveryDueDate).toLocaleDateString("en-ZA", { day: "numeric", month: "short" })} · </>}
+                        Deleted {p.deletedAt ? new Date(p.deletedAt).toLocaleDateString("en-ZA", { day: "numeric", month: "short" }) : ""}
+                        {p.deletedBy ? ` by ${p.deletedBy}` : ""}
+                      </p>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={restoreMutation.isPending}
+                      onClick={() => restoreMutation.mutate(p.id)}
+                    >
+                      <RotateCcw className="h-3.5 w-3.5 mr-1" /> Restore
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
           </DialogContent>
         </Dialog>
       </div>
@@ -1359,10 +1468,11 @@ interface ProjectRowProps {
   onMove: (id: string) => void;
   onEmail: (id: string, type: "estimate" | "ready" | "survey") => void;
   onMarkDelivered: (id: string) => void;
+  onDelete?: (id: string, name: string) => void;
   isPending: boolean;
 }
 
-function ProjectRow({ project, retoucherName, onCount, onAssign, onMove, onEmail, onMarkDelivered, isPending }: ProjectRowProps) {
+function ProjectRow({ project, retoucherName, onCount, onAssign, onMove, onEmail, onMarkDelivered, onDelete, isPending }: ProjectRowProps) {
   const { toast } = useToast();
   const qc = useQueryClient();
   const [countInput, setCountInput] = useState(
@@ -1533,6 +1643,21 @@ function ProjectRow({ project, retoucherName, onCount, onAssign, onMove, onEmail
               </TooltipTrigger>
               <TooltipContent>{project.clientChatToken ? "Open client chat" : "Chat starts after Email 1 is sent"}</TooltipContent>
             </Tooltip>
+            {/* Delete to Bin (Admin/Lead) */}
+            {onDelete && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    size="sm" variant="ghost"
+                    className="h-7 w-7 p-0 text-red-500 hover:text-red-600 hover:bg-red-50"
+                    onClick={() => onDelete(project.id, project.clientName)}
+                  >
+                    <Trash2 className="h-3 w-3" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Delete (moves to Bin — restorable)</TooltipContent>
+              </Tooltip>
+            )}
           </div>
         </td>
       </tr>

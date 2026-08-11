@@ -29,7 +29,7 @@ export async function scanAllProjectFolders(): Promise<DriveMonitorResult[]> {
   const projectsWithFolders = await db
     .select()
     .from(projects)
-    .where(isNotNull(projects.driveFolderId));
+    .where(and(isNotNull(projects.driveFolderId), isNull(projects.deletedAt)));
 
   recordFired('bg_drive_monitor', `Scanning ${projectsWithFolders.length} folders`);
   console.log(`📂 Drive Monitor: Scanning ${projectsWithFolders.length} project folders...`);

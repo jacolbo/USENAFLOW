@@ -16,6 +16,8 @@ export interface IStorage {
   // Use only where placeholders must be visible: the Today's Shoots page and
   // calendar-event de-duplication. Everywhere else use getAllProjects().
   getAllProjectsIncludingPlaceholders(): Promise<Project[]>;
+  getDeletedProjects(): Promise<Project[]>;
+  getProjectIncludingDeleted(id: string): Promise<Project | undefined>;
   getProject(id: string): Promise<Project | undefined>;
   createProject(project: InsertProject): Promise<Project>;
   updateProject(id: string, updates: UpdateProject): Promise<Project | undefined>;
@@ -466,15 +468,25 @@ export class MemStorage implements IStorage {
   }
 
   async getAllProjects(): Promise<Project[]> {
-    return Array.from(this.projects.values()).filter(p => !p.isInspoPlaceholder && !p.campaignId);
+    return Array.from(this.projects.values()).filter(p => !p.isInspoPlaceholder && !p.campaignId && !p.deletedAt);
   }
 
   async getAllProjectsIncludingPlaceholders(): Promise<Project[]> {
-    return Array.from(this.projects.values()).filter(p => !p.campaignId);
+    return Array.from(this.projects.values()).filter(p => !p.campaignId && !p.deletedAt);
   }
 
+
   async getProject(id: string): Promise<Project | undefined> {
+    const p = this.projects.get(id);
+    return p && !p.deletedAt ? p : undefined;
+  }
+
+  async getProjectIncludingDeleted(id: string): Promise<Project | undefined> {
     return this.projects.get(id);
+  }
+
+  async getDeletedProjects(): Promise<Project[]> {
+    return Array.from(this.projects.values()).filter(p => !!p.deletedAt && !!p.campaignId);
   }
 
   async createProject(insertProject: InsertProject): Promise<Project> {
@@ -1171,15 +1183,32 @@ export class DatabaseStorage implements IStorage {
 
   async getAllProjects(): Promise<Project[]> {
     return await db.select().from(projects).where(
-      and(eq(projects.isInspoPlaceholder, false), isNull(projects.campaignId))
+      and(eq(projects.isInspoPlaceholder, false), isNull(projects.campaignId), isNull(projects.deletedAt))
     );
   }
 
   async getAllProjectsIncludingPlaceholders(): Promise<Project[]> {
-    return await db.select().from(projects).where(isNull(projects.campaignId));
+    return await db.select().from(projects).where(
+      and(isNull(projects.campaignId), isNull(projects.deletedAt))
+    );
+  }
+
+  async getDeletedProjects(): Promise<Project[]> {
+    // Campaign bin only — soft-deleted campaign projects
+    return await db.select().from(projects).where(
+      and(sql`${projects.deletedAt} IS NOT NULL`, sql`${projects.campaignId} IS NOT NULL`)
+    );
   }
 
   async getProject(id: string): Promise<Project | undefined> {
+    // Binned (soft-deleted) projects are invisible everywhere except the bin
+    const [project] = await db.select().from(projects).where(
+      and(eq(projects.id, id), isNull(projects.deletedAt))
+    );
+    return project || undefined;
+  }
+
+  async getProjectIncludingDeleted(id: string): Promise<Project | undefined> {
     const [project] = await db.select().from(projects).where(eq(projects.id, id));
     return project || undefined;
   }
@@ -1661,7 +1690,7 @@ export class DatabaseStorage implements IStorage {
         ) as has_post_review_reply
       FROM projects p
       LEFT JOIN client_messages cm ON p.id = cm.project_id
-      WHERE ${assignedCondition}
+      WHERE ${assignedCondition} AND p.deleted_at IS NULL
       GROUP BY p.id
       ORDER BY last_message_at DESC NULLS LAST, unread_count DESC
     `);
@@ -2717,6 +2746,7 @@ export class DatabaseStorage implements IStorage {
       and(
         eq(projects.campaignId, campaignId),
         sql`${projects.chatArchived} IS NOT TRUE`,
+        isNull(projects.deletedAt),
         ...(yearStart
           ? [sql`(${projects.shootDate} IS NULL OR ${projects.shootDate} >= ${yearStart})`]
           : [])
