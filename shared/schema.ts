@@ -1188,7 +1188,7 @@ export type InsertCampaignAssignment = z.infer<typeof insertCampaignAssignmentSc
 export type CampaignVelocitySnapshot = typeof campaignVelocitySnapshots.$inferSelect;
 export type InsertCampaignVelocitySnapshot = z.infer<typeof insertCampaignVelocitySnapshotSchema>;
 
-export const CAMPAIGN_NOEL_KEYWORDS = ["noël", "noel", "noel set", "noël set", "christmas set"];
+export const CAMPAIGN_NOEL_KEYWORDS = ["noël", "noel", "noel set", "noël set", "christmas set", "blanc"];
 
 export const GalleryPermissions = {
   FULL: ["Admin", "Evans", "Retoucher1", "Retoucher2", "Retoucher3", "DataWrangler"],
