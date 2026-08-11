@@ -190,6 +190,11 @@ export function registerCampaignRoutes(app: Express): void {
       const project = await storage.getProject(id);
       if (!project || !project.campaignId) return res.status(404).json({ error: "Campaign project not found" });
 
+      // Data Wrangler's dashboard grid is view-only — no schedule edits
+      if (role === "DataWrangler") {
+        return res.status(403).json({ error: "Data Wrangler has view-only access to the schedule" });
+      }
+
       // Ownership check — retouchers may only move their own projects (prevents IDOR)
       if (RETOUCHER_ROLES.includes(role as any)) {
         if (project.assignedRetoucherId !== userId && project.assignedTo !== userId) {
@@ -244,6 +249,11 @@ export function registerCampaignRoutes(app: Express): void {
 
       const project = await storage.getProject(id);
       if (!project || !project.campaignId) return res.status(404).json({ error: "Campaign project not found" });
+
+      // Data Wrangler's dashboard grid is view-only — no schedule edits
+      if (role === "DataWrangler") {
+        return res.status(403).json({ error: "Data Wrangler has view-only access to the schedule" });
+      }
 
       // Ownership check — retouchers may only preview their own projects (prevents IDOR)
       if (RETOUCHER_ROLES.includes(role as any)) {

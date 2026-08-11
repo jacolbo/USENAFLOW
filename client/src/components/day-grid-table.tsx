@@ -84,6 +84,15 @@ interface MovePreview {
   slipCalendarDays: number;
 }
 
+// Personalized Christmas greeting titles per user
+const GREETING_TITLES: Record<string, string> = {
+  lucky: "Khisimusi lerinene",
+  earl: "Khisimusi lerinene",
+  data: "Khisimusi lerinene",
+  asa: "Khrisimasi yabwino",
+};
+const DEFAULT_TITLE = "My Day Grid";
+
 interface DayGridTableProps {
   userId: string;
   userName: string;
@@ -138,8 +147,11 @@ export function DayGridTable({ userId, userName, userRole }: DayGridTableProps) 
   today.setHours(0, 0, 0, 0);
   const days = nextNDaysWithOffDays(today, WORKING_DAYS_TO_SHOW);
 
+  // Data Wrangler sees the whole team's schedule (no assignments of their own)
+  const isWrangler = userRole === "DataWrangler";
   // Mine = assigned to me by id, or by name (legacy assignments use names)
   const mine = projects.filter((p: any) => {
+    if (isWrangler) return p.status !== "Delivered";
     const rid = (p.assignedRetoucherId || "").toLowerCase();
     const at = (p.assignedTo || "").toLowerCase();
     return (
@@ -199,7 +211,7 @@ export function DayGridTable({ userId, userName, userRole }: DayGridTableProps) 
       <CardHeader className="pb-3">
         <CardTitle className="text-base flex items-center gap-2">
           <CalendarDays className="h-4 w-4" />
-          My Day Grid
+          {GREETING_TITLES[userId.toLowerCase()] || DEFAULT_TITLE}
         </CardTitle>
       </CardHeader>
       <CardContent className="pt-0">
@@ -232,13 +244,13 @@ export function DayGridTable({ userId, userName, userRole }: DayGridTableProps) 
                     ${offLabel && !isTodayCol && !isDeadline ? "border-dashed bg-muted/40 opacity-80" : ""}
                     ${isDayOver ? "border-primary bg-primary/5" : ""}
                   `}
-                  onDragOver={(e) => {
+                  onDragOver={isWrangler ? undefined : (e) => {
                     e.preventDefault();
                     e.dataTransfer.dropEffect = "move";
                     setDragOverDay(dayIso);
                   }}
-                  onDragLeave={() => setDragOverDay(null)}
-                  onDrop={(e) => handleDrop(e, dayIso)}
+                  onDragLeave={isWrangler ? undefined : () => setDragOverDay(null)}
+                  onDrop={isWrangler ? undefined : (e) => handleDrop(e, dayIso)}
                 >
                   {/* Day column header */}
                   <div className={`p-2 rounded-t-lg border-b ${isTodayCol ? "bg-blue-100 dark:bg-blue-900/40" : isDeadline ? "bg-red-100 dark:bg-red-900/40" : offLabel ? "bg-muted/60" : "bg-muted/30"}`}>
@@ -263,7 +275,7 @@ export function DayGridTable({ userId, userName, userRole }: DayGridTableProps) 
                     )}
                     {dayProjects.length === 0 && !isDayOver && (
                       <p className="text-xs text-muted-foreground text-center py-4 opacity-50">
-                        {offLabel ? "Off day — drag here to work it" : "Drag here"}
+                        {isWrangler ? "—" : offLabel ? "Off day — drag here to work it" : "Drag here"}
                       </p>
                     )}
                     {dayProjects.map((project) => (
@@ -271,13 +283,14 @@ export function DayGridTable({ userId, userName, userRole }: DayGridTableProps) 
                         key={project.id}
                         project={project}
                         isToday={isTodayCol}
+                        readOnly={isWrangler}
                         onDragStart={(e) => {
                           setDragProjectId(project.id);
                           e.dataTransfer.effectAllowed = "move";
                           e.dataTransfer.setData("text/plain", project.id);
                         }}
                         onPullForward={
-                          !isTodayCol ? () => pullForward(project) : undefined
+                          !isTodayCol && !isWrangler ? () => pullForward(project) : undefined
                         }
                       />
                     ))}
@@ -322,7 +335,7 @@ export function DayGridTable({ userId, userName, userRole }: DayGridTableProps) 
 
 // ─────────────────────── Project Card (same look as the workspace) ──────────
 
-function DayGridCard({ project, isToday, onDragStart, onPullForward }: { project: Project; isToday: boolean; onDragStart: (e: React.DragEvent) => void; onPullForward?: () => void }) {
+function DayGridCard({ project, isToday, onDragStart, onPullForward, readOnly }: { project: Project; isToday: boolean; onDragStart: (e: React.DragEvent) => void; onPullForward?: () => void; readOnly?: boolean }) {
   const dueDate = project.promisedDeliveryDate || project.deliveryDueDate;
   const dueDateStr = dueDate
     ? new Date(dueDate).toLocaleDateString("en-ZA", { day: "numeric", month: "short" })
@@ -355,18 +368,18 @@ function DayGridCard({ project, isToday, onDragStart, onPullForward }: { project
 
   return (
     <div
-      draggable
-      onDragStart={onDragStart}
+      draggable={!readOnly}
+      onDragStart={readOnly ? undefined : onDragStart}
       className={`
         bg-card border rounded-lg p-2.5 text-sm select-none
-        cursor-grab active:cursor-grabbing hover:shadow-md transition-shadow
+        ${readOnly ? "" : "cursor-grab active:cursor-grabbing hover:shadow-md transition-shadow"}
         ${isOverdue ? "border-red-300 bg-red-50 dark:bg-red-950/20" : ""}
         ${isToday ? "ring-1 ring-blue-400" : ""}
       `}
     >
       <div className="flex items-start justify-between gap-1">
         <div className="flex items-center gap-1 min-w-0">
-          <GripVertical className="h-3 w-3 text-muted-foreground flex-shrink-0" />
+          {!readOnly && <GripVertical className="h-3 w-3 text-muted-foreground flex-shrink-0" />}
           <span className="font-medium truncate">{project.clientName}</span>
         </div>
         <Badge variant="outline" className={`text-[10px] border flex-shrink-0 ${statusClass}`}>

@@ -3800,7 +3800,7 @@ export default function Dashboard() {
           {widgetOrder.map((widgetId) => {
             // Daily Quote Widget
             if (widgetId === "daily_quote" && isWidgetVisible("daily_quote") && !showRewards && !showReferrals && !showVipClients && !showDriveManager) {
-              const isRetoucher = user.role.toLowerCase().includes("retoucher");
+              const isRetoucher = user.role.toLowerCase().includes("retoucher") || user.role === "DataWrangler";
               return (
                 <div key={widgetId} className="space-y-8">
                   <DailyQuote userId={user.value} />
