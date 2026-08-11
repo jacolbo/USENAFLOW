@@ -11,6 +11,7 @@ import { TaskTable } from "@/components/task-table";
 import { TeamAnalytics } from "@/components/team-analytics";
 import { ShootTrackerWidget } from "@/components/shoot-tracker-widget";
 import { DailyQuote } from "@/components/daily-quote";
+import { DayGridTable } from "@/components/day-grid-table";
 import { NotificationCenter } from "@/components/notification-center";
 import { TradeOfferModal } from "@/components/TradeOfferModal";
 import { ComplaintsCalendar } from "@/components/complaints-calendar";
@@ -3799,7 +3800,19 @@ export default function Dashboard() {
           {widgetOrder.map((widgetId) => {
             // Daily Quote Widget
             if (widgetId === "daily_quote" && isWidgetVisible("daily_quote") && !showRewards && !showReferrals && !showVipClients && !showDriveManager) {
-              return <DailyQuote key={widgetId} userId={user.value} />;
+              const isRetoucher = user.role.toLowerCase().includes("retoucher");
+              return (
+                <div key={widgetId} className="space-y-8">
+                  <DailyQuote userId={user.value} />
+                  {isRetoucher && (
+                    <DayGridTable
+                      userId={user.id || user.value || user.name}
+                      userName={user.name}
+                      userRole={user.role}
+                    />
+                  )}
+                </div>
+              );
             }
             
             // My Tasks Widget - for Admin and retouchers
