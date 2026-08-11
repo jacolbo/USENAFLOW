@@ -69,17 +69,46 @@ async function workspaceFetch(method: string, url: string, body?: unknown): Prom
 }
 
 function isoDate(d: Date): string {
-  return d.toISOString().slice(0, 10);
+  // Local calendar date (not UTC) — avoids off-by-one-day bugs in UTC+2
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
 }
+// SA public holidays during the campaign window (fixed list)
+const PUBLIC_HOLIDAYS: Record<string, string> = {
+  "2026-09-24": "Heritage Day",
+  "2026-12-16": "Day of Reconciliation",
+};
 function isWorkingDay(date: Date): boolean {
   const day = date.getDay();
-  return day !== 0 && day !== 6;
+  return day !== 0 && day !== 6 && !PUBLIC_HOLIDAYS[isoDate(date)];
+}
+// Off-day label ("Weekend" or the holiday name), or null for a normal working day
+function offDayLabel(date: Date): string | null {
+  const holiday = PUBLIC_HOLIDAYS[isoDate(date)];
+  if (holiday) return holiday;
+  const day = date.getDay();
+  if (day === 0 || day === 6) return "Weekend";
+  return null;
 }
 function nextNWorkingDays(from: Date, n: number): Date[] {
   const days: Date[] = [];
   const cur = new Date(from);
   while (days.length < n && cur <= HARD_DEADLINE) {
     if (isWorkingDay(cur)) days.push(new Date(cur));
+    cur.setDate(cur.getDate() + 1);
+  }
+  return days;
+}
+// All calendar days (including weekends/holidays) covering the next n working days
+function nextNDaysWithOffDays(from: Date, workingDayCount: number): Date[] {
+  const days: Date[] = [];
+  const cur = new Date(from);
+  let working = 0;
+  while (working < workingDayCount && cur <= HARD_DEADLINE) {
+    days.push(new Date(cur));
+    if (isWorkingDay(cur)) working++;
     cur.setDate(cur.getDate() + 1);
   }
   return days;
@@ -341,7 +370,7 @@ export default function RetoucherWorkspace() {
       }))
     : [{ id: myId, name: "My Projects", projects: myProjects }];
 
-  const workingDays = nextNWorkingDays(today, 14);
+  const workingDays = nextNDaysWithOffDays(today, 14);
 
   return (
     <div className="min-h-screen bg-background p-6">
@@ -474,6 +503,7 @@ export default function RetoucherWorkspace() {
               const isDayOver = dragOverDay === dayIso;
               const isTodayCol = dayIso === todayIso;
               const isDeadline = dayIso === "2026-12-19";
+              const offLabel = offDayLabel(day);
               const dayProjects = myProjects.filter(
                 (p) =>
                   p.status !== "Delivered" &&
@@ -493,6 +523,7 @@ export default function RetoucherWorkspace() {
                     flex-shrink-0 w-48 rounded-lg border-2 transition-colors
                     ${isTodayCol ? "border-blue-400 bg-blue-50/40 dark:bg-blue-950/20" : "border-border"}
                     ${isDeadline ? "border-red-400 bg-red-50/40 dark:bg-red-950/20" : ""}
+                    ${offLabel && !isTodayCol && !isDeadline ? "border-dashed bg-muted/40 opacity-80" : ""}
                     ${isDayOver ? "border-primary bg-primary/5" : ""}
                   `}
                   onDragOver={(e) => handleDayDragOver(e, dayIso)}
@@ -500,9 +531,10 @@ export default function RetoucherWorkspace() {
                   onDrop={(e) => handleDayDrop(e, dayIso)}
                 >
                   {/* Day column header */}
-                  <div className={`p-2 rounded-t-lg border-b ${isTodayCol ? "bg-blue-100 dark:bg-blue-900/40" : isDeadline ? "bg-red-100 dark:bg-red-900/40" : "bg-muted/30"}`}>
+                  <div className={`p-2 rounded-t-lg border-b ${isTodayCol ? "bg-blue-100 dark:bg-blue-900/40" : isDeadline ? "bg-red-100 dark:bg-red-900/40" : offLabel ? "bg-muted/60" : "bg-muted/30"}`}>
                     <p className="text-xs font-semibold">
                       {day.toLocaleDateString("en-ZA", { weekday: "short", day: "numeric", month: "short" })}
+                      {offLabel && <span className="ml-1 font-normal text-muted-foreground">· {offLabel}</span>}
                     </p>
                     <p className={`text-[10px] ${overCapacity ? "text-red-600 font-bold" : "text-muted-foreground"}`}>
                       {dayPhotos}/{DAILY_PHOTO_TARGET} photos
@@ -521,7 +553,7 @@ export default function RetoucherWorkspace() {
                     )}
                     {dayProjects.length === 0 && !isDayOver && (
                       <p className="text-xs text-muted-foreground text-center py-4 opacity-50">
-                        Drag here
+                        {offLabel ? "Off day — drag here to work it" : "Drag here"}
                       </p>
                     )}
                     {dayProjects.map((project) => (

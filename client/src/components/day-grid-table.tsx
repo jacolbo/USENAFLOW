@@ -13,17 +13,36 @@ const HARD_DEADLINE = new Date("2026-12-19");
 const DAYS_TO_SHOW = 10;
 
 function isoDate(d: Date): string {
-  return d.toISOString().slice(0, 10);
+  // Local calendar date (not UTC) — avoids off-by-one-day bugs in UTC+2
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
 }
+// SA public holidays during the campaign window (fixed list)
+const PUBLIC_HOLIDAYS: Record<string, string> = {
+  "2026-09-24": "Heritage Day",
+  "2026-12-16": "Day of Reconciliation",
+};
 function isWorkingDay(date: Date): boolean {
   const day = date.getDay();
-  return day !== 0 && day !== 6;
+  return day !== 0 && day !== 6 && !PUBLIC_HOLIDAYS[isoDate(date)];
 }
-function nextNWorkingDays(from: Date, n: number): Date[] {
+function offDayLabel(date: Date): string | null {
+  const holiday = PUBLIC_HOLIDAYS[isoDate(date)];
+  if (holiday) return holiday;
+  const day = date.getDay();
+  if (day === 0 || day === 6) return "Weekend";
+  return null;
+}
+// All calendar days (including weekends/holidays) covering the next n working days
+function nextNDaysWithOffDays(from: Date, workingDayCount: number): Date[] {
   const days: Date[] = [];
   const cur = new Date(from);
-  while (days.length < n && cur <= HARD_DEADLINE) {
-    if (isWorkingDay(cur)) days.push(new Date(cur));
+  let working = 0;
+  while (working < workingDayCount && cur <= HARD_DEADLINE) {
+    days.push(new Date(cur));
+    if (isWorkingDay(cur)) working++;
     cur.setDate(cur.getDate() + 1);
   }
   return days;
@@ -51,7 +70,7 @@ export function DayGridTable({ userId, userName, userRole }: DayGridTableProps) 
   });
 
   const todayIso = isoDate(new Date());
-  const days = nextNWorkingDays(new Date(), DAYS_TO_SHOW);
+  const days = nextNDaysWithOffDays(new Date(), DAYS_TO_SHOW);
 
   // Mine = assigned to me by id, or by name (legacy assignments use names)
   const mine = projects.filter((p: any) => {
@@ -96,12 +115,16 @@ export function DayGridTable({ userId, userName, userRole }: DayGridTableProps) 
               const dayProjects = byDay.get(key) || [];
               const photos = dayProjects.reduce((s, p: any) => s + (p.selectedCount || 0), 0);
               const isToday = key === todayIso;
+              const offLabel = offDayLabel(d);
               return (
-                <tr key={key} className={`border-b last:border-0 ${isToday ? "bg-emerald-50" : ""}`}>
+                <tr key={key} className={`border-b last:border-0 ${isToday ? "bg-emerald-50" : offLabel ? "bg-muted/40 text-muted-foreground" : ""}`}>
                   <td className="py-1.5 pr-2 whitespace-nowrap">
                     {dayLabel(d)}
                     {isToday && (
                       <Badge variant="secondary" className="ml-1.5 text-[10px] px-1.5 py-0">Today</Badge>
+                    )}
+                    {offLabel && (
+                      <Badge variant="outline" className="ml-1.5 text-[10px] px-1.5 py-0">{offLabel}</Badge>
                     )}
                   </td>
                   <td className="py-1.5 pr-2">

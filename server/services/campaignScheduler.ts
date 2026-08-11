@@ -36,9 +36,13 @@ const dateChangePendingTimers = new Map<string, ReturnType<typeof setTimeout>>()
 
 // ─────────────────────── Date utilities ────────────────────────
 
+// SA public holidays during the campaign window — the auto-scheduler never places
+// work on these (or weekends); weekend/holiday work is always a manual, pinned move.
+const PUBLIC_HOLIDAYS = new Set(["2026-09-24", "2026-12-16"]);
+
 function isWorkingDay(date: Date): boolean {
   const day = date.getDay();
-  return day !== 0 && day !== 6;
+  return day !== 0 && day !== 6 && !PUBLIC_HOLIDAYS.has(isoDate(date));
 }
 
 function addWorkingDays(start: Date, days: number): Date {
@@ -74,7 +78,11 @@ function countWorkingDaysBetween(from: Date, to: Date): number {
 }
 
 function isoDate(d: Date): string {
-  return d.toISOString().slice(0, 10);
+  // Local calendar date (not UTC) — keeps holiday/weekend keys aligned with local days
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
 }
 
 // ─────────────────────── Core functions ────────────────────────
