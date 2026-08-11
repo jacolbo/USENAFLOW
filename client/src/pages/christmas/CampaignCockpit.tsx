@@ -686,7 +686,7 @@ export default function CampaignCockpit() {
                   p?.plannedWorkDate ? new Date(p.plannedWorkDate).toISOString().slice(0, 10) : ""
                 );
               }}
-              onDropProject={(id, dateKey) => workMoveMutation.mutate({ id, date: dateKey })}
+              onDropProject={(id, dateKey) => moveMutation.mutate({ id, date: dateKey })}
             />
           </TabsContent>
         </Tabs>
@@ -1094,9 +1094,11 @@ function formatWeekLabel(monday: Date, friday: Date): string {
 
 function getChipColor(project: Project, todayKey: string): string {
   if (project.status === "Delivered") return "bg-green-600";
-  if (project.plannedWorkDate) {
-    const workKey = localDateKey(new Date(project.plannedWorkDate));
-    if (workKey < todayKey) return "bg-red-600";
+  // Red = delivery promise already passed and still not delivered
+  const promise = project.promisedDeliveryDate || project.deliveryDueDate;
+  if (promise) {
+    const promiseKey = localDateKey(new Date(promise));
+    if (promiseKey < todayKey) return "bg-red-600";
   }
   // Not yet delivered → orange
   return "bg-amber-500";
@@ -1190,12 +1192,14 @@ function CalendarGrid({
     return result;
   }, [today]);
 
-  // Index projects by plannedWorkDate
+  // Index projects by DELIVERY date — each chip sits on the day the client
+  // was promised their photos (falls back to plannedWorkDate if no promise yet)
   const projectsByDate = useMemo(() => {
     const map: Record<string, Project[]> = {};
     for (const p of projects) {
-      if (!p.plannedWorkDate) continue;
-      const key = localDateKey(new Date(p.plannedWorkDate));
+      const anchor = p.promisedDeliveryDate || p.deliveryDueDate || p.plannedWorkDate;
+      if (!anchor) continue;
+      const key = localDateKey(new Date(anchor));
       map[key] = map[key] || [];
       map[key].push(p);
     }
@@ -1261,7 +1265,7 @@ function CalendarGrid({
       <div className="flex gap-3 mb-3 flex-wrap text-[10px] items-center">
         <span className="bg-green-600 text-white rounded px-2 py-0.5">Delivered (Drive email sent)</span>
         <span className="bg-amber-500 text-white rounded px-2 py-0.5">Not delivered yet</span>
-        <span className="bg-red-600 text-white rounded px-2 py-0.5">Work date missed</span>
+        <span className="bg-red-600 text-white rounded px-2 py-0.5">Delivery date missed</span>
         <span className="flex items-center gap-1 text-muted-foreground">
           <span className="inline-block w-2 h-2 rounded-full bg-amber-500" /> day has pending work
         </span>
