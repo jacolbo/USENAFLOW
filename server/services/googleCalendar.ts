@@ -1,17 +1,23 @@
 import { ReplitConnectors } from '@replit/connectors-sdk';
+import { hasOwnGoogleCredentials, googleApiGet } from './googleAuth';
 
-// Google Calendar integration — uses @replit/connectors-sdk proxy.
-// The SDK handles OAuth token injection and refresh automatically.
-// Do NOT cache the connectors instance; tokens expire.
-
-function getConnectors() {
-  return new ReplitConnectors();
-}
+// Google Calendar integration.
+//
+// With first-party OAuth configured (GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET /
+// GOOGLE_REFRESH_TOKEN) this talks to the Calendar REST API directly. Without
+// it, the original @replit/connectors-sdk proxy is used unchanged, so
+// behaviour on Replit is identical until those variables are set.
 
 // ─── Proxy helper ─────────────────────────────────────────────────────────────
 
 async function calendarProxy(path: string): Promise<any> {
-  const connectors = getConnectors();
+  if (hasOwnGoogleCredentials()) {
+    return googleApiGet('google-calendar', path);
+  }
+
+  // Replit connector fallback. Do NOT cache the connectors instance; the SDK
+  // injects and refreshes the OAuth token per call.
+  const connectors = new ReplitConnectors();
   const response = await connectors.proxy('google-calendar', path, { method: 'GET' });
   if (!response.ok) {
     const body = await response.text().catch(() => '');

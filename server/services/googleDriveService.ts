@@ -1,50 +1,15 @@
 import { google } from 'googleapis';
+import { getGoogleAuthClient } from './googleAuth';
 
-// Google Drive integration - uses Replit Connectors (connection:conn_google-drive_01KH163DZ5EYZJ1MMNJ6VDCHY8)
-let driveConnectionSettings: any;
-
-async function getDriveAccessToken() {
-  if (driveConnectionSettings && driveConnectionSettings.settings?.expires_at && new Date(driveConnectionSettings.settings.expires_at).getTime() > Date.now()) {
-    return driveConnectionSettings.settings.access_token;
-  }
-
-  const hostname = process.env.REPLIT_CONNECTORS_HOSTNAME;
-  const xReplitToken = process.env.REPL_IDENTITY
-    ? 'repl ' + process.env.REPL_IDENTITY
-    : process.env.WEB_REPL_RENEWAL
-    ? 'depl ' + process.env.WEB_REPL_RENEWAL
-    : null;
-
-  if (!xReplitToken) {
-    throw new Error('X_REPLIT_TOKEN not found for repl/depl');
-  }
-
-  const url = 'https://' + hostname + '/api/v2/connection?include_secrets=true&connector_names=google-drive';
-
-  const response = await fetch(url, {
-    headers: {
-      'Accept': 'application/json',
-      'X_REPLIT_TOKEN': xReplitToken
-    }
-  });
-
-  const data = await response.json();
-  driveConnectionSettings = data.items?.[0];
-
-  const accessToken = driveConnectionSettings?.settings?.access_token || driveConnectionSettings?.settings?.oauth?.credentials?.access_token;
-
-  if (!driveConnectionSettings || !accessToken) {
-    throw new Error('Google Drive not connected');
-  }
-
-  return accessToken;
-}
+// Google Drive integration.
+//
+// Credentials are resolved by googleAuth.ts: first-party OAuth when
+// GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET / GOOGLE_REFRESH_TOKEN are set,
+// otherwise Replit's google-drive connector.
 
 async function getDriveClient() {
-  const accessToken = await getDriveAccessToken();
-  const oauth2Client = new google.auth.OAuth2();
-  oauth2Client.setCredentials({ access_token: accessToken });
-  return google.drive({ version: 'v3', auth: oauth2Client });
+  const auth = await getGoogleAuthClient('google-drive');
+  return google.drive({ version: 'v3', auth });
 }
 
 const IMAGE_MIMETYPES = [
