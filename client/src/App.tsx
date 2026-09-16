@@ -19,6 +19,7 @@ import AiBrainPage from "@/pages/ai-brain";
 import GalleriesPage from "@/pages/galleries";
 import GalleryDetailPage from "@/pages/gallery-detail";
 import ClientGalleryPage from "@/pages/client-gallery";
+import DeliveryGalleryPage from "@/pages/delivery-gallery";
 import ReviewsPage from "@/pages/reviews";
 import TodayShoots from "@/pages/today-shoots";
 import CampaignCockpit from "@/pages/christmas/CampaignCockpit";
@@ -43,6 +44,8 @@ function Router() {
       <Route path="/galleries" component={GalleriesPage} />
       <Route path="/galleries/:id" component={GalleryDetailPage} />
       <Route path="/g/:slug" component={ClientGalleryPage} />
+      {/* Client photo delivery — the link the delivery email sends. */}
+      <Route path="/d/:token" component={DeliveryGalleryPage} />
       <Route path="/reviews" component={ReviewsPage} />
       <Route path="/today" component={TodayShoots} />
       <Route path="/christmas" component={CampaignCockpit} />
