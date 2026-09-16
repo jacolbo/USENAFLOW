@@ -1,4 +1,4 @@
-import sharp from "sharp";
+import type { Sharp } from "sharp";
 
 /**
  * Preview rendering — the pure part.
@@ -18,6 +18,12 @@ import sharp from "sharp";
  * screen, not the file. It is deliberately still not the master — the original
  * keeps its full pixel dimensions and its metadata, and only reaches a client
  * after the studio has approved delivery.
+ *
+ * sharp is loaded on first use rather than at import. It is the only native
+ * dependency in this project, and a native module that fails to load takes the
+ * whole process with it — a photo resizer must not be able to stop invoices,
+ * calendars and the shoot tracker from starting. Loaded this way, a broken
+ * sharp costs previews and nothing else.
  */
 
 export const THUMB_EDGE = Number(process.env.DELIVERY_THUMB_EDGE || 640);
@@ -26,11 +32,48 @@ export const THUMB_QUALITY = Number(process.env.DELIVERY_THUMB_QUALITY || 82);
 export const PREVIEW_EDGE = Number(process.env.DELIVERY_PREVIEW_EDGE || 3200);
 export const PREVIEW_QUALITY = Number(process.env.DELIVERY_PREVIEW_QUALITY || 92);
 
+// The callable default export, not the module namespace.
+type SharpFactory = typeof import("sharp").default;
+
+let loaded: SharpFactory | null = null;
+let loadFailure: Error | null = null;
+
+async function getSharp(): Promise<SharpFactory> {
+  if (loaded) return loaded;
+  // Remember the failure: retrying a missing native binary on every request
+  // just turns one broken gallery into a slow broken gallery.
+  if (loadFailure) throw loadFailure;
+  try {
+    loaded = (await import("sharp")).default;
+    return loaded;
+  } catch (cause) {
+    loadFailure = Object.assign(
+      new Error(
+        "Image processing is unavailable: the sharp native module failed to load. " +
+          "Previews cannot be generated until it is reinstalled."
+      ),
+      { cause, status: 503 }
+    );
+    throw loadFailure;
+  }
+}
+
+/** True when previews can be rendered at all — for health checks and status pages. */
+export async function imageProcessingAvailable(): Promise<boolean> {
+  try {
+    await getSharp();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /**
  * sharp decodes untrusted image data. This cap stops a malformed or hostile
  * file turning a decode into an out-of-memory kill.
  */
-function reader(buffer: Buffer) {
+async function reader(buffer: Buffer): Promise<Sharp> {
+  const sharp = await getSharp();
   return sharp(buffer, {
     limitInputPixels: 400_000_000, // ~20000x20000, well past any camera
     sequentialRead: true,
@@ -45,7 +88,7 @@ export interface Rendered {
 }
 
 async function render(source: Buffer, edge: number, quality: number): Promise<Rendered> {
-  const output = await reader(source)
+  const output = await (await reader(source))
     // Honour the EXIF orientation flag and then drop it, so the pixels are
     // already the right way up. A client's browser is not guaranteed to read it.
     .rotate()
