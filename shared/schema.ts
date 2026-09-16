@@ -1021,6 +1021,79 @@ export const galleryAuthTokens = pgTable("gallery_auth_tokens", {
 });
 
 // Gallery Zod schemas
+// ---------------------------------------------------------------------------
+// Delivery galleries
+//
+// A client-facing view onto a project's finished Drive folder, so the client
+// never has to open Drive itself.
+//
+// Nothing here duplicates the photographs. The originals stay in Drive; these
+// rows carry the file ids and the ordering, and a preview is cached the first
+// time one is asked for. That means deleting a photo in Drive removes it from
+// delivery too, rather than leaving a stale copy being handed out as final.
+//
+// Deliberately separate from `galleries` above: that model requires every photo
+// to have a GCS `storageKey`, which a Drive-backed photo does not have.
+// ---------------------------------------------------------------------------
+
+export const deliveryGalleries = pgTable("delivery_galleries", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  projectId: varchar("project_id")
+    .notNull()
+    .unique()
+    .references(() => projects.id, { onDelete: "cascade" }),
+  // The public address. This is the only thing standing between a stranger and
+  // a client's photographs, so it is generated, long and unguessable — never
+  // derived from the client's name or the project id.
+  token: text("token").notNull().unique(),
+  title: text("title").notNull(),
+  // Snapshotted from the project at creation. If someone later repoints the
+  // project at a different Drive folder, a gallery that has already been
+  // delivered must not silently start serving different photographs.
+  driveFolderId: text("drive_folder_id").notNull(),
+  coverPhotoId: varchar("cover_photo_id"),
+  photoCount: integer("photo_count").notNull().default(0),
+  lastSyncedAt: timestamp("last_synced_at"),
+  viewCount: integer("view_count").notNull().default(0),
+  lastViewedAt: timestamp("last_viewed_at"),
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+  updatedAt: timestamp("updated_at").notNull().default(sql`now()`),
+});
+
+export const deliveryPhotos = pgTable("delivery_photos", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  galleryId: varchar("gallery_id")
+    .notNull()
+    .references(() => deliveryGalleries.id, { onDelete: "cascade" }),
+  // Never sent to a browser. A Drive link that works in a browser works for
+  // anyone who has it, which would make the delivery gate meaningless.
+  driveFileId: text("drive_file_id").notNull(),
+  filename: text("filename").notNull(),
+  mimeType: text("mime_type").notNull(),
+  sizeBytes: integer("size_bytes").notNull().default(0),
+  sortOrder: integer("sort_order").notNull().default(0),
+  // Filled the first time a preview is served, so later views skip Drive
+  // entirely. Null simply means "not cached yet", never "broken".
+  previewKey: text("preview_key"),
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+});
+
+export const insertDeliveryGallerySchema = createInsertSchema(deliveryGalleries).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertDeliveryPhotoSchema = createInsertSchema(deliveryPhotos).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type DeliveryGallery = typeof deliveryGalleries.$inferSelect;
+export type DeliveryPhoto = typeof deliveryPhotos.$inferSelect;
+export type InsertDeliveryGallery = z.infer<typeof insertDeliveryGallerySchema>;
+export type InsertDeliveryPhoto = z.infer<typeof insertDeliveryPhotoSchema>;
+
 export const insertGallerySchema = createInsertSchema(galleries).omit({
   id: true,
   createdAt: true,

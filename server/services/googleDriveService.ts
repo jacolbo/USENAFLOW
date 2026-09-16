@@ -286,6 +286,68 @@ export async function getImageThumbnails(folderId: string, maxResults: number = 
   return images.slice(0, maxResults);
 }
 
+/**
+ * The raw bytes of a Drive file.
+ *
+ * Used only on the download path, after delivery has been approved. Browsing a
+ * gallery never reaches this — previews are served from cache — so a client
+ * clicking through 400 photographs does not become 400 Drive calls.
+ */
+export async function downloadFileBuffer(fileId: string, maxBytes?: number): Promise<Buffer> {
+  const drive = await getDriveClient();
+  const response = await drive.files.get(
+    { fileId, alt: 'media', supportsAllDrives: true },
+    { responseType: 'arraybuffer' }
+  );
+  const buffer = Buffer.from(response.data as ArrayBuffer);
+  if (maxBytes && buffer.length > maxBytes) {
+    const error: any = new Error(`That file is larger than the ${Math.round(maxBytes / 1024 / 1024)} MB limit.`);
+    error.status = 413;
+    throw error;
+  }
+  return buffer;
+}
+
+/**
+ * A preview of a Drive image, as bytes.
+ *
+ * Google already renders thumbnails for everything in Drive, which spares us a
+ * server-side image library entirely. The size suffix on the returned URL is
+ * rewritten (`=s220` becomes `=s<size>`) to ask for something worth looking at
+ * rather than a contact-sheet tile.
+ *
+ * Returns null rather than throwing when Drive has no thumbnail for a file —
+ * that is a normal state for a format Google cannot render, not an error, and
+ * the caller falls back to the original.
+ */
+export async function getThumbnailBuffer(
+  fileId: string,
+  size: number = 2048
+): Promise<{ buffer: Buffer; contentType: string } | null> {
+  const drive = await getDriveClient();
+  const meta: any = await drive.files.get({
+    fileId,
+    fields: 'thumbnailLink',
+    supportsAllDrives: true,
+  });
+
+  const link: string | undefined = meta.data.thumbnailLink;
+  if (!link) return null;
+
+  // Google's thumbnail URLs end in a size token such as "=s220". Swapping it is
+  // the documented-by-convention way to ask for a bigger render; if the shape
+  // ever changes, the unmodified link still works at its default size.
+  const sized = link.replace(/=s\d+(-c)?$/, `=s${size}`);
+
+  const response = await fetch(sized);
+  if (!response.ok) return null;
+
+  return {
+    buffer: Buffer.from(await response.arrayBuffer()),
+    contentType: response.headers.get('content-type') || 'image/jpeg',
+  };
+}
+
 export async function testDriveConnection(): Promise<{ connected: boolean; email?: string; error?: string }> {
   try {
     const drive = await getDriveClient();
