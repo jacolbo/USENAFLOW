@@ -1072,9 +1072,14 @@ export const deliveryPhotos = pgTable("delivery_photos", {
   mimeType: text("mime_type").notNull(),
   sizeBytes: integer("size_bytes").notNull().default(0),
   sortOrder: integer("sort_order").notNull().default(0),
-  // Filled the first time a preview is served, so later views skip Drive
-  // entirely. Null simply means "not cached yet", never "broken".
-  previewKey: text("preview_key"),
+  // Two derivatives, both made from the Drive original and cached in object
+  // storage. Null on either simply means "not built yet", never "broken".
+  //
+  // They exist separately because one image cannot serve both jobs: a grid of
+  // 400 full previews would be most of a gigabyte, and a thumbnail opened in
+  // the lightbox would look like a thumbnail.
+  thumbKey: text("thumb_key"),      // grid
+  previewKey: text("preview_key"),  // lightbox, full-screen
   createdAt: timestamp("created_at").notNull().default(sql`now()`),
 });
 

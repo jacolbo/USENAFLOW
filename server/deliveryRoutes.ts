@@ -4,7 +4,12 @@ import { db } from "./db";
 import { deliveryGalleries, projects, GalleryPermissions } from "@shared/schema";
 import type { DeliveryPhoto } from "@shared/schema";
 import { ObjectStorageService } from "./objectStorage";
-import { downloadFileBuffer, getThumbnailBuffer } from "./services/googleDriveService";
+import { downloadFileBuffer } from "./services/googleDriveService";
+import {
+  buildDerivatives,
+  buildGalleryPreviews,
+  previewProgress,
+} from "./services/previewService";
 import { ZipWriter, safeEntryName, uniqueName } from "./lib/zip";
 import {
   attachGalleryLink,
@@ -16,7 +21,6 @@ import {
   isApprovedForDownload,
   listPhotos,
   recordView,
-  setPreviewKey,
   syncGallery,
 } from "./services/deliveryGalleryService";
 
@@ -40,9 +44,6 @@ const objectStorage = new ObjectStorageService();
 /** One original, buffered to compute its zip CRC, so it needs a ceiling. */
 const MAX_FILE_BYTES = 200 * 1024 * 1024;
 
-/** Preview edge. These are finished retouched photographs; people zoom. */
-const PREVIEW_EDGE = 2048;
-
 function canManageDelivery(role: string): boolean {
   return ([...GalleryPermissions.FULL, ...GalleryPermissions.MANAGE] as readonly string[]).includes(role);
 }
@@ -64,7 +65,11 @@ function publicPhoto(photo: DeliveryPhoto, token: string) {
   return {
     id: photo.id,
     filename: photo.filename,
+    // Two sizes, because a grid of four hundred full previews would be most of
+    // a gigabyte. The big one is only ever fetched when a photo is opened.
+    thumbUrl: `/api/d/${token}/thumb/${photo.id}`,
     previewUrl: `/api/d/${token}/preview/${photo.id}`,
+    ready: Boolean(photo.thumbKey),
   };
 }
 
@@ -102,7 +107,15 @@ export function registerDeliveryRoutes(app: Express) {
       }
       const gallery = await ensureDeliveryGallery(req.params.id);
       const result = await syncGallery(gallery.id);
-      res.json(result);
+
+      // Rendering a preview means pulling the original out of Drive, which is
+      // far too slow to do while a client waits on a grid. Start it now and
+      // answer immediately; the studio can poll the status route.
+      void buildGalleryPreviews(gallery.id).catch((err) =>
+        console.error("[Delivery] preview build failed", err)
+      );
+
+      res.json({ ...result, previewsBuilding: true });
     } catch (error: any) {
       console.error("[Delivery]", error);
       res.status(error.status || 500).json({ error: error.message || "Failed to sync" });
@@ -121,6 +134,7 @@ export function registerDeliveryRoutes(app: Express) {
         gallery,
         url: deliveryUrl(gallery.token),
         approved: await isApprovedForDownload(req.params.id),
+        previews: previewProgress(gallery.id),
       });
     } catch (error: any) {
       console.error("[Delivery]", error);
@@ -166,50 +180,57 @@ export function registerDeliveryRoutes(app: Express) {
   });
 
   /**
-   * A preview, proxied.
+   * Serves one of the two cached derivatives.
    *
-   * Google already renders thumbnails for everything in Drive, which spares us
-   * a server-side image library. The first request for a photo caches the
-   * result in object storage; every later request — and every other client
-   * looking at the same gallery — is served from there without touching Drive.
+   * They are normally built ahead of time by the preview worker. If one is
+   * missing — a photograph added to Drive since the last build, say — it is
+   * rendered on demand rather than showing the client a hole, which is slower
+   * for that one request but never wrong.
    */
-  app.get("/api/d/:token/preview/:photoId", async (req: Request, res: Response) => {
+  async function serveDerivative(req: Request, res: Response, kind: "thumb" | "preview") {
+    const gallery = await getGalleryByToken(req.params.token);
+    if (!gallery) return res.status(404).json({ error: "Not found" });
+
+    let photo = await getPhoto(gallery.id, req.params.photoId);
+    if (!photo) return res.status(404).json({ error: "Not found" });
+
+    let key = kind === "thumb" ? photo.thumbKey : photo.previewKey;
+
+    if (!key) {
+      await buildDerivatives(photo);
+      photo = await getPhoto(gallery.id, req.params.photoId);
+      key = kind === "thumb" ? photo?.thumbKey ?? null : photo?.previewKey ?? null;
+      if (!key) return res.status(500).json({ error: "Could not render that photograph" });
+    }
+
     try {
-      const gallery = await getGalleryByToken(req.params.token);
-      if (!gallery) return res.status(404).json({ error: "Not found" });
+      const file = await objectStorage.getObjectEntityFile(key);
+      return await objectStorage.downloadObject(file, res, 86400);
+    } catch {
+      // The cache entry has gone. Rebuild rather than show a broken photograph.
+      const rebuilt = await buildDerivatives(photo!);
+      const file = await objectStorage.getObjectEntityFile(
+        kind === "thumb" ? rebuilt.thumbKey : rebuilt.previewKey
+      );
+      return await objectStorage.downloadObject(file, res, 86400);
+    }
+  }
 
-      const photo = await getPhoto(gallery.id, req.params.photoId);
-      if (!photo) return res.status(404).json({ error: "Not found" });
-
-      if (photo.previewKey) {
-        try {
-          const cached = await objectStorage.getObjectEntityFile(photo.previewKey);
-          return await objectStorage.downloadObject(cached, res, 86400);
-        } catch {
-          // The cache entry has gone; fall through and rebuild it rather than
-          // showing the client a broken photograph.
-        }
-      }
-
-      const thumb = await getThumbnailBuffer(photo.driveFileId, PREVIEW_EDGE);
-      if (!thumb) {
-        return res.status(404).json({ error: "No preview available for this file" });
-      }
-
-      // Cache for next time, but never fail the request over a cache write:
-      // the client is waiting for a photograph, not for our bookkeeping.
-      objectStorage
-        .uploadPrivateBuffer(thumb.buffer, thumb.contentType)
-        .then((key) => setPreviewKey(photo.id, key))
-        .catch((err) => console.error("[Delivery] preview cache failed", err));
-
-      res.setHeader("Content-Type", thumb.contentType);
-      res.setHeader("Cache-Control", "private, max-age=86400");
-      res.setHeader("X-Content-Type-Options", "nosniff");
-      res.send(thumb.buffer);
+  app.get("/api/d/:token/thumb/:photoId", async (req: Request, res: Response) => {
+    try {
+      await serveDerivative(req, res, "thumb");
     } catch (error: any) {
       console.error("[Delivery]", error);
-      res.status(500).json({ error: "Failed to load the preview" });
+      if (!res.headersSent) res.status(500).json({ error: "Failed to load the photograph" });
+    }
+  });
+
+  app.get("/api/d/:token/preview/:photoId", async (req: Request, res: Response) => {
+    try {
+      await serveDerivative(req, res, "preview");
+    } catch (error: any) {
+      console.error("[Delivery]", error);
+      if (!res.headersSent) res.status(500).json({ error: "Failed to load the photograph" });
     }
   });
 

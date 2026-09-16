@@ -13,7 +13,11 @@ import { Download, Loader2, X, ChevronLeft, ChevronRight, Camera } from "lucide-
 interface DeliveryPhoto {
   id: string;
   filename: string;
+  // Two sizes. The grid must never load the big one: four hundred full
+  // previews is most of a gigabyte, and nobody is looking at them all at once.
+  thumbUrl: string;
   previewUrl: string;
+  ready: boolean;
 }
 
 interface DeliveryGallery {
@@ -119,6 +123,7 @@ export default function DeliveryGalleryPage() {
             <img
               src={cover.previewUrl}
               alt=""
+              fetchPriority="high"
               className="w-full object-cover"
               style={{ maxHeight: "44dvh" }}
             />
@@ -172,9 +177,10 @@ export default function DeliveryGalleryPage() {
                 data-testid={`button-photo-${photo.id}`}
               >
                 <img
-                  src={photo.previewUrl}
+                  src={photo.thumbUrl}
                   alt={photo.filename}
                   loading="lazy"
+                  decoding="async"
                   className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.02]"
                 />
               </button>
