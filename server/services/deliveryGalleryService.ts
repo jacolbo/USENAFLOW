@@ -121,8 +121,24 @@ export async function ensureDeliveryGallery(projectId: string): Promise<Delivery
     })
     .returning();
 
-  await syncGallery(gallery.id);
+  // The row is already committed, so a Drive failure here must not throw: it
+  // would leave a gallery that exists, has no photographs, and looks perfectly
+  // healthy to the next caller, because that one takes the idempotent path
+  // above and never retries the sync.
+  //
+  // Instead the gallery comes back with lastSyncedAt still null, which is the
+  // honest signal that it holds nothing yet, and the studio can sync again.
+  try {
+    await syncGallery(gallery.id);
+  } catch (error) {
+    console.error(`[Delivery] first sync failed for ${gallery.id}:`, error);
+  }
   return (await getGalleryByProject(projectId))!;
+}
+
+/** True once a gallery has successfully read its Drive folder at least once. */
+export function hasSynced(gallery: DeliveryGallery): boolean {
+  return gallery.lastSyncedAt !== null;
 }
 
 /**

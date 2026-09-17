@@ -135,6 +135,9 @@ export function registerDeliveryRoutes(app: Express) {
         url: deliveryUrl(gallery.token),
         approved: await isApprovedForDownload(req.params.id),
         previews: previewProgress(gallery.id),
+        // Null lastSyncedAt means the Drive folder has never been read, so the
+        // gallery is empty for a reason the studio needs to see.
+        synced: gallery.lastSyncedAt !== null,
       });
     } catch (error: any) {
       console.error("[Delivery]", error);
